@@ -1,0 +1,135 @@
+// rts.warfare — generador de mapa por semilla, con simetría rotacional de 180°.
+(function () {
+  const W = globalThis.W || (globalThis.W = {});
+
+  W.generarMapa = function (semilla) {
+    const N = W.N, NN = N * N, T = W.TERRENO, r = W.prng(semilla);
+    const espejo = (i) => NN - 1 - i;
+
+    function capa(esc) {
+      const g = Math.ceil(N / esc) + 2, v = new Float32Array(g * g);
+      for (let i = 0; i < v.length; i++) v[i] = r();
+      return function (x, y) {
+        const fx = x / esc, fy = y / esc, x0 = Math.floor(fx), y0 = Math.floor(fy);
+        let tx = fx - x0, ty = fy - y0;
+        tx = tx * tx * (3 - 2 * tx); ty = ty * ty * (3 - 2 * ty);
+        const a = v[y0 * g + x0], b = v[y0 * g + x0 + 1], c = v[(y0 + 1) * g + x0], d = v[(y0 + 1) * g + x0 + 1];
+        return (a + (b - a) * tx) * (1 - ty) + (c + (d - c) * tx) * ty;
+      };
+    }
+    const e1 = capa(20), e2 = capa(8), b1 = capa(11);
+    const crudoE = new Float32Array(NN), crudoB = new Float32Array(NN);
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      crudoE[y * N + x] = e1(x, y) * 0.7 + e2(x, y) * 0.3;
+      crudoB[y * N + x] = b1(x, y);
+    }
+    // Sumar cada celda con su espejo vuelve simétrico el ruido sin costura.
+    const elev = new Float32Array(NN), bosq = new Float32Array(NN);
+    for (let i = 0; i < NN; i++) { elev[i] = crudoE[i] + crudoE[espejo(i)]; bosq[i] = crudoB[i] + crudoB[espejo(i)]; }
+    const cuantil = (arr, q) => { const s = Float32Array.from(arr).sort(); return s[Math.floor(q * (s.length - 1))]; };
+    const uRoca = cuantil(elev, 0.87), uAgua = cuantil(elev, 0.08), uBosq = cuantil(bosq, 0.84);
+
+    const terreno = new Uint8Array(NN);
+    for (let i = 0; i < NN; i++) terreno[i] = elev[i] > uRoca ? T.ROCA : elev[i] < uAgua ? T.AGUA : bosq[i] > uBosq ? T.BOSQUE : T.LLANO;
+
+    const A = { x: 14, y: N - 15 }, B = { x: N - 1 - 14, y: 14 };
+    const bases = [A, B];
+    const dBase = (x, y) => Math.min(Math.hypot(x - A.x, y - A.y), Math.hypot(x - B.x, y - B.y));
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (dBase(x, y) <= 11) terreno[y * N + x] = T.LLANO;
+
+    const transitable = (i) => terreno[i] === T.LLANO || terreno[i] === T.BOSQUE;
+    function inundar() {
+      const visto = new Uint8Array(NN), cola = new Int32Array(NN);
+      let ini = 0, fin = 0;
+      const s = A.y * N + A.x; visto[s] = 1; cola[fin++] = s;
+      while (ini < fin) {
+        const c = cola[ini++], cx = c % N, cy = (c / N) | 0;
+        if (cx > 0 && !visto[c - 1] && transitable(c - 1)) { visto[c - 1] = 1; cola[fin++] = c - 1; }
+        if (cx < N - 1 && !visto[c + 1] && transitable(c + 1)) { visto[c + 1] = 1; cola[fin++] = c + 1; }
+        if (cy > 0 && !visto[c - N] && transitable(c - N)) { visto[c - N] = 1; cola[fin++] = c - N; }
+        if (cy < N - 1 && !visto[c + N] && transitable(c + N)) { visto[c + N] = 1; cola[fin++] = c + N; }
+      }
+      return visto;
+    }
+    let alcanzable = inundar();
+    if (!alcanzable[B.y * N + B.x]) {
+      // Sin paso entre bases: se abre un corredor recto de tres celdas.
+      const pasos = N * 2;
+      for (let k = 0; k <= pasos; k++) {
+        const x = Math.round(A.x + (B.x - A.x) * k / pasos), y = Math.round(A.y + (B.y - A.y) * k / pasos);
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          const xx = x + dx, yy = y + dy;
+          if (xx < 0 || yy < 0 || xx >= N || yy >= N) continue;
+          const i = yy * N + xx; terreno[i] = T.LLANO; terreno[espejo(i)] = T.LLANO;
+        }
+      }
+      alcanzable = inundar();
+    }
+
+    // Recursos cosechables: tipoMin 1 = minerales, 2 = minerales raros.
+    const mineral = new Uint16Array(NN), tipoMin = new Uint8Array(NN);
+    function campo(cx, cy, rad, tipo, cant) {
+      const R = Math.ceil(rad);
+      for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+        const x = Math.round(cx) + dx, y = Math.round(cy) + dy, d = Math.hypot(dx, dy);
+        const azar = r(), azar2 = r();
+        if (x < 1 || y < 1 || x >= N - 1 || y >= N - 1 || d > rad) continue;
+        if (azar < 0.2 + (d / rad) * 0.35) continue;
+        const i = y * N + x;
+        if (terreno[i] !== T.LLANO || !alcanzable[i] || mineral[i] || dBase(x, y) < 6) continue;
+        const q = Math.round(cant * (0.6 + 0.8 * azar2));
+        mineral[i] = q; tipoMin[i] = tipo; mineral[espejo(i)] = q; tipoMin[espejo(i)] = tipo;
+      }
+    }
+    const llanoLibre = (x, y) => x >= 4 && y >= 4 && x < N - 4 && y < N - 4 && terreno[y * N + x] === T.LLANO && alcanzable[y * N + x];
+    const centros = [];
+    const lejos = (x, y, lista, d) => lista.every((c) => Math.hypot(c.x - x, c.y - y) >= d);
+    const anota = (lista, x, y, extra) => { lista.push(Object.assign({ x, y }, extra)); lista.push(Object.assign({ x: N - 1 - x, y: N - 1 - y }, extra)); };
+
+    for (let k = 0; k < 60; k++) { // campo seguro junto a cada base
+      const ang = r() * Math.PI * 2, d = 10 + r() * 3;
+      const x = Math.round(A.x + Math.cos(ang) * d), y = Math.round(A.y + Math.sin(ang) * d);
+      if (!llanoLibre(x, y)) continue;
+      campo(x, y, 3.6, 1, 450); anota(centros, x, y); break;
+    }
+    for (let k = 0, n = 0; k < 600 && n < 5; k++) { // campos disputados
+      const x = 4 + Math.floor(r() * (N - 8)), y = 4 + Math.floor(r() * (N - 8));
+      if (!llanoLibre(x, y) || dBase(x, y) < 24 || !lejos(x, y, centros, 16)) continue;
+      campo(x, y, 3 + r() * 2, 1, 450); anota(centros, x, y); n++;
+    }
+    const mitad = (N - 1) / 2;
+    for (let k = 0, n = 0; k < 600 && n < 2; k++) { // vetas raras, hacia el centro
+      const ang = r() * Math.PI * 2, d = r() * N * 0.24;
+      const x = Math.round(mitad + Math.cos(ang) * d), y = Math.round(mitad + Math.sin(ang) * d);
+      if (!llanoLibre(x, y) || !lejos(x, y, centros, 8)) continue;
+      campo(x, y, 1.8, 2, 250); anota(centros, x, y); n++;
+    }
+
+    // Sitios fijos: yacimientos de petróleo y campos de conocimiento.
+    const sitios = [], sitioEn = new Uint8Array(NN);
+    const sitioValido = (x, y) => llanoLibre(x, y) && !mineral[y * N + x] && dBase(x, y) >= 7 && lejos(x, y, sitios, 6);
+    function sitio(tipo, x, y) {
+      anota(sitios, x, y, { tipo });
+      sitioEn[y * N + x] = 1; sitioEn[espejo(y * N + x)] = 1;
+    }
+    for (let k = 0; k < 80; k++) {
+      const ang = r() * Math.PI * 2, d = 14 + r() * 4;
+      const x = Math.round(A.x + Math.cos(ang) * d), y = Math.round(A.y + Math.sin(ang) * d);
+      if (!sitioValido(x, y)) continue;
+      sitio('petroleo', x, y); break;
+    }
+    for (let k = 0, n = 0; k < 600 && n < 3; k++) {
+      const x = 4 + Math.floor(r() * (N - 8)), y = 4 + Math.floor(r() * (N - 8));
+      if (!sitioValido(x, y) || dBase(x, y) < 26) continue;
+      sitio('petroleo', x, y); n++;
+    }
+    for (let k = 0, n = 0; k < 600 && n < 2; k++) {
+      const ang = r() * Math.PI * 2, d = r() * N * 0.3;
+      const x = Math.round(mitad + Math.cos(ang) * d), y = Math.round(mitad + Math.sin(ang) * d);
+      if (!sitioValido(x, y)) continue;
+      sitio('conocimiento', x, y); n++;
+    }
+
+    return { N, semilla, terreno, mineral, tipoMin, sitios, sitioEn, bases, alcanzable };
+  };
+})();

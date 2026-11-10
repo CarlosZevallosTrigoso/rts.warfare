@@ -1,0 +1,1382 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>rts.warfare</title>
+<style>
+  :root { --fondo: #ffffff; --tinta: #111111; --suave: #6b6b63; --linea: #d9d7cf; --musgo: #586a45; --acero: #4f6b82; --naranja: #b06a36; --relleno: #e4ead9; --mal: #b0362f; }
+  body[data-tema="oscura"] { --fondo: #16170f; --tinta: #e8e4d6; --suave: #9a978a; --linea: #3a3b30; --musgo: #8fa676; --acero: #6f93b0; --naranja: #d0854a; --relleno: #2f3a26; --mal: #d0554a; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--fondo); color: var(--tinta); font: 12px/1.45 "Fira Code", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow: hidden; user-select: none; -webkit-user-select: none; }
+  #app { display: grid; grid-template-columns: 1fr 236px; height: 100%; }
+  #lienzo { width: 100%; height: 100%; display: block; cursor: crosshair; min-width: 0; }
+  #barra { border-left: 1px solid var(--linea); padding: 12px 13px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+  h1 { font-size: 14px; margin: 0; font-weight: 600; cursor: pointer; letter-spacing: .02em; }
+  h1 span { color: var(--suave); font-weight: 400; }
+  h2 { font-size: 10px; margin: 0 0 5px; font-weight: 400; color: var(--suave); text-transform: uppercase; letter-spacing: .12em; }
+  .fila { display: flex; justify-content: space-between; font-variant-numeric: tabular-nums; }
+  .fila b { font-weight: 600; }
+  .mal { color: var(--mal); }
+  .tenue { color: var(--suave); font-size: 11px; }
+  #mini { width: 208px; height: 208px; border: 1px solid var(--linea); border-radius: 2px; display: block; cursor: pointer; }
+  .btn { display: flex; justify-content: space-between; width: 100%; margin: 0 0 4px; padding: 5px 7px; font: inherit; color: var(--tinta); text-align: left; cursor: pointer; border: 1px solid var(--linea); border-radius: 2px;
+    background: linear-gradient(to right, var(--relleno) var(--p, 0%), transparent var(--p, 0%)); }
+  .btn:hover { border-color: var(--tinta); }
+  .btn.no { color: var(--suave); border-style: dashed; cursor: default; }
+  .btn.no:hover { border-color: var(--linea); }
+  .btn.caro .c { color: var(--mal); }
+  .btn.listo { border-color: var(--musgo); background: var(--relleno); font-weight: 600; }
+  .btn .c { font-variant-numeric: tabular-nums; }
+  #sel { min-height: 18px; }
+  #ayuda { margin-top: auto; border-top: 1px solid var(--linea); padding-top: 9px; }
+  #ayuda kbd { font: inherit; color: var(--tinta); }
+  #fin { position: fixed; inset: 0 236px 0 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+  #fin[hidden] { display: none; }
+  #fin div { pointer-events: auto; background: var(--fondo); border: 1px solid var(--tinta); border-radius: 2px; padding: 22px 30px; text-align: center; }
+  #fin strong { display: block; font-size: 20px; margin-bottom: 6px; }
+  #fin a { color: var(--acero); margin: 0 6px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="lienzo"></canvas>
+  <aside id="barra">
+    <h1 id="titulo" title="Recargar">rts<span>.</span>warfare</h1>
+    <div id="recursos">
+      <div class="fila"><span>minerales</span><b id="rMin">0</b></div>
+      <div class="fila"><span>energía</span><b id="rEne">0 / 0</b></div>
+      <div class="tenue" title="Visibles en el mapa; todavía no se explotan">petróleo · agua · raros · información —</div>
+    </div>
+    <canvas id="mini" width="208" height="208"></canvas>
+    <section><h2>Edificios</h2><div id="bEdif"></div></section>
+    <section><h2>Unidades</h2><div id="bUnid"></div></section>
+    <div id="sel" class="tenue"></div>
+    <div id="ayuda" class="tenue">
+      <div>clic / caja: seleccionar</div>
+      <div>clic derecho: mover, atacar, cosechar</div>
+      <div><kbd>A</kbd> atacar al avanzar · <kbd>S</kbd> detener</div>
+      <div>flechas o botón central: cámara</div>
+      <div>rueda: zoom · <kbd>H</kbd> base · <kbd>espacio</kbd> alerta</div>
+      <div><kbd>Mayús+1…9</kbd> guardar grupo · <kbd>1…9</kbd> llamarlo</div>
+      <div>clic derecho en botón: cancelar</div>
+      <div><kbd>P</kbd> pausa · <kbd>T</kbd> tema · <span id="semilla"></span></div>
+    </div>
+  </aside>
+</div>
+<div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><p><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
+<script>
+// ===== sim/datos.js =====
+// rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
+(function () {
+  const W = globalThis.W || (globalThis.W = {});
+
+  // PRNG determinista (mulberry32)
+  W.prng = function (semilla) {
+    let a = semilla >>> 0;
+    return function () {
+      a = (a + 0x6d2b79f5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  };
+
+  W.N = 128; // lado del mapa en celdas
+  W.TPS = 20; // ticks de simulación por segundo
+  W.TERRENO = { LLANO: 0, ROCA: 1, AGUA: 2, BOSQUE: 3 };
+
+  // energia > 0 produce, < 0 consume. tiempo en ticks.
+  W.EDIF = {
+    patio:     { nombre: 'Patio',     tam: 3, vida: 2000, costo: 0,    tiempo: 0,   energia: 0,   vision: 8, req: [] },
+    central:   { nombre: 'Central',   tam: 2, vida: 500,  costo: 300,  tiempo: 200, energia: 100, vision: 5, req: ['patio'] },
+    refineria: { nombre: 'Refinería', tam: 3, vida: 900,  costo: 1200, tiempo: 400, energia: -30, vision: 6, req: ['central'] },
+    cuartel:   { nombre: 'Cuartel',   tam: 2, vida: 700,  costo: 400,  tiempo: 300, energia: -20, vision: 5, req: ['central'] },
+    fabrica:   { nombre: 'Fábrica',   tam: 3, vida: 1000, costo: 1400, tiempo: 500, energia: -40, vision: 5, req: ['refineria'] },
+    torreta:   { nombre: 'Torreta',   tam: 1, vida: 600,  costo: 500,  tiempo: 300, energia: -25, vision: 8, req: ['cuartel'], arma: 'bateria' },
+  };
+
+  // vel en celdas por tick. cat: cola de producción (inf = cuartel, veh = fábrica).
+  W.UNID = {
+    infanteria:  { nombre: 'Infantería',  cat: 'inf', vida: 60,  vel: 0.06, costo: 100, tiempo: 100, blindaje: 'ligero', arma: 'fusil', vision: 6, radio: 0.24, req: ['cuartel'] },
+    tanque:      { nombre: 'Tanque',      cat: 'veh', vida: 300, vel: 0.10, costo: 600, tiempo: 300, blindaje: 'pesado', arma: 'canon', vision: 7, radio: 0.40, req: ['fabrica'] },
+    cosechadora: { nombre: 'Cosechadora', cat: 'veh', vida: 450, vel: 0.07, costo: 900, tiempo: 360, blindaje: 'pesado', arma: null,    vision: 5, radio: 0.44, req: ['fabrica', 'refineria'], carga: 500 },
+  };
+
+  // Tabla de daño: arma contra blindaje.
+  W.ARMAS = {
+    fusil:   { alcance: 4,   dano: 8,  recarga: 16, vs: { ligero: 1,   pesado: 0.25, edificio: 0.3 } },
+    canon:   { alcance: 5,   dano: 40, recarga: 50, vs: { ligero: 0.4, pesado: 1,    edificio: 0.9 } },
+    bateria: { alcance: 6.5, dano: 30, recarga: 30, vs: { ligero: 0.8, pesado: 1,    edificio: 0.5 } },
+  };
+
+  W.ECON = { inicio: 2500, cosecha: 5, descarga: 25, colaMax: 9, separacionColocar: 3, goteoCada: 5 };
+})();
+
+// ===== sim/mapa.js =====
+// rts.warfare — generador de mapa por semilla, con simetría rotacional de 180°.
+(function () {
+  const W = globalThis.W || (globalThis.W = {});
+
+  W.generarMapa = function (semilla) {
+    const N = W.N, NN = N * N, T = W.TERRENO, r = W.prng(semilla);
+    const espejo = (i) => NN - 1 - i;
+
+    function capa(esc) {
+      const g = Math.ceil(N / esc) + 2, v = new Float32Array(g * g);
+      for (let i = 0; i < v.length; i++) v[i] = r();
+      return function (x, y) {
+        const fx = x / esc, fy = y / esc, x0 = Math.floor(fx), y0 = Math.floor(fy);
+        let tx = fx - x0, ty = fy - y0;
+        tx = tx * tx * (3 - 2 * tx); ty = ty * ty * (3 - 2 * ty);
+        const a = v[y0 * g + x0], b = v[y0 * g + x0 + 1], c = v[(y0 + 1) * g + x0], d = v[(y0 + 1) * g + x0 + 1];
+        return (a + (b - a) * tx) * (1 - ty) + (c + (d - c) * tx) * ty;
+      };
+    }
+    const e1 = capa(20), e2 = capa(8), b1 = capa(11);
+    const crudoE = new Float32Array(NN), crudoB = new Float32Array(NN);
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      crudoE[y * N + x] = e1(x, y) * 0.7 + e2(x, y) * 0.3;
+      crudoB[y * N + x] = b1(x, y);
+    }
+    // Sumar cada celda con su espejo vuelve simétrico el ruido sin costura.
+    const elev = new Float32Array(NN), bosq = new Float32Array(NN);
+    for (let i = 0; i < NN; i++) { elev[i] = crudoE[i] + crudoE[espejo(i)]; bosq[i] = crudoB[i] + crudoB[espejo(i)]; }
+    const cuantil = (arr, q) => { const s = Float32Array.from(arr).sort(); return s[Math.floor(q * (s.length - 1))]; };
+    const uRoca = cuantil(elev, 0.87), uAgua = cuantil(elev, 0.08), uBosq = cuantil(bosq, 0.84);
+
+    const terreno = new Uint8Array(NN);
+    for (let i = 0; i < NN; i++) terreno[i] = elev[i] > uRoca ? T.ROCA : elev[i] < uAgua ? T.AGUA : bosq[i] > uBosq ? T.BOSQUE : T.LLANO;
+
+    const A = { x: 14, y: N - 15 }, B = { x: N - 1 - 14, y: 14 };
+    const bases = [A, B];
+    const dBase = (x, y) => Math.min(Math.hypot(x - A.x, y - A.y), Math.hypot(x - B.x, y - B.y));
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (dBase(x, y) <= 11) terreno[y * N + x] = T.LLANO;
+
+    const transitable = (i) => terreno[i] === T.LLANO || terreno[i] === T.BOSQUE;
+    function inundar() {
+      const visto = new Uint8Array(NN), cola = new Int32Array(NN);
+      let ini = 0, fin = 0;
+      const s = A.y * N + A.x; visto[s] = 1; cola[fin++] = s;
+      while (ini < fin) {
+        const c = cola[ini++], cx = c % N, cy = (c / N) | 0;
+        if (cx > 0 && !visto[c - 1] && transitable(c - 1)) { visto[c - 1] = 1; cola[fin++] = c - 1; }
+        if (cx < N - 1 && !visto[c + 1] && transitable(c + 1)) { visto[c + 1] = 1; cola[fin++] = c + 1; }
+        if (cy > 0 && !visto[c - N] && transitable(c - N)) { visto[c - N] = 1; cola[fin++] = c - N; }
+        if (cy < N - 1 && !visto[c + N] && transitable(c + N)) { visto[c + N] = 1; cola[fin++] = c + N; }
+      }
+      return visto;
+    }
+    let alcanzable = inundar();
+    if (!alcanzable[B.y * N + B.x]) {
+      // Sin paso entre bases: se abre un corredor recto de tres celdas.
+      const pasos = N * 2;
+      for (let k = 0; k <= pasos; k++) {
+        const x = Math.round(A.x + (B.x - A.x) * k / pasos), y = Math.round(A.y + (B.y - A.y) * k / pasos);
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          const xx = x + dx, yy = y + dy;
+          if (xx < 0 || yy < 0 || xx >= N || yy >= N) continue;
+          const i = yy * N + xx; terreno[i] = T.LLANO; terreno[espejo(i)] = T.LLANO;
+        }
+      }
+      alcanzable = inundar();
+    }
+
+    // Recursos cosechables: tipoMin 1 = minerales, 2 = minerales raros.
+    const mineral = new Uint16Array(NN), tipoMin = new Uint8Array(NN);
+    function campo(cx, cy, rad, tipo, cant) {
+      const R = Math.ceil(rad);
+      for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+        const x = Math.round(cx) + dx, y = Math.round(cy) + dy, d = Math.hypot(dx, dy);
+        const azar = r(), azar2 = r();
+        if (x < 1 || y < 1 || x >= N - 1 || y >= N - 1 || d > rad) continue;
+        if (azar < 0.2 + (d / rad) * 0.35) continue;
+        const i = y * N + x;
+        if (terreno[i] !== T.LLANO || !alcanzable[i] || mineral[i] || dBase(x, y) < 6) continue;
+        const q = Math.round(cant * (0.6 + 0.8 * azar2));
+        mineral[i] = q; tipoMin[i] = tipo; mineral[espejo(i)] = q; tipoMin[espejo(i)] = tipo;
+      }
+    }
+    const llanoLibre = (x, y) => x >= 4 && y >= 4 && x < N - 4 && y < N - 4 && terreno[y * N + x] === T.LLANO && alcanzable[y * N + x];
+    const centros = [];
+    const lejos = (x, y, lista, d) => lista.every((c) => Math.hypot(c.x - x, c.y - y) >= d);
+    const anota = (lista, x, y, extra) => { lista.push(Object.assign({ x, y }, extra)); lista.push(Object.assign({ x: N - 1 - x, y: N - 1 - y }, extra)); };
+
+    for (let k = 0; k < 60; k++) { // campo seguro junto a cada base
+      const ang = r() * Math.PI * 2, d = 10 + r() * 3;
+      const x = Math.round(A.x + Math.cos(ang) * d), y = Math.round(A.y + Math.sin(ang) * d);
+      if (!llanoLibre(x, y)) continue;
+      campo(x, y, 3.6, 1, 450); anota(centros, x, y); break;
+    }
+    for (let k = 0, n = 0; k < 600 && n < 5; k++) { // campos disputados
+      const x = 4 + Math.floor(r() * (N - 8)), y = 4 + Math.floor(r() * (N - 8));
+      if (!llanoLibre(x, y) || dBase(x, y) < 24 || !lejos(x, y, centros, 16)) continue;
+      campo(x, y, 3 + r() * 2, 1, 450); anota(centros, x, y); n++;
+    }
+    const mitad = (N - 1) / 2;
+    for (let k = 0, n = 0; k < 600 && n < 2; k++) { // vetas raras, hacia el centro
+      const ang = r() * Math.PI * 2, d = r() * N * 0.24;
+      const x = Math.round(mitad + Math.cos(ang) * d), y = Math.round(mitad + Math.sin(ang) * d);
+      if (!llanoLibre(x, y) || !lejos(x, y, centros, 8)) continue;
+      campo(x, y, 1.8, 2, 250); anota(centros, x, y); n++;
+    }
+
+    // Sitios fijos: yacimientos de petróleo y campos de conocimiento.
+    const sitios = [], sitioEn = new Uint8Array(NN);
+    const sitioValido = (x, y) => llanoLibre(x, y) && !mineral[y * N + x] && dBase(x, y) >= 7 && lejos(x, y, sitios, 6);
+    function sitio(tipo, x, y) {
+      anota(sitios, x, y, { tipo });
+      sitioEn[y * N + x] = 1; sitioEn[espejo(y * N + x)] = 1;
+    }
+    for (let k = 0; k < 80; k++) {
+      const ang = r() * Math.PI * 2, d = 14 + r() * 4;
+      const x = Math.round(A.x + Math.cos(ang) * d), y = Math.round(A.y + Math.sin(ang) * d);
+      if (!sitioValido(x, y)) continue;
+      sitio('petroleo', x, y); break;
+    }
+    for (let k = 0, n = 0; k < 600 && n < 3; k++) {
+      const x = 4 + Math.floor(r() * (N - 8)), y = 4 + Math.floor(r() * (N - 8));
+      if (!sitioValido(x, y) || dBase(x, y) < 26) continue;
+      sitio('petroleo', x, y); n++;
+    }
+    for (let k = 0, n = 0; k < 600 && n < 2; k++) {
+      const ang = r() * Math.PI * 2, d = r() * N * 0.3;
+      const x = Math.round(mitad + Math.cos(ang) * d), y = Math.round(mitad + Math.sin(ang) * d);
+      if (!sitioValido(x, y)) continue;
+      sitio('conocimiento', x, y); n++;
+    }
+
+    return { N, semilla, terreno, mineral, tipoMin, sitios, sitioEn, bases, alcanzable };
+  };
+})();
+
+// ===== sim/ruta.js =====
+// rts.warfare — A* sobre la rejilla (8 direcciones, sin cortar esquinas).
+(function () {
+  const W = globalThis.W || (globalThis.W = {});
+
+  W.crearRuta = function (N) {
+    const NN = N * N;
+    const g = new Float32Array(NN), padre = new Int32Array(NN), visto = new Uint32Array(NN), cerrado = new Uint32Array(NN);
+    const hI = [], hF = [];
+    let gen = 0;
+    function mete(i, f) {
+      let k = hI.length; hI.push(i); hF.push(f);
+      while (k > 0) { const p = (k - 1) >> 1; if (hF[p] <= f) break; hI[k] = hI[p]; hF[k] = hF[p]; k = p; }
+      hI[k] = i; hF[k] = f;
+    }
+    function saca() {
+      const top = hI[0], li = hI.pop(), lf = hF.pop(), n = hI.length;
+      if (n > 0) {
+        let k = 0;
+        for (;;) {
+          let c = 2 * k + 1; if (c >= n) break;
+          if (c + 1 < n && hF[c + 1] < hF[c]) c++;
+          if (hF[c] >= lf) break;
+          hI[k] = hI[c]; hF[k] = hF[c]; k = c;
+        }
+        hI[k] = li; hF[k] = lf;
+      }
+      return top;
+    }
+    const DX = [1, -1, 0, 0, 1, 1, -1, -1], DY = [0, 0, 1, -1, 1, -1, 1, -1];
+
+    // Devuelve la lista de celdas desde (x0,y0) hasta la primera cuyo centro
+    // quede a `radio` o menos de (mx,my); [] si ya está ahí; null si no hay paso.
+    return function (paso, terreno, x0, y0, mx, my, radio) {
+      gen++; hI.length = 0; hF.length = 0;
+      const r2 = Math.max(radio, 0.75) ** 2, ini = y0 * N + x0;
+      const h = (x, y) => { const dx = Math.abs(x + 0.5 - mx), dy = Math.abs(y + 0.5 - my); return Math.max(dx, dy) + 0.4142 * Math.min(dx, dy); };
+      g[ini] = 0; padre[ini] = -1; visto[ini] = gen; mete(ini, h(x0, y0));
+      while (hI.length) {
+        const c = saca();
+        if (cerrado[c] === gen) continue;
+        cerrado[c] = gen;
+        const cx = c % N, cy = (c / N) | 0, ex = cx + 0.5 - mx, ey = cy + 0.5 - my;
+        if (ex * ex + ey * ey <= r2) {
+          const out = [];
+          for (let k = c; k !== ini; k = padre[k]) out.push(k);
+          return out.reverse();
+        }
+        for (let d = 0; d < 8; d++) {
+          const nx = cx + DX[d], ny = cy + DY[d];
+          if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
+          const n = ny * N + nx;
+          if (!paso[n] || cerrado[n] === gen) continue;
+          if (d >= 4 && (!paso[cy * N + nx] || !paso[ny * N + cx])) continue;
+          const ng = g[c] + (d >= 4 ? 1.4142 : 1) * (terreno[n] === 3 ? 1.7 : 1);
+          if (visto[n] !== gen || ng < g[n]) { visto[n] = gen; g[n] = ng; padre[n] = c; mete(n, ng + h(nx, ny)); }
+        }
+      }
+      return null;
+    };
+  };
+})();
+
+// ===== sim/mundo.js =====
+// rts.warfare — estado del mundo, comandos y tick de simulación. No toca el DOM.
+(function () {
+  const W = globalThis.W || (globalThis.W = {});
+  const EDIF = W.EDIF, UNID = W.UNID, ARMAS = W.ARMAS, ECON = W.ECON, T = W.TERRENO;
+
+  // Desplazamientos ordenados por distancia: reparten los destinos de un grupo.
+  const ESPIRAL = [];
+  for (let dy = -6; dy <= 6; dy++) for (let dx = -6; dx <= 6; dx++) ESPIRAL.push([dx, dy]);
+  ESPIRAL.sort((a, b) => (a[0] * a[0] + a[1] * a[1]) - (b[0] * b[0] + b[1] * b[1]) || a[1] - b[1] || a[0] - b[0]);
+
+  function nuevoJugador() {
+    return {
+      minerales: ECON.inicio, prod: 0, uso: 0, cuenta: {}, vivo: true,
+      edif: null, // { tipo, prog, listo }
+      colas: { inf: { lista: [], prog: 0 }, veh: { lista: [], prog: 0 } },
+      alerta: null, cosechado: 0, bajas: 0, producidas: 0,
+    };
+  }
+
+  W.crearMundo = function (semilla) {
+    const mapa = W.generarMapa(semilla), N = mapa.N, NN = N * N;
+    const m = {
+      N, semilla, mapa, t: 0, ents: [], porId: new Map(), sigId: 1,
+      ocup: new Int32Array(NN), paso: new Uint8Array(NN),
+      jug: [nuevoJugador(), nuevoJugador()],
+      niebla: [new Uint8Array(NN), new Uint8Array(NN)],
+      cola: [], colaRutas: [], efectos: [], minas: [], raros: [], ganador: -1,
+      ruta: W.crearRuta(N),
+    };
+    for (let i = 0; i < NN; i++) {
+      m.paso[i] = mapa.terreno[i] === T.LLANO || mapa.terreno[i] === T.BOSQUE ? 1 : 0;
+      if (mapa.tipoMin[i] === 1) m.minas.push(i); else if (mapa.tipoMin[i] === 2) m.raros.push(i);
+    }
+    for (let j = 0; j < 2; j++) {
+      const b = mapa.bases[j];
+      crearEdificio(m, j, 'patio', b.x - 1, b.y - 1);
+      const haciaCentro = j === 0 ? 1 : -1;
+      for (let k = 0; k < 2; k++) crearUnidad(m, j, 'infanteria', W.cercaLibre(m, b.x + (3 + k) * haciaCentro, b.y - 3 * haciaCentro));
+    }
+    contar(m);
+    W.actualizarNiebla(m);
+    return m;
+  };
+
+  // ---------- entidades ----------
+  function crearEdificio(m, j, tipo, x, y) {
+    const d = EDIF[tipo], N = m.N;
+    const e = { id: m.sigId++, j, tipo, edif: true, x, y, tam: d.tam, cx: x + d.tam / 2, cy: y + d.tam / 2, vida: d.vida, vidaMax: d.vida, recarga: 0, obj: 0 };
+    for (let dy = 0; dy < d.tam; dy++) for (let dx = 0; dx < d.tam; dx++) { const i = (y + dy) * N + x + dx; m.ocup[i] = e.id; m.paso[i] = 0; }
+    m.ents.push(e); m.porId.set(e.id, e);
+    return e;
+  }
+  function crearUnidad(m, j, tipo, celda) {
+    const d = UNID[tipo], N = m.N, x = (celda % N) + 0.5, y = ((celda / N) | 0) + 0.5;
+    const u = {
+      id: m.sigId++, j, tipo, edif: false, x, y, px: x, py: y, vida: d.vida, vidaMax: d.vida,
+      orden: 'nada', ruta: null, ri: 0, dest: null, meta: null, pend: null, fallo: false, obj: 0, recarga: 0, fijo: false,
+      carga: 0, est: tipo === 'cosechadora' ? 'buscar' : '', celda: -1, ref: 0, espera: 0, pref: null,
+    };
+    m.ents.push(u); m.porId.set(u.id, u);
+    m.jug[j].producidas++;
+    return u;
+  }
+  W.crearEdificio = crearEdificio; W.crearUnidad = crearUnidad;
+
+  W.cercaLibre = function (m, x, y) {
+    const N = m.N, cx = Math.max(0, Math.min(N - 1, Math.floor(x))), cy = Math.max(0, Math.min(N - 1, Math.floor(y)));
+    for (let k = 0; k < ESPIRAL.length; k++) {
+      const xx = cx + ESPIRAL[k][0], yy = cy + ESPIRAL[k][1];
+      if (xx < 0 || yy < 0 || xx >= N || yy >= N) continue;
+      if (m.paso[yy * N + xx]) return yy * N + xx;
+    }
+    return cy * N + cx;
+  };
+
+  W.tieneReq = function (m, j, req) {
+    const c = m.jug[j].cuenta;
+    for (let k = 0; k < req.length; k++) if (!c[req[k]]) return false;
+    return true;
+  };
+
+  W.puedeColocar = function (m, j, tipo, x, y) {
+    const d = EDIF[tipo], N = m.N, t = d.tam;
+    if (x < 0 || y < 0 || x + t > N || y + t > N) return false;
+    for (let dy = 0; dy < t; dy++) for (let dx = 0; dx < t; dx++) {
+      const i = (y + dy) * N + x + dx;
+      if (m.mapa.terreno[i] !== T.LLANO || m.ocup[i] || m.mapa.mineral[i] || m.mapa.sitioEn[i]) return false;
+    }
+    let junto = false;
+    const s = ECON.separacionColocar;
+    for (let k = 0; k < m.ents.length; k++) {
+      const e = m.ents[k];
+      if (e.edif) {
+        if (e.j !== j || junto) continue;
+        const gx = Math.max(e.x - (x + t), x - (e.x + e.tam), 0), gy = Math.max(e.y - (y + t), y - (e.y + e.tam), 0);
+        if (Math.max(gx, gy) <= s) junto = true;
+      } else if (e.x > x - 0.3 && e.x < x + t + 0.3 && e.y > y - 0.3 && e.y < y + t + 0.3) return false;
+    }
+    return junto;
+  };
+
+  // Distancia de un punto a una entidad (al borde, si es edificio).
+  function dist(x, y, e) {
+    if (!e.edif) return Math.hypot(e.x - x, e.y - y);
+    const dx = Math.max(e.x - x, 0, x - (e.x + e.tam)), dy = Math.max(e.y - y, 0, y - (e.y + e.tam));
+    return Math.hypot(dx, dy);
+  }
+  const posX = (e) => (e.edif ? e.cx : e.x), posY = (e) => (e.edif ? e.cy : e.y);
+  W.dist = dist;
+
+  function contar(m) {
+    for (let j = 0; j < 2; j++) { const J = m.jug[j]; J.prod = 0; J.uso = 0; J.cuenta = {}; }
+    for (let k = 0; k < m.ents.length; k++) {
+      const e = m.ents[k], J = m.jug[e.j];
+      J.cuenta[e.tipo] = (J.cuenta[e.tipo] || 0) + 1;
+      if (e.edif) { const en = EDIF[e.tipo].energia; if (en > 0) J.prod += en; else J.uso -= en; }
+    }
+  }
+
+  // ---------- comandos ----------
+  W.orden = function (m, cmd) { m.cola.push(cmd); };
+
+  function pedirRuta(m, u, x, y, radio) {
+    if (!u.pend) m.colaRutas.push(u.id);
+    u.pend = { x, y, radio }; u.meta = u.pend;
+  }
+
+  function propias(m, cmd) {
+    const out = [];
+    for (let k = 0; k < cmd.ids.length; k++) { const u = m.porId.get(cmd.ids[k]); if (u && !u.edif && u.j === cmd.j) out.push(u); }
+    return out;
+  }
+  function destinos(m, us, x, y, fn) {
+    const N = m.N, cx = Math.floor(x), cy = Math.floor(y);
+    let k = 0;
+    for (let i = 0; i < us.length; i++) {
+      let c = -1;
+      while (k < ESPIRAL.length) {
+        const xx = cx + ESPIRAL[k][0], yy = cy + ESPIRAL[k][1]; k++;
+        if (xx >= 0 && yy >= 0 && xx < N && yy < N && m.paso[yy * N + xx]) { c = yy * N + xx; break; }
+      }
+      if (c < 0) c = W.cercaLibre(m, x, y);
+      fn(us[i], (c % N) + 0.5, ((c / N) | 0) + 0.5);
+    }
+  }
+
+  function aplicar(m, cmd) {
+    const J = m.jug[cmd.j];
+    if (!J || !J.vivo) return;
+    switch (cmd.t) {
+      case 'construir': {
+        const d = EDIF[cmd.tipo];
+        if (!d || cmd.tipo === 'patio' || J.edif || !W.tieneReq(m, cmd.j, d.req) || J.minerales < d.costo) return;
+        J.minerales -= d.costo; J.edif = { tipo: cmd.tipo, prog: 0, listo: false };
+        return;
+      }
+      case 'cancelarEdif':
+        if (J.edif) { J.minerales += EDIF[J.edif.tipo].costo; J.edif = null; }
+        return;
+      case 'colocar': {
+        if (!J.edif || !J.edif.listo || !W.puedeColocar(m, cmd.j, J.edif.tipo, cmd.x, cmd.y)) return;
+        const e = crearEdificio(m, cmd.j, J.edif.tipo, cmd.x, cmd.y);
+        J.edif = null;
+        if (e.tipo === 'refineria') crearUnidad(m, cmd.j, 'cosechadora', W.cercaLibre(m, e.cx, e.y + e.tam + 0.5));
+        contar(m);
+        return;
+      }
+      case 'entrenar': {
+        const d = UNID[cmd.tipo];
+        if (!d || !W.tieneReq(m, cmd.j, d.req) || J.minerales < d.costo) return;
+        const q = J.colas[d.cat];
+        if (q.lista.length >= ECON.colaMax) return;
+        J.minerales -= d.costo; q.lista.push(cmd.tipo);
+        return;
+      }
+      case 'cancelarUnidad': {
+        const d = UNID[cmd.tipo]; if (!d) return;
+        const q = J.colas[d.cat], i = q.lista.lastIndexOf(cmd.tipo);
+        if (i < 0) return;
+        q.lista.splice(i, 1); J.minerales += d.costo;
+        if (i === 0) q.prog = 0;
+        return;
+      }
+      case 'mover':
+        destinos(m, propias(m, cmd), cmd.x, cmd.y, (u, x, y) => { u.orden = 'mover'; u.obj = 0; u.dest = { x, y }; u.ruta = null; pedirRuta(m, u, x, y, 0); });
+        return;
+      case 'amover':
+        destinos(m, propias(m, cmd).filter((u) => UNID[u.tipo].arma), cmd.x, cmd.y, (u, x, y) => { u.orden = 'amover'; u.obj = 0; u.dest = { x, y }; u.ruta = null; pedirRuta(m, u, x, y, 0); });
+        return;
+      case 'atacar': {
+        const o = m.porId.get(cmd.obj);
+        if (!o || o.j === cmd.j) return;
+        for (const u of propias(m, cmd)) if (UNID[u.tipo].arma) { u.orden = 'atacar'; u.obj = o.id; u.ruta = null; u.pend = null; }
+        return;
+      }
+      case 'detener':
+        for (const u of propias(m, cmd)) { u.orden = 'nada'; u.obj = 0; u.ruta = null; u.pend = null; if (u.tipo === 'cosechadora') u.est = 'quieto'; }
+        return;
+      case 'cosechar':
+        for (const u of propias(m, cmd)) if (u.tipo === 'cosechadora') { u.orden = 'nada'; u.ruta = null; u.pend = null; u.est = 'buscar'; u.pref = { x: cmd.x, y: cmd.y }; }
+        return;
+    }
+  }
+
+  // ---------- movimiento ----------
+  function avanzar(m, u) {
+    if (!u.ruta) return false;
+    const N = m.N, d = UNID[u.tipo];
+    let vel = d.vel * (m.mapa.terreno[Math.floor(u.y) * N + Math.floor(u.x)] === T.BOSQUE ? 0.6 : 1);
+    while (vel > 0 && u.ri < u.ruta.length) {
+      const c = u.ruta[u.ri];
+      if (!m.paso[c]) { // alguien construyó encima: se recalcula
+        u.ruta = null;
+        if (u.meta) pedirRuta(m, u, u.meta.x, u.meta.y, u.meta.radio);
+        return false;
+      }
+      const tx = (c % N) + 0.5, ty = ((c / N) | 0) + 0.5, dx = tx - u.x, dy = ty - u.y, dd = Math.hypot(dx, dy);
+      if (dd <= vel) { u.x = tx; u.y = ty; vel -= dd; u.ri++; } else { u.x += (dx / dd) * vel; u.y += (dy / dd) * vel; vel = 0; }
+    }
+    if (u.ri >= u.ruta.length) { u.ruta = null; return true; }
+    return false;
+  }
+
+  function procesarRutas(m) {
+    const N = m.N;
+    let n = 0;
+    while (m.colaRutas.length && n < 12) {
+      const u = m.porId.get(m.colaRutas.shift());
+      if (!u || !u.pend) continue;
+      const p = u.pend; u.pend = null; n++;
+      const camino = m.ruta(m.paso, m.mapa.terreno, Math.floor(u.x), Math.floor(u.y), p.x, p.y, p.radio);
+      if (camino) { u.ruta = camino; u.ri = 0; } else { u.ruta = null; u.fallo = true; }
+    }
+  }
+
+  function separar(m) {
+    const N = m.N, us = [];
+    for (let k = 0; k < m.ents.length; k++) if (!m.ents[k].edif) us.push(m.ents[k]);
+    for (let a = 0; a < us.length; a++) {
+      const A = us[a], ra = UNID[A.tipo].radio;
+      for (let b = a + 1; b < us.length; b++) {
+        const B = us[b];
+        let dx = B.x - A.x; if (dx > 1 || dx < -1) continue;
+        let dy = B.y - A.y; if (dy > 1 || dy < -1) continue;
+        const min = ra + UNID[B.tipo].radio;
+        let d = Math.hypot(dx, dy);
+        if (d >= min) continue;
+        if (d < 1e-4) { dx = ((A.id * 7 + B.id * 3) % 5) - 2 || 1; dy = ((A.id * 3 + B.id * 5) % 5) - 2; d = Math.hypot(dx, dy); }
+        // Empuje blando y algo girado: tope por debajo de la velocidad de marcha,
+        // para que dos unidades de frente se rodeen en vez de bloquearse.
+        const emp = Math.min((min - d) * 0.5, 0.06), ex = dx / d, ey = dy / d;
+        const ux = ex * 0.88 - ey * 0.48, uy = ex * 0.48 + ey * 0.88;
+        const pa = A.fijo ? 0 : B.fijo ? 1 : 0.5, pb = B.fijo ? 0 : A.fijo ? 1 : 0.5;
+        mover(A, -ux * emp * pa, -uy * emp * pa); mover(B, ux * emp * pb, uy * emp * pb);
+      }
+    }
+    function mover(u, dx, dy) {
+      if (!dx && !dy) return;
+      const nx = u.x + dx, ny = u.y + dy;
+      if (nx < 0.3 || ny < 0.3 || nx > N - 0.3 || ny > N - 0.3) return;
+      if (m.paso[Math.floor(ny) * N + Math.floor(nx)]) { u.x = nx; u.y = ny; }
+    }
+  }
+
+  // ---------- combate ----------
+  function buscarEnemigo(m, a, x, y, rango) {
+    let mejor = null, md = rango;
+    for (let k = 0; k < m.ents.length; k++) {
+      const e = m.ents[k];
+      if (e.j === a.j || e.vida <= 0) continue;
+      const d = dist(x, y, e);
+      if (d <= md) { md = d; mejor = e; }
+    }
+    return mejor;
+  }
+
+  function disparar(m, a, b, arma) {
+    const blindaje = b.edif ? 'edificio' : UNID[b.tipo].blindaje;
+    b.vida -= arma.dano * arma.vs[blindaje];
+    a.recarga = arma.recarga;
+    m.efectos.push({ x1: posX(a), y1: posY(a), x2: posX(b), y2: posY(b), j: a.j, t: m.t });
+    m.jug[b.j].alerta = { x: posX(b), y: posY(b), t: m.t };
+    if (!b.edif && b.orden === 'nada' && !b.obj && UNID[b.tipo].arma) b.obj = a.id;
+  }
+
+  function tickTorreta(m, e) {
+    const J = m.jug[e.j], arma = ARMAS[EDIF[e.tipo].arma];
+    if (e.recarga > 0) e.recarga--;
+    if (J.uso > J.prod) { e.obj = 0; return; } // sin energía, apagada
+    let o = e.obj ? m.porId.get(e.obj) : null;
+    if (o && (o.vida <= 0 || dist(e.cx, e.cy, o) > arma.alcance)) { o = null; e.obj = 0; }
+    if (!o && (m.t + e.id) % 5 === 0) { o = buscarEnemigo(m, e, e.cx, e.cy, arma.alcance); if (o) e.obj = o.id; }
+    if (o && e.recarga <= 0) disparar(m, e, o, arma);
+  }
+
+  function tickUnidad(m, u) {
+    const d = UNID[u.tipo];
+    u.px = u.x; u.py = u.y;
+    if (u.recarga > 0) u.recarga--;
+    if (u.tipo === 'cosechadora') { tickCosechadora(m, u); return; }
+    if (u.fallo) { u.fallo = false; u.orden = 'nada'; u.obj = 0; }
+    const arma = ARMAS[d.arma];
+    if (u.orden === 'mover') {
+      if (avanzar(m, u) || (!u.ruta && !u.pend)) u.orden = 'nada';
+      return;
+    }
+    let o = u.obj ? m.porId.get(u.obj) : null;
+    if (u.obj && (!o || o.vida <= 0)) { o = null; u.obj = 0; u.ruta = null; if (u.orden === 'atacar') u.orden = 'nada'; }
+    if (!o && (m.t + u.id) % 5 === 0) {
+      o = buscarEnemigo(m, u, u.x, u.y, arma.alcance + 2);
+      if (o) { u.obj = o.id; u.ruta = null; u.pend = null; }
+    }
+    if (o) {
+      const dd = dist(u.x, u.y, o);
+      if (dd <= arma.alcance) {
+        if (u.recarga <= 0) disparar(m, u, o, arma);
+      } else if (u.orden !== 'atacar' && dd > arma.alcance + 4) {
+        u.obj = 0; u.ruta = null; // se alejó demasiado: lo suelta
+      } else {
+        if (!u.pend && (!u.ruta || (!o.edif && (m.t + u.id) % 20 === 0))) pedirRuta(m, u, posX(o), posY(o), o.edif ? o.tam / 2 + 1 : 1);
+        avanzar(m, u);
+      }
+      return;
+    }
+    if (u.orden === 'amover') {
+      if (u.ruta) { if (avanzar(m, u)) u.orden = 'nada'; }
+      else if (!u.pend) {
+        if (Math.hypot(u.dest.x - u.x, u.dest.y - u.y) > 1.5) pedirRuta(m, u, u.dest.x, u.dest.y, 0); else u.orden = 'nada';
+      }
+    }
+  }
+
+  // ---------- cosecha ----------
+  function minaCercana(m, u) {
+    const N = m.N, rx = u.pref ? u.pref.x : u.x, ry = u.pref ? u.pref.y : u.y;
+    let mejor = -1, md = Infinity;
+    for (let k = 0; k < m.minas.length; k++) {
+      const c = m.minas[k];
+      const d = Math.hypot((c % N) + 0.5 - rx, ((c / N) | 0) + 0.5 - ry) + ((c * 7 + u.id * 13) % 5) * 0.3;
+      if (d < md) { md = d; mejor = c; }
+    }
+    u.pref = null;
+    return mejor;
+  }
+  function quitarMina(m, c) {
+    const i = m.minas.indexOf(c);
+    if (i >= 0) { m.minas[i] = m.minas[m.minas.length - 1]; m.minas.pop(); }
+    m.mapa.tipoMin[c] = 0;
+  }
+  function refineriaCercana(m, u) {
+    let mejor = null, md = Infinity;
+    for (let k = 0; k < m.ents.length; k++) {
+      const e = m.ents[k];
+      if (e.j !== u.j || e.tipo !== 'refineria') continue;
+      const d = dist(u.x, u.y, e);
+      if (d < md) { md = d; mejor = e; }
+    }
+    return mejor;
+  }
+
+  function tickCosechadora(m, u) {
+    const d = UNID.cosechadora, N = m.N, J = m.jug[u.j];
+    u.fijo = false; u.fallo = false;
+    if (u.orden === 'mover') {
+      if (avanzar(m, u) || (!u.ruta && !u.pend)) { u.orden = 'nada'; u.est = 'quieto'; }
+      return;
+    }
+    switch (u.est) {
+      case 'buscar': {
+        if (u.carga >= d.carga) { u.est = 'volver0'; break; }
+        const c = minaCercana(m, u);
+        if (c < 0) { if (u.carga > 0) u.est = 'volver0'; else { u.est = 'espera'; u.espera = 60; } break; }
+        u.celda = c; pedirRuta(m, u, (c % N) + 0.5, ((c / N) | 0) + 0.5, 0); u.est = 'ir';
+        break;
+      }
+      case 'ir':
+        if (u.pend) break;
+        if (!u.ruta) {
+          const cerca = Math.hypot((u.celda % N) + 0.5 - u.x, ((u.celda / N) | 0) + 0.5 - u.y) < 0.9;
+          if (cerca) u.est = 'cosechar'; else { u.est = 'espera'; u.espera = 40; }
+          break;
+        }
+        avanzar(m, u);
+        break;
+      case 'cosechar': {
+        u.fijo = true;
+        const hay = m.mapa.mineral[u.celda];
+        if (hay <= 0) { quitarMina(m, u.celda); u.est = 'buscar'; break; }
+        const q = Math.min(ECON.cosecha, d.carga - u.carga, hay);
+        m.mapa.mineral[u.celda] -= q; u.carga += q;
+        if (m.mapa.mineral[u.celda] <= 0) quitarMina(m, u.celda);
+        if (u.carga >= d.carga) u.est = 'volver0';
+        break;
+      }
+      case 'volver0': {
+        const ref = refineriaCercana(m, u);
+        if (!ref) { u.est = 'espera'; u.espera = 60; break; }
+        u.ref = ref.id; pedirRuta(m, u, ref.cx, ref.cy, ref.tam / 2 + 0.9); u.est = 'volver';
+        break;
+      }
+      case 'volver': {
+        if (u.pend) break;
+        const ref = m.porId.get(u.ref);
+        if (!ref) { u.ruta = null; u.est = 'volver0'; break; }
+        if (!u.ruta) {
+          if (dist(u.x, u.y, ref) <= 1.3) u.est = 'descargar'; else { u.est = 'espera'; u.espera = 40; }
+          break;
+        }
+        avanzar(m, u);
+        break;
+      }
+      case 'descargar': {
+        u.fijo = true;
+        if (!m.porId.get(u.ref)) { u.est = 'volver0'; break; }
+        const q = Math.min(ECON.descarga, u.carga);
+        u.carga -= q; J.minerales += q; J.cosechado += q;
+        if (u.carga <= 0) u.est = 'buscar';
+        break;
+      }
+      case 'espera':
+        if (--u.espera <= 0) u.est = u.carga >= d.carga ? 'volver0' : 'buscar';
+        break;
+    }
+  }
+
+  // ---------- producción ----------
+  function edificioDe(m, j, tipo) {
+    for (let k = 0; k < m.ents.length; k++) if (m.ents[k].j === j && m.ents[k].tipo === tipo) return m.ents[k];
+    return null;
+  }
+  function tickProduccion(m, j) {
+    const J = m.jug[j];
+    if (!J.vivo) return;
+    const factor = J.uso > J.prod ? 0.5 : 1; // déficit de energía: todo a media velocidad
+    if (m.t % ECON.goteoCada === 0) J.minerales += 1; // ingreso mínimo del patio: evita el bloqueo total
+    if (J.edif && !J.edif.listo) { J.edif.prog += factor; if (J.edif.prog >= EDIF[J.edif.tipo].tiempo) J.edif.listo = true; }
+    for (const cat of ['inf', 'veh']) {
+      const q = J.colas[cat];
+      if (!q.lista.length) continue;
+      const fab = edificioDe(m, j, cat === 'inf' ? 'cuartel' : 'fabrica');
+      if (!fab) { for (const t of q.lista) J.minerales += UNID[t].costo; q.lista.length = 0; q.prog = 0; continue; }
+      q.prog += factor;
+      const tipo = q.lista[0];
+      if (q.prog < UNID[tipo].tiempo) continue;
+      q.lista.shift(); q.prog = 0;
+      const u = crearUnidad(m, j, tipo, W.cercaLibre(m, fab.cx, fab.y + fab.tam + 0.5));
+      if (tipo !== 'cosechadora') { // se aparta de la puerta, hacia el centro del mapa
+        const cx = m.N / 2 - fab.cx, cy = m.N / 2 - fab.cy, cd = Math.hypot(cx, cy) || 1;
+        const c = W.cercaLibre(m, fab.cx + (cx / cd) * (fab.tam + 2), fab.cy + (cy / cd) * (fab.tam + 2));
+        u.orden = 'mover'; u.dest = { x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 };
+        pedirRuta(m, u, u.dest.x, u.dest.y, 0);
+      }
+    }
+  }
+
+  // ---------- niebla ----------
+  W.actualizarNiebla = function (m) {
+    const N = m.N, NN = N * N;
+    for (let j = 0; j < 2; j++) { const f = m.niebla[j]; for (let i = 0; i < NN; i++) if (f[i] === 2) f[i] = 1; }
+    for (let k = 0; k < m.ents.length; k++) {
+      const e = m.ents[k], f = m.niebla[e.j];
+      const r = (e.edif ? EDIF[e.tipo] : UNID[e.tipo]).vision + (e.edif ? e.tam / 2 : 0), r2 = r * r;
+      const cx = Math.floor(posX(e)), cy = Math.floor(posY(e)), R = Math.ceil(r);
+      for (let dy = -R; dy <= R; dy++) {
+        const y = cy + dy; if (y < 0 || y >= N) continue;
+        for (let dx = -R; dx <= R; dx++) {
+          const x = cx + dx; if (x < 0 || x >= N || dx * dx + dy * dy > r2) continue;
+          f[y * N + x] = 2;
+        }
+      }
+    }
+    m.nieblaV = (m.nieblaV || 0) + 1;
+  };
+
+  // ---------- tick ----------
+  W.tick = function (m) {
+    if (m.ganador >= 0) return;
+    const cmds = m.cola; m.cola = [];
+    for (let k = 0; k < cmds.length; k++) aplicar(m, cmds[k]);
+    contar(m);
+    procesarRutas(m);
+    tickProduccion(m, 0); tickProduccion(m, 1);
+    for (let k = 0, n = m.ents.length; k < n; k++) {
+      const e = m.ents[k];
+      if (e.edif) { if (EDIF[e.tipo].arma) tickTorreta(m, e); } else tickUnidad(m, e);
+    }
+    separar(m);
+
+    let muertos = false;
+    for (let k = 0; k < m.ents.length; k++) {
+      const e = m.ents[k];
+      if (e.vida > 0) continue;
+      muertos = true; m.porId.delete(e.id); m.jug[e.j].bajas++;
+      if (e.edif) {
+        const N = m.N;
+        for (let dy = 0; dy < e.tam; dy++) for (let dx = 0; dx < e.tam; dx++) { const i = (e.y + dy) * N + e.x + dx; m.ocup[i] = 0; m.paso[i] = 1; }
+        if (e.tipo === 'patio') m.jug[e.j].vivo = false;
+      }
+    }
+    if (muertos) {
+      m.ents = m.ents.filter((e) => e.vida > 0);
+      contar(m);
+      if (!m.jug[0].vivo || !m.jug[1].vivo) m.ganador = m.jug[0].vivo ? 0 : m.jug[1].vivo ? 1 : 2;
+    }
+    if (m.efectos.length && m.efectos[0].t < m.t - 4) m.efectos = m.efectos.filter((f) => f.t >= m.t - 4);
+    if (m.t % 4 === 0) W.actualizarNiebla(m);
+    m.t++;
+  };
+
+  // Resumen numérico del estado, para comprobar determinismo.
+  W.huella = function (m) {
+    let h = m.t + m.jug[0].minerales * 3 + m.jug[1].minerales * 7;
+    for (const e of m.ents) h = (h * 31 + e.id * 17 + Math.round(posX(e) * 1000) + Math.round(posY(e) * 1000) * 3 + Math.round(e.vida * 10)) % 2147483647;
+    return h;
+  };
+})();
+
+// ===== sim/ia.js =====
+// rts.warfare — IA rival básica. Solo emite comandos, igual que el jugador.
+// Limitación declarada: no usa la niebla (sabe dónde está la base rival).
+(function () {
+  const W = globalThis.W || (globalThis.W = {});
+  const EDIF = W.EDIF, UNID = W.UNID;
+
+  // Orden de construcción: [tipo, cantidad deseada].
+  const PLAN = [['central', 1], ['refineria', 1], ['cuartel', 1], ['fabrica', 1], ['torreta', 1], ['refineria', 2], ['torreta', 2], ['torreta', 3]];
+
+  W.iaCrear = function (j) {
+    return { j, oleada: 6, atacantes: new Set(), reunidos: new Set(), fallos: 0 };
+  };
+
+  function siguienteEdificio(m, j) {
+    const J = m.jug[j];
+    for (const [tipo, n] of PLAN) {
+      if ((J.cuenta[tipo] || 0) >= n) continue;
+      if (!W.tieneReq(m, j, EDIF[tipo].req)) return null;
+      if (tipo !== 'central' && J.prod - J.uso + EDIF[tipo].energia < 0) return 'central';
+      return tipo;
+    }
+    return J.uso > J.prod ? 'central' : null;
+  }
+
+  function buscarSitio(m, j, tipo, patio) {
+    const N = m.N, t = EDIF[tipo].tam, rival = m.mapa.bases[1 - j];
+    let mejor = null, mp = Infinity;
+    for (let dy = -14; dy <= 14; dy++) for (let dx = -14; dx <= 14; dx++) {
+      const x = Math.floor(patio.cx) + dx, y = Math.floor(patio.cy) + dy;
+      if (x < 1 || y < 1 || x + t >= N || y + t >= N) continue;
+      if (!W.puedeColocar(m, j, tipo, x, y)) continue;
+      let libre = true; // un anillo libre alrededor, para no cerrarse el paso
+      for (let yy = y - 1; yy <= y + t && libre; yy++) for (let xx = x - 1; xx <= x + t; xx++) if (m.ocup[yy * N + xx] || m.mapa.mineral[yy * N + xx]) { libre = false; break; }
+      if (!libre) continue;
+      const cx = x + t / 2, cy = y + t / 2;
+      let p = Math.hypot(cx - patio.cx, cy - patio.cy);
+      if (tipo === 'refineria') {
+        let dm = 40;
+        for (let k = 0; k < m.minas.length; k++) { const c = m.minas[k]; const d = Math.hypot((c % N) + 0.5 - cx, ((c / N) | 0) + 0.5 - cy); if (d < dm) dm = d; }
+        p = p * 0.3 + dm * 2;
+      } else if (tipo === 'torreta') {
+        p = p * 0.5 + Math.hypot(cx - rival.x, cy - rival.y) * 0.4;
+      }
+      if (p < mp) { mp = p; mejor = { x, y }; }
+    }
+    return mejor;
+  }
+
+  W.iaTick = function (m, ia) {
+    if ((m.t + ia.j * 7) % 20 !== 0 || m.ganador >= 0) return;
+    const j = ia.j, J = m.jug[j];
+    if (!J.vivo) return;
+    let patio = null, objetivo = null, dObj = Infinity;
+    const soldados = [];
+    for (const e of m.ents) {
+      if (e.j === j) {
+        if (e.tipo === 'patio') patio = e;
+        else if (!e.edif && UNID[e.tipo].arma) soldados.push(e);
+      }
+    }
+    if (!patio) return;
+    for (const e of m.ents) { // objetivo: el patio rival; si no, el edificio rival más cercano
+      if (e.j === j || !e.edif) continue;
+      const d = e.tipo === 'patio' ? -1 : Math.hypot(e.cx - patio.cx, e.cy - patio.cy);
+      if (d < dObj) { dObj = d; objetivo = e; }
+    }
+
+    // Sin cosechadoras no hay economía: reponerlas va antes que todo lo demás.
+    const cosech = (J.cuenta.cosechadora || 0) + J.colas.veh.lista.filter((t) => t === 'cosechadora').length;
+    const urgente = cosech === 0 && J.cuenta.fabrica && J.cuenta.refineria;
+
+    // Construcción
+    const plan = J.edif || urgente ? null : siguienteEdificio(m, j);
+    if (J.edif && J.edif.listo) {
+      const p = buscarSitio(m, j, J.edif.tipo, patio);
+      if (p) { W.orden(m, { t: 'colocar', j, x: p.x, y: p.y }); ia.fallos = 0; }
+      else if (++ia.fallos > 15) { W.orden(m, { t: 'cancelarEdif', j }); ia.fallos = 0; }
+    } else if (plan && J.minerales >= EDIF[plan].costo) {
+      W.orden(m, { t: 'construir', j, tipo: plan });
+    }
+
+    // Unidades
+    let dinero = J.minerales - (plan ? EDIF[plan].costo : 0);
+    const deseadas = Math.min(2 * (J.cuenta.refineria || 0), 4);
+    if (J.cuenta.fabrica && cosech < deseadas && J.minerales >= UNID.cosechadora.costo) {
+      W.orden(m, { t: 'entrenar', j, tipo: 'cosechadora' }); dinero -= UNID.cosechadora.costo;
+    }
+    if (soldados.length < 40 && !urgente) {
+      if (J.cuenta.fabrica && !J.colas.veh.lista.length && dinero >= UNID.tanque.costo) { W.orden(m, { t: 'entrenar', j, tipo: 'tanque' }); dinero -= UNID.tanque.costo; }
+      if (J.cuenta.cuartel && J.colas.inf.lista.length < 2 && dinero >= UNID.infanteria.costo) W.orden(m, { t: 'entrenar', j, tipo: 'infanteria' });
+    }
+
+    // Ejército
+    const vivos = new Set(soldados.map((u) => u.id));
+    for (const id of ia.atacantes) if (!vivos.has(id)) ia.atacantes.delete(id);
+    for (const id of ia.reunidos) if (!vivos.has(id)) ia.reunidos.delete(id);
+    const rival = m.mapa.bases[1 - j];
+    const dx = rival.x - patio.cx, dy = rival.y - patio.cy, dd = Math.hypot(dx, dy) || 1;
+    const rx = patio.cx + (dx / dd) * 9, ry = patio.cy + (dy / dd) * 9;
+    const reserva = soldados.filter((u) => !ia.atacantes.has(u.id));
+
+    if (J.alerta && m.t - J.alerta.t < 100) { // defensa: acude la reserva ociosa
+      const ids = reserva.filter((u) => u.orden === 'nada' && !u.obj).map((u) => u.id);
+      if (ids.length) W.orden(m, { t: 'amover', j, ids, x: J.alerta.x, y: J.alerta.y });
+    } else {
+      const ids = reserva.filter((u) => u.orden === 'nada' && !u.obj && !ia.reunidos.has(u.id)).map((u) => u.id);
+      if (ids.length) { W.orden(m, { t: 'amover', j, ids, x: rx, y: ry }); for (const id of ids) ia.reunidos.add(id); }
+    }
+    if (objetivo) {
+      if (reserva.length >= ia.oleada) {
+        W.orden(m, { t: 'amover', j, ids: reserva.map((u) => u.id), x: objetivo.cx, y: objetivo.cy });
+        for (const u of reserva) ia.atacantes.add(u.id);
+        ia.oleada = Math.min(ia.oleada + 2, 18);
+      }
+      const ociosos = soldados.filter((u) => ia.atacantes.has(u.id) && u.orden === 'nada' && !u.obj).map((u) => u.id);
+      if (ociosos.length) W.orden(m, { t: 'amover', j, ids: ociosos, x: objetivo.cx, y: objetivo.cy });
+    }
+  };
+})();
+
+// ===== ui/juego.js =====
+// rts.warfare — interfaz: dibujo en canvas, entrada y barra lateral. Lee el mundo y emite comandos.
+(function () {
+  const W = globalThis.W;
+  const EDIF = W.EDIF, UNID = W.UNID;
+  const TAU = Math.PI * 2;
+
+  // Toda la paleta vive aquí: cambiar de tema no cuesta nada.
+  const PALETAS = {
+    clara:  { fondo: '#ffffff', llano: '#f3f1e8', roca: '#4a4a42', agua: '#b9cfdc', bosque: '#c5d3b0', tinta: '#111111', mineral: '#586a45', raro: '#7d5aa6', niebla: [196, 194, 184], velo: 150, yo: '#4f6b82', rival: '#b06a36', bien: '#586a45', mal: '#b0362f' },
+    oscura: { fondo: '#16170f', llano: '#26271c', roca: '#5b5c50', agua: '#22343f', bosque: '#34412a', tinta: '#e8e4d6', mineral: '#8fa676', raro: '#b08ad6', niebla: [6, 6, 4],       velo: 140, yo: '#6f93b0', rival: '#d0854a', bien: '#8fa676', mal: '#d0554a' },
+  };
+  const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+
+  W.iniciar = function () {
+    const $ = (id) => document.getElementById(id);
+    const params = new URLSearchParams(location.search);
+    let semilla = parseInt(params.get('s'), 10);
+    if (!Number.isFinite(semilla)) semilla = Math.floor(Date.now() % 1000000);
+    const m = W.crearMundo(semilla), ia = W.iaCrear(1), N = m.N, YO = 0, J = m.jug[YO];
+    W.mundo = m; // a mano en la consola, para depurar
+
+    let tema = 'clara';
+    try { tema = localStorage.getItem('rts.tema') === 'oscura' ? 'oscura' : 'clara'; } catch (e) { /* sin almacenamiento: tema por defecto */ }
+    let P = PALETAS[tema];
+
+    const lienzo = $('lienzo'), ctx = lienzo.getContext('2d');
+    const mini = $('mini'), mctx = mini.getContext('2d'), MS = mini.width;
+    let cw = 0, ch = 0, dpr = 1;
+    const cam = { x: m.mapa.bases[YO].x, y: m.mapa.bases[YO].y, z: 14 };
+    const sel = new Set(), grupos = {}, teclas = new Set(), marcas = [];
+    let modo = null; // null | 'colocar' | 'amover'
+    let pausa = false, cuadros = 0, nieblaVista = -1;
+    const raton = { x: 0, y: 0, izq: false, x0: 0, y0: 0, medio: false, dentro: false };
+
+    // ---------- capas pre-dibujadas ----------
+    const cTerr = document.createElement('canvas'); cTerr.width = cTerr.height = N;
+    const xTerr = cTerr.getContext('2d');
+    const cNie = document.createElement('canvas'); cNie.width = cNie.height = N;
+    const xNie = cNie.getContext('2d'), imgNie = xNie.createImageData(N, N);
+    function pintarTerreno() {
+      const img = xTerr.createImageData(N, N), cols = [P.llano, P.roca, P.agua, P.bosque].map(hex);
+      for (let i = 0; i < N * N; i++) { const c = cols[m.mapa.terreno[i]]; img.data[i * 4] = c[0]; img.data[i * 4 + 1] = c[1]; img.data[i * 4 + 2] = c[2]; img.data[i * 4 + 3] = 255; }
+      xTerr.putImageData(img, 0, 0);
+    }
+    function pintarNiebla() {
+      const f = m.niebla[YO], d = imgNie.data, c = P.niebla;
+      for (let i = 0; i < N * N; i++) { d[i * 4] = c[0]; d[i * 4 + 1] = c[1]; d[i * 4 + 2] = c[2]; d[i * 4 + 3] = f[i] === 2 ? 0 : f[i] === 1 ? P.velo : 255; }
+      xNie.putImageData(imgNie, 0, 0);
+      nieblaVista = m.nieblaV;
+    }
+    function ponerTema(t) {
+      tema = t; P = PALETAS[t]; document.body.dataset.tema = t;
+      try { localStorage.setItem('rts.tema', t); } catch (e) { /* no pasa nada */ }
+      pintarTerreno(); pintarNiebla();
+    }
+
+    function ajustar() {
+      dpr = window.devicePixelRatio || 1;
+      const r = lienzo.getBoundingClientRect();
+      cw = r.width; ch = r.height;
+      lienzo.width = Math.max(1, Math.round(cw * dpr)); lienzo.height = Math.max(1, Math.round(ch * dpr));
+    }
+    function limitarCam() {
+      cam.z = Math.max(4, Math.min(40, cam.z));
+      cam.x = Math.max(0, Math.min(N, cam.x)); cam.y = Math.max(0, Math.min(N, cam.y));
+    }
+    const aMundoX = (sx) => cam.x + (sx - cw / 2) / cam.z, aMundoY = (sy) => cam.y + (sy - ch / 2) / cam.z;
+    const visible = (x, y) => x >= 0 && y >= 0 && x < N && y < N && m.niebla[YO][Math.floor(y) * N + Math.floor(x)] === 2;
+    const veo = (e) => e.j === YO || visible(e.edif ? e.cx : e.x, e.edif ? e.cy : e.y);
+
+    function entEn(wx, wy) {
+      let mejor = null, md = Infinity;
+      for (const e of m.ents) {
+        if (!veo(e)) continue;
+        if (e.edif) { if (wx >= e.x && wx < e.x + e.tam && wy >= e.y && wy < e.y + e.tam && md > 50) { mejor = e; md = 50; } }
+        else { const d = Math.hypot(e.x - wx, e.y - wy); if (d < UNID[e.tipo].radio + 0.3 && d < md) { mejor = e; md = d; } }
+      }
+      return mejor;
+    }
+    const unidadesSel = () => { const out = []; for (const id of sel) { const e = m.porId.get(id); if (e && !e.edif) out.push(e); } return out; };
+    const esquinaColocar = (tipo) => { const t = EDIF[tipo].tam; return { x: Math.round(aMundoX(raton.x) - t / 2), y: Math.round(aMundoY(raton.y) - t / 2) }; };
+
+    // ---------- dibujo ----------
+    function dibujar(alfa) {
+      const z = cam.z, ox = cw / 2 - cam.x * z, oy = ch / 2 - cam.y * z, f = m.niebla[YO], mp = m.mapa;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.fillStyle = P.fondo; ctx.fillRect(0, 0, cw, ch);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(cTerr, ox, oy, N * z, N * z);
+      const x0 = Math.floor(-ox / z) - 1, x1 = Math.floor((cw - ox) / z) + 1, y0 = Math.floor(-oy / z) - 1, y1 = Math.floor((ch - oy) / z) + 1;
+      const fuera = (x, y) => x < x0 || x > x1 || y < y0 || y > y1;
+
+      ctx.fillStyle = P.mineral; ctx.beginPath();
+      for (const c of m.minas) {
+        const x = c % N, y = (c / N) | 0;
+        if (fuera(x, y) || !f[c]) continue;
+        const r = z * (0.13 + 0.25 * Math.min(1, mp.mineral[c] / 600)), px = ox + (x + 0.5) * z, py = oy + (y + 0.5) * z;
+        ctx.moveTo(px + r, py); ctx.arc(px, py, r, 0, TAU);
+      }
+      ctx.fill();
+      ctx.fillStyle = P.raro; ctx.beginPath();
+      for (const c of m.raros) {
+        const x = c % N, y = (c / N) | 0;
+        if (fuera(x, y) || !f[c]) continue;
+        const r = z * 0.34, px = ox + (x + 0.5) * z, py = oy + (y + 0.5) * z;
+        ctx.moveTo(px, py - r); ctx.lineTo(px + r, py); ctx.lineTo(px, py + r); ctx.lineTo(px - r, py); ctx.closePath();
+      }
+      ctx.fill();
+      ctx.strokeStyle = P.tinta; ctx.fillStyle = P.tinta; ctx.lineWidth = Math.max(1, z * 0.09);
+      for (const s of mp.sitios) {
+        if (fuera(s.x, s.y) || !f[s.y * N + s.x]) continue;
+        const px = ox + (s.x + 0.5) * z, py = oy + (s.y + 0.5) * z;
+        if (s.tipo === 'petroleo') {
+          ctx.beginPath(); ctx.arc(px, py, z * 0.5, 0, TAU); ctx.stroke();
+          ctx.beginPath(); ctx.arc(px, py, z * 0.17, 0, TAU); ctx.fill();
+        } else {
+          ctx.beginPath(); ctx.arc(px, py, z * 0.55, 0, TAU); ctx.moveTo(px + z * 0.28, py); ctx.arc(px, py, z * 0.28, 0, TAU);
+          ctx.moveTo(px - z * 0.85, py); ctx.lineTo(px + z * 0.85, py); ctx.moveTo(px, py - z * 0.85); ctx.lineTo(px, py + z * 0.85); ctx.stroke();
+        }
+      }
+
+      const barras = [];
+      for (const e of m.ents) {
+        if (!e.edif || !veo(e) || fuera(e.cx, e.cy) && fuera(e.x, e.y)) continue;
+        const px = ox + e.x * z, py = oy + e.y * z, t = e.tam * z, cx = px + t / 2, cy = py + t / 2;
+        ctx.fillStyle = e.j === YO ? P.yo : P.rival;
+        ctx.strokeStyle = P.llano; ctx.lineWidth = Math.max(1, z * 0.1);
+        if (e.tipo === 'torreta') {
+          ctx.beginPath(); ctx.arc(cx, cy, t * 0.46, 0, TAU); ctx.fill();
+          ctx.beginPath(); ctx.arc(cx, cy, t * 0.2, 0, TAU); ctx.stroke();
+        } else {
+          ctx.fillRect(px + 1, py + 1, t - 2, t - 2);
+          ctx.beginPath();
+          const g = t * 0.24;
+          if (e.tipo === 'patio') ctx.rect(cx - g, cy - g, g * 2, g * 2);
+          else if (e.tipo === 'central') ctx.arc(cx, cy, g, 0, TAU);
+          else if (e.tipo === 'refineria') { ctx.moveTo(cx, cy - g); ctx.lineTo(cx + g, cy); ctx.lineTo(cx, cy + g); ctx.lineTo(cx - g, cy); ctx.closePath(); }
+          else if (e.tipo === 'cuartel') { ctx.moveTo(cx - g, cy); ctx.lineTo(cx + g, cy); ctx.moveTo(cx, cy - g); ctx.lineTo(cx, cy + g); }
+          else if (e.tipo === 'fabrica') { ctx.moveTo(cx, cy - g); ctx.lineTo(cx + g, cy + g); ctx.lineTo(cx - g, cy + g); ctx.closePath(); }
+          ctx.stroke();
+        }
+        if (sel.has(e.id)) { ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.strokeRect(px - 1, py - 1, t + 2, t + 2); }
+        if (sel.has(e.id) || e.vida < e.vidaMax) barras.push([px, py - 5, t, e.vida / e.vidaMax]);
+      }
+      for (const e of m.ents) {
+        if (e.edif || !veo(e)) continue;
+        const wx = e.px + (e.x - e.px) * alfa, wy = e.py + (e.y - e.py) * alfa;
+        if (fuera(wx, wy)) continue;
+        const px = ox + wx * z, py = oy + wy * z, r = Math.max(2, UNID[e.tipo].radio * z);
+        ctx.fillStyle = e.j === YO ? P.yo : P.rival;
+        ctx.beginPath();
+        if (e.tipo === 'infanteria') ctx.arc(px, py, r, 0, TAU);
+        else if (e.tipo === 'tanque') { ctx.moveTo(px, py - r * 1.15); ctx.lineTo(px + r * 1.15, py); ctx.lineTo(px, py + r * 1.15); ctx.lineTo(px - r * 1.15, py); ctx.closePath(); }
+        else ctx.rect(px - r, py - r, r * 2, r * 2);
+        ctx.fill();
+        if (e.tipo === 'cosechadora') { // el relleno interior muestra la carga
+          const q = e.carga / UNID.cosechadora.carga, i = r * 0.62;
+          ctx.fillStyle = P.llano; ctx.fillRect(px - i, py - i, i * 2, i * 2);
+          if (q > 0) { ctx.fillStyle = P.mineral; ctx.fillRect(px - i, py + i - i * 2 * q, i * 2, i * 2 * q); }
+        }
+        if (sel.has(e.id)) { ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(px, py, r * 1.5 + 2, 0, TAU); ctx.stroke(); }
+        if (sel.has(e.id) || e.vida < e.vidaMax) barras.push([px - r * 1.3, py - r * 1.5 - 7, r * 2.6, e.vida / e.vidaMax]);
+      }
+
+      ctx.lineWidth = Math.max(1, z * 0.07);
+      for (const d of m.efectos) {
+        const edad = m.t - d.t;
+        if (edad > 3 || !(visible(d.x1, d.y1) || visible(d.x2, d.y2))) continue;
+        ctx.strokeStyle = d.j === YO ? P.yo : P.rival; ctx.globalAlpha = 1 - edad * 0.28;
+        ctx.beginPath(); ctx.moveTo(ox + d.x1 * z, oy + d.y1 * z); ctx.lineTo(ox + d.x2 * z, oy + d.y2 * z); ctx.stroke();
+        ctx.beginPath(); ctx.arc(ox + d.x2 * z, oy + d.y2 * z, z * 0.22, 0, TAU); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(cNie, ox, oy, N * z, N * z);
+      ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.strokeRect(ox - 0.5, oy - 0.5, N * z + 1, N * z + 1);
+
+      for (const b of barras) {
+        ctx.fillStyle = P.fondo; ctx.fillRect(b[0], b[1], b[2], 3);
+        ctx.fillStyle = b[3] > 0.5 ? P.bien : b[3] > 0.25 ? P.rival : P.mal; ctx.fillRect(b[0], b[1], b[2] * Math.max(0, b[3]), 3);
+      }
+      const ahora = performance.now();
+      for (let k = marcas.length - 1; k >= 0; k--) {
+        const a = (ahora - marcas[k].t0) / 450;
+        if (a >= 1) { marcas.splice(k, 1); continue; }
+        ctx.strokeStyle = marcas[k].color; ctx.globalAlpha = 1 - a; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(ox + marcas[k].x * z, oy + marcas[k].y * z, z * (0.2 + a * 0.7), 0, TAU); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+
+      if (modo === 'colocar' && J.edif && J.edif.listo && raton.dentro) {
+        const p = esquinaColocar(J.edif.tipo), t = EDIF[J.edif.tipo].tam, vale = W.puedeColocar(m, YO, J.edif.tipo, p.x, p.y);
+        ctx.fillStyle = vale ? P.bien : P.mal; ctx.globalAlpha = 0.45;
+        ctx.fillRect(ox + p.x * z, oy + p.y * z, t * z, t * z);
+        ctx.globalAlpha = 1; ctx.strokeStyle = vale ? P.bien : P.mal; ctx.lineWidth = 1.5;
+        ctx.strokeRect(ox + p.x * z, oy + p.y * z, t * z, t * z);
+      }
+      if (raton.izq && Math.hypot(raton.x - raton.x0, raton.y - raton.y0) > 5) {
+        ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+        ctx.strokeRect(raton.x0, raton.y0, raton.x - raton.x0, raton.y - raton.y0);
+        ctx.setLineDash([]);
+      }
+      if (pausa || modo === 'amover') {
+        ctx.fillStyle = P.tinta; ctx.font = '12px "Fira Code", ui-monospace, monospace';
+        ctx.fillText(pausa ? 'pausa' : 'atacar al avanzar: elige destino', 12, 20);
+      }
+    }
+
+    function dibujarMini() {
+      const k = MS / N, f = m.niebla[YO];
+      mctx.imageSmoothingEnabled = false;
+      mctx.drawImage(cTerr, 0, 0, MS, MS);
+      mctx.fillStyle = P.mineral;
+      for (const c of m.minas) if (f[c]) mctx.fillRect((c % N) * k, ((c / N) | 0) * k, 2, 2);
+      for (const e of m.ents) {
+        if (!veo(e)) continue;
+        mctx.fillStyle = e.j === YO ? P.yo : P.rival;
+        if (e.edif) mctx.fillRect(e.x * k, e.y * k, Math.max(3, e.tam * k), Math.max(3, e.tam * k)); else mctx.fillRect(e.x * k - 1, e.y * k - 1, 2.5, 2.5);
+      }
+      mctx.imageSmoothingEnabled = true;
+      mctx.drawImage(cNie, 0, 0, MS, MS);
+      if (J.alerta && m.t - J.alerta.t < 60 && (m.t >> 2) % 2) { mctx.strokeStyle = P.mal; mctx.lineWidth = 2; mctx.beginPath(); mctx.arc(J.alerta.x * k, J.alerta.y * k, 7, 0, TAU); mctx.stroke(); }
+      mctx.strokeStyle = P.tinta; mctx.lineWidth = 1;
+      mctx.strokeRect((cam.x - cw / 2 / cam.z) * k + 0.5, (cam.y - ch / 2 / cam.z) * k + 0.5, (cw / cam.z) * k, (ch / cam.z) * k);
+    }
+
+    // ---------- barra lateral ----------
+    const botones = [];
+    function boton(cont, tipo, d, esEdif) {
+      const b = document.createElement('button');
+      b.className = 'btn'; b.type = 'button';
+      b.innerHTML = '<span class="n"></span><span class="c"></span>';
+      b.querySelector('.n').textContent = d.nombre;
+      b.title = 'Requiere: ' + d.req.map((r) => EDIF[r].nombre).join(', ');
+      b.addEventListener('click', () => {
+        if (esEdif) {
+          if (J.edif && J.edif.tipo === tipo && J.edif.listo) modo = 'colocar';
+          else if (!J.edif) W.orden(m, { t: 'construir', j: YO, tipo });
+        } else W.orden(m, { t: 'entrenar', j: YO, tipo });
+      });
+      b.addEventListener('contextmenu', (ev) => {
+        ev.preventDefault();
+        if (esEdif) { if (J.edif && J.edif.tipo === tipo) { W.orden(m, { t: 'cancelarEdif', j: YO }); modo = null; } }
+        else W.orden(m, { t: 'cancelarUnidad', j: YO, tipo });
+      });
+      cont.appendChild(b);
+      botones.push({ b, tipo, d, esEdif, c: b.querySelector('.c'), n: b.querySelector('.n') });
+    }
+    for (const tipo in EDIF) if (tipo !== 'patio') boton($('bEdif'), tipo, EDIF[tipo], true);
+    for (const tipo in UNID) boton($('bUnid'), tipo, UNID[tipo], false);
+
+    function actualizarBarra() {
+      $('rMin').textContent = Math.floor(J.minerales);
+      const e = $('rEne'); e.textContent = J.prod + ' / ' + J.uso; e.className = J.uso > J.prod ? 'mal' : '';
+      for (const o of botones) {
+        const d = o.d, req = W.tieneReq(m, YO, d.req);
+        let clase = 'btn', txt = String(d.costo), p = 0, nombre = d.nombre;
+        if (o.esEdif) {
+          const a = J.edif;
+          if (a && a.tipo === o.tipo) {
+            if (a.listo) { clase += ' listo'; txt = 'colocar'; } else { p = a.prog / d.tiempo; txt = Math.floor(p * 100) + '%'; }
+          } else if (!req || a) clase += ' no';
+          else if (J.minerales < d.costo) clase += ' caro';
+        } else {
+          const q = J.colas[d.cat], n = q.lista.filter((t) => t === o.tipo).length;
+          if (n) nombre += ' ×' + n;
+          if (q.lista[0] === o.tipo) p = q.prog / d.tiempo;
+          if (!req) clase += ' no'; else if (J.minerales < d.costo) clase += ' caro';
+        }
+        if (o.b.className !== clase) o.b.className = clase;
+        if (o.c.textContent !== txt) o.c.textContent = txt;
+        if (o.n.textContent !== nombre) o.n.textContent = nombre;
+        o.b.style.setProperty('--p', (p * 100).toFixed(1) + '%');
+      }
+      let s = '';
+      const vivos = [...sel].map((id) => m.porId.get(id)).filter(Boolean);
+      if (vivos.length === 1) { const v = vivos[0]; s = (v.edif ? EDIF : UNID)[v.tipo].nombre + ' · ' + Math.ceil(v.vida) + ' / ' + v.vidaMax; }
+      else if (vivos.length > 1) s = vivos.length + ' unidades';
+      if ($('sel').textContent !== s) $('sel').textContent = s;
+    }
+
+    // ---------- entrada ----------
+    function posRaton(ev) { const r = lienzo.getBoundingClientRect(); raton.x = ev.clientX - r.left; raton.y = ev.clientY - r.top; }
+    const marca = (x, y, color) => marcas.push({ x, y, color, t0: performance.now() });
+
+    lienzo.addEventListener('contextmenu', (ev) => ev.preventDefault());
+    lienzo.addEventListener('mouseenter', () => { raton.dentro = true; });
+    lienzo.addEventListener('mouseleave', () => { raton.dentro = false; });
+    lienzo.addEventListener('mousedown', (ev) => {
+      posRaton(ev);
+      const wx = aMundoX(raton.x), wy = aMundoY(raton.y);
+      if (ev.button === 1) { raton.medio = true; ev.preventDefault(); return; }
+      if (ev.button === 0) {
+        if (modo === 'colocar' && J.edif && J.edif.listo) {
+          const p = esquinaColocar(J.edif.tipo);
+          if (W.puedeColocar(m, YO, J.edif.tipo, p.x, p.y)) { W.orden(m, { t: 'colocar', j: YO, x: p.x, y: p.y }); modo = null; }
+          return;
+        }
+        if (modo === 'amover') {
+          const ids = unidadesSel().map((u) => u.id);
+          if (ids.length) { W.orden(m, { t: 'amover', j: YO, ids, x: wx, y: wy }); marca(wx, wy, P.mal); }
+          modo = null; return;
+        }
+        raton.izq = true; raton.x0 = raton.x; raton.y0 = raton.y;
+        return;
+      }
+      if (ev.button === 2) {
+        if (modo) { modo = null; return; }
+        const us = unidadesSel();
+        if (!us.length || wx < 0 || wy < 0 || wx >= N || wy >= N) return;
+        const ids = us.map((u) => u.id), o = entEn(wx, wy), c = Math.floor(wy) * N + Math.floor(wx);
+        if (o && o.j !== YO) { W.orden(m, { t: 'atacar', j: YO, ids, obj: o.id }); marca(wx, wy, P.mal); return; }
+        const cos = us.filter((u) => u.tipo === 'cosechadora').map((u) => u.id);
+        if (cos.length && m.mapa.tipoMin[c] === 1 && m.niebla[YO][c]) {
+          W.orden(m, { t: 'cosechar', j: YO, ids: cos, x: wx, y: wy });
+          const resto = us.filter((u) => u.tipo !== 'cosechadora').map((u) => u.id);
+          if (resto.length) W.orden(m, { t: 'mover', j: YO, ids: resto, x: wx, y: wy });
+        } else W.orden(m, { t: 'mover', j: YO, ids, x: wx, y: wy });
+        marca(wx, wy, P.bien);
+      }
+    });
+    window.addEventListener('mousemove', (ev) => {
+      const ax = raton.x, ay = raton.y;
+      posRaton(ev);
+      if (raton.medio) { cam.x -= (raton.x - ax) / cam.z; cam.y -= (raton.y - ay) / cam.z; limitarCam(); }
+    });
+    window.addEventListener('mouseup', (ev) => {
+      if (ev.button === 1) { raton.medio = false; return; }
+      if (ev.button !== 0 || !raton.izq) return;
+      raton.izq = false;
+      if (!ev.shiftKey) sel.clear();
+      if (Math.hypot(raton.x - raton.x0, raton.y - raton.y0) <= 5) {
+        const e = entEn(aMundoX(raton.x), aMundoY(raton.y));
+        if (e && e.j === YO) { if (ev.shiftKey && sel.has(e.id)) sel.delete(e.id); else sel.add(e.id); }
+        return;
+      }
+      const ax = aMundoX(Math.min(raton.x, raton.x0)), bx = aMundoX(Math.max(raton.x, raton.x0));
+      const ay = aMundoY(Math.min(raton.y, raton.y0)), by = aMundoY(Math.max(raton.y, raton.y0));
+      for (const e of m.ents) if (!e.edif && e.j === YO && e.x >= ax && e.x <= bx && e.y >= ay && e.y <= by) sel.add(e.id);
+      // La caja prioriza tropa: suelta edificios y, si hay combatientes, también cosechadoras.
+      const cosas = [...sel].map((id) => m.porId.get(id)).filter(Boolean);
+      const hayTropa = cosas.some((e) => !e.edif && UNID[e.tipo].arma);
+      for (const e of cosas) if ((e.edif && sel.size > 1) || (hayTropa && e.tipo === 'cosechadora')) sel.delete(e.id);
+    });
+    lienzo.addEventListener('wheel', (ev) => {
+      ev.preventDefault(); posRaton(ev);
+      const wx = aMundoX(raton.x), wy = aMundoY(raton.y);
+      cam.z *= Math.exp(-ev.deltaY * 0.0015); limitarCam();
+      cam.x = wx - (raton.x - cw / 2) / cam.z; cam.y = wy - (raton.y - ch / 2) / cam.z; limitarCam();
+    }, { passive: false });
+
+    let miniAbajo = false;
+    function irMini(ev) { const r = mini.getBoundingClientRect(); cam.x = ((ev.clientX - r.left) / r.width) * N; cam.y = ((ev.clientY - r.top) / r.height) * N; limitarCam(); }
+    mini.addEventListener('mousedown', (ev) => { miniAbajo = true; irMini(ev); });
+    window.addEventListener('mousemove', (ev) => { if (miniAbajo) irMini(ev); });
+    window.addEventListener('mouseup', () => { miniAbajo = false; });
+
+    window.addEventListener('keydown', (ev) => {
+      if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+      teclas.add(ev.code);
+      if (ev.code.startsWith('Arrow') || ev.code === 'Space') ev.preventDefault();
+      const digito = /^Digit([1-9])$/.exec(ev.code);
+      if (digito) {
+        if (ev.shiftKey) grupos[digito[1]] = [...sel];
+        else if (grupos[digito[1]]) { sel.clear(); for (const id of grupos[digito[1]]) if (m.porId.has(id)) sel.add(id); }
+        return;
+      }
+      switch (ev.code) {
+        case 'KeyA': if (unidadesSel().length) modo = 'amover'; break;
+        case 'KeyS': { const ids = unidadesSel().map((u) => u.id); if (ids.length) W.orden(m, { t: 'detener', j: YO, ids }); break; }
+        case 'KeyH': cam.x = m.mapa.bases[YO].x; cam.y = m.mapa.bases[YO].y; break;
+        case 'Space': if (J.alerta) { cam.x = J.alerta.x; cam.y = J.alerta.y; } break;
+        case 'KeyP': pausa = !pausa; break;
+        case 'KeyT': ponerTema(tema === 'clara' ? 'oscura' : 'clara'); break;
+        case 'Escape': modo = null; sel.clear(); break;
+      }
+    });
+    window.addEventListener('keyup', (ev) => teclas.delete(ev.code));
+    window.addEventListener('blur', () => { teclas.clear(); raton.izq = false; raton.medio = false; });
+    window.addEventListener('resize', ajustar);
+
+    $('titulo').addEventListener('click', () => location.reload());
+    $('semilla').textContent = 'semilla ' + semilla;
+    $('finRep').href = '?s=' + semilla;
+    $('finNueva').href = location.pathname;
+
+    // ---------- bucle ----------
+    const PASO = 1000 / W.TPS;
+    let antes = performance.now(), acum = 0, finMostrado = false;
+    function cuadro(ahora) {
+      const dt = Math.min(250, ahora - antes); antes = ahora;
+      const v = (dt / 1000) * 420 / cam.z;
+      if (teclas.has('ArrowLeft')) cam.x -= v; if (teclas.has('ArrowRight')) cam.x += v;
+      if (teclas.has('ArrowUp')) cam.y -= v; if (teclas.has('ArrowDown')) cam.y += v;
+      limitarCam();
+      if (!pausa && m.ganador < 0) {
+        acum += dt;
+        let n = 0;
+        while (acum >= PASO && n < 4) { W.iaTick(m, ia); W.tick(m); acum -= PASO; n++; }
+        if (n === 4) acum = 0;
+      }
+      for (const id of sel) if (!m.porId.has(id)) sel.delete(id);
+      if (modo === 'colocar' && !(J.edif && J.edif.listo)) modo = null;
+      if (nieblaVista !== m.nieblaV) pintarNiebla();
+      dibujar(pausa || m.ganador >= 0 ? 1 : Math.min(1, acum / PASO));
+      if (cuadros % 6 === 0) { dibujarMini(); actualizarBarra(); }
+      cuadros++;
+      if (m.ganador >= 0 && !finMostrado) {
+        finMostrado = true;
+        $('finTxt').textContent = m.ganador === YO ? 'victoria' : m.ganador === 2 ? 'empate' : 'derrota';
+        $('finSub').textContent = 'semilla ' + semilla + ' · ' + Math.round(m.t / W.TPS / 60) + ' min';
+        $('fin').hidden = false;
+      }
+      requestAnimationFrame(cuadro);
+    }
+    ajustar(); ponerTema(tema);
+    requestAnimationFrame(cuadro);
+  };
+})();
+
+W.iniciar();
+</script>
+</body>
+</html>
