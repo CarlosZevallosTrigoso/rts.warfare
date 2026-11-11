@@ -1362,6 +1362,52 @@ prueba('tanda 2: la gatling monta antes de disparar y el hacker apaga vehículos
   assert.ok(!(tq.hack > m.t), 'sin información no hay hackeo');
 });
 
+prueba('tanda 3: misilera (Scud, Minuteman, Sarmat) e interceptor', () => {
+  const m = W.crearMundo(4242, { N: 256 }), N = m.N, J = m.jug[0], R = m.jug[1];
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  for (let y = 20; y < 236; y++) for (let x = 20; x < 236; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.mapa.tipoMin[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; } }
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  J.minerales = 60000; J.petroleo = 9000; J.raros = 900; J.nivel = 3; m.niebla[0].fill(1);
+  const mis = W.crearEdificio(m, 0, 'misilera', 40, 100); W.crearEdificio(m, 0, 'central', 45, 100); W.crearEdificio(m, 0, 'central', 45, 103);
+  // fabricar: se paga al encargar; diez como mucho
+  const min0 = J.minerales;
+  for (let k = 0; k < 12; k++) W.orden(m, { t: 'misil', j: 0, id: mis.id, tipo: 'scud' });
+  avanza(2);
+  assert.equal(mis.fabMis.length, 10, 'diez misiles como mucho');
+  assert.ok(min0 - J.minerales >= W.MISILES.scud.costo * 10 - 200, 'se pagan al encargarlos');
+  for (let k = 0; k < 7; k++) W.orden(m, { t: 'cancelarMisil', j: 0, id: mis.id, tipo: 'scud' });
+  W.orden(m, { t: 'misil', j: 0, id: mis.id, tipo: 'sarmat' }); W.orden(m, { t: 'misil', j: 0, id: mis.id, tipo: 'minuteman' });
+  avanza(2); assert.equal(mis.fabMis.join(), 'scud,scud,scud,sarmat,minuteman');
+  avanza(W.MISILES.scud.tiempo * 3 + W.MISILES.sarmat.tiempo + W.MISILES.minuteman.tiempo + 20);
+  assert.deepEqual(mis.silo, { scud: 3, sarmat: 1, minuteman: 1 }, 'los cinco fabricados y guardados');
+  // alcance: el Scud no llega a 100 celdas; el Minuteman sí; lo no explorado no se puede apuntar
+  const lejos = W.crearEdificio(m, 1, 'fabrica', 150, 100), cerca = W.crearEdificio(m, 1, 'cuartel', 90, 100), tq = W.crearUnidad(m, 1, 'tanque', 102 * N + 92);
+  W.orden(m, { t: 'lanzar', j: 0, id: mis.id, tipo: 'scud', x: 151.5, y: 101.5 }); avanza(2);
+  assert.equal(m.misiles.length, 0, 'fuera de alcance no sale');
+  W.orden(m, { t: 'lanzar', j: 0, id: mis.id, tipo: 'scud', x: 91, y: 101 }); avanza(2);
+  assert.ok(m.misiles.length === 1 && mis.silo.scud === 2, 'el Scud sale');
+  const v0 = cerca.vida; for (let i = 0; i < 400 && m.misiles.length; i++) W.tick(m);
+  assert.ok(cerca.vida < v0 - 300 && tq.vida < tq.vidaMax, 'y pega fuerte en área: cuartel ' + cerca.vida + ', tanque ' + tq.vida);
+  const vl = lejos.vida; W.orden(m, { t: 'lanzar', j: 0, id: mis.id, tipo: 'minuteman', x: 151.5, y: 101.5 });
+  for (let i = 0; i < 600 && (i < 3 || m.misiles.length); i++) W.tick(m);
+  assert.ok(lejos.vida < vl - 700, 'el Minuteman llega el doble de lejos y pega más: ' + (vl - lejos.vida));
+  // interceptor: para el Scud; el Sarmat necesita dos impactos, y las cargas se gastan
+  const obj = W.crearEdificio(m, 1, 'refineria', 92, 108), ic = W.crearEdificio(m, 1, 'interceptor', 96, 103); W.crearEdificio(m, 1, 'central', 100, 103);
+  avanza(3); assert.ok(!ic.sinLuz, 'interceptor con energía');
+  const v2 = obj.vida, tiro = (tipo) => { W.orden(m, { t: 'lanzar', j: 0, id: mis.id, tipo, x: 93.5, y: 109.5 }); for (let i = 0; i < 600 && (i < 3 || m.misiles.length); i++) W.tick(m); };
+  tiro('scud');
+  assert.ok(obj.vida === v2 && mis.silo.scud === 1 && ic.cargas === W.EDIF.interceptor.cargas - 1, 'Scud derribado, una carga menos: ' + ic.cargas);
+  tiro('sarmat');
+  assert.ok(obj.vida === v2 && mis.silo.sarmat === 0 && ic.cargas === W.EDIF.interceptor.cargas - 3, 'el Sarmat cae con dos impactos: cargas ' + ic.cargas);
+  ic.cargas = 0; ic.repone = 0; tiro('scud');
+  assert.ok(obj.vida < v2, 'sin cargas, el misil pasa');
+  // partida guardada con un misil en vuelo: sigue igual
+  W.orden(m, { t: 'misil', j: 0, id: mis.id, tipo: 'scud' }); avanza(W.MISILES.scud.tiempo + 5);
+  W.orden(m, { t: 'lanzar', j: 0, id: mis.id, tipo: 'scud', x: 91, y: 101 }); avanza(20);
+  const copia = W.cargar(W.guardar(m)).m; for (let i = 0; i < 300; i++) { W.tick(m); W.tick(copia); }
+  assert.equal(W.huella(copia), W.huella(m));
+});
+
 prueba('puentes: la excavadora cruza el agua, todos lo usan y al caer se cierra', () => {
   const m = W.crearMundo(31, { N: 128 }), N = m.N, J = m.jug[0], T = W.TERRENO;
   m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);

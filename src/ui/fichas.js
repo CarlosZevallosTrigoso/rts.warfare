@@ -410,6 +410,18 @@
       }
       c.fillStyle = tinta; c.beginPath(); c.arc(cx, cy, t * 0.05, 0, TAU); c.fill();
       if (lod === 2) { c.fillStyle = col.osc; c.fillRect(X(0.1), Y(0.76), t * 0.2, t * 0.12); c.fillRect(X(0.74), Y(0.1), t * 0.14, t * 0.14); }
+    } else if (e.tipo === 'misilera') { // tres silos con su tapa; el del centro, entreabierto
+      for (const [fx, fy, ab] of [[0.27, 0.3, 0], [0.73, 0.3, 0], [0.5, 0.7, 1]]) {
+        c.fillStyle = col.tinta; c.beginPath(); c.arc(X(fx), Y(fy), t * 0.16, 0, TAU); c.fill();
+        c.fillStyle = ab ? col.luz : col.osc; c.strokeStyle = col.luz; c.lineWidth = lw; c.beginPath(); c.arc(X(fx), Y(fy), t * 0.16, ab ? 0.5 : 0, ab ? Math.PI + 0.5 : TAU); c.fill(); c.stroke();
+        if (ab) { c.fillStyle = s.deficit ? col.humo : col.mal; c.beginPath(); c.arc(X(fx), Y(fy), t * 0.07, 0, TAU); c.fill(); } // la ojiva asoma
+      }
+    } else if (e.tipo === 'interceptor') { // antena de radar que gira y una lanzadera de cuatro tubos
+      c.fillStyle = col.osc; c.fillRect(X(0.14), Y(0.5), t * 0.36, t * 0.36); c.fillStyle = col.tinta;
+      for (const [fx, fy] of [[0.2, 0.56], [0.36, 0.56], [0.2, 0.72], [0.36, 0.72]]) { c.beginPath(); c.arc(X(fx + 0.03), Y(fy + 0.03), t * 0.045, 0, TAU); c.fill(); }
+      c.save(); c.translate(X(0.68), Y(0.34)); c.rotate(s.deficit ? 0.6 : s.tiempo * 0.003 + s.id);
+      c.strokeStyle = col.luz; c.lineWidth = lw * 1.8; c.beginPath(); c.arc(0, 0, t * 0.2, -0.9, 0.9); c.stroke(); c.lineWidth = lw; c.beginPath(); c.moveTo(0, 0); c.lineTo(t * 0.2, 0); c.stroke();
+      c.restore(); c.fillStyle = col.osc; c.beginPath(); c.arc(X(0.68), Y(0.34), t * 0.05, 0, TAU); c.fill();
     } else if (e.tipo === 'obras') { // una grúa: mástil, pluma y contrapeso; y un rollo de cable
       c.strokeStyle = col.luz; c.lineWidth = lw * 1.6; c.beginPath(); c.moveTo(X(0.3), Y(0.84)); c.lineTo(X(0.3), Y(0.2)); c.lineTo(X(0.84), Y(0.2)); c.stroke();
       c.lineWidth = lw; c.beginPath(); c.moveTo(X(0.3), Y(0.36)); c.lineTo(X(0.46), Y(0.2)); c.moveTo(X(0.7), Y(0.2)); c.lineTo(X(0.7), Y(0.46)); c.stroke();

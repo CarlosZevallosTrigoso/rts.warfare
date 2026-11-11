@@ -149,7 +149,10 @@
     const quiereDeposito = m.logistica !== false && ia.via && ia.viaFin && !J.cuenta.deposito && W.tieneReq(m, j, EDIF.deposito.req) && J.minerales > 900 && !!J.cuenta.obras;
     if (obra && obra.tipo === 'deposito' && ia.viaFin) donde = { cx: ia.viaFin.x, cy: ia.viaFin.y };
     const quiereObras = m.logistica !== false && !J.cuenta.obras && J.cuenta.cuartel && W.tieneReq(m, j, EDIF.obras.req) && J.minerales > 600 && (J.cuenta.fabrica || m.ents.some((e) => e.edif && !e.infra && e.j === j && !e.conRed)); // en cuanto tiene algo que conectar (o fábrica), sus obras civiles
-    const plan = obra || urgente ? null : planBase || (quiereObras ? 'obras' : quiereDeposito ? 'deposito' : siguienteEdificio(m, j, patio, ia.plan));
+    // Misiles: pasada la primera media hora y con dinero de sobra, una misilera; y un interceptor en cuanto ve volar un misil enemigo o conoce una misilera rival.
+    if (!ia.misilVisto && (m.misiles.some((q) => q.j !== j) || m.ents.some((e) => e.tipo === 'misilera' && e.j !== j && m.niebla[j][Math.floor(e.cy) * m.N + Math.floor(e.cx)]))) ia.misilVisto = true;
+    const quiereMisil = J.nivel >= 2 && W.tieneReq(m, j, EDIF.misilera.req) && (ia.misilVisto && !J.cuenta.interceptor && J.minerales > 2200 ? 'interceptor' : !J.cuenta.misilera && m.t > 36000 && J.minerales > 4000 ? 'misilera' : null);
+    const plan = obra || urgente ? null : planBase || (quiereMisil ? quiereMisil : quiereObras ? 'obras' : quiereDeposito ? 'deposito' : siguienteEdificio(m, j, patio, ia.plan));
     if (obra && obra.listo) {
       const p = buscarSitio(m, j, obra.tipo, donde) || buscarSitio(m, j, obra.tipo, patio);
       if (p) { W.orden(m, { t: 'colocar', j, tipo: obra.tipo, x: p.x, y: p.y }); ia.fallos = 0; }
@@ -303,6 +306,24 @@
         if (blanco) W.orden(m, { t: 'atacar', j, ids: [u.id], obj: blanco.id }); else patrulla.push(u.id);
       }
       if (patrulla.length) W.orden(m, { t: 'patrulla', j, ids: patrulla, x: patio.cx + (ax / ad) * 16, y: patio.cy + (ay / ad) * 16 });
+    }
+
+    // Misilera: guarda un par de misiles (el mejor que pueda pagar sin quedarse seca) y los lanza al edificio rival explorado más valioso que tenga a su alcance.
+    if (J.cuenta.misilera && m.t % 100 === 40 + ia.j * 20) {
+      const MIS = W.MISILES;
+      for (const e of m.ents) {
+        if (e.tipo !== 'misilera' || e.j !== j || e.vida <= 0) continue;
+        let hay = 0; if (e.silo) for (const k in e.silo) hay += e.silo[k];
+        if (hay + (e.fabMis ? e.fabMis.length : 0) < 2) { const tipo = ['sarmat', 'minuteman', 'scud'].find((k) => J.nivel >= MIS[k].nivel && W.puedePagar(J, MIS[k]) && J.minerales > MIS[k].costo + 1500); if (tipo) W.orden(m, { t: 'misil', j, id: e.id, tipo }); }
+        if (!hay || e.sinLuz || m.t - (ia.ultMisil || -9999) < 600) continue;
+        const tipo = ['scud', 'minuteman', 'sarmat'].find((k) => e.silo[k] > 0);
+        let blanco = null, mv = 0;
+        for (const o of m.ents) {
+          if (!o.edif || o.infra || o.j === j || o.vida <= 0 || !m.niebla[j][Math.floor(o.cy) * m.N + Math.floor(o.cx)] || !W.alcanceMisil(m, e, tipo, o.cx, o.cy)) continue;
+          const v = o.tipo === 'patio' ? 5000 : o.tipo === 'interceptor' ? 1 : EDIF[o.tipo].costo; if (v > mv) { mv = v; blanco = o; }
+        }
+        if (blanco) { W.orden(m, { t: 'lanzar', j, id: e.id, tipo, x: blanco.cx, y: blanco.cy }); ia.ultMisil = m.t; }
+      }
     }
 
     // Ejército

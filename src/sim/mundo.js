@@ -33,7 +33,7 @@
       // carrilX/Y: por cada celda de camino, el punto del carril que le toca (0 = ninguno); tramoEn: el tramo dueño de la celda
       jug: [nuevoJugador(op.inicio), nuevoJugador(op.inicio)],
       niebla: [new Uint8Array(NN), new Uint8Array(NN)],
-      cola: [], colaRutas: [], efectos: [], proy: [], barridos: [], trincheras: new Map(), focos: [[], []], sigFoco: 1, marchas: {}, sigMarcha: 1, logistica: op.logistica !== false, // logistica: las unidades necesitan la cobertura de su red (se puede apagar al crear la partida)
+      cola: [], colaRutas: [], efectos: [], proy: [], barridos: [], misiles: [], trincheras: new Map(), focos: [[], []], sigFoco: 1, marchas: {}, sigMarcha: 1, logistica: op.logistica !== false, // logistica: las unidades necesitan la cobertura de su red (se puede apagar al crear la partida)
       sigMision: 1, minas: [], raros: [], ganador: -1, embarques: [],
       puestos: mapa.puestos.map((p, i) => ({ id: i, tipo: p.tipo, x: p.x + 0.5, y: p.y + 0.5, dueno: -1, prog: 0, quien: -1 })), // puestos neutrales: los captura la infantería
       ruta: W.crearRuta(N),
@@ -113,6 +113,42 @@
     const prev = ob.ult ? m.porId.get(ob.ult) : null; if (prev) prev.a = tr.id;
     ob.ult = tr.id; ob.hecho = sig;
     if (sig >= L) { tr.a = b.id; m.redSucia = true; ob.pares.shift(); ob.prog = 0; ob.hecho = 0; ob.ult = 0; }
+  }
+  // ---------- misiles balísticos ----------
+  const MIS = W.MISILES, VS_MISIL = { ligero: 1, pesado: 1, edificio: 1.2, aire: 0 };
+  const guardados = (e) => { let n = 0; if (e.silo) for (const k in e.silo) n += e.silo[k]; return n + (e.fabMis ? e.fabMis.length : 0); };
+  W.alcanceMisil = (m, e, tipo, x, y) => !MIS[tipo].alcance || Math.hypot(x - e.cx, y - e.cy) <= MIS[tipo].alcance;
+  function tickMisiles(m) {
+    for (const e of m.ents) { // fábrica de misiles e interceptores
+      if (!e.edif || e.infra) continue;
+      const d = EDIF[e.tipo];
+      if (d.misiles && e.fabMis && e.fabMis.length && !(e.hack > m.t)) {
+        e.progMis = (e.progMis || 0) + m.jug[e.j].tr.vel * (e.sinLuz ? 0.5 : 1);
+        if (e.progMis >= MIS[e.fabMis[0]].tiempo) { const t = e.fabMis.shift(); e.progMis = 0; if (!e.silo) e.silo = {}; e.silo[t] = (e.silo[t] || 0) + 1; m.efectos.push({ tipo: 'misilListo', x1: e.cx, y1: e.cy, j: e.j, clase: t, t: m.t }); }
+      }
+      if (d.intercepta) {
+        if (e.cargas === undefined) e.cargas = d.cargas;
+        if (e.cargas < d.cargas && !e.sinLuz) { e.repone = (e.repone || 0) + 1; if (e.repone >= d.reponeCarga) { e.repone = 0; e.cargas++; } }
+        if (e.cargas <= 0 || e.sinLuz || e.hack > m.t || (m.t + e.id) % 4) continue;
+        for (const q of m.misiles) { // dispara al misil enemigo más avanzado que tenga en su radio y que nadie haya rematado ya
+          if (q.j === e.j || q.vida <= 0 || Math.hypot(q.x - e.cx, q.y - e.cy) > d.intercepta) continue;
+          e.cargas--; q.vida--; e.angT = Math.atan2(q.y - e.cy, q.x - e.cx);
+          m.efectos.push({ tipo: 'intercepta', x1: e.cx, y1: e.cy, x2: q.x, y2: q.y, j: e.j, derribo: q.vida <= 0, t: m.t });
+          break;
+        }
+      }
+    }
+    for (let k = m.misiles.length - 1; k >= 0; k--) {
+      const q = m.misiles[k], d = MIS[q.tipo];
+      if (q.vida <= 0) { m.misiles.splice(k, 1); continue; } // derribado
+      const dx = q.tx - q.x, dy = q.ty - q.y, dd = Math.hypot(dx, dy);
+      q.px = q.x; q.py = q.y;
+      if (dd > d.vel) { q.x += (dx / dd) * d.vel; q.y += (dy / dd) * d.vel; continue; }
+      const arma = { dano: d.dano, area: d.area, vs: VS_MISIL }; // cae: daña todo lo que haya en el radio, sea de quien sea, más cuanto más cerca del centro
+      for (const e of m.ents) { if (e.vida <= 0) continue; const r = dist(q.tx, q.ty, e); if (r <= d.area) herir(m, e, arma, 1 - 0.6 * (r / d.area), 0); }
+      m.efectos.push({ tipo: 'impactoMisil', x2: q.tx, y2: q.ty, area: d.area, j: q.j, clase: q.tipo, t: m.t });
+      m.misiles.splice(k, 1);
+    }
   }
   // ¿Se puede hackear? Vehículos de tierra y edificios enemigos (no la infantería, ni los aviones, ni caminos o líneas).
   const hackeable = (u, o) => !!o && o.vida > 0 && o.j !== u.j && !o.infra && (o.edif || (UNID[o.tipo].cat === 'veh' && !UNID[o.tipo].aire));
@@ -526,6 +562,27 @@
       case 'trampa': // un interruptor del panel ADMIN
         trampa(m, cmd.j, cmd.clave, cmd.valor);
         return;
+      case 'misil': { // encarga un misil en esa misilera: se paga al encargarlo; entre guardados y encargados, diez como mucho
+        const e = m.porId.get(cmd.id), d = MIS[cmd.tipo];
+        if (!e || !d || e.j !== cmd.j || !EDIF[e.tipo].misiles || e.vida <= 0 || J.nivel < d.nivel || guardados(e) >= ECON.misilesMax || !W.puedePagar(J, d)) return;
+        cobrar(J, d); if (!e.fabMis) e.fabMis = []; e.fabMis.push(cmd.tipo);
+        return;
+      }
+      case 'cancelarMisil': { // quita el último encargado de ese tipo y devuelve su precio
+        const e = m.porId.get(cmd.id); if (!e || e.j !== cmd.j || !e.fabMis) return;
+        const k = e.fabMis.lastIndexOf(cmd.tipo); if (k < 0) return;
+        e.fabMis.splice(k, 1); if (k === 0) e.progMis = 0; devolver(J, MIS[cmd.tipo]);
+        return;
+      }
+      case 'lanzar': { // lanza un misil guardado a un punto explorado y dentro de su alcance
+        const e = m.porId.get(cmd.id), d = MIS[cmd.tipo], N = m.N;
+        if (!e || !d || e.j !== cmd.j || e.vida <= 0 || !e.silo || !(e.silo[cmd.tipo] > 0) || e.hack > m.t || e.sinLuz) return;
+        if (!(cmd.x >= 0 && cmd.y >= 0 && cmd.x < N && cmd.y < N) || !m.niebla[cmd.j][Math.floor(cmd.y) * N + Math.floor(cmd.x)] || !W.alcanceMisil(m, e, cmd.tipo, cmd.x, cmd.y)) return;
+        e.silo[cmd.tipo]--;
+        m.misiles.push({ id: m.sigId++, tipo: cmd.tipo, j: cmd.j, x: e.cx, y: e.cy, px: e.cx, py: e.cy, ox: e.cx, oy: e.cy, tx: cmd.x, ty: cmd.y, vida: d.aguante, t0: m.t });
+        m.efectos.push({ tipo: 'lanzamiento', x1: e.cx, y1: e.cy, x2: cmd.x, y2: cmd.y, j: cmd.j, clase: cmd.tipo, t: m.t });
+        return;
+      }
       case 'hackear': { // los hackers elegidos van por ese vehículo o edificio enemigo
         const o = m.porId.get(cmd.obj);
         for (const u of propias(m, cmd)) if (UNID[u.tipo].hackea && hackeable(u, o)) { limpiar(u); u.obj = 0; u.ruta = null; u.pend = null; u.guardia = false; u.orden = 'hackear'; u.hackObj = o.id; u.canal = 0; }
@@ -1737,6 +1794,7 @@
     separar(m);
     aplastar(m);
     tickProyectiles(m);
+    tickMisiles(m);
     if (m.t % 10 === 0) { curar(m); colmena(m); }
 
     if (m.redSucia || !m.cob || m.t - m.redT >= 100) calcularRed(m);

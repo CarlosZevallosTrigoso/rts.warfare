@@ -37,6 +37,7 @@
   .btn.con-x .x { display: inline-block; }
   .btn .x:hover { background: var(--mal); color: #fff; }
   #obras { min-height: 34px; margin-top: 5px; }
+  #bLanzar { margin-top: 6px; } #bLanzar .btn { justify-content: space-between; } #misInfo { min-height: 30px; }
   #vacio { line-height: 1.7; } #vacio kbd { font: inherit; color: var(--tinta); }
   /* Rejilla de producción: casillas de tamaño fijo; nada cambia de sitio al encargar, avanzar o cancelar. */
   #pest { display: flex; gap: 2px; margin: 0 0 -4px; }
@@ -249,11 +250,12 @@
     <div id="panel">
     <div id="vacio" class="tenue">Selecciona un edificio para ver lo que produce.<br><kbd>B</kbd> patio · <kbd>Q</kbd> cuarteles · <kbd>V</kbd> fábricas · <kbd>X</kbd> aeródromos</div>
     <section id="secCola" hidden><div class="cab"><h2>Cola</h2><button type="button" id="bucle" class="grupo" title="Cada unidad que sale se vuelve a encargar al final de la cola. Se paga al empezarla.">repetir: no</button></div><div id="cola"></div></section>
-    <div id="pest" hidden><button type="button" data-p="edif">Edificios</button><button type="button" data-p="unid">Unidades</button><button type="button" data-p="tec">Mejoras</button><button type="button" data-p="intel">Intel.</button></div>
+    <div id="pest" hidden><button type="button" data-p="edif">Edificios</button><button type="button" data-p="unid">Unidades</button><button type="button" data-p="tec">Mejoras</button><button type="button" data-p="intel">Intel.</button><button type="button" data-p="mis">Misiles</button></div>
     <section id="secEdif" hidden><div id="bEdif" class="rej"></div><div id="obras" class="tenue"></div></section>
     <section id="secUnid" hidden><div id="bUnid" class="rej"></div></section>
     <section id="secTec" hidden><div id="bTec" class="rej"></div></section>
     <section id="secIntel" hidden><div id="bIntel" class="rej"></div></section>
+    <section id="secMis" hidden><div id="bMis" class="rej"></div><div id="bLanzar"></div><div id="misInfo" class="tenue"></div></section>
     <section id="secGrupos" hidden><h2>Grupos</h2><div id="grupos"></div></section>
     <section id="secFormas" hidden><h2 title="Con una formación elegida, el grupo se forma antes de salir, avanza junto al paso del más lento y llega formado.">Formación</h2><div id="formas">
       <button type="button" class="grupo on" data-f="grupo">grupo</button><button type="button" class="grupo" data-f="linea">línea</button><button type="button" class="grupo" data-f="columna">columna</button>

@@ -145,7 +145,7 @@
 
     // Volumen: la vista sigue siendo cenital, pero cada cosa tiene altura. Los edificios muestran su pared sur y el tejado
     // se dibuja desplazado hacia arriba; las unidades llevan un canto; la roca y el agua, un escalón.
-    const ALTO = { patio: 0.3, central: 0.36, refineria: 0.32, bomba: 0.2, cuartel: 0.26, extractor: 0.3, fabrica: 0.34, torreta: 0.22, torreCanon: 0.36, aerodromo: 0.08, antiaerea: 0.22, estacion: 0.26, deposito: 0.22, obras: 0.28 };
+    const ALTO = { patio: 0.3, central: 0.36, refineria: 0.32, bomba: 0.2, cuartel: 0.26, extractor: 0.3, fabrica: 0.34, torreta: 0.22, torreCanon: 0.36, aerodromo: 0.08, antiaerea: 0.22, estacion: 0.26, deposito: 0.22, obras: 0.28, misilera: 0.12, interceptor: 0.24 };
     function entEn(wx, wy, holgura) { // holgura: margen extra (en celdas) para acertar con el dedo
       let mejor = null, md = Infinity;
       for (const e of m.ents) {
@@ -197,6 +197,8 @@
         if (!e.edif && e.j === YO && W.oculta(m, e)) t += ' · oculta';
         if (e.retirando) t += ' · se retira a reparar'; else if (e.huye > m.t) t += ' · huye';
         if (e.j === YO && conRed) { if (e.edif && !e.infra && !e.conRed) t += e.tipo === 'deposito' ? ' · sin conexión: únelo a tu base con un ingeniero civil' : ' · fuera de la red'; if (e.linea && !e.conRed) t += ' · no llega a tu red'; if (e.sinLuz) t += ' · sin energía: a media marcha'; if (!e.edif && e.sinSum >= W.ECON.sinSum) t += ' · sin suministro: dispara más lento y no se repara'; }
+        if (e.tipo === 'misilera' && e.j === YO) { const g = Object.keys(MIS).filter((k) => e.silo && e.silo[k]).map((k) => e.silo[k] + ' ' + MIS[k].nombre).join(', '); t += ' · ' + (g || 'sin misiles'); }
+        if (e.tipo === 'interceptor' && e.j === YO) t += ' · cargas ' + (e.cargas === undefined ? EDIF.interceptor.cargas : e.cargas) + '/' + EDIF.interceptor.cargas;
         if (e.hack > m.t) t += ' · hackeado: ' + Math.ceil((e.hack - m.t) / 20) + ' s';
         if (!e.edif && UNID[e.tipo].monta && e.j === YO) t += (e.monta || 0) >= UNID[e.tipo].monta ? ' · montada' : ' · montando…';
         if (e.tipo === 'aerodromo' && e.j === YO) t += ' · aviones ' + m.ents.filter((u) => !u.edif && u.casa === e.id).length + '/' + W.ECON.cupoAviones;
@@ -678,6 +680,20 @@
       }
       if (!repasado) repasar();
 
+      // Misiles balísticos: se ven siempre (el radar los canta), grandes, con su llama y su estela.
+      for (const q of m.misiles) {
+        const x = q.px + (q.x - q.px) * alfa, y = q.py + (q.y - q.py) * alfa, d = MIS[q.tipo];
+        if (fuera(x, y)) continue;
+        const a = Math.atan2(q.ty - q.y, q.tx - q.x), sx = ox + x * z, sy = oy + y * z, L = Math.max(7, z * (0.5 + d.area * 0.12)), w = Math.max(2.5, L * 0.22);
+        if (!pausa && azar() < 0.7) parte('humo', x - Math.cos(a) * 0.4, y - Math.sin(a) * 0.4, (azar() - 0.5) * 0.2, (azar() - 0.5) * 0.2, 0.9, 0.16 + d.area * 0.02);
+        ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.beginPath(); ctx.ellipse(sx + L * 0.6, sy + L * 0.6, L * 0.6, w * 0.8, a, 0, TAU); ctx.fill(); // sombra, lejos: va alto
+        ctx.save(); ctx.translate(sx, sy); ctx.rotate(a);
+        ctx.fillStyle = '#e8912d'; ctx.beginPath(); ctx.moveTo(-L * 0.5, -w * 0.5); ctx.lineTo(-L * (0.85 + azar() * 0.25), 0); ctx.lineTo(-L * 0.5, w * 0.5); ctx.fill(); // llama
+        ctx.fillStyle = q.j === YO ? P.yoOsc : P.rivalOsc; ctx.fillRect(-L * 0.5, -w * 0.5, L * 0.8, w);
+        ctx.fillStyle = P.tinta; ctx.beginPath(); ctx.moveTo(L * 0.3, -w * 0.5); ctx.lineTo(L * 0.62, 0); ctx.lineTo(L * 0.3, w * 0.5); ctx.fill(); // ojiva
+        ctx.fillRect(-L * 0.5, -w * 0.9, L * 0.14, w * 1.8); // aletas
+        ctx.restore();
+      }
       // Obuses en vuelo, con estela.
       ctx.lineCap = 'round';
       for (const p of m.proy) {
@@ -765,7 +781,7 @@
         for (const id of sel) {
           const e = m.porId.get(id);
           if (!e || e.j !== YO) continue;
-          if (e.edif) { if (e.tipo === 'aerodromo') for (const t in UNID) if (UNID[t].aire) aro(e, UNID[t].radioVuelo); }
+          if (e.edif) { if (e.tipo === 'aerodromo') for (const t in UNID) if (UNID[t].aire) aro(e, UNID[t].radioVuelo); if (EDIF[e.tipo].intercepta) aro(e, EDIF[e.tipo].intercepta); }
           else if (UNID[e.tipo].aire && e.casa && m.porId.has(e.casa)) aro(m.porId.get(e.casa), UNID[e.tipo].radioVuelo);
         }
         ctx.setLineDash([]); ctx.globalAlpha = 1;
@@ -854,6 +870,17 @@
           ctx.fillStyle = mal ? P.mal : P.tinta; ctx.fillText(mal ? 'ahí no llega un camino' : 'camino: unos ' + Math.round(costo) + ' minerales · Mayús: más tramos', raton.x + 14, raton.y - 8);
         }
       }
+      if (modo === 'lanzar') { // alcance del misil elegido y, bajo el cursor, la zona que arrasará
+        const e = misilera(), d = MIS[lanzaTipo];
+        if (e && d) {
+          if (d.alcance) { ctx.strokeStyle = P.tinta; ctx.globalAlpha = 0.4; ctx.lineWidth = 1.5; ctx.setLineDash([10, 8]); ctx.beginPath(); ctx.arc(ox + e.cx * z, oy + e.cy * z, d.alcance * z, 0, TAU); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1; }
+          if (raton.dentro) {
+            const wx = aMundoX(raton.x), wy = aMundoY(raton.y), vale = wx >= 0 && wy >= 0 && wx < N && wy < N && m.niebla[YO][Math.floor(wy) * N + Math.floor(wx)] && W.alcanceMisil(m, e, lanzaTipo, wx, wy);
+            ctx.strokeStyle = P.mal; ctx.fillStyle = P.mal; ctx.lineWidth = 2; ctx.globalAlpha = vale ? 0.9 : 0.35; ctx.beginPath(); ctx.arc(raton.x, raton.y, d.area * z, 0, TAU); ctx.stroke(); ctx.globalAlpha = vale ? 0.12 : 0.04; ctx.fill(); ctx.globalAlpha = 1;
+            ctx.fillStyle = P.tinta; ctx.fillText(vale ? d.nombre + ': daña todo lo que haya en el círculo, también lo tuyo' : 'ahí no llega (o no está explorado)', raton.x + 14, raton.y - 8);
+          }
+        } else modo = null;
+      }
       if (modo === 'barrido' && raton.dentro) { // zona que revelará el barrido
         ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.setLineDash([6, 4]); ctx.beginPath(); ctx.arc(raton.x, raton.y, W.INTEL.barrido.radio * z, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
       }
@@ -898,6 +925,10 @@
         mctx.strokeStyle = P.camino; mctx.lineWidth = 1.5; mctx.beginPath();
         for (const e of m.ents) { if (!e.infra || e.linea) continue; const tr = e.pts; mctx.moveTo(tr[0] * k, tr[1] * k); for (let q = 2; q < tr.length; q += 2) mctx.lineTo(tr[q] * k, tr[q + 1] * k); }
         mctx.stroke();
+      }
+      for (const q of m.misiles) { // misiles en el minimapa: un punto que parpadea; el propio, con la línea a su blanco
+        mctx.fillStyle = q.j === YO ? P.yo : P.mal; mctx.beginPath(); mctx.arc(q.x * k, q.y * k, 2.5 + ((m.t >> 2) % 2), 0, TAU); mctx.fill();
+        if (q.j === YO) { mctx.strokeStyle = P.yo; mctx.lineWidth = 1; mctx.setLineDash([3, 3]); mctx.beginPath(); mctx.moveTo(q.x * k, q.y * k); mctx.lineTo(q.tx * k, q.ty * k); mctx.stroke(); mctx.setLineDash([]); }
       }
       for (const p of m.puestos) { // puestos: rombo del color de su dueño
         if (!m.niebla[YO][Math.floor(p.y) * N + Math.floor(p.x)]) continue;
@@ -947,6 +978,18 @@
           if (n++ < 6) son.impacto(cerca(d.x2, d.y2), paneo(d.x2));
         } else if (d.tipo === 'explorado') {
           if (d.j === YO && performance.now() - (avisoExpl || 0) > 3000) { avisoExpl = performance.now(); aviso(J.tr.mapa ? 'Nada que explorar: el mapa está revelado desde ADMIN' : 'No queda nada por explorar'); }
+        } else if (d.tipo === 'lanzamiento') {
+          if (d.j === YO) son.explosion(0.5, 0, false); else { aviso('¡Misil enemigo en vuelo: ' + MIS[d.clase].nombre + '!'); son.alerta(); }
+          if (visible(d.x1, d.y1)) { estallido(d.x1, d.y1, 2); for (let k = 0; k < 6; k++) parte('humo', d.x1 + (azar() - 0.5), d.y1 + (azar() - 0.5), (azar() - 0.5) * 0.8, (azar() - 0.5) * 0.8, 1.6, 0.35); }
+        } else if (d.tipo === 'impactoMisil') {
+          for (let k = 0; k < 4 + d.area * 2; k++) { const a = azar() * TAU, r = azar() * d.area * 0.8; estallido(d.x2 + Math.cos(a) * r, d.y2 + Math.sin(a) * r, 3); }
+          parte('anillo', d.x2, d.y2, 0, 0, 0.9, d.area * 1.4); marcaSuelo('quemado', d.x2, d.y2, d.area, 0, 60000);
+          son.explosion(Math.max(0.5, cerca(d.x2, d.y2)), paneo(d.x2), true); aviso(MIS[d.clase].nombre + (d.j === YO ? ': impacto' : ' enemigo: impacto'));
+        } else if (d.tipo === 'intercepta') {
+          balas.push({ x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2, t0: performance.now(), dur: 420, k: 'rifle' });
+          if (d.derribo) { estallido(d.x2, d.y2, 2); aviso(d.j === YO ? 'Misil enemigo derribado' : 'Te han derribado un misil'); son.explosion(Math.max(0.2, cerca(d.x2, d.y2)), paneo(d.x2), false); }
+        } else if (d.tipo === 'misilListo') {
+          if (d.j === YO) { aviso(MIS[d.clase].nombre + ' listo en la misilera'); son.unidadLista(); }
         } else if (d.tipo === 'hack') {
           if (d.de === YO) { aviso('¡Te han hackeado: ' + (EDIF[d.clase] || UNID[d.clase]).nombre.toLowerCase() + '!'); son.alerta(); } else if (d.j === YO) aviso('Hackeado: ' + (EDIF[d.clase] || UNID[d.clase]).nombre.toLowerCase());
           if (visible(d.x2, d.y2)) senales.push({ k: 'onda', x: d.x2, y: d.y2, r: 2.2, t0: performance.now(), dur: 700 });
@@ -1353,6 +1396,42 @@
       for (const e of eds) sel.add(e.id);
       if (ir) { cam.x = eds[0].cx; cam.y = eds[0].cy; limitarCam(); }
     }
+    // ---------- misilera: fabricar y lanzar ----------
+    const MIS = W.MISILES, misilera = () => edificiosSel('misilera')[0] || null;
+    let lanzaTipo = '';
+    const casMis = {}, btnLanzar = {};
+    for (const tipo in MIS) {
+      const d = MIS[tipo], b = document.createElement('button');
+      b.className = 'cas txt'; b.type = 'button';
+      b.innerHTML = '<span class="n"></span><span class="c"></span><b class="k"></b><span class="x" title="Cancelar uno">×</span>';
+      b.querySelector('.n').textContent = d.nombre;
+      b.title = d.nombre + ' · ' + precio(d) + '. ' + d.que + ' Pega ' + d.dano + ' en un radio de ' + d.area + ' celdas.';
+      b.addEventListener('click', () => { const e = misilera(); if (e) { W.orden(m, { t: 'misil', j: YO, id: e.id, tipo }); son.activar(); } });
+      const cancelar = (ev) => { ev.preventDefault(); ev.stopPropagation(); const e = misilera(); if (e) W.orden(m, { t: 'cancelarMisil', j: YO, id: e.id, tipo }); };
+      b.addEventListener('contextmenu', cancelar); b.querySelector('.x').addEventListener('click', cancelar);
+      $('bMis').appendChild(b); casMis[tipo] = { b, c: b.querySelector('.c'), k: b.querySelector('.k') };
+      const l = document.createElement('button'); l.className = 'btn'; l.type = 'button'; l.innerHTML = '<span></span><span class="c"></span>'; l.firstChild.textContent = 'Lanzar ' + d.nombre;
+      l.addEventListener('click', () => { const e = misilera(); if (e && e.silo && e.silo[tipo] > 0) { modo = 'lanzar'; lanzaTipo = tipo; aviso('Elige el blanco del ' + d.nombre + (d.alcance ? ' dentro del círculo' : '') + ' · Esc cancela'); } });
+      $('bLanzar').appendChild(l); btnLanzar[tipo] = { b: l, c: l.lastChild };
+    }
+    function actualizarMisiles() {
+      const e = misilera(); if (!e) return;
+      let total = 0;
+      for (const tipo in MIS) {
+        const d = MIS[tipo], o = casMis[tipo], enCola = (e.fabMis || []).filter((t) => t === tipo).length, hay = (e.silo && e.silo[tipo]) || 0, primero = e.fabMis && e.fabMis[0] === tipo;
+        total += enCola + hay;
+        const sinNivel = J.nivel < d.nivel;
+        let clase = 'cas txt' + (enCola ? ' hay' : ''); if (sinNivel) clase += ' no'; else if (!W.puedePagar(J, d)) clase += ' caro';
+        const txt = sinNivel ? 'nivel ' + d.nivel : primero ? Math.floor(((e.progMis || 0) / d.tiempo) * 100) + '%' : precioCorto(d), cuenta = enCola ? '+' + enCola : '';
+        if (o.b.className !== clase) o.b.className = clase; if (o.c.textContent !== txt) o.c.textContent = txt; if (o.k.textContent !== cuenta) o.k.textContent = cuenta;
+        o.c.classList.toggle('lg', txt.length > 11);
+        o.b.style.setProperty('--p', (primero ? ((e.progMis || 0) / d.tiempo) * 100 : 0).toFixed(1) + '%');
+        const l = btnLanzar[tipo], cl = 'btn' + (hay ? (modo === 'lanzar' && lanzaTipo === tipo ? ' listo' : '') : ' no'), tl = hay ? '× ' + hay : 'ninguno';
+        if (l.b.className !== cl) l.b.className = cl; if (l.c.textContent !== tl) l.c.textContent = tl;
+      }
+      const ti = total + ' / ' + W.ECON.misilesMax + ' misiles entre guardados y encargados' + (e.sinLuz ? ' · sin energía: no puede lanzar' : '');
+      if ($('misInfo').textContent !== ti) $('misInfo').textContent = ti;
+    }
     let pestQuiero = '', pestFirma = '';
     $('pest').addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (b) pestQuiero = b.dataset.p; });
     const botones = [];
@@ -1431,12 +1510,12 @@
       }
       listarGrupos(); actualizarTec(); actualizarTactil();
       { // pestañas: una sola rejilla a la vista, la que toca según lo seleccionado (o la que elija el jugador)
-        const disp = { edif: tipos.has('patio'), unid: hayUnid, tec: hayTecG, intel: tipos.has('estacion') }, firma = [...tipos].sort().join(',');
+        const disp = { edif: tipos.has('patio'), unid: hayUnid, tec: hayTecG, intel: tipos.has('estacion'), mis: tipos.has('misilera') }, firma = [...tipos].sort().join(',');
         if (firma !== pestFirma) { pestFirma = firma; pestQuiero = ''; }
         const lista = Object.keys(disp).filter((k) => disp[k]), ver = disp[pestQuiero] ? pestQuiero : lista[0] || '';
         $('pest').hidden = lista.length < 2;
         for (const b of $('pest').children) { const k = b.dataset.p; if (b.hidden === disp[k]) b.hidden = !disp[k]; b.classList.toggle('on', k === ver); }
-        $('secEdif').hidden = ver !== 'edif'; $('secUnid').hidden = ver !== 'unid'; $('secTec').hidden = ver !== 'tec'; $('secIntel').hidden = ver !== 'intel';
+        $('secEdif').hidden = ver !== 'edif'; $('secUnid').hidden = ver !== 'unid'; $('secTec').hidden = ver !== 'tec'; $('secIntel').hidden = ver !== 'intel'; $('secMis').hidden = ver !== 'mis'; if (ver === 'mis') actualizarMisiles();
       }
       let enCurso = 0; // en el patio más cargado de los elegidos
       for (const id of patiosSel) enCurso = Math.max(enCurso, new Set(J.obras.filter((a) => !a.listo && a.patio === id).map((a) => a.tipo)).size);
@@ -1485,6 +1564,14 @@
           return;
         }
         if (modo === 'barrido') { W.orden(m, { t: 'intel', j: YO, clave: 'barrido', x: wx, y: wy }); son.orden(); modo = null; return; }
+        if (modo === 'lanzar') { // blanco del misil
+          const e = misilera(), d = MIS[lanzaTipo];
+          if (!e || !d) { modo = null; return; }
+          if (wx < 0 || wy < 0 || wx >= N || wy >= N || !m.niebla[YO][Math.floor(wy) * N + Math.floor(wx)]) { aviso('Solo se puede apuntar a terreno explorado'); return; }
+          if (!W.alcanceMisil(m, e, lanzaTipo, wx, wy)) { aviso('Fuera del alcance del ' + d.nombre); return; }
+          W.orden(m, { t: 'lanzar', j: YO, id: e.id, tipo: lanzaTipo, x: wx, y: wy }); marca(wx, wy, P.mal); modo = null;
+          return;
+        }
         if (modo === 'conectar') { // cada clic en un edificio propio lo une con el anterior
           const e = entEn(wx, wy), ids = unidadesSel().filter((u) => UNID[u.tipo].tiende).map((u) => u.id);
           if (!e || !e.edif || e.infra || e.j !== YO) { aviso('Toca un edificio tuyo'); return; }
