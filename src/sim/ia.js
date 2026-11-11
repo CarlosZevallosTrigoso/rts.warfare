@@ -114,6 +114,7 @@
       if (e.j === j) {
         if (e.tipo === 'patio') patios.push(e);
         else if (e.tipo === 'patioMovil') moviles.push(e);
+        else if (!e.edif && UNID[e.tipo].mini) continue; // los drones pequeños van con su portador
         else if (!e.edif && UNID[e.tipo].aire) aviones.push(e); // la aviación no va con el ejército
         else if (!e.edif && UNID[e.tipo].arma) soldados.push(e);
         else if (!e.edif && e.tipo !== 'cosechadora') sinArma.push(e);
@@ -391,7 +392,8 @@
       }
     }
     // El vehículo de mando y los ingenieros sobrantes acompañan al punto de reunión.
-    for (const u of sinArma) if (u.tipo === 'mando' && u.orden === 'nada' && Math.hypot(u.x - rx, u.y - ry) > 7) W.orden(m, { t: 'mover', j, ids: [u.id], x: rx - (dx / dd) * 2, y: ry - (dy / dd) * 2 });
+    if (J.nivel >= 2 && ia.estilo !== 'aereo' && !J.cuenta.comandoDrones && !J.colas.comandoDrones.n && soldados.length >= 10 && J.cuenta.fabrica && W.puedePagar(J, UNID.comandoDrones) && J.minerales > 1600) W.orden(m, { t: 'entrenar', j, tipo: 'comandoDrones' }); // un comando de drones que acompaña al grueso
+    for (const u of sinArma) if ((u.tipo === 'mando' || u.tipo === 'comandoDrones') && u.orden === 'nada' && Math.hypot(u.x - rx, u.y - ry) > 7) W.orden(m, { t: 'mover', j, ids: [u.id], x: rx - (dx / dd) * 2, y: ry - (dy / dd) * 2 });
     const reserva = soldados.filter((u) => !ia.atacantes.has(u.id) && u.id !== ia.explorador && !ia.capturan.has(u.id));
 
     if (J.alerta && m.t - J.alerta.t < 100) { // defensa: acude la reserva ociosa

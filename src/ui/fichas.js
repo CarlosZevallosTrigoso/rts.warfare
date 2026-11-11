@@ -8,7 +8,7 @@
   // El contexto llega trasladado al centro de la unidad. r = radio en píxeles.
   // e = { ang, angT, retro (0..1), anda, tiempo, carga (0..1), cosecha }
   W.fichaUnidad = function (c, u, r, lod, col, e) {
-    const inf = W.UNID[u.tipo].cat === 'inf', at = u.tipo === 'antitanque', pesado = u.tipo === 'pesado', expl = u.tipo === 'explorador', ing = u.tipo === 'ingeniero', med = u.tipo === 'medico', civ = u.tipo === 'civil', hk = u.tipo === 'hacker', franco = u.tipo === 'francotirador';
+    const inf = W.UNID[u.tipo].cat === 'inf', at = u.tipo === 'antitanque', pesado = u.tipo === 'pesado', expl = u.tipo === 'explorador', ing = u.tipo === 'ingeniero', med = u.tipo === 'medico', civ = u.tipo === 'civil', hk = u.tipo === 'hacker', op = u.tipo === 'operador', franco = u.tipo === 'francotirador';
     if (lod === 0) {
       c.fillStyle = col.base; c.beginPath();
       if (inf) c.arc(0, 0, r, 0, TAU);
@@ -36,6 +36,8 @@
       c.strokeStyle = col.osc; c.lineCap = at ? 'butt' : 'round'; c.lineWidth = Math.max(1.4, R * (at ? 0.55 : 0.3)); // fusil, o tubo lanzacohetes al hombro
       if (ing) { // sin arma: lleva una llave inglesa por delante
         c.lineWidth = Math.max(1.2, R * 0.26); c.beginPath(); c.moveTo(R * 0.3, R * 0.45); c.lineTo(R * 1.25, R * 0.45); c.moveTo(R * 1.25, R * 0.15); c.lineTo(R * 1.25, R * 0.75); c.stroke();
+      } else if (op) { // sin arma: el mando a dos manos y una antena corta
+        c.fillStyle = col.osc; c.fillRect(R * 0.65, -R * 0.45, R * 0.3, R * 0.9); c.lineWidth = 1; c.beginPath(); c.moveTo(R * 0.8, -R * 0.45); c.lineTo(R * 1.25, -R * 1.0); c.stroke();
       } else if (hk) { // sin arma: un portátil abierto por delante y una antena
         c.fillStyle = col.osc; c.fillRect(R * 0.7, -R * 0.4, R * 0.5, R * 0.8); c.fillStyle = col.luz; c.fillRect(R * 0.78, -R * 0.3, R * 0.16, R * 0.6);
         c.lineWidth = 1; c.beginPath(); c.moveTo(-R * 0.6, R * 0.3); c.lineTo(-R * 1.6, R * 1.0); c.stroke();
@@ -109,6 +111,21 @@
       c.fillStyle = col.base; c.strokeStyle = col.luz; c.lineWidth = Math.max(1, r * 0.14); c.beginPath(); c.rect(-w * 0.5, -w * 0.5, w, w); c.fill(); c.stroke();
       if (lod === 2) { c.strokeStyle = col.luz; c.beginPath(); c.arc(-w * 0.15, 0, w * 0.28, -1.2 + e.tiempo * 0.004, 1.2 + e.tiempo * 0.004); c.stroke(); } // radar girando
       if (e.retro > 0.6) { c.fillStyle = col.fuego; c.beginPath(); c.arc(L * 1.45, -w * 0.27, w * 0.2, 0, TAU); c.arc(L * 1.45, w * 0.27, w * 0.2, 0, TAU); c.fill(); }
+    } else if (W.UNID[u.tipo].mini) { // cuadricóptero: cuerpo pequeño y cuatro rotores; el kamikaze lleva la carga delante, el bombardero colgando
+      const L = r * 1.5;
+      c.strokeStyle = col.osc; c.lineWidth = Math.max(1, L * 0.16); c.beginPath(); c.moveTo(-L * 0.7, -L * 0.7); c.lineTo(L * 0.7, L * 0.7); c.moveTo(-L * 0.7, L * 0.7); c.lineTo(L * 0.7, -L * 0.7); c.stroke();
+      c.fillStyle = col.luz; c.globalAlpha = 0.55; for (const [fx, fy] of [[-0.7, -0.7], [0.7, 0.7], [-0.7, 0.7], [0.7, -0.7]]) { c.beginPath(); c.arc(L * fx, L * fy, L * 0.42, 0, TAU); c.fill(); } c.globalAlpha = 1;
+      c.fillStyle = col.base; c.fillRect(-L * 0.32, -L * 0.26, L * 0.64, L * 0.52);
+      if (u.tipo === 'dronFpv') { c.fillStyle = col.mal; c.beginPath(); c.arc(L * 0.5, 0, L * 0.22, 0, TAU); c.fill(); }
+      if (u.tipo === 'dronBomba') { c.fillStyle = col.tinta; c.beginPath(); c.arc(0, 0, L * 0.2, 0, TAU); c.fill(); }
+    } else if (u.tipo === 'comandoDrones') { // furgón con plataforma de despegue detrás y antena
+      const L = r * 1.35, w = r * 0.85;
+      c.fillStyle = col.osc; c.fillRect(-L, -w, L * 2, w * 2);
+      c.fillStyle = col.base; c.fillRect(-L * 0.92, -w * 0.84, L * 1.84, w * 1.68);
+      c.fillStyle = col.luz; c.fillRect(L * 0.45, -w * 0.6, L * 0.38, w * 1.2); // cabina
+      c.strokeStyle = col.luz; c.lineWidth = Math.max(1, r * 0.1); c.beginPath(); c.arc(-L * 0.35, 0, w * 0.55, 0, TAU); c.stroke(); // plataforma
+      c.beginPath(); c.moveTo(-L * 0.35 - w * 0.3, 0); c.lineTo(-L * 0.35 + w * 0.3, 0); c.moveTo(-L * 0.35, -w * 0.3); c.lineTo(-L * 0.35, w * 0.3); c.stroke();
+      c.strokeStyle = col.osc; c.beginPath(); c.moveTo(L * 0.2, -w * 0.7); c.lineTo(L * 0.2, -w * 1.5); c.stroke(); // antena
     } else if (u.tipo === 'dron') { // ala fina y larga, cola en V, hélice detrás
       const L = r * 1.8;
       c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1;
@@ -410,6 +427,10 @@
       }
       c.fillStyle = tinta; c.beginPath(); c.arc(cx, cy, t * 0.05, 0, TAU); c.fill();
       if (lod === 2) { c.fillStyle = col.osc; c.fillRect(X(0.1), Y(0.76), t * 0.2, t * 0.12); c.fillRect(X(0.74), Y(0.1), t * 0.14, t * 0.14); }
+    } else if (e.tipo === 'estDrones') { // plataforma de despegue con su H y un mástil
+      c.strokeStyle = col.luz; c.lineWidth = lw * 1.4; c.beginPath(); c.arc(cx, cy, t * 0.3, 0, TAU); c.stroke();
+      c.beginPath(); c.moveTo(X(0.4), Y(0.36)); c.lineTo(X(0.4), Y(0.64)); c.moveTo(X(0.6), Y(0.36)); c.lineTo(X(0.6), Y(0.64)); c.moveTo(X(0.4), Y(0.5)); c.lineTo(X(0.6), Y(0.5)); c.stroke();
+      c.fillStyle = s.deficit ? col.mal : col.luz; c.beginPath(); c.arc(X(0.84), Y(0.16), t * 0.06, 0, TAU); c.fill();
     } else if (e.tipo === 'camara') { // un poste con su cámara, que barre de lado a lado
       c.fillStyle = col.osc; c.beginPath(); c.arc(cx, cy, t * 0.12, 0, TAU); c.fill();
       c.save(); c.translate(cx, cy); c.rotate(s.deficit ? 0.7 : Math.sin(s.tiempo * 0.0015 + s.id) * 1.6);

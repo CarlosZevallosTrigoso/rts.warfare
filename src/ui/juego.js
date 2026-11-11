@@ -145,7 +145,7 @@
 
     // Volumen: la vista sigue siendo cenital, pero cada cosa tiene altura. Los edificios muestran su pared sur y el tejado
     // se dibuja desplazado hacia arriba; las unidades llevan un canto; la roca y el agua, un escalón.
-    const ALTO = { patio: 0.3, central: 0.36, refineria: 0.32, bomba: 0.2, cuartel: 0.26, extractor: 0.3, fabrica: 0.34, torreta: 0.22, torreCanon: 0.36, aerodromo: 0.08, antiaerea: 0.22, estacion: 0.26, deposito: 0.22, obras: 0.28, misilera: 0.12, interceptor: 0.24, torretaMuro: 0.34, camara: 0.3 };
+    const ALTO = { patio: 0.3, central: 0.36, refineria: 0.32, bomba: 0.2, cuartel: 0.26, extractor: 0.3, fabrica: 0.34, torreta: 0.22, torreCanon: 0.36, aerodromo: 0.08, antiaerea: 0.22, estacion: 0.26, deposito: 0.22, obras: 0.28, misilera: 0.12, interceptor: 0.24, torretaMuro: 0.34, camara: 0.3, estDrones: 0.14 };
     function entEn(wx, wy, holgura) { // holgura: margen extra (en celdas) para acertar con el dedo
       let mejor = null, md = Infinity;
       for (const e of m.ents) {
@@ -158,7 +158,7 @@
           if (dm < 0.55 + (holgura || 0)) { mejor = e; md = 40; }
           continue;
         }
-        if (e.edif) { if (wx >= e.x && wx < e.x + e.tam && wy >= e.y - (cam.z >= 8 ? ALTO[e.tipo] : 0) && wy < e.y + e.tam && md > 50) { mejor = e; md = 50; } } // el tejado sobresale por arriba
+        if (e.edif) { if (wx >= e.x && wx < e.x + e.tam && wy >= e.y - (cam.z >= 8 ? ALTO[e.tipo] : 0) && wy < e.y + e.tam && md >= 40) { mejor = e; md = 39; } } // (un edificio gana a la línea o al camino que le pase por debajo) // el tejado sobresale por arriba
         else { const d = Math.hypot(e.x - wx, e.y - wy); if (d < UNID[e.tipo].radio + 0.3 + (holgura || 0) && d < md) { mejor = e; md = d; } }
       }
       return mejor;
@@ -200,6 +200,7 @@
         if (e.j === YO && conRed) { if (e.edif && !e.infra && !e.conRed) t += e.tipo === 'deposito' ? ' · sin conexión: únelo a tu base con un ingeniero civil' : ' · fuera de la red'; if (e.linea && !e.conRed) t += ' · no llega a tu red'; if (e.sinLuz) t += ' · sin energía: a media marcha'; if (!e.edif && e.sinSum >= W.ECON.sinSum) t += ' · sin suministro: dispara más lento y no se repara'; }
         if (e.tipo === 'misilera' && e.j === YO) { const g = Object.keys(MIS).filter((k) => e.silo && e.silo[k]).map((k) => e.silo[k] + ' ' + MIS[k].nombre).join(', '); t += ' · ' + (g || 'sin misiles'); }
         if (e.tipo === 'interceptor' && e.j === YO) t += ' · cargas ' + (e.cargas === undefined ? EDIF.interceptor.cargas : e.cargas) + '/' + EDIF.interceptor.cargas;
+        { const dd = (e.edif ? EDIF : UNID)[e.tipo].drones; if (dd && e.j === YO && e.dr) t += ' · drones ' + (e.dr.rec.length + e.dr.bomba.length + e.dr.fpv.length) + ' en el aire' + (dd.fpv ? (e.dronAtk === false ? ' · ataque apagado' : '') : ''); }
         if (e.hack > m.t) t += ' · hackeado: ' + Math.ceil((e.hack - m.t) / 20) + ' s';
         if (!e.edif && UNID[e.tipo].monta && e.j === YO) t += (e.monta || 0) >= UNID[e.tipo].monta ? ' · montada' : ' · montando…';
         if (e.tipo === 'aerodromo' && e.j === YO) t += ' · aviones ' + m.ents.filter((u) => !u.edif && u.casa === e.id).length + '/' + W.ECON.cupoAviones;
@@ -797,7 +798,8 @@
         for (const id of sel) {
           const e = m.porId.get(id);
           if (!e || e.j !== YO) continue;
-          if (e.edif) { if (e.tipo === 'aerodromo') for (const t in UNID) if (UNID[t].aire) aro(e, UNID[t].radioVuelo); if (EDIF[e.tipo].intercepta) aro(e, EDIF[e.tipo].intercepta); }
+          if (e.edif) { if (e.tipo === 'aerodromo') for (const t in UNID) if (UNID[t].aire && UNID[t].radioVuelo) aro(e, UNID[t].radioVuelo); if (EDIF[e.tipo].intercepta) aro(e, EDIF[e.tipo].intercepta); if (EDIF[e.tipo].radioDron) aro(e, EDIF[e.tipo].radioDron); }
+          else if (UNID[e.tipo].radioDron) aro({ id: e.id, cx: e.x, cy: e.y }, UNID[e.tipo].radioDron); // hasta dónde llegan sus drones
           else if (UNID[e.tipo].aire && e.casa && m.porId.has(e.casa)) aro(m.porId.get(e.casa), UNID[e.tipo].radioVuelo);
         }
         ctx.setLineDash([]); ctx.globalAlpha = 1;
@@ -1016,6 +1018,8 @@
           if (d.derribo) { estallido(d.x2, d.y2, 2); aviso(d.j === YO ? 'Misil enemigo derribado' : 'Te han derribado un misil'); son.explosion(Math.max(0.2, cerca(d.x2, d.y2)), paneo(d.x2), false); }
         } else if (d.tipo === 'misilListo') {
           if (d.j === YO) { aviso(MIS[d.clase].nombre + ' listo en la misilera'); son.unidadLista(); }
+        } else if (d.tipo === 'interferido') {
+          if (d.j === YO && performance.now() - avisoInterf > 6000) { avisoInterf = performance.now(); aviso('Un vehículo de mando enemigo interfiere tus drones'); }
         } else if (d.tipo === 'hack') {
           if (d.de === YO) { aviso('¡Te han hackeado: ' + (EDIF[d.clase] || UNID[d.clase]).nombre.toLowerCase() + '!'); son.alerta(); } else if (d.j === YO) aviso('Hackeado: ' + (EDIF[d.clase] || UNID[d.clase]).nombre.toLowerCase());
           if (visible(d.x2, d.y2)) senales.push({ k: 'onda', x: d.x2, y: d.y2, r: 2.2, t0: performance.now(), dur: 700 });
@@ -1095,7 +1099,7 @@
     // Textos que suben y se desvanecen sobre el mapa (flancos, ascensos, retiradas).
     const flotantes = [];
     function flotar(x, y, txt, color) { flotantes.push({ x, y, txt, color, t0: performance.now() }); if (flotantes.length > 40) flotantes.shift(); }
-    const avisos = []; let avisoExpl = 0;
+    const avisos = []; let avisoExpl = 0, avisoInterf = 0;
     function aviso(txt) { avisos.push({ txt, t0: performance.now() }); if (avisos.length > 4) avisos.shift(); }
 
     // ---------- dibujos de las casillas ----------
@@ -1285,6 +1289,9 @@
     $('desplegar').addEventListener('click', desplegar);
     if (!cargado) W.orden(m, { t: 'retiro', j: YO, on: true }); // por defecto, las unidades propias muy dañadas se retiran solas a reparar
     const paraRetiro = () => unidadesSel().filter((u) => !UNID[u.tipo].aire && u.tipo !== 'cosechadora');
+    const conDrones = () => unidadesSel().filter((u) => u.j === YO && UNID[u.tipo].drones && UNID[u.tipo].drones.fpv);
+    $('dronAtk').addEventListener('click', () => { const us = conDrones(); if (us.length) W.orden(m, { t: 'dronAtk', j: YO, ids: us.map((u) => u.id), on: us.some((u) => u.dronAtk === false) }); });
+    $('verRed').addEventListener('click', () => { if (conRed) verRed = !verRed; else aviso('Partida clásica: sin red'); });
     $('retiro').addEventListener('click', () => { const us = paraRetiro(); if (us.length) W.orden(m, { t: 'retiro', j: YO, ids: us.map((u) => u.id), on: !us.every((u) => u.retira) }); });
     // Segundo clic derecho tras ordenar mover: fija hacia dónde queda mirando la unidad (o el frente de la formación).
     let giroPend = null, giroCerca = false;
@@ -1309,6 +1316,7 @@
         if (us.some((u) => UNID[u.tipo].plazas)) L.push('<b>transporte: la infantería sube con clic derecho sobre él · ' + k('U') + ' descargar</b>');
         if (us.some((u) => UNID[u.tipo].mando)) L.push('<b>mando: los tuyos en su radio ven en redondo y giran más rápido; gasta información</b>');
         if (us.some((u) => UNID[u.tipo].despliega)) L.push('<b>patio móvil: ' + k('D') + ' lo despliega aquí como patio nuevo (no se repliega)</b>');
+        if (us.some((u) => UNID[u.tipo].drones)) L.push('<b>drones: los de reconocimiento dan vueltas solos; el operador solo los despliega parado; los de ataque del comando salen solos (clic derecho en un enemigo: preferencia)</b>');
         if (us.some((u) => UNID[u.tipo].hackea)) L.push('<b>hacker: clic derecho en un vehículo o edificio enemigo lo apaga unos segundos · ' + W.ECON.hackInfo + ' de información</b>');
         if (us.some((u) => UNID[u.tipo].monta)) L.push('<b>gatling: quieta se monta sola (3 s) y entonces dispara; para moverse desmonta</b>');
         if (us.some((u) => UNID[u.tipo].tiende)) L.push('<b>ingeniero civil: ' + k('J') + ' conectar edificios con una línea de servicio (energía y red)</b>');
@@ -1574,6 +1582,8 @@
       { const hay = unidadesSel().some((u) => UNID[u.tipo].tiende), bc = $('conectar'); bc.hidden = !hay; bc.classList.toggle('listo', modo === 'conectar'); if (!hay && modo === 'conectar') modo = null; }
       { const hay = unidadesSel().some((u) => UNID[u.tipo].traza), bz = $('trazar'); bz.hidden = !hay; bz.classList.toggle('listo', modo === 'trazar'); }
       { const us = conCarga(), bd = $('descargar'); bd.hidden = !us.length; if (us.length) { const t = 'Descargar · ' + us.reduce((a, u) => a + u.pasajeros.length, 0) + ' dentro'; if (bd.textContent !== t) bd.textContent = t; } }
+      { const us = conDrones(), bd = $('dronAtk'); bd.hidden = !us.length; if (us.length) { const t = 'Drones de ataque: ' + (us.every((u) => u.dronAtk !== false) ? 'sí' : us.some((u) => u.dronAtk !== false) ? 'algunos' : 'no'); if (bd.textContent !== t) bd.textContent = t; } }
+      { const bv = $('verRed'), t = 'ver la red: ' + (verRed ? 'sí' : 'no'); if (bv.textContent !== t) { bv.textContent = t; bv.classList.toggle('on', verRed); } bv.hidden = !conRed; }
       { const us = paraRetiro(), br = $('retiro'); br.hidden = !us.length;
         if (us.length) { const t = 'Retirada automática: ' + (us.every((u) => u.retira) ? 'sí' : us.some((u) => u.retira) ? 'algunas' : 'no'); if (br.textContent !== t) br.textContent = t; } }
       if (cav) { const t = 'Atrincherarse · ' + cav + (cav === 1 ? ' soldado' : ' soldados'); if (bt.textContent !== t) bt.textContent = t; }
@@ -1677,6 +1687,7 @@
         }
         const ids = us.map((u) => u.id), o = entEn(wx, wy), c = Math.floor(wy) * N + Math.floor(wx);
         if (o && o.j !== YO) {
+          { const cd = us.filter((u) => UNID[u.tipo].drones && UNID[u.tipo].drones.fpv).map((u) => u.id); if (cd.length) { W.orden(m, { t: 'dronObj', j: YO, ids: cd, obj: o.id }); marca(wx, wy, P.mal); son.orden(); if (cd.length === us.length) return; } }
           { const hk = us.filter((u) => UNID[u.tipo].hackea).map((u) => u.id); if (hk.length) { if (W.hackeable(us.find((u) => UNID[u.tipo].hackea), o)) { W.orden(m, { t: 'hackear', j: YO, ids: hk, obj: o.id }); marca(wx, wy, P.mal); son.orden(); } else aviso('El hacker solo puede con vehículos y edificios'); if (hk.length === us.length) return; } }
           if (!us.some((u) => UNID[u.tipo].arma && W.puedeAtacar(u, o))) aviso(UNID[o.tipo] && UNID[o.tipo].aire ? 'Estas unidades no alcanzan a los aviones' : 'Estas unidades no pueden atacar eso');
           W.orden(m, { t: 'atacar', j: YO, ids, obj: o.id, enc }); marca(wx, wy, P.mal); return;
@@ -1732,7 +1743,7 @@
       if (!ev.shiftKey) sel.clear();
       if (clic) {
         const e = entEn(aMundoX(raton.x), aMundoY(raton.y));
-        if (e && e.j === YO) { if (ev.shiftKey && sel.has(e.id)) sel.delete(e.id); else sel.add(e.id); }
+        if (e && e.j === YO && !(UNID[e.tipo] && UNID[e.tipo].mini)) { if (ev.shiftKey && sel.has(e.id)) sel.delete(e.id); else sel.add(e.id); } // los drones pequeños no se seleccionan: van con su portador
         const ahora = performance.now();
         if (e && e.j === YO && !e.edif && ultClic.id === e.id && ahora - ultClic.t < 380) { // doble clic: todas las de su tipo que estén en pantalla
           const c = lienzo.getBoundingClientRect(), ax = aMundoX(0), bx = aMundoX(c.width), ay = aMundoY(0), by = aMundoY(c.height);
@@ -1743,7 +1754,7 @@
       }
       const ax = aMundoX(Math.min(raton.x, raton.x0)), bx = aMundoX(Math.max(raton.x, raton.x0));
       const ay = aMundoY(Math.min(raton.y, raton.y0)), by = aMundoY(Math.max(raton.y, raton.y0));
-      for (const e of m.ents) if (!e.edif && e.j === YO && e.x >= ax && e.x <= bx && e.y >= ay && e.y <= by) sel.add(e.id);
+      for (const e of m.ents) if (!e.edif && e.j === YO && !UNID[e.tipo].mini && e.x >= ax && e.x <= bx && e.y >= ay && e.y <= by) sel.add(e.id);
       // La caja prioriza tropa: suelta edificios y, si hay combatientes, también cosechadoras.
       const cosas = [...sel].map((id) => m.porId.get(id)).filter(Boolean);
       const hayTropa = cosas.some((e) => !e.edif && UNID[e.tipo].arma);

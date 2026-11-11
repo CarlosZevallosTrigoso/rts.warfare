@@ -1471,6 +1471,58 @@ prueba('tanda 4: muros, puertas, alambrada, torreta de muro y cámara', () => {
   assert.equal(W.huella(copia), W.huella(m));
 });
 
+prueba('drones: estación, operador y comando; kamikaze, bombardero, derribos e interferencia', () => {
+  const m = W.crearMundo(4242, { N: 128 }), N = m.N, J = m.jug[0];
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  for (let y = 30; y < 100; y++) for (let x = 20; x < 110; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; } }
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  const drones = (base, rol) => m.ents.filter((e) => W.UNID[e.tipo] && W.UNID[e.tipo].mini && e.base === base.id && (!rol || e.rol === rol));
+  J.dios = false; J.minerales = 5000;
+  // estación: dos de reconocimiento dando vueltas, y se ve donde antes no
+  const lejos = 60 * N + 52; assert.notEqual(m.niebla[0][lejos], 2, 'antes no se ve a esa distancia');
+  W.crearEdificio(m, 0, 'central', 36, 64); const est = W.crearEdificio(m, 0, 'estDrones', 40, 60); avanza(200);
+  assert.equal(drones(est, 'rec').length, 2, 'la estación saca sus dos drones');
+  let visto = false; for (let i = 0; i < 600; i++) { W.tick(m); if (m.niebla[0][lejos] === 2) visto = true; }
+  assert.ok(visto, 'los drones dan visión lejos de la estación');
+  assert.ok(drones(est).every((q) => Math.hypot(q.x - est.cx, q.y - est.cy) <= W.EDIF.estDrones.radioDron + 1), 'sin salirse de su radio');
+  // derribarlos cuesta reponerlos; si cae la estación, caen
+  const min0 = J.minerales; drones(est)[0].vida = 0; avanza(W.ECON.dronRepone + 60);
+  assert.ok(drones(est, 'rec').length === 2, 'repone el derribado'); void min0;
+  est.vida = 0; avanza(5); assert.equal(m.ents.filter((e) => W.UNID[e.tipo] && W.UNID[e.tipo].mini).length, 0, 'sin estación caen sus drones');
+  // operador: solo despliega parado; al andar, el dron se le pega
+  const op = W.crearUnidad(m, 0, 'operador', 80 * N + 40); avanza(60);
+  const dr = drones(op, 'rec'); assert.equal(dr.length, 1, 'el operador despliega su dron');
+  avanza(300); assert.ok(Math.hypot(dr[0].x - op.x, dr[0].y - op.y) > 4, 'parado, el dron se aleja a mirar');
+  W.orden(m, { t: 'mover', j: 0, ids: [op.id], x: 60.5, y: 80.5 }); avanza(150);
+  assert.ok(Math.hypot(dr[0].x - op.x, dr[0].y - op.y) < 4, 'andando, el dron va pegado a él');
+  op.vida = 0; avanza(5);
+  // comando: kamikazes contra el tanque, bombardero contra la infantería; cada salida cuesta
+  const cmd = W.crearUnidad(m, 0, 'comandoDrones', 45 * N + 40); avanza(150);
+  assert.ok(drones(cmd, 'rec').length === 3 && drones(cmd, 'bomba').length === 2, 'tres de reconocimiento y dos bombarderos');
+  const tq = W.crearUnidad(m, 1, 'tanque', 45 * N + 52), sols = [0, 1, 2].map((k) => W.crearUnidad(m, 1, 'infanteria', (49 + k) * N + 50));
+  tq.guardia = true; tq.recarga = 99999; sols.forEach((s) => { s.guardia = true; s.recarga = 99999; });
+  const m1 = J.minerales; let maxFpv = 0;
+  for (let i = 0; i < 700; i++) { W.tick(m); tq.recarga = 99999; sols.forEach((s) => { s.recarga = 99999; }); maxFpv = Math.max(maxFpv, drones(cmd, 'fpv').length); }
+  assert.ok(tq.vida <= 0 || tq.vida < tq.vidaMax - 140, 'los kamikazes castigan al tanque: ' + tq.vida);
+  assert.ok(sols.some((s) => s.vida < s.vidaMax), 'el bombardero castiga a la infantería');
+  assert.ok(maxFpv >= 1 && maxFpv <= 5, 'salen de uno en uno, como mucho cinco: ' + maxFpv); void m1;
+  assert.ok(drones(cmd).length <= 10, 'nunca más de diez en el aire');
+  // apagados los de ataque, no sale ninguno más
+  W.orden(m, { t: 'dronAtk', j: 0, ids: [cmd.id], on: false }); avanza(100);
+  const tq2 = W.crearUnidad(m, 1, 'tanque', 42 * N + 52); tq2.guardia = true; tq2.recarga = 99999; avanza(300);
+  assert.ok(tq2.vida === tq2.vidaMax, 'con los drones de ataque apagados no ataca');
+  // la antiaérea enemiga los derriba; el vehículo de mando enemigo los interfiere
+  [tq, tq2, ...sols].forEach((e) => { e.vida = 0; }); avanza(3);
+  m.jug[1].nivel = 2; W.crearEdificio(m, 1, 'central', 58, 44); const g = W.crearEdificio(m, 1, 'antiaerea', 54, 45); // en la órbita de los de reconocimiento
+  const antes = drones(cmd).length; let minimo = antes; for (let i = 0; i < 400; i++) { W.tick(m); minimo = Math.min(minimo, drones(cmd).length); }
+  assert.ok(minimo < antes, 'la antiaérea derriba drones: de ' + antes + ' bajan a ' + minimo);
+  g.vida = 0; avanza(W.ECON.dronRepone * 3 + 100);
+  m.jug[1].info = 500; const mando = W.crearUnidad(m, 1, 'mando', 46 * N + 43); mando.guardia = true; avanza(80);
+  const r = W.UNID.mando.mando;
+  assert.ok(drones(cmd, 'bomba').length < 2 && drones(cmd).filter((q) => Math.hypot(q.x - mando.x, q.y - mando.y) <= r).every((q) => q.vida < q.vidaMax), 'dentro del radio del mando enemigo los drones pierden el enlace y caen');
+  assert.equal(drones(cmd, 'rec').length, 3, 'los que vuelan fuera de su radio siguen');
+});
+
 prueba('puentes: la excavadora cruza el agua, todos lo usan y al caer se cierra', () => {
   const m = W.crearMundo(31, { N: 128 }), N = m.N, J = m.jug[0], T = W.TERRENO;
   m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
