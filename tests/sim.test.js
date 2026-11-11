@@ -1127,6 +1127,32 @@ prueba('formación en marcha: el grupo se forma, avanza junto y llega formado', 
   console.log('      a media marcha el grupo se estira ' + linea.peor.toFixed(1) + ' celdas en línea, ' + suelto.peor.toFixed(1) + ' sin formación · llegan con ' + (Math.max(...l) - Math.min(...l)) + ' ticks de diferencia');
 });
 
+prueba('repetición: las órdenes apuntadas reproducen la misma partida', () => {
+  const m = W.crearMundo(555, { N: 128 }), ia = W.iaCrear(1, 'normal', 'equilibrado');
+  m.registro = [];
+  const propias = () => m.ents.filter((e) => !e.edif && e.j === 0).map((e) => e.id);
+  for (let i = 0; i < 5000; i++) {
+    if (i === 40) W.orden(m, { t: 'construir', j: 0, tipo: 'central' });
+    if (i === 300) W.orden(m, { t: 'mover', j: 0, ids: propias(), x: 60.5, y: 60.5, forma: 'linea' });
+    if (i === 900) W.orden(m, { t: 'amover', j: 0, ids: propias(), x: 70.5, y: 50.5 });
+    if (i === 1500) W.orden(m, { t: 'trampa', j: 0, clave: 'recursos', valor: true });
+    W.iaTick(m, ia); W.tick(m);
+  }
+  assert.ok(m.registro.length > 40, 'debía haber órdenes apuntadas: ' + m.registro.length / 2);
+  const txt = JSON.stringify(m.registro), rep = JSON.parse(txt), r = W.crearMundo(555, { N: 128 });
+  r.soloRep = true;
+  let k = 0;
+  for (let i = 0; i < 5000; i++) {
+    while (k < rep.length && rep[k] <= r.t) { W.orden(r, rep[k + 1], true); k += 2; }
+    if (i === 100) W.orden(r, { t: 'mover', j: 0, ids: r.ents.filter((e) => !e.edif && e.j === 0).map((e) => e.id), x: 20.5, y: 20.5 }); // quien mira no puede mandar
+    W.tick(r);
+  }
+  assert.equal(k, rep.length, 'todas las órdenes reproducidas');
+  assert.equal(W.huella(r), W.huella(m), 'la repetición debía dar exactamente la misma partida');
+  assert.ok(!W.guardar(m).includes('"registro"'), 'el registro no va en la partida guardada');
+  console.log('      ' + rep.length / 2 + ' órdenes en 5000 ticks · ' + Math.round(txt.length / 1024) + ' KB');
+});
+
 prueba('puentes: la excavadora cruza el agua, todos lo usan y al caer se cierra', () => {
   const m = W.crearMundo(31, { N: 128 }), N = m.N, J = m.jug[0], T = W.TERRENO;
   m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);

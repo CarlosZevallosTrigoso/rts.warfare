@@ -179,6 +179,19 @@
       else if (exc.orden === 'nada') {
         const c = W.cercaLibre(m, patio.cx + (objetivo.cx - patio.cx) * 0.45, patio.cy + (objetivo.cy - patio.cy) * 0.45, true);
         W.orden(m, { t: 'trazar', j, ids: [exc.id], x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 }); ia.via = true;
+        ia.viaFin = { x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 }; ia.viaIni = { x: exc.x, y: exc.y }; ia.viaN = 0;
+      }
+    } else if (ia.via && ia.viaFin && m.t % 400 === ia.j * 20) {
+      // Mantenimiento: si le han destruido tramos de su vía, la excavadora la recorre de punta a punta reponiéndolos (lo que sigue en pie no cuesta).
+      let n = 0; for (const e of m.ents) if (e.infra && e.j === j) n++;
+      const exc = sinArma.find((u) => u.tipo === 'excavadora');
+      if (exc && exc.orden === 'trazar') ia.viaN = 0; // aún trazando: la cuenta se toma al terminar
+      else if (exc && exc.orden === 'nada') {
+        if (!ia.viaN || n > ia.viaN) ia.viaN = n;
+        else if (n < ia.viaN && J.minerales > 600) {
+          const a = Math.hypot(exc.x - ia.viaFin.x, exc.y - ia.viaFin.y) < Math.hypot(exc.x - ia.viaIni.x, exc.y - ia.viaIni.y) ? ia.viaIni : ia.viaFin;
+          W.orden(m, { t: 'trazar', j, ids: [exc.id], x: a.x, y: a.y }); ia.viaN = 0;
+        }
       }
     }
 
@@ -326,6 +339,15 @@
           const van = soldados.filter((u) => UNID[u.tipo].cat === 'inf' && u.tipo !== 'explorador' && !ia.atacantes.has(u.id) && u.orden === 'nada' && !u.obj).slice(0, 2);
           if (van.length) { ia.puesto = p.id; ia.tPuesto = m.t; for (const u of van) ia.capturan.add(u.id); W.orden(m, { t: 'mover', j, ids: van.map((u) => u.id), x: p.x + 0.6, y: p.y + 0.6 }); }
         }
+      }
+    }
+    // Cortar caminos: hasta tres atacantes que se han quedado sin nada que hacer disparan al tramo enemigo que tengan a la vista y cerca.
+    if (m.t % 200 === ia.j * 20) {
+      const libres = soldados.filter((u) => ia.atacantes.has(u.id) && u.orden === 'nada' && !u.obj).slice(0, 3);
+      if (libres.length) {
+        let tramo = null, md = 8;
+        for (const e of m.ents) { if (!e.infra || e.j === j || e.vida <= 0 || m.niebla[j][Math.floor(e.cy) * m.N + Math.floor(e.cx)] !== 2) continue; const d0 = Math.hypot(e.cx - libres[0].x, e.cy - libres[0].y) - (e.puente ? 3 : 0); if (d0 < md) { md = d0; tramo = e; } }
+        if (tramo) W.orden(m, { t: 'atacar', j, ids: libres.filter((u) => W.puedeAtacar(u, tramo)).map((u) => u.id), obj: tramo.id });
       }
     }
     // El vehículo de mando y los ingenieros sobrantes acompañan al punto de reunión.

@@ -224,7 +224,9 @@
   function devolver(J, d) { J.minerales += d.costo || 0; J.petroleo += d.pet || 0; J.raros += d.raros || 0; J.info += d.info || 0; }
 
   // ---------- comandos ----------
-  W.orden = function (m, cmd) { m.cola.push(cmd); };
+  // Con m.registro (una lista), cada orden queda apuntada con su tick: reproducidas en un mundo igual, dan la misma partida.
+  // Con m.soloRep (viendo una repetición) solo entran las órdenes de la repetición.
+  W.orden = function (m, cmd, deRep) { if (m.soloRep && !deRep) return; if (m.registro) m.registro.push(m.t, cmd); m.cola.push(cmd); };
 
   // Por dónde puede pasar cada unidad: los vehículos no entran al bosque, salvo la excavadora mientras traza un camino.
   const pasoDe = (m, u) => (UNID[u.tipo].cat === 'veh' && u.orden !== 'trazar' ? m.pasoV : m.paso);

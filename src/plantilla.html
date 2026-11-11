@@ -133,6 +133,11 @@
   #fin div { pointer-events: auto; background: var(--fondo); border: 1px solid var(--tinta); border-radius: 2px; padding: 22px 30px; text-align: center; }
   #fin strong { display: block; font-size: 20px; margin-bottom: 6px; }
   #fin a { color: var(--tinta); margin: 0 6px; }
+  #repBar { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); margin-left: -118px; z-index: 4; display: flex; gap: 5px; align-items: center; padding: 5px 9px; background: var(--panel); border: 1px solid var(--tinta); border-radius: 3px; white-space: nowrap; }
+  #repBar b { color: var(--mal); letter-spacing: .12em; } #repBar span { color: var(--suave); min-width: 44px; font-variant-numeric: tabular-nums; }
+  #repBar button { font: inherit; color: var(--tinta); background: var(--panel); border: 1px solid var(--linea); border-radius: 2px; padding: 2px 7px; cursor: pointer; }
+  #repBar button.on { background: var(--tinta); color: var(--fondo); border-color: var(--tinta); }
+  #repBar a { color: var(--tinta); margin-left: 4px; }
   #menu { position: fixed; inset: 0; background: var(--fondo); display: flex; align-items: center; justify-content: center; z-index: 5; }
   #menu[hidden] { display: none; }
   #menu .caja { width: min(440px, 92vw); display: flex; flex-direction: column; gap: 16px; }
@@ -224,6 +229,7 @@
     <button type="button" data-c="Escape">soltar</button><button type="button" data-c="KeyB">patio</button><button type="button" data-c="KeyQ">cuarteles</button><button type="button" data-c="KeyV">fábricas</button><button type="button" data-c="KeyX">aeródromos</button><button type="button" data-c="Space">alerta</button><button type="button" data-c="KeyP">pausa</button>
   </div>
   <div id="abajo"><table id="rend" class="tenue" title="Rendimiento del último segundo. Clic para plegar."></table><div id="contexto" class="tenue" hidden></div></div>
+  <div id="repBar" hidden><b>REPETICIÓN</b><span id="repT"></span><button type="button" data-v="0">❙❙</button><button type="button" data-v="1" class="on">×1</button><button type="button" data-v="2">×2</button><button type="button" data-v="4">×4</button><button type="button" data-v="8">×8</button><button type="button" data-v="16">×16</button><a id="repSalir" href="#">salir</a></div>
   <aside id="barra">
     <h1 id="titulo" title="Recargar">rts<span>.</span>warfare<b id="dios" hidden>GOD</b><b id="sinColmena" hidden>SIN COLMENA</b></h1>
     <div id="recursos">
@@ -278,7 +284,7 @@
   <button type="button" id="continuar" hidden>Continuar la partida guardada</button>
   <div id="version">__VERSION__</div>
 </div></div>
-<div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
+<div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finVer" href="#" title="Vuelve a ver la partida entera, con todo el mapa a la vista y a la velocidad que quieras.">ver repetición</a><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
 globalThis.W = { VERSION: '__VERSION__' };
 /*__CODIGO__*/

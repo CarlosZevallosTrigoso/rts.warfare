@@ -133,6 +133,11 @@
   #fin div { pointer-events: auto; background: var(--fondo); border: 1px solid var(--tinta); border-radius: 2px; padding: 22px 30px; text-align: center; }
   #fin strong { display: block; font-size: 20px; margin-bottom: 6px; }
   #fin a { color: var(--tinta); margin: 0 6px; }
+  #repBar { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); margin-left: -118px; z-index: 4; display: flex; gap: 5px; align-items: center; padding: 5px 9px; background: var(--panel); border: 1px solid var(--tinta); border-radius: 3px; white-space: nowrap; }
+  #repBar b { color: var(--mal); letter-spacing: .12em; } #repBar span { color: var(--suave); min-width: 44px; font-variant-numeric: tabular-nums; }
+  #repBar button { font: inherit; color: var(--tinta); background: var(--panel); border: 1px solid var(--linea); border-radius: 2px; padding: 2px 7px; cursor: pointer; }
+  #repBar button.on { background: var(--tinta); color: var(--fondo); border-color: var(--tinta); }
+  #repBar a { color: var(--tinta); margin-left: 4px; }
   #menu { position: fixed; inset: 0; background: var(--fondo); display: flex; align-items: center; justify-content: center; z-index: 5; }
   #menu[hidden] { display: none; }
   #menu .caja { width: min(440px, 92vw); display: flex; flex-direction: column; gap: 16px; }
@@ -224,6 +229,7 @@
     <button type="button" data-c="Escape">soltar</button><button type="button" data-c="KeyB">patio</button><button type="button" data-c="KeyQ">cuarteles</button><button type="button" data-c="KeyV">fábricas</button><button type="button" data-c="KeyX">aeródromos</button><button type="button" data-c="Space">alerta</button><button type="button" data-c="KeyP">pausa</button>
   </div>
   <div id="abajo"><table id="rend" class="tenue" title="Rendimiento del último segundo. Clic para plegar."></table><div id="contexto" class="tenue" hidden></div></div>
+  <div id="repBar" hidden><b>REPETICIÓN</b><span id="repT"></span><button type="button" data-v="0">❙❙</button><button type="button" data-v="1" class="on">×1</button><button type="button" data-v="2">×2</button><button type="button" data-v="4">×4</button><button type="button" data-v="8">×8</button><button type="button" data-v="16">×16</button><a id="repSalir" href="#">salir</a></div>
   <aside id="barra">
     <h1 id="titulo" title="Recargar">rts<span>.</span>warfare<b id="dios" hidden>GOD</b><b id="sinColmena" hidden>SIN COLMENA</b></h1>
     <div id="recursos">
@@ -276,11 +282,11 @@
   <div><h2>Semilla del mapa</h2><input id="op-s" inputmode="numeric" placeholder="al azar" autocomplete="off"></div>
   <button type="button" id="empezar">Empezar</button>
   <button type="button" id="continuar" hidden>Continuar la partida guardada</button>
-  <div id="version">versión 46</div>
+  <div id="version">versión 47</div>
 </div></div>
-<div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
+<div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finVer" href="#" title="Vuelve a ver la partida entera, con todo el mapa a la vista y a la velocidad que quieras.">ver repetición</a><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 46' };
+globalThis.W = { VERSION: 'versión 47' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -914,7 +920,9 @@ globalThis.W = { VERSION: 'versión 46' };
   function devolver(J, d) { J.minerales += d.costo || 0; J.petroleo += d.pet || 0; J.raros += d.raros || 0; J.info += d.info || 0; }
 
   // ---------- comandos ----------
-  W.orden = function (m, cmd) { m.cola.push(cmd); };
+  // Con m.registro (una lista), cada orden queda apuntada con su tick: reproducidas en un mundo igual, dan la misma partida.
+  // Con m.soloRep (viendo una repetición) solo entran las órdenes de la repetición.
+  W.orden = function (m, cmd, deRep) { if (m.soloRep && !deRep) return; if (m.registro) m.registro.push(m.t, cmd); m.cola.push(cmd); };
 
   // Por dónde puede pasar cada unidad: los vehículos no entran al bosque, salvo la excavadora mientras traza un camino.
   const pasoDe = (m, u) => (UNID[u.tipo].cat === 'veh' && u.orden !== 'trazar' ? m.pasoV : m.paso);
@@ -2470,6 +2478,19 @@ globalThis.W = { VERSION: 'versión 46' };
       else if (exc.orden === 'nada') {
         const c = W.cercaLibre(m, patio.cx + (objetivo.cx - patio.cx) * 0.45, patio.cy + (objetivo.cy - patio.cy) * 0.45, true);
         W.orden(m, { t: 'trazar', j, ids: [exc.id], x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 }); ia.via = true;
+        ia.viaFin = { x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 }; ia.viaIni = { x: exc.x, y: exc.y }; ia.viaN = 0;
+      }
+    } else if (ia.via && ia.viaFin && m.t % 400 === ia.j * 20) {
+      // Mantenimiento: si le han destruido tramos de su vía, la excavadora la recorre de punta a punta reponiéndolos (lo que sigue en pie no cuesta).
+      let n = 0; for (const e of m.ents) if (e.infra && e.j === j) n++;
+      const exc = sinArma.find((u) => u.tipo === 'excavadora');
+      if (exc && exc.orden === 'trazar') ia.viaN = 0; // aún trazando: la cuenta se toma al terminar
+      else if (exc && exc.orden === 'nada') {
+        if (!ia.viaN || n > ia.viaN) ia.viaN = n;
+        else if (n < ia.viaN && J.minerales > 600) {
+          const a = Math.hypot(exc.x - ia.viaFin.x, exc.y - ia.viaFin.y) < Math.hypot(exc.x - ia.viaIni.x, exc.y - ia.viaIni.y) ? ia.viaIni : ia.viaFin;
+          W.orden(m, { t: 'trazar', j, ids: [exc.id], x: a.x, y: a.y }); ia.viaN = 0;
+        }
       }
     }
 
@@ -2619,6 +2640,15 @@ globalThis.W = { VERSION: 'versión 46' };
         }
       }
     }
+    // Cortar caminos: hasta tres atacantes que se han quedado sin nada que hacer disparan al tramo enemigo que tengan a la vista y cerca.
+    if (m.t % 200 === ia.j * 20) {
+      const libres = soldados.filter((u) => ia.atacantes.has(u.id) && u.orden === 'nada' && !u.obj).slice(0, 3);
+      if (libres.length) {
+        let tramo = null, md = 8;
+        for (const e of m.ents) { if (!e.infra || e.j === j || e.vida <= 0 || m.niebla[j][Math.floor(e.cy) * m.N + Math.floor(e.cx)] !== 2) continue; const d0 = Math.hypot(e.cx - libres[0].x, e.cy - libres[0].y) - (e.puente ? 3 : 0); if (d0 < md) { md = d0; tramo = e; } }
+        if (tramo) W.orden(m, { t: 'atacar', j, ids: libres.filter((u) => W.puedeAtacar(u, tramo)).map((u) => u.id), obj: tramo.id });
+      }
+    }
     // El vehículo de mando y los ingenieros sobrantes acompañan al punto de reunión.
     for (const u of sinArma) if (u.tipo === 'mando' && u.orden === 'nada' && Math.hypot(u.x - rx, u.y - ry) > 7) W.orden(m, { t: 'mover', j, ids: [u.id], x: rx - (dx / dd) * 2, y: ry - (dy / dd) * 2 });
     const reserva = soldados.filter((u) => !ia.atacantes.has(u.id) && u.id !== ia.explorador && !ia.capturan.has(u.id));
@@ -2659,7 +2689,7 @@ globalThis.W = { VERSION: 'versión 46' };
 (function () {
   const W = globalThis.W || (globalThis.W = {});
   const TIPOS = { Uint8Array, Int8Array, Uint8ClampedArray, Uint16Array, Int16Array, Int32Array, Uint32Array, Float32Array, Float64Array };
-  const FUERA = ['porId', 'ruta', 'vistas', 'pasoT']; // del mundo: se reconstruyen al cargar
+  const FUERA = ['porId', 'ruta', 'vistas', 'pasoT', 'registro', 'soloRep']; // del mundo: se reconstruyen al cargar
   const DE_ENTIDADES = new Set(['victimas', 'agresores', 'embarques']); // listas que apuntan a unidades: se guardan sus números
 
   function comprimir(a, flotante) { // "valor,veces,valor,veces…"; los enteros, en base 36
@@ -3304,7 +3334,9 @@ globalThis.W = { VERSION: 'versión 46' };
       const q = 's=' + semilla + '&n=' + op.n + '&min=' + op.min + '&ia=' + op.ia + '&est=' + op.est;
       try { history.replaceState(null, '', location.pathname + '?' + q); } catch (e) { /* en file:// puede no dejar */ }
       $('menu').hidden = true;
-      W.jugar({ semilla, N: +op.n, inicio: +op.min, ia: op.ia, estilo: op.est, consulta: q });
+      let rep = null; // ?rep=1: se vuelve a ver la partida apuntada en esta pestaña
+      if (params.get('rep')) { try { const g = JSON.parse(sessionStorage.getItem('rts.rep')); if (g && g.q === q && Array.isArray(g.c)) rep = g; } catch (e) { /* sin repetición: partida normal */ } }
+      W.jugar({ semilla, N: +op.n, inicio: +op.min, ia: op.ia, estilo: op.est, consulta: q, repeticion: rep });
     };
     $('empezar').addEventListener('click', empezar);
     // Partida guardada: se ofrece continuarla, y con ?cargar=1 se entra directo (así funciona «cargar la guardada» desde dentro).
@@ -3330,7 +3362,10 @@ globalThis.W = { VERSION: 'versión 46' };
     const semilla = op.semilla;
     const cargado = op.guardado || null; // partida guardada: el mundo y la IA vienen ya hechos
     const m = cargado ? cargado.m : W.crearMundo(semilla, { N: op.N, inicio: op.inicio }), estilos = Object.keys(W.ESTILOS_IA);
-    const ia = cargado ? cargado.extra.ia : op.ia === 'no' ? null : W.iaCrear(1, op.ia, W.ESTILOS_IA[op.estilo] ? op.estilo : estilos[semilla % estilos.length]), N = m.N, YO = 0, J = m.jug[YO];
+    const rep = op.repeticion ? op.repeticion.c : null, repFin = op.repeticion ? op.repeticion.fin : 0; // repetición: las órdenes apuntadas de una partida; se reproducen solas, sin rival que piense ni jugador que mande
+    if (rep) m.soloRep = true; else if (!cargado) m.registro = [];
+    let repI = 0, repVel = 1, repAvisado = false;
+    const ia = cargado ? cargado.extra.ia : rep || op.ia === 'no' ? null : W.iaCrear(1, op.ia, W.ESTILOS_IA[op.estilo] ? op.estilo : estilos[semilla % estilos.length]), N = m.N, YO = 0, J = m.jug[YO];
     const hist = cargado && cargado.extra.hist ? cargado.extra.hist : []; // una muestra cada 30 s, para el resumen final
     W.mundo = m; // a mano en la consola, para depurar
 
@@ -3368,7 +3403,7 @@ globalThis.W = { VERSION: 'versión 46' };
     }
     function pintarNiebla() {
       const f = m.niebla[YO], d = imgNie.data, c = P.niebla;
-      for (let i = 0; i < N * N; i++) { d[i * 4] = c[0]; d[i * 4 + 1] = c[1]; d[i * 4 + 2] = c[2]; d[i * 4 + 3] = f[i] === 2 ? 0 : f[i] === 1 ? P.velo : 255; }
+      for (let i = 0; i < N * N; i++) { d[i * 4] = c[0]; d[i * 4 + 1] = c[1]; d[i * 4 + 2] = c[2]; d[i * 4 + 3] = rep || f[i] === 2 ? 0 : f[i] === 1 ? P.velo : 255; } // en la repetición se ve todo
       xNie.putImageData(imgNie, 0, 0);
       nieblaVista = m.nieblaV;
     }
@@ -3399,8 +3434,8 @@ globalThis.W = { VERSION: 'versión 46' };
       cam.x = Math.max(mx, Math.min(N - mx, cam.x)); cam.y = Math.max(my, Math.min(N - my, cam.y));
     }
     const aMundoX = (sx) => cam.x + (sx - cw / 2) / cam.z, aMundoY = (sy) => cam.y + (sy - ch / 2) / cam.z;
-    const visible = (x, y) => x >= 0 && y >= 0 && x < N && y < N && m.niebla[YO][Math.floor(y) * N + Math.floor(x)] === 2;
-    const veo = (e) => e.j === YO || (visible(e.edif ? e.cx : e.x, e.edif ? e.cy : e.y) && !(W.oculta(m, e) && m.t - (e.delatada === undefined ? -99 : e.delatada) > 20)); // al enemigo escondido no se le ve hasta descubrirlo
+    const visible = (x, y) => x >= 0 && y >= 0 && x < N && y < N && (rep || m.niebla[YO][Math.floor(y) * N + Math.floor(x)] === 2);
+    const veo = (e) => rep || e.j === YO || (visible(e.edif ? e.cx : e.x, e.edif ? e.cy : e.y) && !(W.oculta(m, e) && m.t - (e.delatada === undefined ? -99 : e.delatada) > 20)); // al enemigo escondido no se le ve hasta descubrirlo
 
     // Volumen: la vista sigue siendo cenital, pero cada cosa tiene altura. Los edificios muestran su pared sur y el tejado
     // se dibuja desplazado hacia arriba; las unidades llevan un canto; la roca y el agua, un escalón.
@@ -4902,6 +4937,17 @@ globalThis.W = { VERSION: 'versión 46' };
     $('titulo').addEventListener('click', () => location.reload());
     $('semilla').textContent = 'semilla ' + semilla + ' · ' + W.VERSION;
     $('finRep').href = '?' + op.consulta + '&ya=1';
+    $('finVer').hidden = !rep && !m.registro; // una partida cargada no tiene apuntado su principio
+    const verRepeticion = () => { // apunta la partida en la pestaña y la vuelve a abrir como repetición, hasta el tick en que estaba
+      try { if (!rep) sessionStorage.setItem('rts.rep', JSON.stringify({ q: op.consulta, c: m.registro, fin: m.t })); location.href = '?' + op.consulta + '&ya=1&rep=1'; }
+      catch (e) { aviso('La repetición no cabe en la memoria del navegador'); }
+    };
+    W.verRepeticion = verRepeticion; // a mano en la consola, también a media partida
+    $('finVer').addEventListener('click', (ev) => { ev.preventDefault(); verRepeticion(); });
+    if (rep) {
+      $('repBar').hidden = false; $('repSalir').href = location.pathname;
+      $('repBar').addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (!b) return; repVel = +b.dataset.v; for (const q of $('repBar').querySelectorAll('button')) q.classList.toggle('on', q === b); });
+    }
     $('finNueva').href = location.pathname;
 
     // ---------- rendimiento: tablita de abajo a la izquierda ----------
@@ -4933,13 +4979,18 @@ globalThis.W = { VERSION: 'versión 46' };
       if (teclas.has('ArrowUp')) cam.y -= v; if (teclas.has('ArrowDown')) cam.y += v;
       limitarCam();
       if (!pausa && m.ganador < 0) {
-        acum += dt;
+        acum += dt * (rep ? repVel : 1);
         let n = 0;
         const t0 = performance.now();
-        while (acum >= PASO && n < 4) { if (ia && !iaQuieta) W.iaTick(m, ia); W.tick(m); acum -= PASO; n++; }
+        while (acum >= PASO && n < (rep ? 4 * Math.max(1, repVel) : 4) && !(rep && m.t >= repFin)) {
+          if (rep) while (repI < rep.length && rep[repI] <= m.t) { W.orden(m, rep[repI + 1], true); repI += 2; }
+          if (ia && !iaQuieta) W.iaTick(m, ia); W.tick(m); acum -= PASO; n++;
+        }
         R.sim += performance.now() - t0; R.ticks += n;
         if (n && Math.floor(m.t / 600) !== Math.floor((m.t - n) / 600)) muestra();
-        if (n === 4) acum = 0;
+        if (n >= (rep ? 4 * Math.max(1, repVel) : 4) || (rep && m.t >= repFin)) acum = 0;
+        if (rep && m.t >= repFin && !repAvisado) { repAvisado = true; if (m.ganador < 0) aviso('Fin de la repetición'); }
+        if (rep && n) { const s = Math.floor(m.t / 20), t = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); if ($('repT').textContent !== t) $('repT').textContent = t; }
         if (n) sonar();
       }
       for (const id of sel) if (!m.porId.has(id)) sel.delete(id);

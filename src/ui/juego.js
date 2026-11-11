@@ -33,7 +33,9 @@
       const q = 's=' + semilla + '&n=' + op.n + '&min=' + op.min + '&ia=' + op.ia + '&est=' + op.est;
       try { history.replaceState(null, '', location.pathname + '?' + q); } catch (e) { /* en file:// puede no dejar */ }
       $('menu').hidden = true;
-      W.jugar({ semilla, N: +op.n, inicio: +op.min, ia: op.ia, estilo: op.est, consulta: q });
+      let rep = null; // ?rep=1: se vuelve a ver la partida apuntada en esta pestaña
+      if (params.get('rep')) { try { const g = JSON.parse(sessionStorage.getItem('rts.rep')); if (g && g.q === q && Array.isArray(g.c)) rep = g; } catch (e) { /* sin repetición: partida normal */ } }
+      W.jugar({ semilla, N: +op.n, inicio: +op.min, ia: op.ia, estilo: op.est, consulta: q, repeticion: rep });
     };
     $('empezar').addEventListener('click', empezar);
     // Partida guardada: se ofrece continuarla, y con ?cargar=1 se entra directo (así funciona «cargar la guardada» desde dentro).
@@ -59,7 +61,10 @@
     const semilla = op.semilla;
     const cargado = op.guardado || null; // partida guardada: el mundo y la IA vienen ya hechos
     const m = cargado ? cargado.m : W.crearMundo(semilla, { N: op.N, inicio: op.inicio }), estilos = Object.keys(W.ESTILOS_IA);
-    const ia = cargado ? cargado.extra.ia : op.ia === 'no' ? null : W.iaCrear(1, op.ia, W.ESTILOS_IA[op.estilo] ? op.estilo : estilos[semilla % estilos.length]), N = m.N, YO = 0, J = m.jug[YO];
+    const rep = op.repeticion ? op.repeticion.c : null, repFin = op.repeticion ? op.repeticion.fin : 0; // repetición: las órdenes apuntadas de una partida; se reproducen solas, sin rival que piense ni jugador que mande
+    if (rep) m.soloRep = true; else if (!cargado) m.registro = [];
+    let repI = 0, repVel = 1, repAvisado = false;
+    const ia = cargado ? cargado.extra.ia : rep || op.ia === 'no' ? null : W.iaCrear(1, op.ia, W.ESTILOS_IA[op.estilo] ? op.estilo : estilos[semilla % estilos.length]), N = m.N, YO = 0, J = m.jug[YO];
     const hist = cargado && cargado.extra.hist ? cargado.extra.hist : []; // una muestra cada 30 s, para el resumen final
     W.mundo = m; // a mano en la consola, para depurar
 
@@ -97,7 +102,7 @@
     }
     function pintarNiebla() {
       const f = m.niebla[YO], d = imgNie.data, c = P.niebla;
-      for (let i = 0; i < N * N; i++) { d[i * 4] = c[0]; d[i * 4 + 1] = c[1]; d[i * 4 + 2] = c[2]; d[i * 4 + 3] = f[i] === 2 ? 0 : f[i] === 1 ? P.velo : 255; }
+      for (let i = 0; i < N * N; i++) { d[i * 4] = c[0]; d[i * 4 + 1] = c[1]; d[i * 4 + 2] = c[2]; d[i * 4 + 3] = rep || f[i] === 2 ? 0 : f[i] === 1 ? P.velo : 255; } // en la repetición se ve todo
       xNie.putImageData(imgNie, 0, 0);
       nieblaVista = m.nieblaV;
     }
@@ -128,8 +133,8 @@
       cam.x = Math.max(mx, Math.min(N - mx, cam.x)); cam.y = Math.max(my, Math.min(N - my, cam.y));
     }
     const aMundoX = (sx) => cam.x + (sx - cw / 2) / cam.z, aMundoY = (sy) => cam.y + (sy - ch / 2) / cam.z;
-    const visible = (x, y) => x >= 0 && y >= 0 && x < N && y < N && m.niebla[YO][Math.floor(y) * N + Math.floor(x)] === 2;
-    const veo = (e) => e.j === YO || (visible(e.edif ? e.cx : e.x, e.edif ? e.cy : e.y) && !(W.oculta(m, e) && m.t - (e.delatada === undefined ? -99 : e.delatada) > 20)); // al enemigo escondido no se le ve hasta descubrirlo
+    const visible = (x, y) => x >= 0 && y >= 0 && x < N && y < N && (rep || m.niebla[YO][Math.floor(y) * N + Math.floor(x)] === 2);
+    const veo = (e) => rep || e.j === YO || (visible(e.edif ? e.cx : e.x, e.edif ? e.cy : e.y) && !(W.oculta(m, e) && m.t - (e.delatada === undefined ? -99 : e.delatada) > 20)); // al enemigo escondido no se le ve hasta descubrirlo
 
     // Volumen: la vista sigue siendo cenital, pero cada cosa tiene altura. Los edificios muestran su pared sur y el tejado
     // se dibuja desplazado hacia arriba; las unidades llevan un canto; la roca y el agua, un escalón.
@@ -1631,6 +1636,17 @@
     $('titulo').addEventListener('click', () => location.reload());
     $('semilla').textContent = 'semilla ' + semilla + ' · ' + W.VERSION;
     $('finRep').href = '?' + op.consulta + '&ya=1';
+    $('finVer').hidden = !rep && !m.registro; // una partida cargada no tiene apuntado su principio
+    const verRepeticion = () => { // apunta la partida en la pestaña y la vuelve a abrir como repetición, hasta el tick en que estaba
+      try { if (!rep) sessionStorage.setItem('rts.rep', JSON.stringify({ q: op.consulta, c: m.registro, fin: m.t })); location.href = '?' + op.consulta + '&ya=1&rep=1'; }
+      catch (e) { aviso('La repetición no cabe en la memoria del navegador'); }
+    };
+    W.verRepeticion = verRepeticion; // a mano en la consola, también a media partida
+    $('finVer').addEventListener('click', (ev) => { ev.preventDefault(); verRepeticion(); });
+    if (rep) {
+      $('repBar').hidden = false; $('repSalir').href = location.pathname;
+      $('repBar').addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (!b) return; repVel = +b.dataset.v; for (const q of $('repBar').querySelectorAll('button')) q.classList.toggle('on', q === b); });
+    }
     $('finNueva').href = location.pathname;
 
     // ---------- rendimiento: tablita de abajo a la izquierda ----------
@@ -1662,13 +1678,18 @@
       if (teclas.has('ArrowUp')) cam.y -= v; if (teclas.has('ArrowDown')) cam.y += v;
       limitarCam();
       if (!pausa && m.ganador < 0) {
-        acum += dt;
+        acum += dt * (rep ? repVel : 1);
         let n = 0;
         const t0 = performance.now();
-        while (acum >= PASO && n < 4) { if (ia && !iaQuieta) W.iaTick(m, ia); W.tick(m); acum -= PASO; n++; }
+        while (acum >= PASO && n < (rep ? 4 * Math.max(1, repVel) : 4) && !(rep && m.t >= repFin)) {
+          if (rep) while (repI < rep.length && rep[repI] <= m.t) { W.orden(m, rep[repI + 1], true); repI += 2; }
+          if (ia && !iaQuieta) W.iaTick(m, ia); W.tick(m); acum -= PASO; n++;
+        }
         R.sim += performance.now() - t0; R.ticks += n;
         if (n && Math.floor(m.t / 600) !== Math.floor((m.t - n) / 600)) muestra();
-        if (n === 4) acum = 0;
+        if (n >= (rep ? 4 * Math.max(1, repVel) : 4) || (rep && m.t >= repFin)) acum = 0;
+        if (rep && m.t >= repFin && !repAvisado) { repAvisado = true; if (m.ganador < 0) aviso('Fin de la repetición'); }
+        if (rep && n) { const s = Math.floor(m.t / 20), t = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); if ($('repT').textContent !== t) $('repT').textContent = t; }
         if (n) sonar();
       }
       for (const id of sel) if (!m.porId.has(id)) sel.delete(id);
