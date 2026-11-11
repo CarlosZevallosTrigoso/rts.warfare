@@ -32,7 +32,9 @@
     // quede a `radio` o menos de (mx,my); [] si ya está ahí; null si no hay paso.
     // kh: factor de la estimación (1 normal; 0,62 cuando hay caminos, para que el cálculo los encuentre y los prefiera).
     // via: las celdas de camino propias (solo esas abaratan la ruta: el camino ajeno se cruza, pero no se busca).
-    return function (paso, terreno, x0, y0, mx, my, radio, kh, via) {
+    // abre: celdas que para esta unidad también son transitables (sus puertas; o todos los muros, cuando busca por dónde abrirse paso).
+    // caro: celdas que cuestan mucho más (los muros que tendría que derribar).
+    return function (paso, terreno, x0, y0, mx, my, radio, kh, via, abre, caro) {
       kh = kh || 1;
       gen++; hI.length = 0; hF.length = 0;
       const r2 = Math.max(radio, 0.75) ** 2, ini = y0 * N + x0;
@@ -52,9 +54,9 @@
           const nx = cx + DX[d], ny = cy + DY[d];
           if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
           const n = ny * N + nx;
-          if (!paso[n] || cerrado[n] === gen) continue;
-          if (d >= 4 && (!paso[cy * N + nx] || !paso[ny * N + cx])) continue;
-          const ng = g[c] + (d >= 4 ? 1.4142 : 1) * (via && via[n] ? 0.62 : terreno[n] === 3 ? 1.7 : terreno[n] === 2 ? 3 : 1); // camino y puente, baratos; el agua solo la cruza la excavadora tendiendo un puente, y le sale cara
+          if ((!paso[n] && !(abre && abre[n])) || cerrado[n] === gen) continue;
+          if (d >= 4) { const a = cy * N + nx, b = ny * N + cx; if ((!paso[a] && !(abre && abre[a])) || (!paso[b] && !(abre && abre[b]))) continue; }
+          const ng = g[c] + (d >= 4 ? 1.4142 : 1) * (caro && caro[n] ? 9 : via && via[n] ? 0.62 : terreno[n] === 3 ? 1.7 : terreno[n] === 2 ? 3 : 1); // camino y puente, baratos; el agua solo la cruza la excavadora tendiendo un puente, y le sale cara
           if (visto[n] !== gen || ng < g[n]) { visto[n] = gen; g[n] = ng; padre[n] = c; mete(n, ng + h(nx, ny)); }
         }
       }

@@ -236,7 +236,7 @@
     const lw = Math.max(1, t * 0.035);
     c.lineJoin = 'round'; c.lineCap = 'butt';
 
-    if (e.tipo === 'torreta' || e.tipo === 'antiaerea') {
+    if (e.tipo === 'torreta' || e.tipo === 'antiaerea' || e.tipo === 'torretaMuro') {
       const R = t * 0.47, aa = e.tipo === 'antiaerea';
       c.fillStyle = lod ? col.osc : col.base; c.beginPath();
       for (let k = 0; k < 8; k++) { const a = (k + 0.5) / 8 * TAU; c.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); }
@@ -410,6 +410,12 @@
       }
       c.fillStyle = tinta; c.beginPath(); c.arc(cx, cy, t * 0.05, 0, TAU); c.fill();
       if (lod === 2) { c.fillStyle = col.osc; c.fillRect(X(0.1), Y(0.76), t * 0.2, t * 0.12); c.fillRect(X(0.74), Y(0.1), t * 0.14, t * 0.14); }
+    } else if (e.tipo === 'camara') { // un poste con su cámara, que barre de lado a lado
+      c.fillStyle = col.osc; c.beginPath(); c.arc(cx, cy, t * 0.12, 0, TAU); c.fill();
+      c.save(); c.translate(cx, cy); c.rotate(s.deficit ? 0.7 : Math.sin(s.tiempo * 0.0015 + s.id) * 1.6);
+      c.fillStyle = col.luz; c.strokeStyle = col.osc; c.lineWidth = lw; c.fillRect(-t * 0.08, -t * 0.1, t * 0.34, t * 0.2); c.strokeRect(-t * 0.08, -t * 0.1, t * 0.34, t * 0.2);
+      c.fillStyle = s.deficit ? col.humo : col.mal; c.beginPath(); c.arc(t * 0.26, 0, t * 0.06, 0, TAU); c.fill();
+      c.restore();
     } else if (e.tipo === 'misilera') { // tres silos con su tapa; el del centro, entreabierto
       for (const [fx, fy, ab] of [[0.27, 0.3, 0], [0.73, 0.3, 0], [0.5, 0.7, 1]]) {
         c.fillStyle = col.tinta; c.beginPath(); c.arc(X(fx), Y(fy), t * 0.16, 0, TAU); c.fill();

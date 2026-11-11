@@ -145,11 +145,12 @@
 
     // Volumen: la vista sigue siendo cenital, pero cada cosa tiene altura. Los edificios muestran su pared sur y el tejado
     // se dibuja desplazado hacia arriba; las unidades llevan un canto; la roca y el agua, un escalón.
-    const ALTO = { patio: 0.3, central: 0.36, refineria: 0.32, bomba: 0.2, cuartel: 0.26, extractor: 0.3, fabrica: 0.34, torreta: 0.22, torreCanon: 0.36, aerodromo: 0.08, antiaerea: 0.22, estacion: 0.26, deposito: 0.22, obras: 0.28, misilera: 0.12, interceptor: 0.24 };
+    const ALTO = { patio: 0.3, central: 0.36, refineria: 0.32, bomba: 0.2, cuartel: 0.26, extractor: 0.3, fabrica: 0.34, torreta: 0.22, torreCanon: 0.36, aerodromo: 0.08, antiaerea: 0.22, estacion: 0.26, deposito: 0.22, obras: 0.28, misilera: 0.12, interceptor: 0.24, torretaMuro: 0.34, camara: 0.3 };
     function entEn(wx, wy, holgura) { // holgura: margen extra (en celdas) para acertar con el dedo
       let mejor = null, md = Infinity;
       for (const e of m.ents) {
         if (!veo(e)) continue;
+        if (e.muro && e.j === YO) continue; // el blanco de un muro propio no se selecciona
         if (e.infra) { // un tramo de camino: se acierta sobre su carril, y cede ante cualquier unidad
           if (md <= 40) continue;
           const p = e.pts; let dm = Math.hypot(wx - p[0], wy - p[1]);
@@ -185,7 +186,7 @@
       if (!m.niebla[YO][c]) return 'Sin explorar';
       const e = entEn(wx, wy);
       if (e) {
-        let t = (e.edif ? EDIF : UNID)[e.tipo].nombre + (e.j === YO ? '' : ' rival') + ' · ' + Math.ceil(e.vida) + '/' + e.vidaMax;
+        let t = (e.muro ? W.MURO_N[e.muro] : (e.edif ? EDIF : UNID)[e.tipo]).nombre + (e.j === YO ? '' : ' rival') + ' · ' + Math.ceil(e.vida) + '/' + e.vidaMax;
         if (e.tipo === 'cosechadora' && e.j === YO) t += ' · carga ' + e.carga;
         if (e.cava > 0) t += ' · cavando'; else if (e.guardia && e.j === YO && !W.enTrinchera(m, e)) t += ' · en guardia';
         if (UNID[e.tipo] && UNID[e.tipo].aire && e.j === YO) t += (e.enTierra ? ' · en tierra' : e.repostando ? ' · vuelve a repostar' : e.patrulla ? ' · patrulla' : '') + ' · combustible ' + Math.round(e.fuel / UNID[e.tipo].fuel * 100) + ' %';
@@ -205,6 +206,7 @@
         const ef = efectos(e); if (ef) t += ' · ' + ef;
         return t;
       }
+      if (m.muro && m.muro[c]) { const d = W.MURO_N[m.muro[c]], b = m.porId.get(m.muroId.get(c)); return d.nombre + (m.muroJ[c] === YO + 1 ? '' : ' rival') + ' · ' + Math.ceil(b ? b.vida : d.vida) + '/' + d.vida + ' · ' + d.que; }
       { const tq = m.trincheras.get(c); if (tq) { const n = (tq.dentro || []).filter((id) => id && m.porId.get(id)).length, ajena = (tq.dentro || []).some((id) => { const o = id ? m.porId.get(id) : null; return o && o.j !== YO; }); return 'Trinchera · ' + n + '/' + W.PLAZAS_TRINCHERA + (ajena ? ' · del enemigo' : n ? '' : ' · vacía') + ' · clic derecho con infantería: ocuparla'; } }
       const pu = m.puestos.find((p) => Math.abs(p.x - wx) < 0.8 && Math.abs(p.y - wy) < 0.8);
       if (pu) return NOMBRE_PUESTO[pu.tipo] + (pu.dueno === YO ? ' · tuyo' : pu.dueno >= 0 ? ' · del rival' : ' · neutral: lo captura la infantería') + (pu.prog > 0 ? ' · capturando ' + Math.floor((pu.prog / W.ECON.captura) * 100) + ' %' : '');
@@ -300,7 +302,7 @@
         ctx.fillStyle = COL.copa; ctx.fill(copas);
       }
       if (conRed && (verRed || modo === 'colocar')) { if (redVista !== m.redV) pintarRed(); ctx.drawImage(cRed, ox, oy, N * z, N * z); } // la cobertura: dónde hay suministro y dónde se puede construir
-      const infra = m.ents.filter((e) => e.infra), tramos = infra.filter((e) => !e.linea), lineas = infra.filter((e) => e.linea); // caminos: cada tramo es una pieza de infraestructura, dibujada como un carril continuo con su borde
+      const infra = m.ents.filter((e) => e.infra && !e.muro), tramos = infra.filter((e) => !e.linea), lineas = infra.filter((e) => e.linea); // caminos: cada tramo es una pieza de infraestructura, dibujada como un carril continuo con su borde
       if (tramos.length) {
         const linea = (p) => { ctx.moveTo(ox + p[0] * z, oy + p[1] * z); if (p.length < 4) ctx.lineTo(ox + p[0] * z + 0.01, oy + p[1] * z); for (let k = 2; k < p.length; k += 2) ctx.lineTo(ox + p[k] * z, oy + p[k + 1] * z); };
         ctx.lineJoin = 'round'; ctx.lineCap = 'butt'; // los puentes: un tablero más ancho y oscuro debajo del carril
@@ -358,6 +360,20 @@
           const dano = 1 - e.vida / e.vidaMax, elegido = sel.has(e.id);
           if (elegido) { const p = e.pts; ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.moveTo(ox + p[0] * z, oy + p[1] * z - 4); ctx.lineTo(ox + p[2] * z, oy + p[3] * z - 4); ctx.stroke(); ctx.setLineDash([]); }
           if (elegido || dano > 0.02) { const bx = ox + e.cx * z, by = oy + e.cy * z - z * 0.5, w = Math.max(14, z); ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(bx - w / 2, by, w, 3); ctx.fillStyle = dano > 0.6 ? P.mal : e.j === YO ? P.yo : P.rival; ctx.fillRect(bx - w / 2, by, w * (1 - dano), 3); }
+        }
+      }
+      if (m.muros && m.muros.length) { // muros: bloques con su cara sur; la alambrada, aspas; la puerta, con la franja de su dueño
+        const alto = lod ? Math.max(2, z * 0.22) : 0;
+        for (const c of m.muros) {
+          const x = c % N, y = (c / N) | 0; if (fuera(x + 0.5, y + 0.5) || !m.niebla[YO][c]) continue;
+          const n = m.muro[c], px = ox + x * z, py = oy + y * z, mio = m.muroJ[c] === YO + 1;
+          if (n === 1) { ctx.strokeStyle = '#6b665c'; ctx.lineWidth = Math.max(1, z * 0.05); ctx.beginPath(); ctx.moveTo(px + z * 0.1, py + z * 0.2); ctx.lineTo(px + z * 0.9, py + z * 0.8); ctx.moveTo(px + z * 0.9, py + z * 0.2); ctx.lineTo(px + z * 0.1, py + z * 0.8); ctx.moveTo(px, py + z * 0.5); ctx.lineTo(px + z, py + z * 0.5); ctx.stroke(); continue; }
+          ctx.fillStyle = n === 3 ? '#3f3d39' : '#5c5850'; ctx.fillRect(px, py + z - alto, z + 0.5, alto); // cara sur
+          ctx.fillStyle = n === 3 ? '#6e6a62' : n === 4 ? '#8d877a' : '#9a958a'; ctx.fillRect(px, py - alto, z + 0.5, z + 0.5); // coronación
+          if (n === 4) { ctx.fillStyle = mio ? P.yo : P.rival; ctx.fillRect(px + z * 0.2, py - alto + z * 0.38, z * 0.6, z * 0.24); }
+          else if (lod && z >= 12) { ctx.fillStyle = mio ? P.yo : P.rival; ctx.globalAlpha = 0.55; ctx.fillRect(px + z * 0.42, py - alto + z * 0.42, z * 0.16, z * 0.16); ctx.globalAlpha = 1; }
+          const b = m.muroId.get(c) ? m.porId.get(m.muroId.get(c)) : null;
+          if (b && b.vida < b.vidaMax) { ctx.fillStyle = 'rgba(0,0,0,' + (0.55 * (1 - b.vida / b.vidaMax)).toFixed(2) + ')'; ctx.fillRect(px, py - alto, z + 0.5, z + 0.5); }
         }
       }
       const chatarra = [];
@@ -500,7 +516,7 @@
         if (e.tipo === 'patio') est.activo = Je.obras.some((o) => !o.listo);
         else if (e.tipo === 'fabrica') est.activo = e.cola.length > 0;
         else if (EDIF[e.tipo].arma) { est.ang = giro(e).t; est.retro = retroceso(e, EDIF[e.tipo].arma); }
-        const h = lod ? ALTO[e.tipo] * z : 0, redondo = e.tipo === 'torreta' || e.tipo === 'antiaerea'; // altura en píxeles
+        const h = lod ? ALTO[e.tipo] * z : 0, redondo = e.tipo === 'torreta' || e.tipo === 'antiaerea' || e.tipo === 'torretaMuro'; // altura en píxeles
         if (lod) { // sombra: cae hacia el sureste, más larga cuanto más alto el edificio
           const sx = so + h * 0.75, sy = so + h * 0.45;
           ctx.fillStyle = 'rgba(0,0,0,0.17)'; ctx.beginPath();
@@ -870,6 +886,15 @@
           ctx.fillStyle = mal ? P.mal : P.tinta; ctx.fillText(mal ? 'ahí no llega un camino' : 'camino: unos ' + Math.round(costo) + ' minerales · Mayús: más tramos', raton.x + 14, raton.y - 8);
         }
       }
+      if ((modo === 'murar' || modo === 'quitarMuro') && raton.dentro) { // la celda bajo el cursor y, murando, el tramo que saldría y su precio
+        const wx = aMundoX(raton.x), wy = aMundoY(raton.y), cx = Math.floor(wx), cy = Math.floor(wy);
+        ctx.strokeStyle = modo === 'quitarMuro' ? P.mal : P.bien; ctx.lineWidth = 2; ctx.strokeRect(ox + cx * z, oy + cy * z, z, z);
+        if (modo === 'murar' && muroDesde) {
+          const n = Math.max(Math.abs(cx - Math.floor(muroDesde.x)), Math.abs(cy - Math.floor(muroDesde.y))) + 1, d = W.MUROS[muroTipo];
+          ctx.globalAlpha = 0.5; ctx.lineWidth = Math.max(3, z * 0.5); ctx.lineCap = 'square'; ctx.beginPath(); ctx.moveTo(ox + (Math.floor(muroDesde.x) + 0.5) * z, oy + (Math.floor(muroDesde.y) + 0.5) * z); ctx.lineTo(ox + (cx + 0.5) * z, oy + (cy + 0.5) * z); ctx.stroke(); ctx.globalAlpha = 1; ctx.lineCap = 'butt';
+          ctx.fillStyle = P.tinta; ctx.fillText(d.nombre + ': unas ' + n + ' celdas · ' + n * d.costo + ' minerales', raton.x + 14, raton.y - 8);
+        } else { ctx.fillStyle = P.tinta; ctx.fillText(modo === 'quitarMuro' ? 'quitar muro propio' : W.MUROS[muroTipo].nombre + ': toca dónde empieza', raton.x + 14, raton.y - 8); }
+      }
       if (modo === 'lanzar') { // alcance del misil elegido y, bajo el cursor, la zona que arrasará
         const e = misilera(), d = MIS[lanzaTipo];
         if (e && d) {
@@ -926,6 +951,7 @@
         for (const e of m.ents) { if (!e.infra || e.linea) continue; const tr = e.pts; mctx.moveTo(tr[0] * k, tr[1] * k); for (let q = 2; q < tr.length; q += 2) mctx.lineTo(tr[q] * k, tr[q + 1] * k); }
         mctx.stroke();
       }
+      if (m.muros && m.muros.length) { mctx.fillStyle = P.tinta; for (const c of m.muros) if (f[c] && m.muro[c] >= 2) mctx.fillRect((c % N) * k, ((c / N) | 0) * k, Math.max(1, k), Math.max(1, k)); }
       for (const q of m.misiles) { // misiles en el minimapa: un punto que parpadea; el propio, con la línea a su blanco
         mctx.fillStyle = q.j === YO ? P.yo : P.mal; mctx.beginPath(); mctx.arc(q.x * k, q.y * k, 2.5 + ((m.t >> 2) % 2), 0, TAU); mctx.fill();
         if (q.j === YO) { mctx.strokeStyle = P.yo; mctx.lineWidth = 1; mctx.setLineDash([3, 3]); mctx.beginPath(); mctx.moveTo(q.x * k, q.y * k); mctx.lineTo(q.tx * k, q.ty * k); mctx.stroke(); mctx.setLineDash([]); }
@@ -996,7 +1022,9 @@
         } else if (d.tipo === 'sinInfo') {
           if (d.j === YO) aviso('Sin información: el hacker no puede (' + W.ECON.hackInfo + ' por hackeo)');
         } else if (d.tipo === 'sinLinea') {
-          if (d.j === YO) aviso(d.llegar ? 'El ingeniero civil no puede llegar a ese edificio' : 'Sin minerales: la línea de servicio espera');
+          if (d.j === YO) aviso(d.llegar ? 'El ingeniero civil no puede llegar a ese edificio' : d.muro ? 'Sin minerales: el muro espera' : 'Sin minerales: la línea de servicio espera');
+        } else if (d.tipo === 'camara') {
+          if (d.j === YO) { aviso('Cámara: ' + UNID[d.clase].nombre.toLowerCase() + ' enemigo a la vista'); son.alerta(); senales.push({ k: 'onda', x: d.x2, y: d.y2, r: 2.5, t0: performance.now(), dur: 1200 }); }
         } else if (d.tipo === 'sinCamino') {
           if (d.j === YO) aviso(d.corte ? 'La excavadora no encuentra por dónde seguir' : 'Sin minerales: la excavadora se detiene');
         } else if (d.tipo === 'captura') {
@@ -1009,6 +1037,7 @@
           else if (d.edif && d.clase === 'patio' && m.ganador < 0) aviso('Patio enemigo destruido');
           else if (d.clase === 'camino' && d.j === YO) aviso('Te han cortado un camino');
           else if (d.clase === 'linea' && d.j === YO) aviso('Te han cortado una línea de servicio');
+          else if (d.clase === 'muro') { if (d.j === YO) aviso('Te han abierto un hueco en el muro'); if (enVista) { estallido(d.x2, d.y2, 1); son.explosion(Math.max(0.1, cerca(d.x2, d.y2)) * 0.4, paneo(d.x2), false); } continue; }
           if (!enVista) continue;
           if (d.edif) {
             for (let k = 0; k < d.tam * 2; k++) estallido(d.x2 + (azar() - 0.5) * d.tam * 0.8, d.y2 + (azar() - 0.5) * d.tam * 0.8, 2);
@@ -1233,6 +1262,14 @@
     const conCarga = () => unidadesSel().filter((u) => UNID[u.tipo].plazas && u.pasajeros.length);
     function descargar() { const us = conCarga(); if (us.length) { W.orden(m, { t: 'descargar', j: YO, ids: us.map((u) => u.id) }); son.orden(); } }
     $('descargar').addEventListener('click', descargar);
+    let muroTipo = '', muroDesde = null, muroN = 0; // murar: qué se levanta, desde qué celda y cuántos tramos van
+    $('bMuro').addEventListener('click', (ev) => {
+      const b = ev.target.closest('[data-m]'); if (!b) return;
+      const t = b.dataset.m;
+      if (t !== 'quitar' && (W.MUROS[t].nivel || 1) > J.nivel) { aviso(W.MUROS[t].nombre + ': hace falta el nivel ' + W.MUROS[t].nivel); return; }
+      modo = t === 'quitar' ? 'quitarMuro' : 'murar'; muroTipo = t; muroDesde = null; muroN = 0;
+      aviso(t === 'quitar' ? 'Quitar muro: toca las celdas tuyas que quieras derribar · Esc termina' : W.MUROS[t].nombre + ': toca dónde empieza y dónde acaba · Esc termina');
+    });
     let conectaDesde = 0, conectaN = 0; // conectar: el último edificio marcado y cuántos tramos van
     function conectar() { if (unidadesSel().some((u) => UNID[u.tipo].tiende)) { modo = 'conectar'; conectaDesde = 0; conectaN = 0; aviso('Conectar: toca el edificio de partida y luego los que quieras unir · Esc termina'); } }
     $('conectar').addEventListener('click', conectar);
@@ -1533,6 +1570,7 @@
       bt.hidden = !cav && !dentroT;
       if (dentroT) { const t = 'Salir de la trinchera · ' + dentroT; if (bt.textContent !== t) bt.textContent = t; }
       $('desplegar').hidden = !paraDesplegar().length;
+      { const hay = unidadesSel().some((u) => UNID[u.tipo].tiende), bm = $('bMuro'); bm.hidden = !hay; if (!hay && (modo === 'murar' || modo === 'quitarMuro')) modo = null; for (const b of bm.querySelectorAll('[data-m]')) b.classList.toggle('on', (modo === 'murar' || modo === 'quitarMuro') && muroTipo === b.dataset.m); }
       { const hay = unidadesSel().some((u) => UNID[u.tipo].tiende), bc = $('conectar'); bc.hidden = !hay; bc.classList.toggle('listo', modo === 'conectar'); if (!hay && modo === 'conectar') modo = null; }
       { const hay = unidadesSel().some((u) => UNID[u.tipo].traza), bz = $('trazar'); bz.hidden = !hay; bz.classList.toggle('listo', modo === 'trazar'); }
       { const us = conCarga(), bd = $('descargar'); bd.hidden = !us.length; if (us.length) { const t = 'Descargar · ' + us.reduce((a, u) => a + u.pasajeros.length, 0) + ' dentro'; if (bd.textContent !== t) bd.textContent = t; } }
@@ -1564,6 +1602,18 @@
           return;
         }
         if (modo === 'barrido') { W.orden(m, { t: 'intel', j: YO, clave: 'barrido', x: wx, y: wy }); son.orden(); modo = null; return; }
+        if (modo === 'quitarMuro') { // derribar muro propio, celda a celda
+          const c = Math.floor(wy) * N + Math.floor(wx);
+          if (m.muro && m.muro[c] && m.muroJ[c] === YO + 1) { W.orden(m, { t: 'quitarMuro', j: YO, c }); son.colocar(); } else aviso('Ahí no hay un muro tuyo');
+          return;
+        }
+        if (modo === 'murar') { // primer clic: dónde empieza; los siguientes: hasta dónde llega cada tramo
+          const ids = unidadesSel().filter((u) => UNID[u.tipo].tiende).map((u) => u.id);
+          if (wx < 0 || wy < 0 || wx >= N || wy >= N || !ids.length) return;
+          if (muroDesde) { W.orden(m, { t: 'murar', j: YO, ids, tipo: muroTipo, x0: muroDesde.x, y0: muroDesde.y, x1: wx, y1: wy, enc: muroN > 0 || unidadesSel().some((u) => UNID[u.tipo].tiende && u.orden === 'murar') }); muroN++; son.orden(); } // si ya está levantando muro, se añade a la cola
+          muroDesde = { x: wx, y: wy }; marca(wx, wy, P.bien);
+          return;
+        }
         if (modo === 'lanzar') { // blanco del misil
           const e = misilera(), d = MIS[lanzaTipo];
           if (!e || !d) { modo = null; return; }
@@ -1638,6 +1688,9 @@
           return;
         }
         if (us.some((u) => { const b = UNID[u.tipo].aire && u.casa ? m.porId.get(u.casa) : null; return b && Math.hypot(wx - b.cx, wy - b.cy) > UNID[u.tipo].radioVuelo; })) aviso('Fuera del radio de vuelo: el avión llegará hasta el límite');
+        if (m.muro && m.muro[c] && m.muroJ[c] !== YO + 1 && m.niebla[YO][c] && us.some((u) => UNID[u.tipo].arma)) { // clic derecho sobre un muro enemigo: a derribarlo
+          W.orden(m, { t: 'atacarMuro', j: YO, ids, c, enc }); marca(wx, wy, P.mal); son.orden(); return;
+        }
         if (m.trincheras.has(c) && us.some((u) => UNID[u.tipo].cat === 'inf')) { // clic derecho sobre una trinchera: la infantería la ocupa; el resto va al lado
           const q = m.trincheras.get(c), ajena = (q.dentro || []).some((id) => { const o = id ? m.porId.get(id) : null; return o && o.j !== YO; });
           if (ajena) aviso('La trinchera está ocupada por el enemigo');

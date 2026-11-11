@@ -37,6 +37,7 @@
   .btn.con-x .x { display: inline-block; }
   .btn .x:hover { background: var(--mal); color: #fff; }
   #obras { min-height: 34px; margin-top: 5px; }
+  #bMuro .g3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; } #bMuro .grupo { justify-content: center; }
   #bLanzar { margin-top: 6px; } #bLanzar .btn { justify-content: space-between; } #misInfo { min-height: 30px; }
   #vacio { line-height: 1.7; } #vacio kbd { font: inherit; color: var(--tinta); }
   /* Rejilla de producción: casillas de tamaño fijo; nada cambia de sitio al encargar, avanzar o cancelar. */
@@ -163,6 +164,7 @@
       <div><kbd>Mayús</kbd>+clic derecho: encadenar órdenes</div>
       <div><kbd>R</kbd> patrulla · <kbd>E</kbd> explorar sola · <kbd>F</kbd> formación</div>
       <div><kbd>L</kbd> vista de la red: cobertura (suministro y dónde construir) y qué está conectado</div>
+      <div>ingeniero civil: muros, puertas y alambradas en línea recta; clic derecho con tropa sobre un muro enemigo lo ataca</div>
       <div><kbd>J</kbd> con un ingeniero civil: conectar edificios con líneas de servicio · <kbd>K</kbd> con la excavadora: camino militar</div>
       <div><kbd>Supr</kbd> demoler el edificio seleccionado</div>
       <div><kbd>G</kbd> guardia: la unidad queda fija · <kbd>C</kbd> colmena sí/no</div>
@@ -261,6 +263,7 @@
       <button type="button" class="grupo on" data-f="grupo">grupo</button><button type="button" class="grupo" data-f="linea">línea</button><button type="button" class="grupo" data-f="columna">columna</button>
       <button type="button" class="grupo" data-f="cuna">cuña</button><button type="button" class="grupo" data-f="cuadro">cuadro</button></div></section>
     <div id="sel" class="tenue"></div>
+    <div id="bMuro" hidden><h2 title="El ingeniero civil levanta muros en línea recta: toca dónde empieza y dónde acaba.">Muros</h2><div class="g3"><button type="button" class="grupo" data-m="muro">muro</button><button type="button" class="grupo" data-m="reforzado">reforzado</button><button type="button" class="grupo" data-m="puerta">puerta</button><button type="button" class="grupo" data-m="alambrada">alambrada</button><button type="button" class="grupo" data-m="quitar">quitar</button></div></div>
     <button type="button" id="conectar" class="btn" hidden title="El ingeniero civil une edificios tuyos con una línea de servicio: lleva la energía y los mete en tu red. Cruza cualquier terreno.">Conectar edificios</button>
     <button type="button" id="trazar" class="btn" hidden title="La excavadora va hasta el punto que marques dejando camino. Camino militar: abre el bosque y tiende puentes sobre el agua (más caros). Solo tus vehículos corren por él. No lleva energía ni red: para eso está el ingeniero civil.">Trazar camino</button>
     <button type="button" id="descargar" class="btn" hidden></button>

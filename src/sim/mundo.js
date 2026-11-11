@@ -33,7 +33,7 @@
       // carrilX/Y: por cada celda de camino, el punto del carril que le toca (0 = ninguno); tramoEn: el tramo dueño de la celda
       jug: [nuevoJugador(op.inicio), nuevoJugador(op.inicio)],
       niebla: [new Uint8Array(NN), new Uint8Array(NN)],
-      cola: [], colaRutas: [], efectos: [], proy: [], barridos: [], misiles: [], trincheras: new Map(), focos: [[], []], sigFoco: 1, marchas: {}, sigMarcha: 1, logistica: op.logistica !== false, // logistica: las unidades necesitan la cobertura de su red (se puede apagar al crear la partida)
+      cola: [], colaRutas: [], efectos: [], proy: [], barridos: [], misiles: [], muro: new Uint8Array(NN), muroJ: new Uint8Array(NN), muroTodo: new Uint8Array(NN), puertas: [new Uint8Array(NN), new Uint8Array(NN)], muros: [], muroId: new Map(), trincheras: new Map(), focos: [[], []], sigFoco: 1, marchas: {}, sigMarcha: 1, logistica: op.logistica !== false, // logistica: las unidades necesitan la cobertura de su red (se puede apagar al crear la partida)
       sigMision: 1, minas: [], raros: [], ganador: -1, embarques: [],
       puestos: mapa.puestos.map((p, i) => ({ id: i, tipo: p.tipo, x: p.x + 0.5, y: p.y + 0.5, dueno: -1, prog: 0, quien: -1 })), // puestos neutrales: los captura la infantería
       ruta: W.crearRuta(N),
@@ -114,6 +114,75 @@
     ob.ult = tr.id; ob.hecho = sig;
     if (sig >= L) { tr.a = b.id; m.redSucia = true; ob.pares.shift(); ob.prog = 0; ob.hecho = 0; ob.ult = 0; }
   }
+  // ---------- muros ----------
+  // Los muros no son entidades: van en tablas del mapa (m.muro: tipo; m.muroJ: dueño + 1; m.muros: la lista de celdas, para dibujar).
+  // Solo cuando alguien dispara a una celda se le crea un blanco (una entidad mínima) que lleva su vida.
+  const MURO_N = W.MURO_N;
+  function murosDe(m) { // partidas guardadas antes de que existieran
+    if (!m.muro) { const NN = m.N * m.N; m.muro = new Uint8Array(NN); m.muroJ = new Uint8Array(NN); m.muroTodo = new Uint8Array(NN); m.puertas = [new Uint8Array(NN), new Uint8Array(NN)]; m.muros = []; m.muroId = new Map(); }
+    return m.muro;
+  }
+  function puedeMuro(m, c) {
+    if (murosDe(m)[c] || m.mapa.terreno[c] !== T.LLANO || m.ocup[c] || m.mapa.mineral[c] || m.mapa.sitioEn[c] || m.trincheras.has(c)) return false;
+    const x = c % m.N, y = (c / m.N) | 0;
+    for (const u of m.ents) if (!u.edif && !UNID[u.tipo].aire && Math.floor(u.x) === x && Math.floor(u.y) === y) return false; // hay alguien encima
+    return true;
+  }
+  function ponerMuro(m, j, n, c) {
+    m.muro[c] = n; m.muroJ[c] = j + 1; m.muros.push(c); m.muroV = (m.muroV || 0) + 1;
+    if (n >= 2) { m.paso[c] = 0; m.pasoV[c] = 0; m.muroTodo[c] = 1; if (n === 4) m.puertas[j][c] = 1; }
+  }
+  function quitarMuro(m, c) {
+    const n = murosDe(m)[c]; if (!n) return;
+    m.muro[c] = 0; m.muroJ[c] = 0; m.muroTodo[c] = 0; m.puertas[0][c] = 0; m.puertas[1][c] = 0; m.muroV = (m.muroV || 0) + 1;
+    const k = m.muros.indexOf(c); if (k >= 0) { m.muros[k] = m.muros[m.muros.length - 1]; m.muros.pop(); }
+    if (n >= 2 && !m.ocup[c]) { m.paso[c] = 1; m.pasoV[c] = 1; }
+    const b = m.porId.get(m.muroId.get(c)); m.muroId.delete(c); if (b && b.vida > 0) { b.vida = 0; b.quitado = true; }
+  }
+  function blancoMuro(m, c) { // la entidad a la que se dispara cuando se ataca esa celda de muro
+    let e = m.porId.get(m.muroId.get(c)); if (e) return e;
+    const d = MURO_N[m.muro[c]], x = c % m.N, y = (c / m.N) | 0;
+    e = { id: m.sigId++, j: m.muroJ[c] - 1, tipo: 'camino', edif: true, infra: true, muro: m.muro[c], celda: c, x, y, tam: 1, cx: x + 0.5, cy: y + 0.5, vida: d.vida, vidaMax: d.vida, recarga: 0, obj: 0, reunion: null, acum: 0, nace: m.t, cola: [], pago: [], prog: 0, pts: [x + 0.5, y + 0.5], celdas: [], antes: [] };
+    m.ents.push(e); m.porId.set(e.id, e); m.muroId.set(c, e.id);
+    return e;
+  }
+  W.blancoMuro = (m, c) => (murosDe(m)[c] ? blancoMuro(m, c) : null);
+  function danarMuros(m, x, y, r, arma, mult, de, j) { // una explosión también castiga los muros que pilla (j: de quién es; -1, de nadie: daña todos)
+    if (!m.muros || !m.muros.length) return;
+    const N = m.N, R = Math.ceil(r);
+    for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+      const cx = Math.floor(x) + dx, cy = Math.floor(y) + dy; if (cx < 0 || cy < 0 || cx >= N || cy >= N) continue;
+      const c = cy * N + cx; if (!m.muro[c] || m.muroJ[c] - 1 === j || Math.hypot(cx + 0.5 - x, cy + 0.5 - y) > r) continue;
+      herir(m, blancoMuro(m, c), arma, mult, de);
+    }
+  }
+  // El ingeniero civil levantando muro: va hasta cerca de cada celda de la línea y la construye, pagando cada una; se salta las que no valen.
+  function tickMurar(m, u) {
+    const ob = u.obra, J = m.jug[u.j], N = m.N;
+    const fin = () => { u.orden = 'nada'; u.obra = null; u.ruta = null; };
+    if (!ob || ob.i >= ob.celdas.length) { fin(); return; }
+    const c = ob.celdas[ob.i], cx = (c % N) + 0.5, cy = ((c / N) | 0) + 0.5, n = ob.ns[ob.i], d = MURO_N[n];
+    if (Math.hypot(u.x - cx, u.y - cy) > 2.6) {
+      if (u.fallo) { u.fallo = false; ob.i++; return; } // no puede llegar: pasa a la siguiente
+      if (!u.pend && !u.ruta) pedirRuta(m, u, cx, cy, 1.8);
+      avanzar(m, u); return;
+    }
+    u.ruta = null; u.pend = null; u.v = 0; u.ang = Math.atan2(cy - u.y, cx - u.x);
+    if (++ob.t < d.ticks) return;
+    if (!puedeMuro(m, c)) { ob.t = 0; ob.i++; return; }
+    if (J.minerales < d.costo && !J.dios) { ob.t = d.ticks; if (!ob.avisado) { ob.avisado = true; m.efectos.push({ tipo: 'sinLinea', x1: u.x, y1: u.y, j: u.j, t: m.t, muro: true }); } return; }
+    if (!J.dios) J.minerales -= d.costo;
+    ob.avisado = false; ob.t = 0; ob.i++; ponerMuro(m, u.j, n, c);
+  }
+  // Cámaras: cada medio segundo descubren a los escondidos que tengan cerca y, si entra un enemigo, avisan (como mucho cada 15 s).
+  function tickCamaras(m) {
+    for (const e of m.ents) {
+      if (!e.edif || e.infra || !EDIF[e.tipo].detecta || e.sinLuz || e.hack > m.t) continue;
+      const r = EDIF[e.tipo].detecta; let visto = null;
+      for (const u of m.ents) { if (u.edif || u.j === e.j || u.vida <= 0 || u.enTierra || Math.abs(u.x - e.cx) > r || Math.hypot(u.x - e.cx, u.y - e.cy) > r) continue; u.camT = m.t; visto = visto || u; }
+      if (visto && m.t - (e.tAviso === undefined ? -999 : e.tAviso) > 300) { e.tAviso = m.t; m.efectos.push({ tipo: 'camara', x1: e.cx, y1: e.cy, x2: visto.x, y2: visto.y, j: e.j, clase: visto.tipo, t: m.t }); }
+    }
+  }
   // ---------- misiles balísticos ----------
   const MIS = W.MISILES, VS_MISIL = { ligero: 1, pesado: 1, edificio: 1.2, aire: 0 };
   const guardados = (e) => { let n = 0; if (e.silo) for (const k in e.silo) n += e.silo[k]; return n + (e.fabMis ? e.fabMis.length : 0); };
@@ -145,7 +214,8 @@
       q.px = q.x; q.py = q.y;
       if (dd > d.vel) { q.x += (dx / dd) * d.vel; q.y += (dy / dd) * d.vel; continue; }
       const arma = { dano: d.dano, area: d.area, vs: VS_MISIL }; // cae: daña todo lo que haya en el radio, sea de quien sea, más cuanto más cerca del centro
-      for (const e of m.ents) { if (e.vida <= 0) continue; const r = dist(q.tx, q.ty, e); if (r <= d.area) herir(m, e, arma, 1 - 0.6 * (r / d.area), 0); }
+      danarMuros(m, q.tx, q.ty, d.area, arma, 0.7, 0, -1); // primero se les da blanco a los muros de la zona, y luego cae sobre todo
+      for (const e of m.ents) { if (e.vida <= 0 || e.muro) continue; const r = dist(q.tx, q.ty, e); if (r <= d.area) herir(m, e, arma, 1 - 0.6 * (r / d.area), 0); }
       m.efectos.push({ tipo: 'impactoMisil', x2: q.tx, y2: q.ty, area: d.area, j: q.j, clase: q.tipo, t: m.t });
       m.misiles.splice(k, 1);
     }
@@ -261,9 +331,11 @@
     const d = EDIF[tipo], N = m.N, t = d.tam;
     if (x < 0 || y < 0 || x + t > N || y + t > N) return false;
     let sitio = false;
+    const c0 = y * N + x, mu = murosDe(m)[c0], enMuro = t === 1 && m.muroJ[c0] === j + 1 && (d.sobreMuro ? mu === 3 : d.enMuro ? mu === 2 || mu === 3 : false); // sobre un muro propio
+    if (d.sobreMuro && !enMuro) return false;
     for (let dy = 0; dy < t; dy++) for (let dx = 0; dx < t; dx++) {
       const i = (y + dy) * N + x + dx;
-      if (m.mapa.terreno[i] !== T.LLANO || m.ocup[i] || m.mapa.mineral[i]) return false;
+      if (m.mapa.terreno[i] !== T.LLANO || m.ocup[i] || m.mapa.mineral[i] || (m.muro[i] && !enMuro)) return false;
       if (m.mapa.sitioEn[i]) { if (!d.sobre || m.mapa.sitioTipo.get(i) !== d.sobre) return false; sitio = true; }
     }
     if (d.sobre && !sitio) return false; // debe cubrir su yacimiento o su campo
@@ -275,7 +347,7 @@
     if (d.libre && !m.niebla[j][y * N + x]) return false; // solo en terreno explorado
     // Territorio: se construye dentro de la cobertura de la red propia (cerca de un patio, de un depósito conectado, de los
     // edificios de la base o junto a un camino conectado). Los edificios de extracción y el depósito van donde haga falta.
-    let junto = !!d.libre || m.jug[j].tr.libre || (m.logistica !== false && !!W.cobertura(m, j)[(y + (t >> 1)) * N + x + (t >> 1)]); // ADMIN: se construye en cualquier parte
+    let junto = !!d.libre || enMuro || m.jug[j].tr.libre || (m.logistica !== false && !!W.cobertura(m, j)[(y + (t >> 1)) * N + x + (t >> 1)]); // ADMIN: se construye en cualquier parte
     const s = ECON.separacionColocar;
     for (let k = 0; k < m.ents.length; k++) {
       const e = m.ents[k];
@@ -562,6 +634,32 @@
       case 'trampa': // un interruptor del panel ADMIN
         trampa(m, cmd.j, cmd.clave, cmd.valor);
         return;
+      case 'murar': { // el ingeniero civil levanta un tramo recto de muro (tipo: clave de W.MUROS) de una celda a otra; con enc, lo añade a lo que lleva
+        const u = propias(m, cmd).find((q) => UNID[q.tipo].tiende), d = W.MUROS[cmd.tipo], N = m.N;
+        if (!u || !d || (d.nivel || 1) > J.nivel) return;
+        let x = Math.floor(cmd.x0), y = Math.floor(cmd.y0); const x1 = Math.floor(cmd.x1), y1 = Math.floor(cmd.y1), celdas = [];
+        if (!(x >= 0 && y >= 0 && x < N && y < N && x1 >= 0 && y1 >= 0 && x1 < N && y1 < N)) return;
+        const dx = Math.abs(x1 - x), dy = Math.abs(y1 - y), sx = x < x1 ? 1 : -1, sy = y < y1 ? 1 : -1; let err = dx - dy;
+        for (let k = 0; k < 200; k++) { // la línea, sin huecos en diagonal: tras un paso en diagonal se rellena la esquina
+          celdas.push(y * N + x); if (x === x1 && y === y1) break;
+          const e2 = 2 * err; let mx = false, my = false;
+          if (e2 > -dy) { err -= dy; x += sx; mx = true; } if (e2 < dx) { err += dx; y += sy; my = true; }
+          if (mx && my) celdas.push(y * N + x - sx);
+        }
+        if (cmd.enc && u.orden === 'murar' && u.obra && u.obra.ns) { for (const c of celdas) if (u.obra.celdas.length < 600) { u.obra.celdas.push(c); u.obra.ns.push(d.n); } return; } // se suma a lo que ya tiene encargado, sea del tipo que sea
+        limpiar(u); u.obj = 0; u.ruta = null; u.pend = null; u.guardia = false; u.orden = 'murar'; u.obra = { celdas, ns: celdas.map(() => d.n), i: 0, t: 0 };
+        return;
+      }
+      case 'quitarMuro': { // derriba una celda de muro propia y recupera la mitad
+        const c = cmd.c, n = murosDe(m)[c]; if (!n || m.muroJ[c] !== cmd.j + 1 || m.ocup[c]) return;
+        J.minerales += Math.floor(MURO_N[n].costo / 2); quitarMuro(m, c);
+        return;
+      }
+      case 'atacarMuro': { // ordena disparar a esa celda de muro enemiga
+        const b = W.blancoMuro(m, cmd.c); if (!b || b.j === cmd.j) return;
+        for (const u of propias(m, cmd)) if (UNID[u.tipo].arma) encargar(m, u, { t: 'atacar', obj: b.id }, cmd.enc);
+        return;
+      }
       case 'misil': { // encarga un misil en esa misilera: se paga al encargarlo; entre guardados y encargados, diez como mucho
         const e = m.porId.get(cmd.id), d = MIS[cmd.tipo];
         if (!e || !d || e.j !== cmd.j || !EDIF[e.tipo].misiles || e.vida <= 0 || J.nivel < d.nivel || guardados(e) >= ECON.misilesMax || !W.puedePagar(J, d)) return;
@@ -813,11 +911,20 @@
     const N = m.N, d = UNID[u.tipo], c = u.ruta[u.ri];
     const replantear = () => { u.ruta = null; u.v = 0; u.tReplan = m.t; if (u.meta) pedirRuta(m, u, u.meta.x, u.meta.y, u.meta.radio); };
     if (d.monta && u.monta > 0) { u.monta = Math.max(0, u.monta - 2); u.v = 0; return false; } // antes de moverse hay que desmontar el arma
-    const pisa = (i) => (u.orden === 'trazar' ? pisaTraza(m, i) : pasoDe(m, u)[i]);
+    const pisa = (i) => (u.orden === 'trazar' ? pisaTraza(m, i) : pasoDe(m, u)[i] || (m.puertas ? m.puertas[u.j][i] : 0));
+    if (!d.aire && m.muro && m.muro[c] >= 2 && m.muroJ[c] - 1 !== u.j && !pisa(c)) { // le cierra el paso un muro enemigo: si su ruta pasa por él y tiene con qué, lo derriba a tiros
+      const arma = d.arma ? ARMAS[d.arma] : null;
+      if (!u.rompe || !arma || !(arma.vs.edificio > 0) || u.orden === 'mover') { u.ruta = null; u.v = 0; u.fallo = !u.rompe; if (u.rompe) u.orden = 'nada'; return false; }
+      const b = blancoMuro(m, c); u.v = 0;
+      if (apuntar(m, u, b, false) && u.recarga <= 0) disparar(m, u, b, arma);
+      return false;
+    }
     if (!d.aire && !pisa(c) && pisa(Math.floor(u.y) * N + Math.floor(u.x))) { replantear(); return false; } // alguien construyó en el punto de paso
     const vel = d.vel * (d.cat === 'veh' && m.jug[u.j].mejoras.motores ? 1.15 : 1);
     const terr = m.mapa.terreno[Math.floor(u.y) * N + Math.floor(u.x)];
-    const vmax = (u.tope && u.tope < vel && !u.suelto ? u.tope : vel) * (u.marcha ? u.fm || 1 : 1) * (u.orden === 'trazar' && !(viaDe(m)[u.j][Math.floor(u.y) * N + Math.floor(u.x)] && m.via[u.j][c]) ? ECON.trazaVel : d.cat === 'veh' && terr >= T.CAMINO && viaDe(m)[u.j][Math.floor(u.y) * N + Math.floor(u.x)] ? ECON.caminoVel : 1); // (trazando sobre camino ya hecho va a su paso normal) // por camino los vehículos van más rápido; trazándolo, despacio
+    let freno = 1; // alambrada enemiga: a la infantería la frena mucho; un vehículo la aplasta al pasar
+    if (m.muro && !d.aire) { const ca = Math.floor(u.y) * N + Math.floor(u.x); if (m.muro[ca] === 1 && m.muroJ[ca] - 1 !== u.j) { if (d.cat === 'veh') quitarMuro(m, ca); else freno = 0.3; } }
+    const vmax = freno * (u.tope && u.tope < vel && !u.suelto ? u.tope : vel) * (u.marcha ? u.fm || 1 : 1) * (u.orden === 'trazar' && !(viaDe(m)[u.j][Math.floor(u.y) * N + Math.floor(u.x)] && m.via[u.j][c]) ? ECON.trazaVel : d.cat === 'veh' && terr >= T.CAMINO && viaDe(m)[u.j][Math.floor(u.y) * N + Math.floor(u.x)] ? ECON.caminoVel : 1); // (trazando sobre camino ya hecho va a su paso normal) // por camino los vehículos van más rápido; trazándolo, despacio
     const alFinal = u.ri === u.ruta.length - 1 && u.fin;
     const carril = !alFinal && d.cat === 'veh' && u.orden !== 'trazar' && m.carrilX && m.carrilX[c] > 0 && m.mapa.terreno[c] >= T.CAMINO && viaDe(m)[u.j][c]; // por camino, los vehículos van por el carril y no por el centro de cada celda
     const tx = alFinal ? u.fin.x : carril ? m.carrilX[c] : (c % N) + 0.5, ty = alFinal ? u.fin.y : carril ? m.carrilY[c] : ((c / N) | 0) + 0.5, dx = tx - u.x, dy = ty - u.y, dd = Math.hypot(dx, dy);
@@ -887,14 +994,20 @@
       if (!u || !u.pend) continue;
       const p = u.pend; u.pend = null; n++;
       const traza = u.orden === 'trazar', paso = traza ? tablaTraza(m) : pasoDe(m, u);
-      const camino = m.ruta(paso, m.mapa.terreno, Math.floor(u.x), Math.floor(u.y), p.x, p.y, p.radio, viaDe(m) && m.viaN[u.j] > 0 ? 0.62 : 1, m.via[u.j]);
+      const kh = viaDe(m) && m.viaN[u.j] > 0 ? 0.62 : 1, hayMuros = murosDe(m) && m.muros.length > 0;
+      let camino = m.ruta(paso, m.mapa.terreno, Math.floor(u.x), Math.floor(u.y), p.x, p.y, p.radio, kh, m.via[u.j], hayMuros ? m.puertas[u.j] : null);
+      u.rompe = false;
+      if (!camino && hayMuros && !traza) { // cerrado por muros: la ruta que menos muro tenga que derribar
+        camino = m.ruta(paso, m.mapa.terreno, Math.floor(u.x), Math.floor(u.y), p.x, p.y, p.radio, kh, m.via[u.j], m.muroTodo, m.muroTodo);
+        if (camino) u.rompe = true;
+      }
       if (camino) {
         u.fin = null;
         if (p.radio === 0) { // destino exacto: el último tramo va al punto pedido, no al centro de su celda
           const cf = Math.floor(p.y) * N + Math.floor(p.x);
           if (p.x >= 0 && p.y >= 0 && p.x < N && p.y < N && paso[cf]) { if (camino[camino.length - 1] !== cf) camino.push(cf); u.fin = { x: p.x, y: p.y }; }
         }
-        u.ruta = m.viaN[u.j] > 0 && paso === m.pasoV ? camino : suavizar(m, u.x, u.y, camino, traza && !camino.some((c) => m.mapa.terreno[c] === T.AGUA) ? m.paso : paso); u.ri = 0; // (la excavadora solo recorta por el agua si de verdad tiene que cruzarla) // con caminos, los vehículos siguen la ruta tal cual, para no salirse de ellos
+        u.ruta = u.rompe || (m.viaN[u.j] > 0 && paso === m.pasoV) ? camino : suavizar(m, u.x, u.y, camino, traza && !camino.some((c) => m.mapa.terreno[c] === T.AGUA) ? m.paso : paso); u.ri = 0; // (la excavadora solo recorta por el agua si de verdad tiene que cruzarla) // con caminos, los vehículos siguen la ruta tal cual, para no salirse de ellos
       } else { u.ruta = null; u.fallo = true; }
     }
   }
@@ -977,7 +1090,7 @@
   // Escondida: infantería quieta en el bosque (o un francotirador quieto en cualquier parte) que no ha disparado hace poco.
   // El enemigo no la ve ni la ataca por su cuenta hasta tenerla a un par de celdas.
   function oculta(m, e) {
-    if (e.edif || e.orden !== 'nada' || e.v > 0.001 || m.t - (e.tDisparo === undefined ? -999 : e.tDisparo) < 60) return false;
+    if (e.edif || e.orden !== 'nada' || e.v > 0.001 || m.t - (e.tDisparo === undefined ? -999 : e.tDisparo) < 60 || m.t - (e.camT === undefined ? -999 : e.camT) < 20) return false; // (una cámara enemiga cerca la descubre)
     const d = UNID[e.tipo];
     return d.cat === 'inf' && (d.sigilo || m.mapa.terreno[Math.floor(e.y) * m.N + Math.floor(e.x)] === T.BOSQUE);
   }
@@ -1175,7 +1288,8 @@
       if (dd > vel) { p.x += (dx / dd) * vel; p.y += (dy / dd) * vel; continue; }
       let acierto = false;
       if (arma.area) { // explosión: daña a todo enemigo dentro del radio
-        for (const e of m.ents) if (e.j !== p.j && e.vida > 0 && dist(p.tx, p.ty, e) <= arma.area) { herir(m, e, arma, p.mult, p.de); acierto = true; }
+        danarMuros(m, p.tx, p.ty, arma.area, arma, p.mult, p.de, p.j);
+        for (const e of m.ents) if (e.j !== p.j && e.vida > 0 && !e.muro && dist(p.tx, p.ty, e) <= arma.area) { herir(m, e, arma, p.mult, p.de); acierto = true; }
       } else {
         const o = m.porId.get(p.obj);
         acierto = !!o && o.vida > 0 && dist(p.tx, p.ty, o) <= 0.9; // si el blanco se apartó, falla
@@ -1391,6 +1505,7 @@
       if (u.orden === 'trazar') { tickTraza(m, u); return; }
       if (u.orden === 'conectar') { tickConectar(m, u); return; }
       if (u.orden === 'hackear') { tickHackear(m, u); return; }
+      if (u.orden === 'murar') { tickMurar(m, u); return; }
       if (u.orden !== 'nada') { u.arregla = 0; if (avanzar(m, u) || (!u.ruta && !u.pend)) u.orden = 'nada'; return; }
       if (d.repara || d.cura) tickIngeniero(m, u);
       return;
@@ -1798,7 +1913,7 @@
     if (m.t % 10 === 0) { curar(m); colmena(m); }
 
     if (m.redSucia || !m.cob || m.t - m.redT >= 100) calcularRed(m);
-    if (m.t % 10 === 0) tickTrincheras(m);
+    if (m.t % 10 === 0) { tickTrincheras(m); tickCamaras(m); }
     if (m.t % 10 === 0 && m.logistica !== false) { // suministro: fuera de la cobertura el contador sube; dentro, baja rápido. Los aviones repostan en su base: no cuenta.
       for (const u of m.ents) { if (u.edif || UNID[u.tipo].aire) continue; const dentro = m.cob[u.j][Math.floor(u.y) * m.N + Math.floor(u.x)] || m.jug[u.j].dios; u.sinSum = dentro ? Math.max(0, (u.sinSum || 0) - 40) : Math.min(ECON.sinSum + 200, (u.sinSum || 0) + 10); }
     }
@@ -1809,6 +1924,7 @@
       if (e.vida > 0) continue;
       muertos = true; m.porId.delete(e.id);
       if (e.desplegado) continue; // el patio móvil no muere: se ha convertido en patio
+      if (e.muro) { if (!e.quitado) { quitarMuro(m, e.celda); m.efectos.push({ tipo: 'muerte', x2: e.cx, y2: e.cy, edif: true, tam: 1, clase: 'muro', ang: 0, j: e.j, t: m.t }); } continue; }
       if (e.infra) { quitarTramo(m, e); m.efectos.push({ tipo: e.vendido ? 'venta' : 'muerte', x2: e.cx, y2: e.cy, edif: true, tam: 1, clase: 'camino', ang: 0, j: e.j, t: m.t }); continue; }
       m.jug[e.j].bajas++;
       if (!e.edif && e.pasajeros.length) { // del transporte destruido sale la mitad de su carga
@@ -1829,6 +1945,7 @@
         e.cola.forEach((t, i) => { if (e.pago[i]) devolver(m.jug[e.j], UNID[t]); m.jug[e.j].colas[t].n--; }); // lo que tenía encargado (y pagado) se devuelve
         e.cola.length = 0;
         for (let dy = 0; dy < e.tam; dy++) for (let dx = 0; dx < e.tam; dx++) { const i = (e.y + dy) * N + e.x + dx; m.ocup[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+        if (e.tam === 1 && m.muro && m.muro[e.y * N + e.x] >= 2) { m.paso[e.y * N + e.x] = 0; m.pasoV[e.y * N + e.x] = 0; } // debajo sigue el muro
       }
     }
     if (muertos) {

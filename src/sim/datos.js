@@ -42,6 +42,9 @@
     misilera:  { nombre: 'Misilera', tam: 3, vida: 1000, costo: 2500, pet: 200, tiempo: 600, energia: -50, vision: 6, req: ['fabrica'], nivel: 2, misiles: true },
     // Interceptor: derriba los misiles enemigos que entran en su radio. Tiene pocas cargas y tarda en reponerlas.
     interceptor: { nombre: 'Interceptor', tam: 2, vida: 700, costo: 1500, pet: 100, tiempo: 500, energia: -40, vision: 7, req: ['fabrica'], nivel: 2, intercepta: 14, cargas: 4, reponeCarga: 600 },
+    // Torreta de muro: solo se monta sobre un muro reforzado propio (y ahí puede ir fuera de la cobertura). Cámara: ve lejos y en redondo, descubre a los escondidos y avisa; en la cobertura o sobre un muro propio.
+    torretaMuro: { nombre: 'Torreta de muro', tam: 1, vida: 500, costo: 350, tiempo: 200, energia: -20, vision: 9, req: ['cuartel'], arma: 'bateria', giroT: 0.2, sobreMuro: true },
+    camara:    { nombre: 'Cámara', tam: 1, vida: 150, costo: 150, tiempo: 100, energia: -5, vision: 11, req: ['obras'], detecta: 11, enMuro: true },
     // Depósito: nodo de la red. Conectado por camino (o por cercanía) a un patio, extiende la cobertura: suministro, energía y dónde se puede construir.
     deposito:  { nombre: 'Depósito',  tam: 2, vida: 600,  costo: 500,  tiempo: 240, energia: -10, vision: 6, req: ['cuartel'], libre: true },
     // Infraestructura: cada tramo de camino. No se construye desde el patio (lo deja la excavadora), no ocupa celdas y no se ataca solo: hay que ordenarlo.
@@ -151,6 +154,15 @@
     cartografia: { nombre: 'Cartografía', info: 200, nivel: 3, que: 'Revela el terreno de todo el mapa.' },
   };
 
+  // Muros: los levanta el ingeniero civil, celda a celda, en línea. n: código en la tabla del mapa. ticks: lo que tarda cada celda.
+  // La alambrada no cierra el paso: frena mucho a la infantería enemiga y los vehículos la aplastan. La puerta deja pasar a su dueño.
+  W.MUROS = {
+    alambrada: { n: 1, nombre: 'Alambrada', costo: 2, vida: 60, ticks: 4, que: 'Frena mucho a la infantería enemiga; los vehículos la aplastan.' },
+    muro:      { n: 2, nombre: 'Muro', costo: 10, vida: 400, ticks: 8, que: 'Cierra el paso a todo lo que va por tierra, hasta que lo derriben.' },
+    reforzado: { n: 3, nombre: 'Muro reforzado', costo: 30, vida: 1200, ticks: 14, nivel: 2, que: 'Tres veces más duro, y admite torretas de muro.' },
+    puerta:    { n: 4, nombre: 'Puerta', costo: 40, vida: 500, ticks: 14, que: 'Para el enemigo es un muro; los tuyos pasan.' },
+  };
+  W.MURO_N = [null, W.MUROS.alambrada, W.MUROS.muro, W.MUROS.reforzado, W.MUROS.puerta];
   // Misiles balísticos. alcance en celdas desde la misilera (0 = todo el mapa); vel en celdas por tick; aguante: impactos de interceptor que resiste.
   W.MISILES = {
     scud:      { nombre: 'Scud',      que: 'Local: alcance parecido al de un aeródromo.', alcance: 70,  costo: 800,  pet: 100, tiempo: 400,  dano: 420,  area: 2.6, vel: 0.5,  aguante: 1, nivel: 2 },
