@@ -1087,6 +1087,10 @@ prueba('panel ADMIN: cada interruptor por separado', () => {
   J.minerales = 5000; pon('vel', 10);
   W.orden(m, { t: 'construir', j: 0, tipo: 'central' }); avanza(W.EDIF.central.tiempo / 10 + 3);
   assert.ok(J.obras[0].listo, 'a ×10 la obra debía estar lista');
+  W.orden(m, { t: 'cancelarEdif', j: 0, tipo: 'central' }); avanza(2); // ×20: otra obra, veinte veces más rápida
+  assert.equal(J.obras.length, 0, 'la obra anterior debía quedar cancelada');
+  pon('vel', 20); W.orden(m, { t: 'construir', j: 0, tipo: 'central' }); avanza(Math.ceil(W.EDIF.central.tiempo / 20) + 3);
+  assert.ok(J.tr.vel === 20 && J.obras.length === 1 && J.obras[0].listo, 'a ×20 la obra debía estar lista');
   pon('vel', 1);
   // construir en cualquier parte
   const lejos = W.cercaLibre(m, b.x < 64 ? b.x + 30 : b.x - 30, b.y), lx = lejos % m.N, ly = (lejos / m.N) | 0;

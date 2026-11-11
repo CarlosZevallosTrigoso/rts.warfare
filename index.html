@@ -179,7 +179,7 @@
     <button type="button" class="grupo" data-t="mapa">mapa a la vista</button>
     <button type="button" class="grupo" data-t="invulnerable">unidades invulnerables</button>
     <button type="button" class="grupo" data-t="ia">rival detenido</button>
-    <div class="fila2"><span>producción</span><button type="button" class="grupo" data-t="vel" data-v="1">×1</button><button type="button" class="grupo" data-t="vel" data-v="2">×2</button><button type="button" class="grupo" data-t="vel" data-v="4">×4</button><button type="button" class="grupo" data-t="vel" data-v="10">×10</button></div>
+    <div class="fila2"><span>producción</span><button type="button" class="grupo" data-t="vel" data-v="1">×1</button><button type="button" class="grupo" data-t="vel" data-v="2">×2</button><button type="button" class="grupo" data-t="vel" data-v="4">×4</button><button type="button" class="grupo" data-t="vel" data-v="10">×10</button><button type="button" class="grupo" data-t="vel" data-v="20">×20</button></div>
     <div class="fila2"><span>de un solo uso</span><button type="button" class="grupo" data-t="nivel3">nivel 3</button><button type="button" class="grupo" data-t="mejoras">todas las mejoras</button></div>
   </div>
   <div id="tactil" hidden>
@@ -239,11 +239,11 @@
   <div><h2>Semilla del mapa</h2><input id="op-s" inputmode="numeric" placeholder="al azar" autocomplete="off"></div>
   <button type="button" id="empezar">Empezar</button>
   <button type="button" id="continuar" hidden>Continuar la partida guardada</button>
-  <div id="version">versión 40</div>
+  <div id="version">versión 41</div>
 </div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 40' };
+globalThis.W = { VERSION: 'versión 41' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -960,7 +960,7 @@ globalThis.W = { VERSION: 'versión 40' };
   function trampa(m, j, clave, valor) {
     const J = m.jug[j];
     if (clave === 'recursos') { if (!!valor !== J.dios) { J.dios = !!valor; if (J.dios) J.antesDios = [J.minerales, J.petroleo, J.raros, J.info]; else [J.minerales, J.petroleo, J.raros, J.info] = J.antesDios; } }
-    else if (clave === 'vel') J.tr.vel = [1, 2, 4, 10].includes(+valor) ? +valor : 1;
+    else if (clave === 'vel') J.tr.vel = [1, 2, 4, 10, 20].includes(+valor) ? +valor : 1;
     else if (clave === 'nivel3') J.nivel = 3;
     else if (clave === 'mejoras') {
       for (const k in TEC) if (!TEC[k].sube) J.mejoras[k] = true;

@@ -309,7 +309,7 @@
   function trampa(m, j, clave, valor) {
     const J = m.jug[j];
     if (clave === 'recursos') { if (!!valor !== J.dios) { J.dios = !!valor; if (J.dios) J.antesDios = [J.minerales, J.petroleo, J.raros, J.info]; else [J.minerales, J.petroleo, J.raros, J.info] = J.antesDios; } }
-    else if (clave === 'vel') J.tr.vel = [1, 2, 4, 10].includes(+valor) ? +valor : 1;
+    else if (clave === 'vel') J.tr.vel = [1, 2, 4, 10, 20].includes(+valor) ? +valor : 1;
     else if (clave === 'nivel3') J.nivel = 3;
     else if (clave === 'mejoras') {
       for (const k in TEC) if (!TEC[k].sube) J.mejoras[k] = true;
