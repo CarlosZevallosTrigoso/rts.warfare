@@ -18,7 +18,7 @@
     const $ = (id) => document.getElementById(id);
     const params = new URLSearchParams(location.search);
     try { if (localStorage.getItem('rts.tema') === 'oscura') document.body.dataset.tema = 'oscura'; } catch (e) { /* tema por defecto */ }
-    const op = { n: '512', min: '2500', ia: 'normal' };
+    const op = { n: '512', min: '2500', ia: 'normal', est: 'azar' };
     for (const k in op) {
       const cont = $('op-' + k), v = params.get(k);
       if (v && cont.querySelector('[data-v="' + CSS.escape(v) + '"]')) op[k] = v;
@@ -30,10 +30,10 @@
     const empezar = () => {
       let semilla = parseInt($('op-s').value, 10);
       if (!Number.isFinite(semilla) || semilla < 0) semilla = Math.floor(Date.now() % 1000000);
-      const q = 's=' + semilla + '&n=' + op.n + '&min=' + op.min + '&ia=' + op.ia;
+      const q = 's=' + semilla + '&n=' + op.n + '&min=' + op.min + '&ia=' + op.ia + '&est=' + op.est;
       try { history.replaceState(null, '', location.pathname + '?' + q); } catch (e) { /* en file:// puede no dejar */ }
       $('menu').hidden = true;
-      W.jugar({ semilla, N: +op.n, inicio: +op.min, ia: op.ia, consulta: q });
+      W.jugar({ semilla, N: +op.n, inicio: +op.min, ia: op.ia, estilo: op.est, consulta: q });
     };
     $('empezar').addEventListener('click', empezar);
     $('op-s').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') empezar(); });
@@ -44,7 +44,7 @@
   W.jugar = function (op) {
     const $ = (id) => document.getElementById(id);
     const semilla = op.semilla;
-    const m = W.crearMundo(semilla, { N: op.N, inicio: op.inicio }), ia = op.ia === 'no' ? null : W.iaCrear(1, op.ia), N = m.N, YO = 0, J = m.jug[YO];
+    const m = W.crearMundo(semilla, { N: op.N, inicio: op.inicio }), estilos = Object.keys(W.ESTILOS_IA), ia = op.ia === 'no' ? null : W.iaCrear(1, op.ia, W.ESTILOS_IA[op.estilo] ? op.estilo : estilos[semilla % estilos.length]), N = m.N, YO = 0, J = m.jug[YO];
     W.mundo = m; // a mano en la consola, para depurar
 
     let tema = 'clara';
@@ -397,6 +397,16 @@
           ctx.beginPath(); ctx.moveTo(rx, ry); ctx.lineTo(rx, ry - 14); ctx.stroke();
           ctx.beginPath(); ctx.moveTo(rx, ry - 14); ctx.lineTo(rx + 9, ry - 10.5); ctx.lineTo(rx, ry - 7); ctx.closePath(); ctx.fill();
         }
+        if (e.tipo === 'patio' && e.j === YO && lod) { // edificio terminado esperando sitio: una chapa sobre el patio, que late
+          const n = J.obras.filter((o) => o.listo && o.patio === e.id).length;
+          if (n) {
+            const bx = px + t - 2, by = py - h + 2, rr = Math.max(7, z * 0.3) * (1 + Math.sin(tiempo * 0.008) * 0.12);
+            ctx.fillStyle = P.bien; ctx.beginPath(); ctx.arc(bx, by, rr, 0, TAU); ctx.fill();
+            ctx.strokeStyle = '#ffffff'; ctx.lineWidth = Math.max(1.5, rr * 0.2); ctx.lineCap = 'round'; ctx.beginPath(); // un edificio pequeño con una flecha hacia abajo: «por colocar»
+            ctx.moveTo(bx, by - rr * 0.5); ctx.lineTo(bx, by + rr * 0.35); ctx.moveTo(bx - rr * 0.35, by); ctx.lineTo(bx, by + rr * 0.4); ctx.lineTo(bx + rr * 0.35, by); ctx.stroke(); ctx.lineCap = 'butt';
+            if (n > 1) { ctx.fillStyle = P.tinta; ctx.fillText(String(n), bx + rr + 2, by + 4); }
+          }
+        }
         if (sel.has(e.id) || e.vida < e.vidaMax) barras.push([px, py - h - 6, t, e.vida / e.vidaMax, m.t - e.curando < 12]);
         if (e.j === YO && m.t - e.llama < 14) signos.push([px + t / 2, py - h - 18, '!']);
       }
@@ -709,7 +719,7 @@
         mctx.lineWidth = 1.5;
         for (const e of m.ents) {
           if (e.tipo !== 'patio' && e.tipo !== 'patioMovil') continue;
-          if (e.j === YO) { if (e.edif) { mctx.strokeStyle = P.yo; mctx.beginPath(); mctx.arc(e.cx * k, e.cy * k, 5, 0, TAU); mctx.stroke(); } }
+          if (e.j === YO) { if (e.edif) { const lista = J.obras.some((o) => o.listo && o.patio === e.id); mctx.strokeStyle = lista ? P.bien : P.yo; mctx.lineWidth = lista ? 2.5 : 1.5; mctx.beginPath(); mctx.arc(e.cx * k, e.cy * k, lista ? 6 + ((m.t >> 3) % 3) : 5, 0, TAU); mctx.stroke(); mctx.lineWidth = 1.5; } } // con un edificio por colocar, el aro late en verde
           else if (delata && (e.edif || !R.cuenta.patio)) { mctx.strokeStyle = P.rival; mctx.beginPath(); mctx.arc((e.edif ? e.cx : e.x) * k, (e.edif ? e.cy : e.y) * k, 5 + ((m.t >> 3) % 3), 0, TAU); mctx.stroke(); }
         }
       }

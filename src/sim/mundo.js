@@ -516,7 +516,7 @@
       alin = Math.cos(dif);
     }
     const ultimo = u.ri === u.ruta.length - 1;
-    const planea = d.aire && !u.obj; // un avión en ruta no se detiene: vira en marcha y da por alcanzado el punto al pasar cerca
+    const planea = d.aire && (!u.obj || d.pasada); // un avión en ruta (o atacando de pasada) no se detiene: vira en marcha y da por alcanzado el punto al pasar cerca
     let obj = planea ? vmax * Math.max(0.6, alin) : alin > 0.6 ? vmax * alin : 0; // muy desalineado: pivota en el sitio
     if (ultimo && !planea) obj = Math.min(obj, 0.02 + dd * 0.12); // frena al llegar
     if (planea && ultimo && dd <= 1.5) { u.ruta = null; return true; }
@@ -1005,6 +1005,16 @@
     if (o && d.aire && u.casa) { // no persigue más allá de su radio de vuelo
       const casa = m.porId.get(u.casa);
       if (casa && Math.hypot(posX(o) - casa.cx, posY(o) - casa.cy) > d.radioVuelo + alc) { o = null; u.obj = 0; u.ruta = null; if (u.orden === 'atacar') u.orden = 'nada'; }
+    }
+    if (!o) u.pase = '';
+    if (o && d.pasada) { // ataque de pasada: entra disparando, sigue de largo unas celdas, vira y vuelve
+      const dd = dist(u.x, u.y, o);
+      if (u.pase !== 'sale') {
+        if (dd <= alc && dd >= (arma.alcanceMin || 0) && u.recarga <= 0 && apuntar(m, u, o, false)) disparar(m, u, o, arma);
+        if (!u.ruta || (m.t + u.id) % 8 === 0) pedirRuta(m, u, posX(o), posY(o), 0);
+        if (avanzar(m, u) || dd < 1) { u.pase = 'sale'; pedirRuta(m, u, posX(o) + Math.cos(u.ang) * ECON.pasada, posY(o) + Math.sin(u.ang) * ECON.pasada, 0); }
+      } else if (avanzar(m, u) || !u.ruta) u.pase = 'entra';
+      return;
     }
     if (!o && (m.t + u.id) % 5 === 0) {
       o = buscarEnemigo(m, u, u.x, u.y, alc + (u.guardia || u.retirando ? 0 : 2));

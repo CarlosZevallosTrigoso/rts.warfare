@@ -5,7 +5,7 @@ for (const f of ['datos', 'mapa', 'ruta', 'mundo', 'ia']) require(path.join(__di
 const W = globalThis.W, N = W.N;
 
 let ok = 0;
-function prueba(nombre, fn) { fn(); ok++; console.log('  ok  ' + nombre); }
+function prueba(nombre, fn) { if (process.env.SOLO && !nombre.includes(process.env.SOLO)) return; fn(); ok++; console.log('  ok  ' + nombre); }
 
 prueba('prng determinista', () => {
   const a = W.prng(42), b = W.prng(42);
@@ -991,6 +991,30 @@ prueba('fase 2b: francotirador, transporte, lanzacohetes, vehículo de mando y h
   assert.ok(maxR < W.UNID.helicoptero.radioVuelo + 0.5 && maxR > 40, 'radio de vuelo corto: ' + maxR.toFixed(1));
 });
 
+prueba('aviones: el caza y el bombardero atacan de pasada; el helicóptero se queda en el aire', () => {
+  const m = W.crearMundo(31, { N: 128 }), N = m.N, J = m.jug[0];
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  for (let y = 30; y < 100; y++) for (let x = 30; x < 110; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; m.mapa.mineral[i] = 0; } }
+  const avanza = (n, fn) => { for (let i = 0; i < n; i++) { W.tick(m); if (fn) fn(); } };
+  const cel = (x, y) => y * N + x;
+  J.dios = true; m.jug[1].dios = true; J.nivel = 3;
+  W.crearEdificio(m, 0, 'aerodromo', 40, 60); avanza(1);
+  const pasa = (tipo) => {
+    const av = W.crearUnidad(m, 0, tipo, cel(41, 61)); avanza(30);
+    const t = W.crearUnidad(m, 1, 'tanque', cel(62, 61)); t.recarga = 99999; t.guardia = true; t.vida = t.vidaMax = 4000;
+    W.orden(m, { t: 'atacar', j: 0, ids: [av.id], obj: t.id }); avanza(260); // ya ha llegado
+    let quieto = 0, minD = Infinity, maxD = 0; // ticks casi sin moverse
+    avanza(500, () => { if (Math.hypot(av.x - av.px, av.y - av.py) < 0.02) quieto++; const d = Math.hypot(av.x - t.x, av.y - t.y); minD = Math.min(minD, d); maxD = Math.max(maxD, d); });
+    const r = { quieto, minD, maxD, dano: t.vidaMax - t.vida };
+    t.vida = 0; av.vida = 0; avanza(2);
+    return r;
+  };
+  const caza = pasa('caza'), bomb = pasa('bombardero'), heli = pasa('helicoptero');
+  assert.ok(caza.quieto < 25 && caza.minD < 1.6 && caza.maxD > 5 && caza.dano > 100, 'el caza debía pasar una y otra vez sobre el blanco sin detenerse: ' + JSON.stringify(caza));
+  assert.ok(bomb.quieto < 25 && bomb.minD < 1.6 && bomb.maxD > 5 && bomb.dano > 100, 'el bombardero suelta sus bombas de pasada: ' + JSON.stringify(bomb));
+  assert.ok(heli.quieto > 300 && heli.maxD < W.ARMAS.coheteAire.alcance + 1 && heli.dano > 100, 'el helicóptero se queda en el aire frente al blanco: ' + JSON.stringify(heli));
+});
+
 prueba('determinismo: misma semilla, misma partida', () => {
   const corre = () => {
     const m = W.crearMundo(777), a = W.iaCrear(0), b = W.iaCrear(1);
@@ -998,6 +1022,32 @@ prueba('determinismo: misma semilla, misma partida', () => {
     return W.huella(m);
   };
   assert.strictEqual(corre(), corre());
+});
+
+if (!process.env.RAPIDO) prueba('fase 2c: los cinco estilos de rival juegan media hora y se comportan distinto', () => {
+  const res = {};
+  for (const estilo of Object.keys(W.ESTILOS_IA)) {
+    const m = W.crearMundo(555, { N: 256 }), a = W.iaCrear(0, 'normal', estilo), b = W.iaCrear(1, 'normal', 'equilibrado');
+    for (const J of m.jug) { J.nivel = 2; J.info = 500; J.minerales += 8000; J.petroleo += 600; } // con ventaja inicial, para que en media hora se vea el juego avanzado
+    let aviones = 0, torres = 0, patios = 1, puestos = 0, primera = 0;
+    while (m.ganador < 0 && m.t < 20 * 60 * 30) {
+      W.iaTick(m, a); W.iaTick(m, b); W.tick(m);
+      if (m.t % 200 === 0) {
+        const c = m.jug[0].cuenta;
+        aviones = Math.max(aviones, (c.caza || 0) + (c.bombardero || 0) + (c.helicoptero || 0) + (c.dron || 0));
+        torres = Math.max(torres, (c.torreta || 0) + (c.torreCanon || 0)); patios = Math.max(patios, c.patio || 0);
+        puestos = Math.max(puestos, m.puestos.filter((p) => p.dueno === 0).length);
+        if (!primera && a.atacantes.size) primera = m.t;
+      }
+    }
+    res[estilo] = { aviones, torres, patios, puestos, primera: +(primera / 1200).toFixed(1), fin: +(m.t / 1200).toFixed(1), ganador: m.ganador };
+    console.log('      ' + estilo + ': ' + JSON.stringify(res[estilo]));
+  }
+  assert.ok(res.aereo.aviones >= 3 && res.aereo.aviones > res.asalto.aviones, 'el aéreo debía apostar por la aviación');
+  assert.ok(res.defensivo.torres > res.asalto.torres, 'el defensivo debía levantar más torres que el de asalto');
+  assert.ok(res.asalto.primera > 0 && res.asalto.primera < res.defensivo.primera, 'el de asalto debía atacar antes que el defensivo');
+  assert.ok(Object.values(res).some((r) => r.patios > 1), 'algún estilo debía fundar una segunda base');
+  assert.ok(Object.values(res).some((r) => r.puestos > 0), 'algún estilo debía capturar un puesto');
 });
 
 if (!process.env.RAPIDO) prueba('partidas completas IA contra IA', () => {
