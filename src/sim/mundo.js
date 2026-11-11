@@ -12,7 +12,7 @@
     return {
       minerales: inicio || ECON.inicio, prod: 0, uso: 0, cuenta: {}, vivo: true, dios: false, admin: false,
       obras: [], // [{ tipo, prog, listo }]: varias a la vez, se reparten la velocidad
-      colas: Object.fromEntries(Object.keys(UNID).map((t) => [t, { n: 0, prog: 0, sinAgua: false }])), // una cola por tipo de unidad
+      colas: Object.fromEntries(Object.keys(UNID).map((t) => [t, { n: 0, prog: 0, sinAgua: false }])), // total encargado por tipo; las colas de verdad están en cada edificio (e.cola)
       alerta: null, cosechado: 0, bajas: 0, producidas: 0,
       colmena: true, // inteligencia de colmena: las unidades piden y dan apoyo solas
       nivel: 1, mejoras: {}, inv: [], intercepta: -1, // tecnología: nivel, mejoras hechas, investigaciones en curso
@@ -58,7 +58,7 @@
   // ---------- entidades ----------
   function crearEdificio(m, j, tipo, x, y) {
     const d = EDIF[tipo], N = m.N;
-    const e = { id: m.sigId++, j, tipo, edif: true, x, y, tam: d.tam, cx: x + d.tam / 2, cy: y + d.tam / 2, vida: d.vida, vidaMax: d.vida, recarga: 0, obj: 0, reunion: null, acum: 0, nace: m.t, angT: Math.atan2(N / 2 - y, N / 2 - x) };
+    const e = { id: m.sigId++, j, tipo, edif: true, x, y, tam: d.tam, cx: x + d.tam / 2, cy: y + d.tam / 2, vida: d.vida, vidaMax: d.vida, recarga: 0, obj: 0, reunion: null, acum: 0, nace: m.t, cola: [], prog: 0, sinAgua: false, angT: Math.atan2(N / 2 - y, N / 2 - x) };
     for (let dy = 0; dy < d.tam; dy++) for (let dx = 0; dx < d.tam; dx++) { const i = (y + dy) * N + x + dx; m.ocup[i] = e.id; m.paso[i] = 0; }
     m.ents.push(e); m.porId.set(e.id, e);
     return e;
@@ -326,17 +326,31 @@
         const d = UNID[cmd.tipo];
         if (!d || !W.disponible(m, cmd.j, d) || !W.puedePagar(J, d)) return;
         if (d.aire) { const c = W.cupoAire(m, cmd.j); if (c.hay >= c.cupo) return; } // cada aeródromo aloja un número limitado de aviones
-        const q = J.colas[cmd.tipo];
-        if (q.n >= ECON.colaMax) return;
-        cobrar(J, d); q.n++;
+        // Va a la cola de un edificio: de los indicados (cmd.ids) o de todos los del tipo, el que la tenga más corta.
+        let fab = null;
+        for (const e of m.ents) {
+          if (!e.edif || e.j !== cmd.j || e.tipo !== LUGAR[d.cat] || e.vida <= 0 || e.cola.length >= ECON.colaMax) continue;
+          if (cmd.ids && !cmd.ids.includes(e.id)) continue;
+          if (!fab || e.cola.length < fab.cola.length) fab = e;
+        }
+        if (!fab) return;
+        cobrar(J, d); fab.cola.push(cmd.tipo); J.colas[cmd.tipo].n++;
         return;
       }
-      case 'cancelarUnidad': {
-        const d = UNID[cmd.tipo]; if (!d) return;
-        const q = J.colas[cmd.tipo];
-        if (!q.n) return;
-        q.n--; devolver(J, d);
-        if (!q.n) q.prog = 0;
+      case 'cancelarUnidad': { // con id e i: ese puesto de la cola de ese edificio; si no, el último de ese tipo (en los edificios indicados o en todos)
+        let fab = null, i = -1;
+        if (cmd.id !== undefined && cmd.i !== undefined) { fab = m.porId.get(cmd.id); i = cmd.i; if (!fab || !fab.edif || fab.j !== cmd.j || !(i >= 0 && i < fab.cola.length)) return; }
+        else {
+          for (const e of m.ents) {
+            if (!e.edif || e.j !== cmd.j || !e.cola.length || (cmd.ids && !cmd.ids.includes(e.id))) continue;
+            const k = e.cola.lastIndexOf(cmd.tipo);
+            if (k >= 0 && (!fab || e.cola.length > fab.cola.length)) { fab = e; i = k; }
+          }
+          if (!fab) return;
+        }
+        const tipo = fab.cola[i];
+        fab.cola.splice(i, 1); if (i === 0) fab.prog = 0;
+        J.colas[tipo].n--; devolver(J, UNID[tipo]);
         return;
       }
       // cmd.enc (encadenar): la orden se añade a la cola de la unidad en vez de reemplazar lo que hace.
@@ -953,7 +967,7 @@
     for (let k = 0; k < m.ents.length; k++) if (m.ents[k].j === j && m.ents[k].tipo === tipo) out.push(m.ents[k]);
     return out;
   }
-  // Varios edificios productivos del mismo tipo aceleran su cola: +50 % por cada uno extra, hasta ×2,5.
+  // Varios patios aceleran las obras: +50 % por cada uno extra, hasta ×2,5. (Las unidades no: cada edificio tiene su cola.)
   W.ritmo = function (n) { return n < 1 ? 0 : Math.min(1 + ECON.bonoProd * (n - 1), ECON.bonoMax); };
   function tickProduccion(m, j) {
     const J = m.jug[j];
@@ -979,21 +993,20 @@
     for (const o of J.obras) if (!o.listo && !vistos.has(o.tipo)) { vistos.add(o.tipo); activas.push(o); }
     const ritmoObras = (factor * W.ritmo(J.cuenta.patio || 0)) / (activas.length || 1);
     for (const o of activas) { o.prog += ritmoObras; if (o.prog >= EDIF[o.tipo].tiempo) o.listo = true; }
-    // Unidades: igual, una cola por tipo; las de un mismo edificio (cuartel o fábrica) se reparten su velocidad.
-    for (const cat of ['inf', 'veh', 'aire']) {
-      const tipos = Object.keys(UNID).filter((t) => UNID[t].cat === cat && J.colas[t].n > 0);
-      if (!tipos.length) continue;
-      const fabs = edificiosDe(m, j, LUGAR[cat]);
-      if (!fabs.length) { for (const t of tipos) { const q = J.colas[t]; for (let k = 0; k < q.n; k++) devolver(J, UNID[t]); q.n = 0; q.prog = 0; } continue; }
-      let enCurso = 0;
-      for (const t of tipos) { const q = J.colas[t]; q.sinAgua = J.aguaUso + (UNID[t].agua || 0) > J.aguaProd; if (!q.sinAgua) enCurso++; } // sin agua no se sostiene más tropa
-      for (const tipo of tipos) {
-      const q = J.colas[tipo];
-      if (q.sinAgua) continue;
-      const fab = fabs[J.producidas % fabs.length]; // las unidades van saliendo por turnos de cada edificio
-      q.prog += (factor * W.ritmo(fabs.length)) / enCurso;
-      if (q.prog < UNID[tipo].tiempo || J.aguaUso + (UNID[tipo].agua || 0) > J.aguaProd) continue;
-      q.n--; q.prog = 0; J.aguaUso += UNID[tipo].agua || 0;
+    // Unidades: cada cuartel, fábrica y aeródromo tiene su propia cola y la despacha en orden, uno tras otro.
+    // Dos edificios iguales producen a la vez. J.colas guarda el total encargado por tipo (para la IA y el cupo).
+    for (const t in J.colas) { J.colas[t].prog = 0; J.colas[t].sinAgua = false; }
+    for (let k = 0, total = m.ents.length; k < total; k++) {
+      const fab = m.ents[k];
+      if (!fab.edif || fab.j !== j || !fab.cola || !fab.cola.length || fab.vida <= 0) continue;
+      const tipo = fab.cola[0], q = J.colas[tipo], cat = UNID[tipo].cat;
+      {
+      fab.sinAgua = J.aguaUso + (UNID[tipo].agua || 0) > J.aguaProd; // sin agua no se sostiene más tropa
+      if (fab.sinAgua) { q.sinAgua = true; continue; }
+      fab.prog += factor;
+      if (fab.prog > q.prog) q.prog = fab.prog;
+      if (fab.prog < UNID[tipo].tiempo) continue;
+      fab.cola.shift(); fab.prog = 0; q.n--; J.aguaUso += UNID[tipo].agua || 0;
       const u = crearUnidad(m, j, tipo, cat === 'aire' ? Math.floor(fab.cy) * m.N + Math.floor(fab.cx) : W.cercaLibre(m, fab.cx, fab.y + fab.tam + 0.5));
       if (cat === 'aire') { const casa = aerodromoLibre(m, u) || fab; posar(m, u, casa); } // el avión nace posado en un aeródromo con sitio
       if (fab.reunion) { // va al punto de reunión del edificio
@@ -1132,6 +1145,8 @@
       m.efectos.push({ tipo: e.vendido ? 'venta' : 'muerte', x2: posX(e), y2: posY(e), edif: e.edif, tam: e.tam || 0, clase: e.tipo, ang: e.ang || 0, j: e.j, t: m.t });
       if (e.edif) {
         const N = m.N;
+        for (const t of e.cola) { devolver(m.jug[e.j], UNID[t]); m.jug[e.j].colas[t].n--; } // lo que tenía encargado se devuelve
+        e.cola.length = 0;
         for (let dy = 0; dy < e.tam; dy++) for (let dx = 0; dx < e.tam; dx++) { const i = (e.y + dy) * N + e.x + dx; m.ocup[i] = 0; m.paso[i] = 1; }
         if (e.tipo === 'patio') m.jug[e.j].vivo = false;
       }

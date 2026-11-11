@@ -76,7 +76,7 @@ prueba('economía: construir, colocar, cosechar', () => {
   assert.ok(m.jug[0].cosechado > antes + 1000, 'no cosechó: ' + m.jug[0].cosechado);
 });
 
-prueba('colas por tipo: el mismo tipo va en fila, tipos distintos a la vez repartiendo velocidad', () => {
+prueba('colas: obras por tipo desde el patio; unidades, una cola por edificio', () => {
   const m = W.crearMundo(4242), J = m.jug[0], b = m.mapa.bases[0], T = W.EDIF.central.tiempo;
   const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
   J.minerales = 9000;
@@ -99,12 +99,27 @@ prueba('colas por tipo: el mismo tipo va en fila, tipos distintos a la vez repar
   assert.ok(J.minerales >= antes + W.EDIF.cuartel.costo, 'cancelar no devolvió el costo');
   const p = J.obras[0].prog; avanza(10);
   assert.ok(Math.abs(J.obras[0].prog - p - 10) < 0.01, 'al quedar un solo tipo vuelve al ritmo pleno');
-  // unidades: tanque y cosechadora a la vez desde la fábrica; dos tanques, en fila
+  // unidades: cada fábrica despacha su cola en orden, de una en una y a ritmo pleno
   J.dios = true;
-  W.crearEdificio(m, 0, 'refineria', b.x - 7, b.y - 6); W.crearEdificio(m, 0, 'fabrica', b.x - 7, b.y + 3); avanza(1);
+  W.crearEdificio(m, 0, 'refineria', b.x - 7, b.y - 6); const f1 = W.crearEdificio(m, 0, 'fabrica', b.x - 7, b.y + 3); avanza(1);
   W.orden(m, { t: 'entrenar', j: 0, tipo: 'tanque' }); W.orden(m, { t: 'entrenar', j: 0, tipo: 'tanque' }); W.orden(m, { t: 'entrenar', j: 0, tipo: 'cosechadora' }); avanza(101);
-  assert.strictEqual(J.colas.tanque.n, 2);
-  assert.ok(Math.abs(J.colas.tanque.prog - 50) <= 1 && Math.abs(J.colas.cosechadora.prog - 50) <= 1, 'tanque y cosechadora debían avanzar a la vez y a la mitad');
+  assert.deepStrictEqual(f1.cola, ['tanque', 'tanque', 'cosechadora'], 'los tres encargos van a la cola de la fábrica, en orden');
+  assert.ok(Math.abs(f1.prog - 100) <= 1 && J.colas.tanque.n === 2 && J.colas.cosechadora.n === 1, 'solo avanza el primero, a ritmo pleno: ' + f1.prog);
+  // cancelar un puesto concreto de la cola devuelve su costo y no toca el resto
+  W.orden(m, { t: 'cancelarUnidad', j: 0, id: f1.id, i: 1 }); avanza(1);
+  assert.deepStrictEqual(f1.cola, ['tanque', 'cosechadora']);
+  assert.ok(f1.prog > 100, 'cancelar el segundo no reinicia el que está en curso');
+  // una segunda fábrica trabaja a la vez; el encargo sin edificio indicado va a la cola más corta, y con ids, a ese
+  const f2 = W.crearEdificio(m, 0, 'fabrica', b.x - 7, b.y + 8); avanza(1);
+  W.orden(m, { t: 'entrenar', j: 0, tipo: 'artilleria' }); avanza(1);
+  assert.deepStrictEqual(f2.cola, [], 'la artillería pide nivel 2');
+  W.orden(m, { t: 'entrenar', j: 0, tipo: 'tanque' }); W.orden(m, { t: 'entrenar', j: 0, tipo: 'tanque', ids: [f1.id] }); avanza(50);
+  assert.deepStrictEqual([f1.cola, f2.cola], [['tanque', 'cosechadora', 'tanque'], ['tanque']]);
+  assert.ok(f1.prog > 150 && Math.abs(f2.prog - 50) <= 1, 'las dos fábricas avanzan a la vez');
+  // al perder el edificio se devuelve lo encargado
+  J.dios = false; J.minerales = 0; J.petroleo = 0; f1.vida = 0; avanza(2);
+  assert.strictEqual(J.minerales >= 2 * W.UNID.tanque.costo + W.UNID.cosechadora.costo, true, 'debía devolver la cola de la fábrica destruida');
+  assert.ok(J.colas.tanque.n === 1 && J.colas.cosechadora.n === 0);
 });
 
 prueba('contraataque, disparo en marcha, curación y atropello', () => {
@@ -164,24 +179,25 @@ prueba('contraataque, disparo en marcha, curación y atropello', () => {
   assert.ok(m.porId.has(amigo.id), 'aplastó a su propia infantería');
 });
 
-prueba('varios edificios productivos aceleran la cola, con tope', () => {
+prueba('dos cuarteles producen a la vez; los patios aceleran las obras', () => {
   assert.deepStrictEqual([0, 1, 2, 3, 4, 5, 9].map(W.ritmo), [0, 1, 1.5, 2, 2.5, 2.5, 2.5]);
-  const tiempoCon = (cuarteles) => {
+  const tiempoCon = (cuarteles, pedidos) => {
     const m = W.crearMundo(4242), J = m.jug[0], b = m.mapa.bases[0];
     J.dios = true;
     W.crearEdificio(m, 0, 'central', b.x + 3, b.y - 1);
     for (let k = 0; k < cuarteles; k++) W.crearEdificio(m, 0, 'cuartel', b.x - 5 + k * 3, b.y - 6);
     W.tick(m);
     const antes = J.cuenta.infanteria;
-    W.orden(m, { t: 'entrenar', j: 0, tipo: 'infanteria' });
+    for (let k = 0; k < pedidos; k++) W.orden(m, { t: 'entrenar', j: 0, tipo: 'infanteria' });
     let n = 0;
-    while ((J.cuenta.infanteria || 0) === antes && n < 1000) { W.tick(m); n++; }
+    while ((J.cuenta.infanteria || 0) < antes + pedidos && n < 3000) { W.tick(m); n++; }
     return n;
   };
-  const t1 = tiempoCon(1), t2 = tiempoCon(2), t6 = tiempoCon(6);
-  assert.ok(Math.abs(t1 - W.UNID.infanteria.tiempo) <= 3, 'un cuartel: ' + t1);
-  assert.ok(Math.abs(t2 - t1 / 1.5) <= 3, 'dos cuarteles: ' + t2);
-  assert.ok(Math.abs(t6 - t1 / 2.5) <= 3, 'seis cuarteles (tope): ' + t6);
+  const T = W.UNID.infanteria.tiempo, t1 = tiempoCon(1, 1), t14 = tiempoCon(1, 4), t24 = tiempoCon(2, 4), t21 = tiempoCon(2, 1);
+  assert.ok(Math.abs(t1 - T) <= 3, 'un cuartel, un soldado: ' + t1);
+  assert.ok(Math.abs(t14 - 4 * T) <= 6, 'un cuartel, cuatro soldados en fila: ' + t14);
+  assert.ok(Math.abs(t24 - 2 * T) <= 6, 'dos cuarteles se reparten los cuatro y tardan la mitad: ' + t24);
+  assert.ok(Math.abs(t21 - T) <= 3, 'un solo soldado no sale antes por tener dos cuarteles: ' + t21);
 });
 
 prueba('tamaños de mapa: 128, 256 y 1024 se generan simétricos y conectados', () => {

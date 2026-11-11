@@ -35,7 +35,15 @@
   .btn .x { display: none; margin: -5px -7px -5px 8px; padding: 5px 8px; border-left: 1px solid var(--linea); font-weight: 600; }
   .btn.con-x .x { display: inline-block; }
   .btn .x:hover { background: var(--mal); color: #fff; }
-  #obras, #ritmo { min-height: 16px; }
+  #obras { min-height: 16px; }
+  #vacio { line-height: 1.7; } #vacio kbd { font: inherit; color: var(--tinta); }
+  .cola-fila { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; margin: 0 0 6px; }
+  .cola-fila .quien { flex-basis: 100%; font-size: 10px; color: var(--suave); }
+  .chip { font: inherit; font-size: 10px; color: var(--tinta); padding: 2px 5px; border: 1px solid var(--linea); border-radius: 2px; cursor: pointer;
+    background: linear-gradient(to right, var(--relleno) var(--p, 0%), var(--panel) var(--p, 0%)); }
+  .chip:hover { background: var(--mal); color: #fff; border-color: var(--mal); }
+  .chip.espera { color: var(--mal); }
+  #hechas { font-weight: 400; margin-left: 6px; }
   #grupos { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
   .grupo { display: flex; gap: 7px; align-items: baseline; font: inherit; font-size: 11px; color: var(--tinta); text-align: left; padding: 4px 6px; background: var(--panel); border: 1px solid var(--linea); border-radius: 2px; cursor: pointer; overflow: hidden; white-space: nowrap; }
   .grupo:hover { border-color: var(--tinta); }
@@ -113,7 +121,9 @@
       <div>rueda o <kbd>+</kbd> <kbd>−</kbd>: zoom · <kbd>M</kbd> cambia rueda</div>
       <div><kbd>H</kbd> base · <kbd>espacio</kbd> alerta</div>
       <div><kbd>Mayús+1…9</kbd> guardar grupo · <kbd>1…9</kbd> elegirlo, dos veces ir</div>
-      <div><kbd>×</kbd> o clic derecho en botón: cancelar</div>
+      <div>clic en un edificio: lo que produce y su cola</div>
+      <div><kbd>B</kbd> patio · <kbd>Q</kbd> cuarteles · <kbd>V</kbd> fábricas · <kbd>X</kbd> aeródromos</div>
+      <div>clic en la cola, <kbd>×</kbd> o clic derecho en botón: cancelar</div>
       <div><kbd>P</kbd> pausa · <kbd>T</kbd> tema · <kbd>N</kbd> silenciar</div>
       <div id="semilla"></div>
       <div>escribe <kbd>god</kbd>: recursos infinitos</div>
@@ -128,13 +138,16 @@
       <div class="fila" title="La da la estación, sobre un campo de conocimiento. Pagará tecnología y mejoras."><span>información</span><b id="rInf">0</b></div>
       <div class="fila" title="Usada / disponible. Cada unidad consume agua; el patio y las bombas la dan. Sin agua libre no sale más tropa."><span>agua</span><b id="rAgu">0 / 0</b></div>
       <div id="espia" class="tenue"></div>
+      <div class="fila" title="Nivel tecnológico. Se sube desde el patio."><span>nivel</span><b><span id="nivel">1</span><span id="hechas" class="tenue"></span></b></div>
       <div class="fila" title="Usada / disponible. En déficit todo va a media velocidad y las torretas se apagan."><span>energía</span><b id="rEne">0 / 0</b></div>
     </div>
     <canvas id="mini" width="208" height="208"></canvas>
     <div id="panel">
-    <section><h2>Edificios</h2><div id="bEdif"></div><div id="obras" class="tenue"></div></section>
-    <section><h2>Unidades</h2><div id="bUnid"></div><div id="ritmo" class="tenue"></div></section>
-    <section><h2>Tecnología · nivel <span id="nivel">1</span></h2><div id="bTec"></div><div id="hechas" class="tenue"></div></section>
+    <div id="vacio" class="tenue">Selecciona un edificio para ver lo que produce.<br><kbd>B</kbd> patio · <kbd>Q</kbd> cuarteles · <kbd>V</kbd> fábricas · <kbd>X</kbd> aeródromos</div>
+    <section id="secCola" hidden><h2>Cola de producción</h2><div id="cola"></div></section>
+    <section id="secEdif" hidden><h2>Edificios</h2><div id="bEdif"></div><div id="obras" class="tenue"></div></section>
+    <section id="secUnid" hidden><h2>Unidades</h2><div id="bUnid"></div></section>
+    <section id="secTec" hidden><h2>Tecnología</h2><div id="bTec"></div></section>
     <section id="secIntel" hidden><h2>Inteligencia</h2><div id="bIntel"></div></section>
     <section id="secGrupos" hidden><h2>Grupos</h2><div id="grupos"></div></section>
     <section id="secFormas" hidden><h2>Formación al llegar</h2><div id="formas">
@@ -158,11 +171,11 @@
     <button type="button" data-v="normal">normal</button><button type="button" data-v="agresivo">agresivo<small>ataca pronto</small></button></div></div>
   <div><h2>Semilla del mapa</h2><input id="op-s" inputmode="numeric" placeholder="al azar" autocomplete="off"></div>
   <button type="button" id="empezar">Empezar</button>
-  <div id="version">versión 29</div>
+  <div id="version">versión 30</div>
 </div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><p><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 29' };
+globalThis.W = { VERSION: 'versión 30' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -501,7 +514,7 @@ globalThis.W = { VERSION: 'versión 29' };
     return {
       minerales: inicio || ECON.inicio, prod: 0, uso: 0, cuenta: {}, vivo: true, dios: false, admin: false,
       obras: [], // [{ tipo, prog, listo }]: varias a la vez, se reparten la velocidad
-      colas: Object.fromEntries(Object.keys(UNID).map((t) => [t, { n: 0, prog: 0, sinAgua: false }])), // una cola por tipo de unidad
+      colas: Object.fromEntries(Object.keys(UNID).map((t) => [t, { n: 0, prog: 0, sinAgua: false }])), // total encargado por tipo; las colas de verdad están en cada edificio (e.cola)
       alerta: null, cosechado: 0, bajas: 0, producidas: 0,
       colmena: true, // inteligencia de colmena: las unidades piden y dan apoyo solas
       nivel: 1, mejoras: {}, inv: [], intercepta: -1, // tecnología: nivel, mejoras hechas, investigaciones en curso
@@ -547,7 +560,7 @@ globalThis.W = { VERSION: 'versión 29' };
   // ---------- entidades ----------
   function crearEdificio(m, j, tipo, x, y) {
     const d = EDIF[tipo], N = m.N;
-    const e = { id: m.sigId++, j, tipo, edif: true, x, y, tam: d.tam, cx: x + d.tam / 2, cy: y + d.tam / 2, vida: d.vida, vidaMax: d.vida, recarga: 0, obj: 0, reunion: null, acum: 0, nace: m.t, angT: Math.atan2(N / 2 - y, N / 2 - x) };
+    const e = { id: m.sigId++, j, tipo, edif: true, x, y, tam: d.tam, cx: x + d.tam / 2, cy: y + d.tam / 2, vida: d.vida, vidaMax: d.vida, recarga: 0, obj: 0, reunion: null, acum: 0, nace: m.t, cola: [], prog: 0, sinAgua: false, angT: Math.atan2(N / 2 - y, N / 2 - x) };
     for (let dy = 0; dy < d.tam; dy++) for (let dx = 0; dx < d.tam; dx++) { const i = (y + dy) * N + x + dx; m.ocup[i] = e.id; m.paso[i] = 0; }
     m.ents.push(e); m.porId.set(e.id, e);
     return e;
@@ -815,17 +828,31 @@ globalThis.W = { VERSION: 'versión 29' };
         const d = UNID[cmd.tipo];
         if (!d || !W.disponible(m, cmd.j, d) || !W.puedePagar(J, d)) return;
         if (d.aire) { const c = W.cupoAire(m, cmd.j); if (c.hay >= c.cupo) return; } // cada aeródromo aloja un número limitado de aviones
-        const q = J.colas[cmd.tipo];
-        if (q.n >= ECON.colaMax) return;
-        cobrar(J, d); q.n++;
+        // Va a la cola de un edificio: de los indicados (cmd.ids) o de todos los del tipo, el que la tenga más corta.
+        let fab = null;
+        for (const e of m.ents) {
+          if (!e.edif || e.j !== cmd.j || e.tipo !== LUGAR[d.cat] || e.vida <= 0 || e.cola.length >= ECON.colaMax) continue;
+          if (cmd.ids && !cmd.ids.includes(e.id)) continue;
+          if (!fab || e.cola.length < fab.cola.length) fab = e;
+        }
+        if (!fab) return;
+        cobrar(J, d); fab.cola.push(cmd.tipo); J.colas[cmd.tipo].n++;
         return;
       }
-      case 'cancelarUnidad': {
-        const d = UNID[cmd.tipo]; if (!d) return;
-        const q = J.colas[cmd.tipo];
-        if (!q.n) return;
-        q.n--; devolver(J, d);
-        if (!q.n) q.prog = 0;
+      case 'cancelarUnidad': { // con id e i: ese puesto de la cola de ese edificio; si no, el último de ese tipo (en los edificios indicados o en todos)
+        let fab = null, i = -1;
+        if (cmd.id !== undefined && cmd.i !== undefined) { fab = m.porId.get(cmd.id); i = cmd.i; if (!fab || !fab.edif || fab.j !== cmd.j || !(i >= 0 && i < fab.cola.length)) return; }
+        else {
+          for (const e of m.ents) {
+            if (!e.edif || e.j !== cmd.j || !e.cola.length || (cmd.ids && !cmd.ids.includes(e.id))) continue;
+            const k = e.cola.lastIndexOf(cmd.tipo);
+            if (k >= 0 && (!fab || e.cola.length > fab.cola.length)) { fab = e; i = k; }
+          }
+          if (!fab) return;
+        }
+        const tipo = fab.cola[i];
+        fab.cola.splice(i, 1); if (i === 0) fab.prog = 0;
+        J.colas[tipo].n--; devolver(J, UNID[tipo]);
         return;
       }
       // cmd.enc (encadenar): la orden se añade a la cola de la unidad en vez de reemplazar lo que hace.
@@ -1442,7 +1469,7 @@ globalThis.W = { VERSION: 'versión 29' };
     for (let k = 0; k < m.ents.length; k++) if (m.ents[k].j === j && m.ents[k].tipo === tipo) out.push(m.ents[k]);
     return out;
   }
-  // Varios edificios productivos del mismo tipo aceleran su cola: +50 % por cada uno extra, hasta ×2,5.
+  // Varios patios aceleran las obras: +50 % por cada uno extra, hasta ×2,5. (Las unidades no: cada edificio tiene su cola.)
   W.ritmo = function (n) { return n < 1 ? 0 : Math.min(1 + ECON.bonoProd * (n - 1), ECON.bonoMax); };
   function tickProduccion(m, j) {
     const J = m.jug[j];
@@ -1468,21 +1495,20 @@ globalThis.W = { VERSION: 'versión 29' };
     for (const o of J.obras) if (!o.listo && !vistos.has(o.tipo)) { vistos.add(o.tipo); activas.push(o); }
     const ritmoObras = (factor * W.ritmo(J.cuenta.patio || 0)) / (activas.length || 1);
     for (const o of activas) { o.prog += ritmoObras; if (o.prog >= EDIF[o.tipo].tiempo) o.listo = true; }
-    // Unidades: igual, una cola por tipo; las de un mismo edificio (cuartel o fábrica) se reparten su velocidad.
-    for (const cat of ['inf', 'veh', 'aire']) {
-      const tipos = Object.keys(UNID).filter((t) => UNID[t].cat === cat && J.colas[t].n > 0);
-      if (!tipos.length) continue;
-      const fabs = edificiosDe(m, j, LUGAR[cat]);
-      if (!fabs.length) { for (const t of tipos) { const q = J.colas[t]; for (let k = 0; k < q.n; k++) devolver(J, UNID[t]); q.n = 0; q.prog = 0; } continue; }
-      let enCurso = 0;
-      for (const t of tipos) { const q = J.colas[t]; q.sinAgua = J.aguaUso + (UNID[t].agua || 0) > J.aguaProd; if (!q.sinAgua) enCurso++; } // sin agua no se sostiene más tropa
-      for (const tipo of tipos) {
-      const q = J.colas[tipo];
-      if (q.sinAgua) continue;
-      const fab = fabs[J.producidas % fabs.length]; // las unidades van saliendo por turnos de cada edificio
-      q.prog += (factor * W.ritmo(fabs.length)) / enCurso;
-      if (q.prog < UNID[tipo].tiempo || J.aguaUso + (UNID[tipo].agua || 0) > J.aguaProd) continue;
-      q.n--; q.prog = 0; J.aguaUso += UNID[tipo].agua || 0;
+    // Unidades: cada cuartel, fábrica y aeródromo tiene su propia cola y la despacha en orden, uno tras otro.
+    // Dos edificios iguales producen a la vez. J.colas guarda el total encargado por tipo (para la IA y el cupo).
+    for (const t in J.colas) { J.colas[t].prog = 0; J.colas[t].sinAgua = false; }
+    for (let k = 0, total = m.ents.length; k < total; k++) {
+      const fab = m.ents[k];
+      if (!fab.edif || fab.j !== j || !fab.cola || !fab.cola.length || fab.vida <= 0) continue;
+      const tipo = fab.cola[0], q = J.colas[tipo], cat = UNID[tipo].cat;
+      {
+      fab.sinAgua = J.aguaUso + (UNID[tipo].agua || 0) > J.aguaProd; // sin agua no se sostiene más tropa
+      if (fab.sinAgua) { q.sinAgua = true; continue; }
+      fab.prog += factor;
+      if (fab.prog > q.prog) q.prog = fab.prog;
+      if (fab.prog < UNID[tipo].tiempo) continue;
+      fab.cola.shift(); fab.prog = 0; q.n--; J.aguaUso += UNID[tipo].agua || 0;
       const u = crearUnidad(m, j, tipo, cat === 'aire' ? Math.floor(fab.cy) * m.N + Math.floor(fab.cx) : W.cercaLibre(m, fab.cx, fab.y + fab.tam + 0.5));
       if (cat === 'aire') { const casa = aerodromoLibre(m, u) || fab; posar(m, u, casa); } // el avión nace posado en un aeródromo con sitio
       if (fab.reunion) { // va al punto de reunión del edificio
@@ -1621,6 +1647,8 @@ globalThis.W = { VERSION: 'versión 29' };
       m.efectos.push({ tipo: e.vendido ? 'venta' : 'muerte', x2: posX(e), y2: posY(e), edif: e.edif, tam: e.tam || 0, clase: e.tipo, ang: e.ang || 0, j: e.j, t: m.t });
       if (e.edif) {
         const N = m.N;
+        for (const t of e.cola) { devolver(m.jug[e.j], UNID[t]); m.jug[e.j].colas[t].n--; } // lo que tenía encargado se devuelve
+        e.cola.length = 0;
         for (let dy = 0; dy < e.tam; dy++) for (let dx = 0; dx < e.tam; dx++) { const i = (e.y + dy) * N + e.x + dx; m.ocup[i] = 0; m.paso[i] = 1; }
         if (e.tipo === 'patio') m.jug[e.j].vivo = false;
       }
@@ -2569,7 +2597,7 @@ globalThis.W = { VERSION: 'versión 29' };
         const px = ox + e.x * z, py = oy + e.y * z, t = e.tam * z, Je = m.jug[e.j];
         const est = { tiempo, id: e.id, vida: e.vida / e.vidaMax, deficit: Je.uso > Je.prod, activo: false, descarga: descargando.has(e.id), ang: 0, retro: 0 };
         if (e.tipo === 'patio') est.activo = Je.obras.some((o) => !o.listo);
-        else if (e.tipo === 'fabrica') est.activo = Je.colas.tanque.n + Je.colas.cosechadora.n > 0;
+        else if (e.tipo === 'fabrica') est.activo = e.cola.length > 0;
         else if (EDIF[e.tipo].arma) { est.ang = giro(e).t; est.retro = retroceso(e, EDIF[e.tipo].arma); }
         if (lod) { // sombra
           ctx.fillStyle = 'rgba(0,0,0,0.17)';
@@ -2937,6 +2965,7 @@ globalThis.W = { VERSION: 'versión 29' };
 
     // ---------- tecnología e inteligencia ----------
     const precio = (d) => [d.costo ? String(d.costo) : '', d.pet ? d.pet + ' pet' : '', d.raros ? d.raros + ' rar' : '', d.info ? d.info + ' inf' : ''].filter(Boolean).join(' + ');
+    let tiposSel = new Set(); // tipos de edificio propios seleccionados: deciden qué muestra la barra
     const botonesTec = [];
     for (const clave in W.TEC) {
       const t = W.TEC[clave], b = document.createElement('button');
@@ -2964,13 +2993,15 @@ globalThis.W = { VERSION: 'versión 29' };
     }
     function actualizarTec() {
       $('nivel').textContent = J.nivel;
+      let hayTec = false;
       for (const o of botonesTec) {
         const t = o.t, enCurso = J.inv.find((i) => i.clave === o.clave);
         const hecha = J.mejoras[o.clave] || (t.sube && J.nivel >= t.sube);
         // Se muestran las que se pueden investigar ahora y la siguiente subida de nivel.
-        const visible = !hecha && (enCurso || (t.sube ? J.nivel === t.nivel : J.nivel >= t.nivel && J.cuenta[t.lugar]));
+        const visible = tiposSel.has(t.lugar) && !hecha && (enCurso || (t.sube ? J.nivel === t.nivel : J.nivel >= t.nivel));
         o.b.hidden = !visible;
         if (!visible) continue;
+        hayTec = true;
         let clase = 'btn', txt = precio(t), p = 0;
         if (enCurso) { clase += ' con-x'; p = enCurso.prog / t.tiempo; txt = Math.floor(p * 100) + '%'; }
         else if (J.inv.some((i) => W.TEC[i.clave].lugar === t.lugar)) clase += ' no';
@@ -2981,9 +3012,10 @@ globalThis.W = { VERSION: 'versión 29' };
         o.b.style.setProperty('--p', (p * 100).toFixed(1) + '%');
       }
       const hechas = Object.keys(J.mejoras).length;
-      const th = hechas ? hechas + (hechas === 1 ? ' mejora hecha' : ' mejoras hechas') : '';
+      const th = hechas ? '· ' + hechas + (hechas === 1 ? ' mejora' : ' mejoras') : '';
       if ($('hechas').textContent !== th) $('hechas').textContent = th;
-      $('secIntel').hidden = !J.cuenta.estacion;
+      $('secTec').hidden = !hayTec;
+      $('secIntel').hidden = !tiposSel.has('estacion');
       for (const o of botonesIntel) {
         const falta = J.nivel < o.it.nivel, clase = 'btn' + (falta ? ' no' : J.info < o.it.info ? ' caro' : ''), txt = falta ? 'nivel ' + o.it.nivel : o.it.info + ' inf';
         if (o.b.className !== clase) o.b.className = clase;
@@ -3043,6 +3075,7 @@ globalThis.W = { VERSION: 'versión 29' };
         L.push(k('R') + ' patrulla aérea: da vueltas sobre el punto; con ' + k('Mayús') + ', más puntos');
         L.push('repostan solos y retoman la patrulla · círculo: radio de vuelo');
       }
+      if (eds.some((e) => e.tipo === 'cuartel' || e.tipo === 'fabrica' || e.tipo === 'aerodromo') && !us.length) L.push('barra: encargar · clic en la cola: cancelar' + (eds.length > 1 ? ' · el encargo va a la cola más corta' : ''));
       if (eds.some((e) => e.tipo === 'cuartel' || e.tipo === 'fabrica') && !us.length) L.push('clic derecho: punto de reunión');
       if (eds.some((e) => e.tipo === 'aerodromo') && !us.length) L.push('clic derecho: punto que patrullarán los aviones nuevos · ' + W.ECON.cupoAviones + ' aviones por aeródromo');
       if (vendibles().length) L.push(k('Supr') + ' demoler y recuperar la mitad');
@@ -3096,6 +3129,46 @@ globalThis.W = { VERSION: 'versión 29' };
     });
 
     // ---------- barra lateral ----------
+    // La barra muestra lo del edificio seleccionado: el patio, los edificios; cuartel, fábrica y aeródromo, sus unidades
+    // y su cola; y cada edificio, las mejoras que se investigan en él.
+    const LUGAR = { inf: 'cuartel', veh: 'fabrica', aire: 'aerodromo' };
+    const edificiosSel = (tipo) => { const out = []; for (const id of sel) { const e = m.porId.get(id); if (e && e.edif && e.j === YO && (!tipo || e.tipo === tipo)) out.push(e); } return out; };
+    let firmaCola = '';
+    $('cola').addEventListener('click', (ev) => { // clic en un puesto de la cola: lo cancela
+      const c = ev.target.closest('.chip');
+      if (c) W.orden(m, { t: 'cancelarUnidad', j: YO, id: +c.dataset.id, i: +c.dataset.i });
+    });
+    function actualizarCola(eds) {
+      const prod = eds.filter((e) => e.tipo === 'cuartel' || e.tipo === 'fabrica' || e.tipo === 'aerodromo').slice(0, 8);
+      $('secCola').hidden = !prod.length;
+      if (!prod.length) { firmaCola = ''; return; }
+      const firma = prod.map((e) => e.id + ':' + e.cola.join(',') + (e.sinAgua ? '!' : '')).join('|');
+      if (firma !== firmaCola) {
+        firmaCola = firma;
+        const num = {};
+        $('cola').innerHTML = prod.map((e) => {
+          num[e.tipo] = (num[e.tipo] || 0) + 1;
+          const quien = '<span class="quien">' + EDIF[e.tipo].nombre + (prod.length > 1 ? ' ' + num[e.tipo] : '') + (e.tipo === 'aerodromo' ? ' · aviones ' + m.ents.filter((u) => !u.edif && u.casa === e.id).length + '/' + W.ECON.cupoAviones : '') + '</span>';
+          const chips = e.cola.length ? e.cola.map((t, i) => '<button type="button" class="chip' + (i === 0 && e.sinAgua ? ' espera' : '') + '" data-id="' + e.id + '" data-i="' + i + '" title="Cancelar">' + UNID[t].nombre + (i === 0 && e.sinAgua ? ' · falta agua' : '') + '</button>').join('') : '<span class="tenue">sin encargos</span>';
+          return '<div class="cola-fila" data-id="' + e.id + '">' + quien + chips + '</div>';
+        }).join('');
+      }
+      for (const fila of $('cola').children) { // el primero de cada cola lleva el avance
+        const e = m.porId.get(+fila.dataset.id), c = fila.querySelector('.chip');
+        if (e && c && e.cola.length) c.style.setProperty('--p', ((e.prog / UNID[e.cola[0]].tiempo) * 100).toFixed(1) + '%');
+      }
+    }
+    // Teclas de edificio: seleccionan todos los de ese tipo (el encargo irá a la cola más corta); dos veces, llevan la cámara.
+    const ultimoEdif = { tipo: '', t: 0 };
+    function elegirEdificios(tipo) {
+      const eds = m.ents.filter((e) => e.edif && e.j === YO && e.tipo === tipo);
+      if (!eds.length) { aviso('No tienes ' + EDIF[tipo].nombre.toLowerCase()); return; }
+      const ahora = performance.now(), ir = ultimoEdif.tipo === tipo && ahora - ultimoEdif.t < 400;
+      ultimoEdif.tipo = tipo; ultimoEdif.t = ahora;
+      sel.clear(); modo = null;
+      for (const e of eds) sel.add(e.id);
+      if (ir) { cam.x = eds[0].cx; cam.y = eds[0].cy; limitarCam(); }
+    }
     const botones = [];
     function boton(cont, tipo, d, esEdif) {
       const b = document.createElement('button');
@@ -3111,12 +3184,12 @@ globalThis.W = { VERSION: 'versión 29' };
         if (esEdif) {
           if (obraLista(tipo)) { modo = 'colocar'; tipoColocar = tipo; }
           else W.orden(m, { t: 'construir', j: YO, tipo });
-        } else W.orden(m, { t: 'entrenar', j: YO, tipo });
+        } else W.orden(m, { t: 'entrenar', j: YO, tipo, ids: edificiosSel(LUGAR[d.cat]).map((e) => e.id) });
       });
       const cancelar = (ev) => {
         ev.preventDefault(); ev.stopPropagation();
         if (esEdif) { W.orden(m, { t: 'cancelarEdif', j: YO, tipo }); if (tipoColocar === tipo) modo = null; }
-        else W.orden(m, { t: 'cancelarUnidad', j: YO, tipo });
+        else W.orden(m, { t: 'cancelarUnidad', j: YO, tipo, ids: edificiosSel(LUGAR[d.cat]).map((e) => e.id) });
       };
       b.addEventListener('contextmenu', cancelar);
       b.querySelector('.x').addEventListener('click', cancelar);
@@ -3132,7 +3205,17 @@ globalThis.W = { VERSION: 'versión 29' };
       $('dios').hidden = !J.dios; { const t = J.admin ? 'ADMIN' : 'GOD'; if ($('dios').textContent !== t) $('dios').textContent = t; } $('sinColmena').hidden = J.colmena;
       const e = $('rEne'); e.textContent = J.uso + ' / ' + J.prod; e.className = J.uso > J.prod ? 'mal' : '';
       const ag = $('rAgu'); ag.textContent = J.aguaUso + ' / ' + (J.dios ? '∞' : J.aguaProd); ag.className = !J.dios && J.aguaUso >= J.aguaProd ? 'mal' : '';
+      const eds = edificiosSel(), tipos = new Set(eds.map((e) => e.tipo));
+      tiposSel = tipos;
+      let hayUnid = false;
+      $('secEdif').hidden = !tipos.has('patio');
+      $('vacio').hidden = eds.length > 0 || sel.size > 0;
+      actualizarCola(eds);
       for (const o of botones) {
+        const visible = o.esEdif ? tipos.has('patio') : tipos.has(LUGAR[o.d.cat]);
+        if (o.b.hidden === visible) o.b.hidden = !visible;
+        if (!visible) continue;
+        if (!o.esEdif) hayUnid = true;
         const d = o.d, sinNivel = (d.nivel || 1) > J.nivel, req = W.tieneReq(m, YO, d.req) && !sinNivel;
         let clase = 'btn', txt = sinNivel ? 'nivel ' + d.nivel : precio(d), p = 0, nombre = d.nombre;
         const caro = !W.puedePagar(J, d);
@@ -3146,9 +3229,11 @@ globalThis.W = { VERSION: 'versión 29' };
           else if (!req) clase += ' no';
           else if (caro) clase += ' caro';
         } else {
-          const q = J.colas[o.tipo], n = q.n;
+          let n = 0, enCurso = null; // lo encargado de este tipo en los edificios seleccionados
+          for (const e of eds) if (e.tipo === LUGAR[d.cat]) { for (const t of e.cola) if (t === o.tipo) n++; if (!enCurso && e.cola[0] === o.tipo) enCurso = e; }
+          const q = { sinAgua: !!enCurso && enCurso.sinAgua };
           if (n) { nombre += ' ×' + n; clase += ' con-x'; }
-          if (n) { p = q.prog / d.tiempo; if (q.sinAgua) txt = 'falta agua'; }
+          if (enCurso) { p = enCurso.prog / d.tiempo; if (q.sinAgua) txt = 'falta agua'; }
           if (d.aire && J.cuenta.aerodromo) { const c = W.cupoAire(m, YO); if (c.hay >= c.cupo) { txt = 'cupo ' + c.hay + '/' + c.cupo; clase += ' caro'; } }
           if (!req) clase += ' no'; else if (caro || (n && q.sinAgua)) clase += ' caro';
         }
@@ -3157,18 +3242,15 @@ globalThis.W = { VERSION: 'versión 29' };
         if (o.n.textContent !== nombre) o.n.textContent = nombre;
         o.b.style.setProperty('--p', (p * 100).toFixed(1) + '%');
       }
+      $('secUnid').hidden = !hayUnid;
       listarGrupos(); actualizarTec();
       const enCurso = new Set(J.obras.filter((a) => !a.listo).map((a) => a.tipo)).size;
       const reparto = enCurso > 1 ? enCurso + ' tipos a la vez: cada uno a 1/' + enCurso + ' de velocidad' : '';
       if ($('obras').textContent !== reparto) $('obras').textContent = reparto;
-      const nc = J.cuenta.cuartel || 0, nf = J.cuenta.fabrica || 0;
-      const bono = (n, uno, varios) => n + ' ' + (n > 1 ? varios : uno) + ' ×' + W.ritmo(n);
-      const ritmos = nc > 1 || nf > 1 ? [nc ? bono(nc, 'cuartel', 'cuarteles') : '', nf ? bono(nf, 'fábrica', 'fábricas') : ''].filter(Boolean).join(' · ') : '';
-      if ($('ritmo').textContent !== ritmos) $('ritmo').textContent = ritmos;
       let s = '';
       const vivos = [...sel].map((id) => m.porId.get(id)).filter(Boolean);
       if (vivos.length === 1) { const v = vivos[0]; s = (v.edif ? EDIF : UNID)[v.tipo].nombre + ' · ' + Math.ceil(v.vida) + ' / ' + v.vidaMax; }
-      else if (vivos.length > 1) s = vivos.length + ' unidades';
+      else if (vivos.length > 1) s = vivos.length + (vivos.every((v) => v.edif) ? ' edificios' : ' unidades');
       if ($('sel').textContent !== s) $('sel').textContent = s;
       const tropas = vivos.filter((v) => !v.edif).length;
       $('secFormas').hidden = tropas < 2;
@@ -3347,6 +3429,10 @@ globalThis.W = { VERSION: 'versión 29' };
         case 'KeyA': if (unidadesSel().length) modo = 'amover'; break;
         case 'KeyR': if (unidadesSel().length) modo = 'patrulla'; break;
         case 'KeyZ': atrincherar(); break;
+        case 'KeyB': elegirEdificios('patio'); break;
+        case 'KeyQ': elegirEdificios('cuartel'); break;
+        case 'KeyV': elegirEdificios('fabrica'); break;
+        case 'KeyX': elegirEdificios('aerodromo'); break;
         case 'KeyG': { const ids = unidadesSel().map((u) => u.id); if (ids.length) { W.orden(m, { t: 'guardia', j: YO, ids }); son.orden(); } break; }
         case 'KeyC': W.orden(m, { t: 'colmena', j: YO }); aviso(J.colmena ? 'Colmena desactivada: nadie acude solo' : 'Colmena activada'); break;
         case 'KeyF': ponerForma(FORMAS[(FORMAS.indexOf(forma) + 1) % FORMAS.length]); break;
@@ -3388,6 +3474,8 @@ globalThis.W = { VERSION: 'versión 29' };
       R.sim = R.ticks = R.dib = R.cuadros = R.ms = R.niebla = R.pasadas = 0;
     }
     $('rend').addEventListener('click', () => $('rend').classList.toggle('plegado'));
+
+    { const patio = m.ents.find((e) => e.edif && e.j === YO && e.tipo === 'patio'); if (patio) sel.add(patio.id); } // se empieza con el patio seleccionado: su lista a la vista
 
     // ---------- bucle ----------
     const PASO = 1000 / W.TPS;
