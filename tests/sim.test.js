@@ -1460,7 +1460,7 @@ if (!process.env.RAPIDO) prueba('fase 2c: los cinco estilos de rival juegan medi
     res[estilo] = { aviones, torres, patios, puestos, primera: +(primera / 1200).toFixed(1), fin: +(m.t / 1200).toFixed(1), ganador: m.ganador };
     console.log('      ' + estilo + ': ' + JSON.stringify(res[estilo]));
   }
-  assert.ok(res.aereo.aviones >= 3 && res.aereo.aviones > res.asalto.aviones, 'el aéreo debía apostar por la aviación');
+  assert.ok(res.aereo.aviones >= 1 && res.aereo.aviones > res.asalto.aviones, 'el aéreo debía apostar por la aviación'); // con la red el nivel 2 llega más tarde (hay que conectar la estación): en media hora caben menos aviones que antes
   assert.ok(res.defensivo.torres > res.asalto.torres, 'el defensivo debía levantar más torres que el de asalto');
   assert.ok(res.asalto.primera > 0 && res.asalto.primera < res.defensivo.primera, 'el de asalto debía atacar antes que el defensivo');
   assert.ok(Object.values(res).some((r) => r.patios > 1), 'algún estilo debía fundar una segunda base');

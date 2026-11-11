@@ -172,11 +172,16 @@
       ia.campoCerrado = hay < 6000 && lejos >= 0 ? lejos : -1;
     }
     // La red: un extractor o una estación sin conexión rinde la mitad. La excavadora le lleva un camino desde donde esté (que es la red: su base o su vía).
-    const suelto = m.logistica !== false && J.cuenta.fabrica && J.minerales > 500 ? m.ents.find((e) => e.edif && !e.infra && e.j === j && !e.conRed && EDIF[e.tipo].da && m.t - e.nace > 40) : null;
+    const suelto = m.logistica !== false && J.cuenta.fabrica && J.minerales > 300 ? m.ents.find((e) => e.edif && !e.infra && e.j === j && !e.conRed && EDIF[e.tipo].da && m.t - e.nace > 40) : null;
     if (suelto) {
       const exc = sinArma.find((u) => u.tipo === 'excavadora');
       if (!exc) { if (!J.colas.excavadora.n && W.puedePagar(J, UNID.excavadora)) W.orden(m, { t: 'entrenar', j, tipo: 'excavadora' }); }
-      else if (exc.orden === 'nada' && m.t % 40 === 0) { const c = W.cercaLibre(m, suelto.cx, suelto.y + suelto.tam + 1.5, true); W.orden(m, { t: 'trazar', j, ids: [exc.id], x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 }); }
+      else if (exc.orden === 'nada' && m.t % 40 === 0) { // primero hasta el patio (lo que ya es camino no cuesta), para que el camino salga de la red, y de ahí al edificio
+        const p0 = W.cercaLibre(m, patio.cx, patio.y + patio.tam + 1.5, true), c = W.cercaLibre(m, suelto.cx, suelto.y + suelto.tam + 1.5, true);
+        const tr = m.porId.get(m.tramoEn[Math.floor(exc.y) * m.N + Math.floor(exc.x)]), enRed = !!tr && tr.j === j && tr.conRed; // ya está sobre un camino conectado: sigue desde ahí
+        if (!enRed) W.orden(m, { t: 'trazar', j, ids: [exc.id], x: (p0 % m.N) + 0.5, y: ((p0 / m.N) | 0) + 0.5 });
+        W.orden(m, { t: 'trazar', j, ids: [exc.id], x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5, enc: !enRed });
+      }
     } else if (ia.campoCerrado >= 0 && J.cuenta.fabrica) {
       const exc = sinArma.find((u) => u.tipo === 'excavadora');
       if (!exc) { if (!J.colas.excavadora.n && W.puedePagar(J, UNID.excavadora)) W.orden(m, { t: 'entrenar', j, tipo: 'excavadora' }); }
@@ -210,7 +215,10 @@
     if (quiereBase && !ia.tAhorro) ia.tAhorro = m.t;
     if (!quiereBase) ia.tAhorro = 0;
     else if (m.t - ia.tAhorro > 4800) { ia.sinBaseHasta = m.t + 6000; ia.tAhorro = 0; }
-    const ahorra = quiereBase && ia.tAhorro > 0;
+    // Subir de nivel: cuando ya tiene la información (y los raros) del siguiente nivel y solo le faltan minerales, deja de gastar hasta reunirlos.
+    const sigNivel = J.nivel < 3 ? TEC['nivel' + (J.nivel + 1)] : null;
+    const paraNivel = !!sigNivel && m.t > 8400 && J.info >= (sigNivel.info || 0) && J.raros >= (sigNivel.raros || 0) && !J.inv.some((i) => TEC[i.clave].sube) && soldados.length >= 6;
+    const ahorra = (quiereBase && ia.tAhorro > 0) || paraNivel;
 
     // Unidades
     let dinero = J.minerales - (plan ? EDIF[plan].costo : 0);
@@ -255,7 +263,7 @@
       const t = TEC[clave];
       if (J.mejoras[clave] || (t.sube && J.nivel >= t.sube) || J.inv.some((i) => i.clave === clave)) continue;
       if (!J.cuenta[t.lugar] || J.nivel < t.nivel || J.inv.some((i) => TEC[i.clave].lugar === t.lugar)) continue;
-      if (!ahorra && W.puedePagar(J, t) && dinero >= (t.costo || 0) + 300) { W.orden(m, { t: 'investigar', j, clave }); dinero -= t.costo || 0; }
+      if ((!ahorra || (paraNivel && t.sube)) && W.puedePagar(J, t) && dinero >= (t.costo || 0) + (t.sube && paraNivel ? 0 : 300)) { W.orden(m, { t: 'investigar', j, clave }); dinero -= t.costo || 0; }
       break;
     }
     // Minerales raros para el nivel 3: una cosechadora se dedica a la veta más cercana.

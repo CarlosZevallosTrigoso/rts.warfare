@@ -285,11 +285,11 @@
   <div><h2>Semilla del mapa</h2><input id="op-s" inputmode="numeric" placeholder="al azar" autocomplete="off"></div>
   <button type="button" id="empezar">Empezar</button>
   <button type="button" id="continuar" hidden>Continuar la partida guardada</button>
-  <div id="version">versión 51</div>
+  <div id="version">versión 52</div>
 </div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finVer" href="#" title="Vuelve a ver la partida entera, con todo el mapa a la vista y a la velocidad que quieras.">ver repetición</a><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 51' };
+globalThis.W = { VERSION: 'versión 52' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -920,7 +920,7 @@ globalThis.W = { VERSION: 'versión 51' };
     for (let i = 0; i < its.length; i++) { // edificios: con los caminos que les pasan cerca, y entre sí
       const e = its[i]; if (clasica) { if (primero[e.j] < 0) primero[e.j] = i; else une(i, primero[e.j]); continue; }
       if (e.infra) continue;
-      for (let y = Math.max(0, e.y - 3); y < Math.min(N, e.y + e.tam + 3); y++) for (let x = Math.max(0, e.x - 3); x < Math.min(N, e.x + e.tam + 3); x++) { const k = cel[y * N + x] - 1; if (k >= 0 && its[k].j === e.j) une(i, k); }
+      for (let y = Math.max(0, e.y - ECON.enlace); y < Math.min(N, e.y + e.tam + ECON.enlace); y++) for (let x = Math.max(0, e.x - ECON.enlace); x < Math.min(N, e.x + e.tam + ECON.enlace); x++) { const k = cel[y * N + x] - 1; if (k >= 0 && its[k].j === e.j) une(i, k); }
       for (let k = i + 1; k < its.length; k++) {
         const o = its[k]; if (o.infra || o.j !== e.j) continue;
         if (Math.max(o.x - (e.x + e.tam), e.x - (o.x + o.tam), 0) <= ECON.enlace && Math.max(o.y - (e.y + e.tam), e.y - (o.y + o.tam), 0) <= ECON.enlace) une(i, k);
@@ -1373,7 +1373,7 @@ globalThis.W = { VERSION: 'versión 51' };
     if (!d.aire && !pisa(c) && pisa(Math.floor(u.y) * N + Math.floor(u.x))) { replantear(); return false; } // alguien construyó en el punto de paso
     const vel = d.vel * (d.cat === 'veh' && m.jug[u.j].mejoras.motores ? 1.15 : 1);
     const terr = m.mapa.terreno[Math.floor(u.y) * N + Math.floor(u.x)];
-    const vmax = (u.tope && u.tope < vel && !u.suelto ? u.tope : vel) * (u.marcha ? u.fm || 1 : 1) * (u.orden === 'trazar' ? ECON.trazaVel : d.cat === 'veh' && terr >= T.CAMINO && viaDe(m)[u.j][Math.floor(u.y) * N + Math.floor(u.x)] ? ECON.caminoVel : 1); // por camino los vehículos van más rápido; trazándolo, despacio
+    const vmax = (u.tope && u.tope < vel && !u.suelto ? u.tope : vel) * (u.marcha ? u.fm || 1 : 1) * (u.orden === 'trazar' && !(viaDe(m)[u.j][Math.floor(u.y) * N + Math.floor(u.x)] && m.via[u.j][c]) ? ECON.trazaVel : d.cat === 'veh' && terr >= T.CAMINO && viaDe(m)[u.j][Math.floor(u.y) * N + Math.floor(u.x)] ? ECON.caminoVel : 1); // (trazando sobre camino ya hecho va a su paso normal) // por camino los vehículos van más rápido; trazándolo, despacio
     const alFinal = u.ri === u.ruta.length - 1 && u.fin;
     const carril = !alFinal && d.cat === 'veh' && u.orden !== 'trazar' && m.carrilX && m.carrilX[c] > 0 && m.mapa.terreno[c] >= T.CAMINO && viaDe(m)[u.j][c]; // por camino, los vehículos van por el carril y no por el centro de cada celda
     const tx = alFinal ? u.fin.x : carril ? m.carrilX[c] : (c % N) + 0.5, ty = alFinal ? u.fin.y : carril ? m.carrilY[c] : ((c / N) | 0) + 0.5, dx = tx - u.x, dy = ty - u.y, dd = Math.hypot(dx, dy);
@@ -2558,11 +2558,16 @@ globalThis.W = { VERSION: 'versión 51' };
       ia.campoCerrado = hay < 6000 && lejos >= 0 ? lejos : -1;
     }
     // La red: un extractor o una estación sin conexión rinde la mitad. La excavadora le lleva un camino desde donde esté (que es la red: su base o su vía).
-    const suelto = m.logistica !== false && J.cuenta.fabrica && J.minerales > 500 ? m.ents.find((e) => e.edif && !e.infra && e.j === j && !e.conRed && EDIF[e.tipo].da && m.t - e.nace > 40) : null;
+    const suelto = m.logistica !== false && J.cuenta.fabrica && J.minerales > 300 ? m.ents.find((e) => e.edif && !e.infra && e.j === j && !e.conRed && EDIF[e.tipo].da && m.t - e.nace > 40) : null;
     if (suelto) {
       const exc = sinArma.find((u) => u.tipo === 'excavadora');
       if (!exc) { if (!J.colas.excavadora.n && W.puedePagar(J, UNID.excavadora)) W.orden(m, { t: 'entrenar', j, tipo: 'excavadora' }); }
-      else if (exc.orden === 'nada' && m.t % 40 === 0) { const c = W.cercaLibre(m, suelto.cx, suelto.y + suelto.tam + 1.5, true); W.orden(m, { t: 'trazar', j, ids: [exc.id], x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 }); }
+      else if (exc.orden === 'nada' && m.t % 40 === 0) { // primero hasta el patio (lo que ya es camino no cuesta), para que el camino salga de la red, y de ahí al edificio
+        const p0 = W.cercaLibre(m, patio.cx, patio.y + patio.tam + 1.5, true), c = W.cercaLibre(m, suelto.cx, suelto.y + suelto.tam + 1.5, true);
+        const tr = m.porId.get(m.tramoEn[Math.floor(exc.y) * m.N + Math.floor(exc.x)]), enRed = !!tr && tr.j === j && tr.conRed; // ya está sobre un camino conectado: sigue desde ahí
+        if (!enRed) W.orden(m, { t: 'trazar', j, ids: [exc.id], x: (p0 % m.N) + 0.5, y: ((p0 / m.N) | 0) + 0.5 });
+        W.orden(m, { t: 'trazar', j, ids: [exc.id], x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5, enc: !enRed });
+      }
     } else if (ia.campoCerrado >= 0 && J.cuenta.fabrica) {
       const exc = sinArma.find((u) => u.tipo === 'excavadora');
       if (!exc) { if (!J.colas.excavadora.n && W.puedePagar(J, UNID.excavadora)) W.orden(m, { t: 'entrenar', j, tipo: 'excavadora' }); }
@@ -2596,7 +2601,10 @@ globalThis.W = { VERSION: 'versión 51' };
     if (quiereBase && !ia.tAhorro) ia.tAhorro = m.t;
     if (!quiereBase) ia.tAhorro = 0;
     else if (m.t - ia.tAhorro > 4800) { ia.sinBaseHasta = m.t + 6000; ia.tAhorro = 0; }
-    const ahorra = quiereBase && ia.tAhorro > 0;
+    // Subir de nivel: cuando ya tiene la información (y los raros) del siguiente nivel y solo le faltan minerales, deja de gastar hasta reunirlos.
+    const sigNivel = J.nivel < 3 ? TEC['nivel' + (J.nivel + 1)] : null;
+    const paraNivel = !!sigNivel && m.t > 8400 && J.info >= (sigNivel.info || 0) && J.raros >= (sigNivel.raros || 0) && !J.inv.some((i) => TEC[i.clave].sube) && soldados.length >= 6;
+    const ahorra = (quiereBase && ia.tAhorro > 0) || paraNivel;
 
     // Unidades
     let dinero = J.minerales - (plan ? EDIF[plan].costo : 0);
@@ -2641,7 +2649,7 @@ globalThis.W = { VERSION: 'versión 51' };
       const t = TEC[clave];
       if (J.mejoras[clave] || (t.sube && J.nivel >= t.sube) || J.inv.some((i) => i.clave === clave)) continue;
       if (!J.cuenta[t.lugar] || J.nivel < t.nivel || J.inv.some((i) => TEC[i.clave].lugar === t.lugar)) continue;
-      if (!ahorra && W.puedePagar(J, t) && dinero >= (t.costo || 0) + 300) { W.orden(m, { t: 'investigar', j, clave }); dinero -= t.costo || 0; }
+      if ((!ahorra || (paraNivel && t.sube)) && W.puedePagar(J, t) && dinero >= (t.costo || 0) + (t.sube && paraNivel ? 0 : 300)) { W.orden(m, { t: 'investigar', j, clave }); dinero -= t.costo || 0; }
       break;
     }
     // Minerales raros para el nivel 3: una cosechadora se dedica a la veta más cercana.
