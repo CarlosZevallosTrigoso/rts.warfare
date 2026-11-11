@@ -41,6 +41,17 @@
   #fin div { pointer-events: auto; background: var(--fondo); border: 1px solid var(--tinta); border-radius: 2px; padding: 22px 30px; text-align: center; }
   #fin strong { display: block; font-size: 20px; margin-bottom: 6px; }
   #fin a { color: var(--tinta); margin: 0 6px; }
+  #menu { position: fixed; inset: 0; background: var(--fondo); display: flex; align-items: center; justify-content: center; z-index: 5; }
+  #menu[hidden] { display: none; }
+  #menu .caja { width: min(440px, 92vw); display: flex; flex-direction: column; gap: 16px; }
+  #menu h1 { font-size: 22px; }
+  #menu .ops { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; }
+  #menu .ops button, #op-s { font: inherit; color: var(--tinta); background: var(--panel); border: 1px solid var(--linea); border-radius: 2px; padding: 7px 6px; cursor: pointer; }
+  #menu .ops button small { display: block; color: var(--suave); font-size: 10px; }
+  #menu .ops button.on { background: var(--tinta); color: var(--fondo); border-color: var(--tinta); }
+  #menu .ops button.on small { color: var(--fondo); }
+  #op-s { cursor: text; width: 100%; }
+  #empezar { font: inherit; font-weight: 600; padding: 10px; border: 1px solid var(--tinta); border-radius: 2px; background: var(--tinta); color: var(--fondo); cursor: pointer; }
   #dios { color: var(--mal); font-size: 10px; letter-spacing: .12em; margin-left: 6px; }
 </style>
 </head>
@@ -61,6 +72,9 @@
     <div id="ayuda" class="tenue">
       <div>clic / caja: seleccionar</div>
       <div>clic derecho: mover, atacar, cosechar</div>
+      <div><kbd>Mayús</kbd>+clic derecho: encadenar órdenes</div>
+      <div><kbd>R</kbd> patrulla · <kbd>E</kbd> explorar sola</div>
+      <div>cuartel o fábrica + clic derecho: punto de reunión</div>
       <div>la línea punteada es el recorrido de lo seleccionado</div>
       <div><kbd>A</kbd> atacar al avanzar · <kbd>S</kbd> detener</div>
       <div>arrastrar con clic derecho, o flechas: cámara</div>
@@ -75,6 +89,19 @@
     </div>
   </aside>
 </div>
+<div id="menu"><div class="caja">
+  <h1 id="tituloMenu">rts<span>.</span>warfare</h1>
+  <div><h2>Tamaño del mapa</h2><div class="ops" id="op-n">
+    <button type="button" data-v="128">pequeño<small>128</small></button><button type="button" data-v="256">mediano<small>256</small></button>
+    <button type="button" data-v="512">grande<small>512</small></button><button type="button" data-v="1024">enorme<small>1024 · experimental</small></button></div></div>
+  <div><h2>Minerales iniciales</h2><div class="ops" id="op-min">
+    <button type="button" data-v="1500">escasos<small>1500</small></button><button type="button" data-v="2500">normales<small>2500</small></button><button type="button" data-v="6000">abundantes<small>6000</small></button></div></div>
+  <div><h2>Rival</h2><div class="ops" id="op-ia">
+    <button type="button" data-v="no">sin rival<small>mapa libre</small></button><button type="button" data-v="tranquilo">tranquilo<small>ataca tarde</small></button>
+    <button type="button" data-v="normal">normal</button><button type="button" data-v="agresivo">agresivo<small>ataca pronto</small></button></div></div>
+  <div><h2>Semilla del mapa</h2><input id="op-s" inputmode="numeric" placeholder="al azar" autocomplete="off"></div>
+  <button type="button" id="empezar">Empezar</button>
+</div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><p><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
 /*__CODIGO__*/

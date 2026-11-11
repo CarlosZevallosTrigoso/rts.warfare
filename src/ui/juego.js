@@ -12,12 +12,39 @@
   };
   const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
 
+  // Pantalla inicial: opciones de la partida. Los mismos valores viajan en la dirección
+  // (?s=semilla&n=lado&min=minerales&ia=nivel); con &ya=1 se salta el menú.
   W.iniciar = function () {
     const $ = (id) => document.getElementById(id);
     const params = new URLSearchParams(location.search);
-    let semilla = parseInt(params.get('s'), 10);
-    if (!Number.isFinite(semilla)) semilla = Math.floor(Date.now() % 1000000);
-    const m = W.crearMundo(semilla), ia = W.iaCrear(1), N = m.N, YO = 0, J = m.jug[YO];
+    try { if (localStorage.getItem('rts.tema') === 'oscura') document.body.dataset.tema = 'oscura'; } catch (e) { /* tema por defecto */ }
+    const op = { n: '512', min: '2500', ia: 'normal' };
+    for (const k in op) {
+      const cont = $('op-' + k), v = params.get(k);
+      if (v && cont.querySelector('[data-v="' + CSS.escape(v) + '"]')) op[k] = v;
+      const marcar = () => { for (const b of cont.children) b.classList.toggle('on', b.dataset.v === op[k]); };
+      for (const b of cont.children) b.addEventListener('click', () => { op[k] = b.dataset.v; marcar(); });
+      marcar();
+    }
+    if (params.get('s')) $('op-s').value = params.get('s');
+    const empezar = () => {
+      let semilla = parseInt($('op-s').value, 10);
+      if (!Number.isFinite(semilla) || semilla < 0) semilla = Math.floor(Date.now() % 1000000);
+      const q = 's=' + semilla + '&n=' + op.n + '&min=' + op.min + '&ia=' + op.ia;
+      try { history.replaceState(null, '', location.pathname + '?' + q); } catch (e) { /* en file:// puede no dejar */ }
+      $('menu').hidden = true;
+      W.jugar({ semilla, N: +op.n, inicio: +op.min, ia: op.ia, consulta: q });
+    };
+    $('empezar').addEventListener('click', empezar);
+    $('op-s').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') empezar(); });
+    $('tituloMenu').addEventListener('click', () => location.reload());
+    if (params.has('ya')) empezar();
+  };
+
+  W.jugar = function (op) {
+    const $ = (id) => document.getElementById(id);
+    const semilla = op.semilla;
+    const m = W.crearMundo(semilla, { N: op.N, inicio: op.inicio }), ia = op.ia === 'no' ? null : W.iaCrear(1, op.ia), N = m.N, YO = 0, J = m.jug[YO];
     W.mundo = m; // a mano en la consola, para depurar
 
     let tema = 'clara';
@@ -34,7 +61,7 @@
     const oido = { t: m.t, listas: 0, producidas: J.producidas, edificios: 0, bajas: 0, alerta: -999 };
     let tecleado = ''; // últimas letras escritas, para el código "god"
     const sel = new Set(), grupos = {}, teclas = new Set(), marcas = [];
-    let modo = null; // null | 'colocar' | 'amover'
+    let modo = null; // null | 'colocar' | 'amover' | 'patrulla'
     let tipoColocar = null; // edificio que se está colocando
     const obraLista = (tipo) => J.obras.some((o) => o.listo && o.tipo === tipo);
     let pausa = false, cuadros = 0, nieblaVista = -1;
@@ -92,6 +119,26 @@
     }
     const unidadesSel = () => { const out = []; for (const id of sel) { const e = m.porId.get(id); if (e && !e.edif) out.push(e); } return out; };
     const esquinaColocar = (tipo) => { const t = EDIF[tipo].tam; return { x: Math.round(aMundoX(raton.x) - t / 2), y: Math.round(aMundoY(raton.y) - t / 2) }; };
+
+    const NOMBRE_TERRENO = ['Llano', 'Roca · no se puede pasar', 'Agua · no se puede pasar', 'Bosque · paso lento'];
+    const sitioPorCelda = new Map(m.mapa.sitios.map((s) => [s.y * N + s.x, s.tipo]));
+    function bajoCursor() {
+      const wx = aMundoX(raton.x), wy = aMundoY(raton.y);
+      if (wx < 0 || wy < 0 || wx >= N || wy >= N) return '';
+      const c = Math.floor(wy) * N + Math.floor(wx);
+      if (!m.niebla[YO][c]) return 'Sin explorar';
+      const e = entEn(wx, wy);
+      if (e) {
+        let t = (e.edif ? EDIF : UNID)[e.tipo].nombre + (e.j === YO ? '' : ' rival') + ' · ' + Math.ceil(e.vida) + '/' + e.vidaMax;
+        if (e.tipo === 'cosechadora' && e.j === YO) t += ' · carga ' + e.carga;
+        return t;
+      }
+      const sitio = sitioPorCelda.get(c);
+      if (sitio) return sitio === 'petroleo' ? 'Yacimiento de petróleo' : 'Campo de conocimiento';
+      if (m.mapa.tipoMin[c] === 1) return 'Minerales · ' + m.mapa.mineral[c];
+      if (m.mapa.tipoMin[c] === 2) return 'Minerales raros · ' + m.mapa.mineral[c];
+      return NOMBRE_TERRENO[m.mapa.terreno[c]];
+    }
 
     // Orientación visual de cada ficha: rumbo del casco (a) y de la torreta o el arma (t).
     const giros = new Map();
@@ -171,6 +218,13 @@
             ctx.setLineDash([5, 5]); ctx.globalAlpha = 0.5; ctx.beginPath(); ctx.arc(px + t / 2, py + t / 2, W.ARMAS.bateria.alcance * z, 0, TAU); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
           }
         }
+        if (sel.has(e.id) && e.reunion && e.j === YO) { // punto de reunión: línea y banderín
+          const rx = ox + e.reunion.x * z, ry = oy + e.reunion.y * z;
+          ctx.strokeStyle = P.bien; ctx.fillStyle = P.bien; ctx.lineWidth = 1.2; ctx.setLineDash([3, 3]);
+          ctx.beginPath(); ctx.moveTo(px + t / 2, py + t / 2); ctx.lineTo(rx, ry); ctx.stroke(); ctx.setLineDash([]);
+          ctx.beginPath(); ctx.moveTo(rx, ry); ctx.lineTo(rx, ry - 14); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(rx, ry - 14); ctx.lineTo(rx + 9, ry - 10.5); ctx.lineTo(rx, ry - 7); ctx.closePath(); ctx.fill();
+        }
         if (sel.has(e.id) || e.vida < e.vidaMax) barras.push([px, py - 6, t, e.vida / e.vidaMax]);
       }
 
@@ -190,6 +244,17 @@
           ctx.stroke(); ctx.setLineDash([]); ctx.lineDashOffset = 0;
           ctx.fillStyle = color; ctx.beginPath(); ctx.arc(fx, fy, 3, 0, TAU); ctx.fill();
           ctx.beginPath(); ctx.arc(fx, fy, 6.5, 0, TAU); ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+        // Puntos encadenados (línea fina) y circuito de patrulla (cerrado).
+        const puntos = u.patrulla ? u.patrulla.pts : u.cola.filter((q) => q.t !== 'atacar');
+        if (puntos.length) {
+          ctx.strokeStyle = u.patrulla ? P.mal : color; ctx.fillStyle = ctx.strokeStyle; ctx.globalAlpha = 0.55; ctx.setLineDash([2, 4]);
+          ctx.beginPath();
+          if (u.patrulla) { ctx.moveTo(ox + puntos[0].x * z, oy + puntos[0].y * z); for (const q of puntos) ctx.lineTo(ox + q.x * z, oy + q.y * z); ctx.closePath(); }
+          else { const d0 = u.dest && u.orden !== 'nada' ? u.dest : u; ctx.moveTo(ox + d0.x * z, oy + d0.y * z); for (const q of puntos) ctx.lineTo(ox + q.x * z, oy + q.y * z); }
+          ctx.stroke(); ctx.setLineDash([]);
+          for (const q of puntos) { ctx.beginPath(); ctx.arc(ox + q.x * z, oy + q.y * z, 2.5, 0, TAU); ctx.fill(); }
           ctx.globalAlpha = 1;
         }
         const o = u.obj ? m.porId.get(u.obj) : null;
@@ -259,9 +324,20 @@
         ctx.strokeRect(raton.x0, raton.y0, raton.x - raton.x0, raton.y - raton.y0);
         ctx.setLineDash([]);
       }
-      if (pausa || modo === 'amover') {
-        ctx.fillStyle = P.tinta; ctx.font = '12px "Fira Code", ui-monospace, monospace';
-        ctx.fillText(pausa ? 'pausa' : 'atacar al avanzar: elige destino', 12, 20);
+      ctx.font = '11px "Fira Code", ui-monospace, monospace';
+      if (pausa || modo === 'amover' || modo === 'patrulla') {
+        ctx.fillStyle = P.tinta;
+        ctx.fillText(pausa ? 'pausa' : modo === 'amover' ? 'atacar al avanzar: elige destino' : 'patrulla: elige el punto (con Mayús añades más)', 12, 20);
+      }
+      // Etiqueta de lo que hay bajo el cursor.
+      if (raton.dentro && !raton.izq && !raton.arrastre && !raton.medio) {
+        const txt = bajoCursor();
+        if (txt) {
+          const w = ctx.measureText(txt).width + 12, x = Math.min(raton.x + 14, cw - w - 4), y = Math.min(raton.y + 18, ch - 22);
+          ctx.fillStyle = P.fondo; ctx.globalAlpha = 0.92; ctx.fillRect(x, y, w, 18); ctx.globalAlpha = 1;
+          ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.strokeRect(x + 0.5, y + 0.5, w - 1, 17);
+          ctx.fillStyle = P.tinta; ctx.fillText(txt, x + 6, y + 13);
+        }
       }
     }
 
@@ -398,10 +474,11 @@
           if (W.puedeColocar(m, YO, tipoColocar, p.x, p.y)) { W.orden(m, { t: 'colocar', j: YO, tipo: tipoColocar, x: p.x, y: p.y }); modo = null; }
           return;
         }
-        if (modo === 'amover') {
+        if (modo === 'amover' || modo === 'patrulla') {
           const ids = unidadesSel().map((u) => u.id);
-          if (ids.length) { W.orden(m, { t: 'amover', j: YO, ids, x: wx, y: wy }); marca(wx, wy, P.mal); }
-          modo = null; return;
+          if (ids.length) { W.orden(m, { t: modo, j: YO, ids, x: wx, y: wy, enc: ev.shiftKey }); marca(wx, wy, P.mal); son.orden(); }
+          if (!(modo === 'patrulla' && ev.shiftKey)) modo = null; // con Mayús se siguen añadiendo puntos de patrulla
+          return;
         }
         raton.izq = true; raton.x0 = raton.x; raton.y0 = raton.y;
         return;
@@ -409,18 +486,25 @@
       if (ev.button === 2) { raton.der = true; raton.arrastre = false; raton.xd = raton.x; raton.yd = raton.y; }
     });
     // Clic derecho sin mover = orden; clic derecho arrastrando = desplazar el mapa (como en Red Alert).
-    function ordenar(wx, wy) {
+    // Con Mayús la orden se encadena detrás de las que ya tiene la unidad.
+    function ordenar(wx, wy, enc) {
         if (modo) { modo = null; return; }
+        if (wx < 0 || wy < 0 || wx >= N || wy >= N) return;
         const us = unidadesSel();
-        if (!us.length || wx < 0 || wy < 0 || wx >= N || wy >= N) return;
+        if (!us.length) { // con un cuartel o una fábrica seleccionados: punto de reunión
+          let puesto = false;
+          for (const id of sel) { const e = m.porId.get(id); if (e && e.edif && (e.tipo === 'cuartel' || e.tipo === 'fabrica')) { W.orden(m, { t: 'reunion', j: YO, id, x: wx, y: wy }); puesto = true; } }
+          if (puesto) { marca(wx, wy, P.bien); son.orden(); }
+          return;
+        }
         const ids = us.map((u) => u.id), o = entEn(wx, wy), c = Math.floor(wy) * N + Math.floor(wx);
-        if (o && o.j !== YO) { W.orden(m, { t: 'atacar', j: YO, ids, obj: o.id }); marca(wx, wy, P.mal); return; }
+        if (o && o.j !== YO) { W.orden(m, { t: 'atacar', j: YO, ids, obj: o.id, enc }); marca(wx, wy, P.mal); return; }
         const cos = us.filter((u) => u.tipo === 'cosechadora').map((u) => u.id);
         if (cos.length && m.mapa.tipoMin[c] === 1 && m.niebla[YO][c]) {
           W.orden(m, { t: 'cosechar', j: YO, ids: cos, x: wx, y: wy });
           const resto = us.filter((u) => u.tipo !== 'cosechadora').map((u) => u.id);
-          if (resto.length) W.orden(m, { t: 'mover', j: YO, ids: resto, x: wx, y: wy });
-        } else W.orden(m, { t: 'mover', j: YO, ids, x: wx, y: wy });
+          if (resto.length) W.orden(m, { t: 'mover', j: YO, ids: resto, x: wx, y: wy, enc });
+        } else W.orden(m, { t: 'mover', j: YO, ids, x: wx, y: wy, enc });
         marca(wx, wy, P.bien); son.orden();
     }
     window.addEventListener('mousemove', (ev) => {
@@ -434,7 +518,7 @@
       if (ev.button === 2 && raton.der) {
         const fue = raton.arrastre;
         raton.der = false; raton.arrastre = false;
-        if (!fue) ordenar(aMundoX(raton.x), aMundoY(raton.y));
+        if (!fue) ordenar(aMundoX(raton.x), aMundoY(raton.y), ev.shiftKey);
         return;
       }
       if (ev.button !== 0 || !raton.izq) return;
@@ -508,6 +592,8 @@
       }
       switch (ev.code) {
         case 'KeyA': if (unidadesSel().length) modo = 'amover'; break;
+        case 'KeyR': if (unidadesSel().length) modo = 'patrulla'; break;
+        case 'KeyE': { const ids = unidadesSel().map((u) => u.id); if (ids.length) { W.orden(m, { t: 'explorar', j: YO, ids }); son.orden(); } break; }
         case 'KeyS': { const ids = unidadesSel().map((u) => u.id); if (ids.length) W.orden(m, { t: 'detener', j: YO, ids }); break; }
         case 'KeyH': cam.x = m.mapa.bases[YO].x; cam.y = m.mapa.bases[YO].y; break;
         case 'Space': if (J.alerta) { cam.x = J.alerta.x; cam.y = J.alerta.y; } break;
@@ -526,7 +612,7 @@
 
     $('titulo').addEventListener('click', () => location.reload());
     $('semilla').textContent = 'semilla ' + semilla;
-    $('finRep').href = '?s=' + semilla;
+    $('finRep').href = '?' + op.consulta + '&ya=1';
     $('finNueva').href = location.pathname;
 
     // ---------- bucle ----------
@@ -541,7 +627,7 @@
       if (!pausa && m.ganador < 0) {
         acum += dt;
         let n = 0;
-        while (acum >= PASO && n < 4) { W.iaTick(m, ia); W.tick(m); acum -= PASO; n++; }
+        while (acum >= PASO && n < 4) { if (ia) W.iaTick(m, ia); W.tick(m); acum -= PASO; n++; }
         if (n === 4) acum = 0;
         if (n) sonar();
       }

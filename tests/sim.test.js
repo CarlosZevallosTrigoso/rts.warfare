@@ -113,6 +113,71 @@ prueba('varios edificios productivos aceleran la cola, con tope', () => {
   assert.ok(Math.abs(t6 - t1 / 2.5) <= 3, 'seis cuarteles (tope): ' + t6);
 });
 
+prueba('tamaños de mapa: 128, 256 y 1024 se generan simétricos y conectados', () => {
+  for (const lado of [128, 256, 1024]) {
+    const mp = W.generarMapa(2026, lado), NN = lado * lado;
+    assert.strictEqual(mp.N, lado);
+    for (let i = 0; i < NN; i += 7) assert.strictEqual(mp.terreno[i], mp.terreno[NN - 1 - i], 'asimétrico en ' + lado);
+    const [A, B] = mp.bases;
+    assert.ok(mp.alcanzable[B.y * lado + B.x], 'bases sin conexión en ' + lado);
+    assert.ok(mp.sitios.length >= 4, 'sin sitios en ' + lado);
+  }
+  const m = W.crearMundo(5, { N: 128, inicio: 5000 });
+  assert.strictEqual(m.N, 128); assert.strictEqual(m.jug[0].minerales, 5000);
+  const a = W.iaCrear(0), b = W.iaCrear(1, 'agresivo');
+  for (let i = 0; i < 6000; i++) { W.iaTick(m, a); W.iaTick(m, b); W.tick(m); }
+  assert.ok(m.jug[0].cosechado > 1000 && m.jug[1].cosechado > 1000, 'economía parada en mapa de 128');
+});
+
+prueba('órdenes encadenadas, patrulla, exploración y punto de reunión', () => {
+  const m = W.crearMundo(4242, { N: 128 }), J = m.jug[0], b = m.mapa.bases[0];
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  const u = m.ents.find((e) => e.j === 0 && e.tipo === 'infanteria');
+  const cerca = (x, y) => Math.hypot(u.x - x, u.y - y) < 1.6;
+  const p1 = { x: b.x + 6.5, y: b.y - 4.5 }, p2 = { x: b.x + 6.5, y: b.y - 8.5 }, p3 = { x: b.x + 2.5, y: b.y - 8.5 };
+  // encadenadas: pasa por p1, luego p2, y termina en p3
+  W.orden(m, { t: 'mover', j: 0, ids: [u.id], x: p1.x, y: p1.y });
+  W.orden(m, { t: 'mover', j: 0, ids: [u.id], x: p2.x, y: p2.y, enc: true });
+  W.orden(m, { t: 'mover', j: 0, ids: [u.id], x: p3.x, y: p3.y, enc: true });
+  avanza(2);
+  assert.strictEqual(u.cola.length, 2);
+  let paso1 = false, paso2 = false;
+  for (let i = 0; i < 600 && !(u.orden === 'nada' && !u.cola.length); i++) { W.tick(m); if (cerca(p1.x, p1.y)) paso1 = true; if (paso1 && cerca(p2.x, p2.y)) paso2 = true; }
+  assert.ok(paso1 && paso2 && cerca(p3.x, p3.y), 'no siguió la cadena de puntos');
+  // una orden sin encadenar borra la cola
+  W.orden(m, { t: 'mover', j: 0, ids: [u.id], x: p1.x, y: p1.y });
+  W.orden(m, { t: 'mover', j: 0, ids: [u.id], x: p2.x, y: p2.y, enc: true });
+  W.orden(m, { t: 'mover', j: 0, ids: [u.id], x: p3.x, y: p3.y });
+  avanza(2);
+  assert.strictEqual(u.cola.length, 0);
+  avanza(300);
+  // patrulla: va y vuelve sin parar
+  const ini = { x: u.x, y: u.y };
+  W.orden(m, { t: 'patrulla', j: 0, ids: [u.id], x: p1.x, y: p1.y });
+  let ida = false, vuelta = false, otraIda = false;
+  for (let i = 0; i < 1500; i++) { W.tick(m); if (cerca(p1.x, p1.y)) { if (vuelta) otraIda = true; ida = true; } if (ida && cerca(ini.x, ini.y)) vuelta = true; }
+  assert.ok(ida && vuelta && otraIda, 'la patrulla no va y vuelve');
+  W.orden(m, { t: 'detener', j: 0, ids: [u.id] }); avanza(2);
+  assert.strictEqual(u.patrulla, null);
+  // exploración: la zona vista crece sola
+  const vistas = () => m.niebla[0].reduce((a, v) => a + (v ? 1 : 0), 0);
+  const antes = vistas();
+  W.orden(m, { t: 'explorar', j: 0, ids: [u.id] }); avanza(1500);
+  assert.ok(u.explora && vistas() > antes * 1.5, 'explorar no descubre mapa: ' + antes + ' -> ' + vistas());
+  // punto de reunión
+  J.dios = true;
+  W.crearEdificio(m, 0, 'central', b.x + 3, b.y - 1);
+  const cu = W.crearEdificio(m, 0, 'cuartel', b.x - 5, b.y - 6);
+  avanza(1);
+  const r = { x: b.x + 8.5, y: b.y + 0.5 };
+  W.orden(m, { t: 'reunion', j: 0, id: cu.id, x: r.x, y: r.y });
+  W.orden(m, { t: 'entrenar', j: 0, tipo: 'infanteria' });
+  const ids = new Set(m.ents.map((e) => e.id));
+  avanza(W.UNID.infanteria.tiempo + 400);
+  const nueva = m.ents.find((e) => !ids.has(e.id) && e.tipo === 'infanteria');
+  assert.ok(nueva && Math.hypot(nueva.x - r.x, nueva.y - r.y) < 2.5, 'la unidad nueva no fue al punto de reunión');
+});
+
 prueba('determinismo: misma semilla, misma partida', () => {
   const corre = () => {
     const m = W.crearMundo(777), a = W.iaCrear(0), b = W.iaCrear(1);

@@ -7,8 +7,9 @@
   // Orden de construcción: [tipo, cantidad deseada].
   const PLAN = [['central', 1], ['refineria', 1], ['cuartel', 1], ['fabrica', 1], ['torreta', 1], ['refineria', 2], ['torreta', 2], ['cuartel', 2], ['torreta', 3], ['fabrica', 2]];
 
-  W.iaCrear = function (j) {
-    return { j, oleada: 6, atacantes: new Set(), reunidos: new Set(), fallos: 0 };
+  // nivel: 'tranquilo' | 'normal' | 'agresivo'. Cambia el tamaño de la primera oleada.
+  W.iaCrear = function (j, nivel) {
+    return { j, oleada: nivel === 'tranquilo' ? 12 : nivel === 'agresivo' ? 4 : 6, atacantes: new Set(), reunidos: new Set(), fallos: 0 };
   };
 
   function siguienteEdificio(m, j) {

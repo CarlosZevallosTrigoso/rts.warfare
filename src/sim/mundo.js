@@ -8,21 +8,23 @@
   for (let dy = -6; dy <= 6; dy++) for (let dx = -6; dx <= 6; dx++) ESPIRAL.push([dx, dy]);
   ESPIRAL.sort((a, b) => (a[0] * a[0] + a[1] * a[1]) - (b[0] * b[0] + b[1] * b[1]) || a[1] - b[1] || a[0] - b[0]);
 
-  function nuevoJugador() {
+  function nuevoJugador(inicio) {
     return {
-      minerales: ECON.inicio, prod: 0, uso: 0, cuenta: {}, vivo: true, dios: false,
+      minerales: inicio || ECON.inicio, prod: 0, uso: 0, cuenta: {}, vivo: true, dios: false,
       obras: [], // [{ tipo, prog, listo }]: varias a la vez, se reparten la velocidad
       colas: { inf: { lista: [], prog: 0 }, veh: { lista: [], prog: 0 } },
       alerta: null, cosechado: 0, bajas: 0, producidas: 0,
     };
   }
 
-  W.crearMundo = function (semilla) {
-    const mapa = W.generarMapa(semilla), N = mapa.N, NN = N * N;
+  // op: { N: lado del mapa, inicio: minerales iniciales }
+  W.crearMundo = function (semilla, op) {
+    op = op || {};
+    const mapa = W.generarMapa(semilla, op.N), N = mapa.N, NN = N * N;
     const m = {
       N, semilla, mapa, t: 0, ents: [], porId: new Map(), sigId: 1,
       ocup: new Int32Array(NN), paso: new Uint8Array(NN),
-      jug: [nuevoJugador(), nuevoJugador()],
+      jug: [nuevoJugador(op.inicio), nuevoJugador(op.inicio)],
       niebla: [new Uint8Array(NN), new Uint8Array(NN)],
       cola: [], colaRutas: [], efectos: [], minas: [], raros: [], ganador: -1,
       ruta: W.crearRuta(N),
@@ -45,7 +47,7 @@
   // ---------- entidades ----------
   function crearEdificio(m, j, tipo, x, y) {
     const d = EDIF[tipo], N = m.N;
-    const e = { id: m.sigId++, j, tipo, edif: true, x, y, tam: d.tam, cx: x + d.tam / 2, cy: y + d.tam / 2, vida: d.vida, vidaMax: d.vida, recarga: 0, obj: 0 };
+    const e = { id: m.sigId++, j, tipo, edif: true, x, y, tam: d.tam, cx: x + d.tam / 2, cy: y + d.tam / 2, vida: d.vida, vidaMax: d.vida, recarga: 0, obj: 0, reunion: null };
     for (let dy = 0; dy < d.tam; dy++) for (let dx = 0; dx < d.tam; dx++) { const i = (y + dy) * N + x + dx; m.ocup[i] = e.id; m.paso[i] = 0; }
     m.ents.push(e); m.porId.set(e.id, e);
     return e;
@@ -56,6 +58,7 @@
       id: m.sigId++, j, tipo, edif: false, x, y, px: x, py: y, vida: d.vida, vidaMax: d.vida,
       orden: 'nada', ruta: null, ri: 0, dest: null, meta: null, pend: null, fallo: false, obj: 0, recarga: 0, fijo: false,
       carga: 0, est: tipo === 'cosechadora' ? 'buscar' : '', celda: -1, ref: 0, espera: 0, pref: null,
+      cola: [], patrulla: null, explora: false, // órdenes encadenadas, ruta de patrulla, exploración automática
     };
     m.ents.push(u); m.porId.set(u.id, u);
     m.jug[j].producidas++;
@@ -145,6 +148,45 @@
     }
   }
 
+  // ---------- órdenes de unidad: directa, encadenada, patrulla y exploración ----------
+  function limpiar(u) { u.cola.length = 0; u.patrulla = null; u.explora = false; }
+  function asignar(m, u, o) {
+    if (o.t === 'atacar') {
+      const ob = m.porId.get(o.obj);
+      if (!ob || ob.vida <= 0) return false;
+      u.orden = 'atacar'; u.obj = ob.id; u.ruta = null; u.pend = null;
+      return true;
+    }
+    u.orden = o.t; u.obj = 0; u.dest = { x: o.x, y: o.y }; u.ruta = null;
+    pedirRuta(m, u, o.x, o.y, 0);
+    return true;
+  }
+  function encargar(m, u, o, enc) {
+    if (enc && !u.patrulla && (u.orden !== 'nada' || u.cola.length)) { if (u.cola.length < 16) u.cola.push(o); return; }
+    limpiar(u); asignar(m, u, o);
+  }
+  function celdaSinExplorar(m, u) {
+    const N = m.N, f = m.niebla[u.j], al = m.mapa.alcanzable;
+    let mejor = -1, md = Infinity;
+    for (let y = 2; y < N; y += 4) for (let x = 2; x < N; x += 4) {
+      const i = y * N + x;
+      if (f[i] || !al[i] || !m.paso[i]) continue;
+      const d = Math.hypot(x - u.x, y - u.y) + ((x * 7 + y * 13 + u.id * 31) % 17) * 1.5; // el sesgo reparte a varios exploradores
+      if (d < md) { md = d; mejor = i; }
+    }
+    return mejor;
+  }
+  function siguienteOrden(m, u) {
+    while (u.cola.length) if (asignar(m, u, u.cola.shift())) return;
+    if (u.patrulla) {
+      const p = u.patrulla; p.i = (p.i + 1) % p.pts.length;
+      asignar(m, u, { t: 'amover', x: p.pts[p.i].x, y: p.pts[p.i].y });
+    } else if (u.explora) {
+      const c = celdaSinExplorar(m, u);
+      if (c < 0) u.explora = false; else asignar(m, u, { t: 'mover', x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 });
+    }
+  }
+
   function aplicar(m, cmd) {
     const J = m.jug[cmd.j];
     if (!J || !J.vivo) return;
@@ -191,23 +233,39 @@
         if (i === 0) q.prog = 0;
         return;
       }
+      // cmd.enc (encadenar): la orden se añade a la cola de la unidad en vez de reemplazar lo que hace.
       case 'mover':
-        destinos(m, propias(m, cmd), cmd.x, cmd.y, (u, x, y) => { u.orden = 'mover'; u.obj = 0; u.dest = { x, y }; u.ruta = null; pedirRuta(m, u, x, y, 0); });
+        destinos(m, propias(m, cmd), cmd.x, cmd.y, (u, x, y) => encargar(m, u, { t: 'mover', x, y }, cmd.enc && u.tipo !== 'cosechadora'));
         return;
       case 'amover':
-        destinos(m, propias(m, cmd).filter((u) => UNID[u.tipo].arma), cmd.x, cmd.y, (u, x, y) => { u.orden = 'amover'; u.obj = 0; u.dest = { x, y }; u.ruta = null; pedirRuta(m, u, x, y, 0); });
+        destinos(m, propias(m, cmd).filter((u) => UNID[u.tipo].arma), cmd.x, cmd.y, (u, x, y) => encargar(m, u, { t: 'amover', x, y }, cmd.enc));
         return;
       case 'atacar': {
         const o = m.porId.get(cmd.obj);
         if (!o || o.j === cmd.j) return;
-        for (const u of propias(m, cmd)) if (UNID[u.tipo].arma) { u.orden = 'atacar'; u.obj = o.id; u.ruta = null; u.pend = null; }
+        for (const u of propias(m, cmd)) if (UNID[u.tipo].arma) encargar(m, u, { t: 'atacar', obj: o.id }, cmd.enc);
+        return;
+      }
+      case 'patrulla': // va y vuelve entre puntos, atacando lo que encuentre; con enc se añade otro punto
+        destinos(m, propias(m, cmd).filter((u) => UNID[u.tipo].arma), cmd.x, cmd.y, (u, x, y) => {
+          if (cmd.enc && u.patrulla) { if (u.patrulla.pts.length < 12) u.patrulla.pts.push({ x, y }); return; }
+          limpiar(u); u.orden = 'nada'; u.obj = 0; u.ruta = null; u.pend = null;
+          u.patrulla = { pts: [{ x: u.x, y: u.y }, { x, y }], i: 0 };
+        });
+        return;
+      case 'explorar': // recorre sola lo que aún no se ha visto
+        for (const u of propias(m, cmd)) if (u.tipo !== 'cosechadora') { limpiar(u); u.explora = true; u.orden = 'nada'; u.obj = 0; u.ruta = null; u.pend = null; }
+        return;
+      case 'reunion': { // punto de reunión de un cuartel o una fábrica
+        const e = m.porId.get(cmd.id);
+        if (e && e.edif && e.j === cmd.j && (e.tipo === 'cuartel' || e.tipo === 'fabrica')) e.reunion = { x: cmd.x, y: cmd.y };
         return;
       }
       case 'detener':
-        for (const u of propias(m, cmd)) { u.orden = 'nada'; u.obj = 0; u.ruta = null; u.pend = null; if (u.tipo === 'cosechadora') u.est = 'quieto'; }
+        for (const u of propias(m, cmd)) { limpiar(u); u.orden = 'nada'; u.obj = 0; u.ruta = null; u.pend = null; if (u.tipo === 'cosechadora') u.est = 'quieto'; }
         return;
       case 'cosechar':
-        for (const u of propias(m, cmd)) if (u.tipo === 'cosechadora') { u.orden = 'nada'; u.ruta = null; u.pend = null; u.est = 'buscar'; u.pref = { x: cmd.x, y: cmd.y }; }
+        for (const u of propias(m, cmd)) if (u.tipo === 'cosechadora') { limpiar(u); u.orden = 'nada'; u.ruta = null; u.pend = null; u.est = 'buscar'; u.pref = { x: cmd.x, y: cmd.y }; }
         return;
     }
   }
@@ -308,7 +366,8 @@
     u.px = u.x; u.py = u.y;
     if (u.recarga > 0) u.recarga--;
     if (u.tipo === 'cosechadora') { tickCosechadora(m, u); return; }
-    if (u.fallo) { u.fallo = false; u.orden = 'nada'; u.obj = 0; }
+    if (u.fallo) { u.fallo = false; u.orden = 'nada'; u.obj = 0; limpiar(u); }
+    if (u.orden === 'nada' && !u.obj && (u.cola.length || u.patrulla || u.explora)) siguienteOrden(m, u);
     const arma = ARMAS[d.arma];
     if (u.orden === 'mover') {
       if (avanzar(m, u) || (!u.ruta && !u.pend)) u.orden = 'nada';
@@ -462,7 +521,10 @@
       if (q.prog < UNID[tipo].tiempo) continue;
       q.lista.shift(); q.prog = 0;
       const u = crearUnidad(m, j, tipo, W.cercaLibre(m, fab.cx, fab.y + fab.tam + 0.5));
-      if (tipo !== 'cosechadora') { // se aparta de la puerta, hacia el centro del mapa
+      if (fab.reunion) { // va al punto de reunión del edificio
+        if (tipo === 'cosechadora') u.pref = { x: fab.reunion.x, y: fab.reunion.y };
+        else { const c = W.cercaLibre(m, fab.reunion.x, fab.reunion.y); asignar(m, u, { t: 'mover', x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 }); }
+      } else if (tipo !== 'cosechadora') { // se aparta de la puerta, hacia el centro del mapa
         const cx = m.N / 2 - fab.cx, cy = m.N / 2 - fab.cy, cd = Math.hypot(cx, cy) || 1;
         const c = W.cercaLibre(m, fab.cx + (cx / cd) * (fab.tam + 2), fab.cy + (cy / cd) * (fab.tam + 2));
         u.orden = 'mover'; u.dest = { x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 };

@@ -2,8 +2,8 @@
 (function () {
   const W = globalThis.W || (globalThis.W = {});
 
-  W.generarMapa = function (semilla) {
-    const N = W.N, NN = N * N, T = W.TERRENO, r = W.prng(semilla);
+  W.generarMapa = function (semilla, lado) {
+    const N = lado || W.N, NN = N * N, T = W.TERRENO, r = W.prng(semilla);
     const espejo = (i) => NN - 1 - i;
 
     function capa(esc) {
