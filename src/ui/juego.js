@@ -54,7 +54,7 @@
     const lienzo = $('lienzo'), ctx = lienzo.getContext('2d');
     const mini = $('mini'), mctx = mini.getContext('2d'), MS = mini.width;
     let cw = 0, ch = 0, dpr = 1;
-    const cam = { x: m.mapa.bases[YO].x, y: m.mapa.bases[YO].y, z: 22 };
+    const cam = { x: m.mapa.bases[YO].x, y: m.mapa.bases[YO].y, z: 30 };
     W.cam = cam;
     const son = W.crearSonido();
     W.son = son;
@@ -102,7 +102,7 @@
     }
     function limitarCam() {
       // El mapa cubre siempre toda la ventana: ni zoom ni cámara dejan ver fuera de él.
-      cam.z = Math.max(Math.max(cw, ch) / N, Math.min(72, cam.z));
+      cam.z = Math.max(Math.max(cw, ch) / N, Math.min(120, cam.z));
       const mx = cw / 2 / cam.z, my = ch / 2 / cam.z;
       cam.x = Math.max(mx, Math.min(N - mx, cam.x)); cam.y = Math.max(my, Math.min(N - my, cam.y));
     }
@@ -262,8 +262,8 @@
         if (fuera(q.x, q.y) || !m.niebla[YO][Math.floor(q.y) * N + Math.floor(q.x)]) continue;
         const sx = ox + q.x * z, sy = oy + q.y * z;
         ctx.lineCap = 'round';
-        ctx.strokeStyle = '#5f5140'; ctx.lineWidth = Math.max(2, z * 0.2); ctx.beginPath(); ctx.arc(sx, sy, z * 0.44, q.ang - 2.1, q.ang + 2.1); ctx.stroke();
-        if (lod) { ctx.strokeStyle = '#a8977c'; ctx.lineWidth = Math.max(1, z * 0.06); ctx.beginPath(); ctx.arc(sx, sy, z * 0.56, q.ang - 1.9, q.ang + 1.9); ctx.stroke(); }
+        ctx.strokeStyle = '#5f5140'; ctx.lineWidth = Math.max(2, z * 0.2); ctx.beginPath(); ctx.arc(sx, sy, z * 0.3, q.ang - 2.1, q.ang + 2.1); ctx.stroke();
+        if (lod) { ctx.strokeStyle = '#a8977c'; ctx.lineWidth = Math.max(1, z * 0.06); ctx.beginPath(); ctx.arc(sx, sy, z * 0.39, q.ang - 1.9, q.ang + 1.9); ctx.stroke(); }
         ctx.lineCap = 'butt';
       }
       const descargando = new Set();
@@ -382,13 +382,13 @@
         }
         if (e.cava > 0) { // cavando: el parapeto se va cerrando
           const fr = 1 - e.cava / W.ECON.cavar;
-          ctx.strokeStyle = '#5f5140'; ctx.lineWidth = Math.max(2, z * 0.16); ctx.beginPath(); ctx.arc(px, py, z * 0.44, e.ang - 2.1 * fr, e.ang + 2.1 * fr); ctx.stroke();
+          ctx.strokeStyle = '#5f5140'; ctx.lineWidth = Math.max(2, z * 0.16); ctx.beginPath(); ctx.arc(px, py, z * 0.3, e.ang - 2.1 * fr, e.ang + 2.1 * fr); ctx.stroke();
         } else if (e.guardia && lod && !W.enTrinchera(m, e)) { // en guardia: una base fija bajo la unidad
           ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(px - r * 1.3, py + r * 1.9); ctx.lineTo(px + r * 1.3, py + r * 1.9); ctx.moveTo(px - r * 0.7, py + r * 1.9 + 3); ctx.lineTo(px + r * 0.7, py + r * 1.9 + 3); ctx.stroke();
         }
         if (e.j === YO) { if (m.t - e.llama < 14) signos.push([px, py - r * 1.9 - 20, '!']); else if (m.t - e.oyo < 36) signos.push([px, py - r * 1.9 - 20, '✓']); }
         const fuel = d.aire && e.j === YO ? e.fuel / d.fuel : -1;
-        if (sel.has(e.id) || e.vida < e.vidaMax || (fuel >= 0 && fuel < 0.35)) barras.push([px - r * 1.3, py - r * 1.9 - 8, r * 2.6, e.vida / e.vidaMax, m.t - e.curando < 12, fuel]);
+        if (sel.has(e.id) || e.vida < e.vidaMax || (fuel >= 0 && fuel < 0.35)) barras.push([px - Math.max(r * 1.3, 8), py - r * 1.9 - 8, Math.max(r * 2.6, 16), e.vida / e.vidaMax, m.t - e.curando < 12, fuel]);
       }
 
       // Obuses en vuelo, con estela.

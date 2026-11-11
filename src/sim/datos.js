@@ -43,22 +43,25 @@
   // La visión sigue, simplificado, el campo visual humano: una zona central (±60°, donde se ve con los dos ojos) que llega
   // más lejos (ECON.visAd); una periferia hasta ±105° (ECON.periferia), que es donde acaba el campo de cada ojo, con menos
   // alcance (visLado); y detrás, donde no se ve y solo se oye lo muy cercano (visAt). Los vehículos sufren más por costados y espalda.
+  // radio: tamaño de la unidad en celdas (se dibuja y se separa con él). La escala va con los edificios: un tanque mide
+  // menos de media celda y una fábrica tres; la infantería es la mitad de un tanque, el pesado un tercio más, y los
+  // aviones son mayores que los vehículos (el bombardero, casi el doble que un tanque).
   // vel en celdas por tick. cat: cola de producción (inf = cuartel, veh = fábrica).
   // giro: radianes por tick que puede girar; acel: cuánto gana de velocidad por tick.
   // agua: cuánta agua consume mientras vive (el agua es un balance, como la energía, y limita la tropa).
   W.UNID = {
-    infanteria:  { nombre: 'Infantería',  cat: 'inf', vida: 60,  vel: 0.06, costo: 100, tiempo: 100, blindaje: 'ligero', arma: 'fusil', vision: 6, radio: 0.24, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, arco: 0.5 },
-    tanque:      { nombre: 'Tanque',      cat: 'veh', vida: 300, vel: 0.10, costo: 600, pet: 50, tiempo: 300, blindaje: 'pesado', arma: 'canon', vision: 7, radio: 0.40, req: ['fabrica'], agua: 2, giro: 0.13, acel: 0.006, giroT: 0.16 },
-    antitanque:  { nombre: 'Antitanque',  cat: 'inf', vida: 70,  vel: 0.055, costo: 250, tiempo: 160, blindaje: 'ligero', arma: 'cohete', vision: 6, radio: 0.25, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, arco: 0.35 },
-    artilleria:  { nombre: 'Artillería',  cat: 'veh', vida: 180, vel: 0.06, costo: 900, pet: 70, tiempo: 400, blindaje: 'pesado', arma: 'obus', vision: 7, radio: 0.42, req: ['fabrica'], agua: 2, giro: 0.08, acel: 0.004, nivel: 2 },
-    pesado:      { nombre: 'Tanque pesado', cat: 'veh', vida: 700, vel: 0.07, costo: 1500, pet: 120, raros: 60, tiempo: 520, blindaje: 'pesado', arma: 'canonPesado', vision: 7, radio: 0.52, req: ['fabrica'], agua: 3, giro: 0.08, acel: 0.004, nivel: 3, giroT: 0.1 },
+    infanteria:  { nombre: 'Infantería',  cat: 'inf', vida: 60,  vel: 0.06, costo: 100, tiempo: 100, blindaje: 'ligero', arma: 'fusil', vision: 6, radio: 0.11, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, arco: 0.5 },
+    tanque:      { nombre: 'Tanque',      cat: 'veh', vida: 300, vel: 0.10, costo: 600, pet: 50, tiempo: 300, blindaje: 'pesado', arma: 'canon', vision: 7, radio: 0.20, req: ['fabrica'], agua: 2, giro: 0.13, acel: 0.006, giroT: 0.16 },
+    antitanque:  { nombre: 'Antitanque',  cat: 'inf', vida: 70,  vel: 0.055, costo: 250, tiempo: 160, blindaje: 'ligero', arma: 'cohete', vision: 6, radio: 0.115, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, arco: 0.35 },
+    artilleria:  { nombre: 'Artillería',  cat: 'veh', vida: 180, vel: 0.06, costo: 900, pet: 70, tiempo: 400, blindaje: 'pesado', arma: 'obus', vision: 7, radio: 0.21, req: ['fabrica'], agua: 2, giro: 0.08, acel: 0.004, nivel: 2 },
+    pesado:      { nombre: 'Tanque pesado', cat: 'veh', vida: 700, vel: 0.07, costo: 1500, pet: 120, raros: 60, tiempo: 520, blindaje: 'pesado', arma: 'canonPesado', vision: 7, radio: 0.27, req: ['fabrica'], agua: 3, giro: 0.08, acel: 0.004, nivel: 3, giroT: 0.1 },
     // Aviación (cat 'aire', sale del aeródromo): vuela sobre cualquier terreno y en línea recta. fuel: ticks de vuelo;
     // Cada avión tiene su aeródromo (ECON.cupoAviones por aeródromo): sale de él, no se aleja más de radioVuelo celdas y
     // vuelve a aterrizar al acabar su orden o cuando le queda el combustible justo. En tierra reposta y no se le puede atacar
     // (cae con su aeródromo). En patrulla, tras repostar despega y la retoma. Sin combustible ni base, cae.
-    caza:        { nombre: 'Caza',        cat: 'aire', aire: true, vida: 160, vel: 0.22, costo: 900, pet: 120, tiempo: 360, blindaje: 'aire', arma: 'misil', vision: 9, radio: 0.42, req: ['aerodromo'], agua: 1, giro: 0.16, acel: 0.012, nivel: 2, fuel: 1800, arco: 0.3, radioVuelo: 70 },
-    bombardero:  { nombre: 'Bombardero',  cat: 'aire', aire: true, vida: 260, vel: 0.15, costo: 1600, pet: 200, raros: 40, tiempo: 520, blindaje: 'aire', arma: 'bomba', vision: 8, radio: 0.55, req: ['aerodromo'], agua: 2, giro: 0.09, acel: 0.008, nivel: 3, fuel: 2400, radioVuelo: 90 },
-    cosechadora: { nombre: 'Cosechadora', cat: 'veh', vida: 450, vel: 0.07, costo: 900, pet: 30, tiempo: 360, blindaje: 'pesado', arma: null,    vision: 5, radio: 0.44, req: ['fabrica', 'refineria'], carga: 500, agua: 1, giro: 0.1, acel: 0.004 },
+    caza:        { nombre: 'Caza',        cat: 'aire', aire: true, vida: 160, vel: 0.22, costo: 900, pet: 120, tiempo: 360, blindaje: 'aire', arma: 'misil', vision: 9, radio: 0.25, req: ['aerodromo'], agua: 1, giro: 0.16, acel: 0.012, nivel: 2, fuel: 1800, arco: 0.3, radioVuelo: 70 },
+    bombardero:  { nombre: 'Bombardero',  cat: 'aire', aire: true, vida: 260, vel: 0.15, costo: 1600, pet: 200, raros: 40, tiempo: 520, blindaje: 'aire', arma: 'bomba', vision: 8, radio: 0.38, req: ['aerodromo'], agua: 2, giro: 0.09, acel: 0.008, nivel: 3, fuel: 2400, radioVuelo: 90 },
+    cosechadora: { nombre: 'Cosechadora', cat: 'veh', vida: 450, vel: 0.07, costo: 900, pet: 30, tiempo: 360, blindaje: 'pesado', arma: null,    vision: 5, radio: 0.25, req: ['fabrica', 'refineria'], carga: 500, agua: 1, giro: 0.1, acel: 0.004 },
   };
 
   // Tabla de daño: arma contra blindaje. vuelo: celdas por tick del proyectil (sin vuelo, impacta al instante).

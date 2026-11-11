@@ -158,11 +158,11 @@
     <button type="button" data-v="normal">normal</button><button type="button" data-v="agresivo">agresivo<small>ataca pronto</small></button></div></div>
   <div><h2>Semilla del mapa</h2><input id="op-s" inputmode="numeric" placeholder="al azar" autocomplete="off"></div>
   <button type="button" id="empezar">Empezar</button>
-  <div id="version">versión 28</div>
+  <div id="version">versión 29</div>
 </div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><p><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 28' };
+globalThis.W = { VERSION: 'versión 29' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -209,22 +209,25 @@ globalThis.W = { VERSION: 'versión 28' };
   // La visión sigue, simplificado, el campo visual humano: una zona central (±60°, donde se ve con los dos ojos) que llega
   // más lejos (ECON.visAd); una periferia hasta ±105° (ECON.periferia), que es donde acaba el campo de cada ojo, con menos
   // alcance (visLado); y detrás, donde no se ve y solo se oye lo muy cercano (visAt). Los vehículos sufren más por costados y espalda.
+  // radio: tamaño de la unidad en celdas (se dibuja y se separa con él). La escala va con los edificios: un tanque mide
+  // menos de media celda y una fábrica tres; la infantería es la mitad de un tanque, el pesado un tercio más, y los
+  // aviones son mayores que los vehículos (el bombardero, casi el doble que un tanque).
   // vel en celdas por tick. cat: cola de producción (inf = cuartel, veh = fábrica).
   // giro: radianes por tick que puede girar; acel: cuánto gana de velocidad por tick.
   // agua: cuánta agua consume mientras vive (el agua es un balance, como la energía, y limita la tropa).
   W.UNID = {
-    infanteria:  { nombre: 'Infantería',  cat: 'inf', vida: 60,  vel: 0.06, costo: 100, tiempo: 100, blindaje: 'ligero', arma: 'fusil', vision: 6, radio: 0.24, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, arco: 0.5 },
-    tanque:      { nombre: 'Tanque',      cat: 'veh', vida: 300, vel: 0.10, costo: 600, pet: 50, tiempo: 300, blindaje: 'pesado', arma: 'canon', vision: 7, radio: 0.40, req: ['fabrica'], agua: 2, giro: 0.13, acel: 0.006, giroT: 0.16 },
-    antitanque:  { nombre: 'Antitanque',  cat: 'inf', vida: 70,  vel: 0.055, costo: 250, tiempo: 160, blindaje: 'ligero', arma: 'cohete', vision: 6, radio: 0.25, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, arco: 0.35 },
-    artilleria:  { nombre: 'Artillería',  cat: 'veh', vida: 180, vel: 0.06, costo: 900, pet: 70, tiempo: 400, blindaje: 'pesado', arma: 'obus', vision: 7, radio: 0.42, req: ['fabrica'], agua: 2, giro: 0.08, acel: 0.004, nivel: 2 },
-    pesado:      { nombre: 'Tanque pesado', cat: 'veh', vida: 700, vel: 0.07, costo: 1500, pet: 120, raros: 60, tiempo: 520, blindaje: 'pesado', arma: 'canonPesado', vision: 7, radio: 0.52, req: ['fabrica'], agua: 3, giro: 0.08, acel: 0.004, nivel: 3, giroT: 0.1 },
+    infanteria:  { nombre: 'Infantería',  cat: 'inf', vida: 60,  vel: 0.06, costo: 100, tiempo: 100, blindaje: 'ligero', arma: 'fusil', vision: 6, radio: 0.11, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, arco: 0.5 },
+    tanque:      { nombre: 'Tanque',      cat: 'veh', vida: 300, vel: 0.10, costo: 600, pet: 50, tiempo: 300, blindaje: 'pesado', arma: 'canon', vision: 7, radio: 0.20, req: ['fabrica'], agua: 2, giro: 0.13, acel: 0.006, giroT: 0.16 },
+    antitanque:  { nombre: 'Antitanque',  cat: 'inf', vida: 70,  vel: 0.055, costo: 250, tiempo: 160, blindaje: 'ligero', arma: 'cohete', vision: 6, radio: 0.115, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, arco: 0.35 },
+    artilleria:  { nombre: 'Artillería',  cat: 'veh', vida: 180, vel: 0.06, costo: 900, pet: 70, tiempo: 400, blindaje: 'pesado', arma: 'obus', vision: 7, radio: 0.21, req: ['fabrica'], agua: 2, giro: 0.08, acel: 0.004, nivel: 2 },
+    pesado:      { nombre: 'Tanque pesado', cat: 'veh', vida: 700, vel: 0.07, costo: 1500, pet: 120, raros: 60, tiempo: 520, blindaje: 'pesado', arma: 'canonPesado', vision: 7, radio: 0.27, req: ['fabrica'], agua: 3, giro: 0.08, acel: 0.004, nivel: 3, giroT: 0.1 },
     // Aviación (cat 'aire', sale del aeródromo): vuela sobre cualquier terreno y en línea recta. fuel: ticks de vuelo;
     // Cada avión tiene su aeródromo (ECON.cupoAviones por aeródromo): sale de él, no se aleja más de radioVuelo celdas y
     // vuelve a aterrizar al acabar su orden o cuando le queda el combustible justo. En tierra reposta y no se le puede atacar
     // (cae con su aeródromo). En patrulla, tras repostar despega y la retoma. Sin combustible ni base, cae.
-    caza:        { nombre: 'Caza',        cat: 'aire', aire: true, vida: 160, vel: 0.22, costo: 900, pet: 120, tiempo: 360, blindaje: 'aire', arma: 'misil', vision: 9, radio: 0.42, req: ['aerodromo'], agua: 1, giro: 0.16, acel: 0.012, nivel: 2, fuel: 1800, arco: 0.3, radioVuelo: 70 },
-    bombardero:  { nombre: 'Bombardero',  cat: 'aire', aire: true, vida: 260, vel: 0.15, costo: 1600, pet: 200, raros: 40, tiempo: 520, blindaje: 'aire', arma: 'bomba', vision: 8, radio: 0.55, req: ['aerodromo'], agua: 2, giro: 0.09, acel: 0.008, nivel: 3, fuel: 2400, radioVuelo: 90 },
-    cosechadora: { nombre: 'Cosechadora', cat: 'veh', vida: 450, vel: 0.07, costo: 900, pet: 30, tiempo: 360, blindaje: 'pesado', arma: null,    vision: 5, radio: 0.44, req: ['fabrica', 'refineria'], carga: 500, agua: 1, giro: 0.1, acel: 0.004 },
+    caza:        { nombre: 'Caza',        cat: 'aire', aire: true, vida: 160, vel: 0.22, costo: 900, pet: 120, tiempo: 360, blindaje: 'aire', arma: 'misil', vision: 9, radio: 0.25, req: ['aerodromo'], agua: 1, giro: 0.16, acel: 0.012, nivel: 2, fuel: 1800, arco: 0.3, radioVuelo: 70 },
+    bombardero:  { nombre: 'Bombardero',  cat: 'aire', aire: true, vida: 260, vel: 0.15, costo: 1600, pet: 200, raros: 40, tiempo: 520, blindaje: 'aire', arma: 'bomba', vision: 8, radio: 0.38, req: ['aerodromo'], agua: 2, giro: 0.09, acel: 0.008, nivel: 3, fuel: 2400, radioVuelo: 90 },
+    cosechadora: { nombre: 'Cosechadora', cat: 'veh', vida: 450, vel: 0.07, costo: 900, pet: 30, tiempo: 360, blindaje: 'pesado', arma: null,    vision: 5, radio: 0.25, req: ['fabrica', 'refineria'], carga: 500, agua: 1, giro: 0.1, acel: 0.004 },
   };
 
   // Tabla de daño: arma contra blindaje. vuelo: celdas por tick del proyectil (sin vuelo, impacta al instante).
@@ -682,10 +685,10 @@ globalThis.W = { VERSION: 'versión 28' };
   }
   // Puestos de una formación, en coordenadas locales [avance, lateral] respecto del rumbo del grupo.
   function puestos(forma, n) {
-    const s = 1.3, out = [];
+    const s = 0.8, out = []; // separación entre puestos, en celdas
     for (let i = 0; i < n; i++) {
       if (forma === 'linea') { const por = Math.min(n, 12), fila = (i / por) | 0, enFila = Math.min(por, n - fila * por); out.push([-fila * s, ((i % por) - (enFila - 1) / 2) * s]); }
-      else if (forma === 'columna') out.push([-(i >> 1) * s, n > 1 ? (i % 2 ? 0.6 : -0.6) : 0]);
+      else if (forma === 'columna') out.push([-(i >> 1) * s, n > 1 ? (i % 2 ? 0.4 : -0.4) : 0]);
       else if (forma === 'cuna') { const r = Math.ceil(i / 2); out.push([-r * s * 0.9, (i % 2 ? 1 : -1) * r * s * 0.8]); }
       else { const lado = Math.ceil(Math.sqrt(n)), filas = Math.ceil(n / lado); out.push([-(((i / lado) | 0) - (filas - 1) / 2) * s, ((i % lado) - (lado - 1) / 2) * s]); } // cuadro
     }
@@ -709,16 +712,16 @@ globalThis.W = { VERSION: 'versión 28' };
       }
       return;
     }
-    const N = m.N, cx = Math.floor(x), cy = Math.floor(y);
+    const N = m.N, cx = Math.floor(x) + 0.5, cy = Math.floor(y) + 0.5, paso = aire ? 1 : 0.6; // racimo apretado: las unidades son pequeñas
     let k = 0;
     for (let i = 0; i < us.length; i++) {
-      let c = -1;
+      let px = -1, py = -1;
       while (k < ESPIRAL.length) {
-        const xx = cx + ESPIRAL[k][0], yy = cy + ESPIRAL[k][1]; k++;
-        if (xx >= 0 && yy >= 0 && xx < N && yy < N && (aire || m.paso[yy * N + xx])) { c = yy * N + xx; break; }
+        const xx = cx + ESPIRAL[k][0] * paso, yy = cy + ESPIRAL[k][1] * paso; k++;
+        if (xx >= 0 && yy >= 0 && xx < N && yy < N && (aire || m.paso[Math.floor(yy) * N + Math.floor(xx)])) { px = xx; py = yy; break; }
       }
-      if (c < 0) c = W.cercaLibre(m, x, y);
-      fn(us[i], (c % N) + 0.5, ((c / N) | 0) + 0.5);
+      if (px < 0) { const c = W.cercaLibre(m, x, y); px = (c % N) + 0.5; py = ((c / N) | 0) + 0.5; }
+      fn(us[i], px, py);
       if (rumboPedido !== undefined) us[i].angFin = rumboPedido; // al llegar queda encarada hacia donde se pidió
     }
   }
@@ -1533,7 +1536,8 @@ globalThis.W = { VERSION: 'versión 28' };
         if (b.edif || UNID[b.tipo].cat !== 'inf' || b.j === a.j || b.vida <= 0 || enTrinchera(m, b)) continue;
         const dx = b.x - a.x; if (dx > 0.5 || dx < -0.5) continue;
         const dy = b.y - a.y; if (dy > 0.5 || dy < -0.5) continue;
-        if (dx * dx + dy * dy >= 0.2) continue;
+        const lim = UNID[a.tipo].radio + UNID[b.tipo].radio + 0.08; // la tiene debajo
+        if (dx * dx + dy * dy >= lim * lim) continue;
         b.vida -= ECON.aplasta; b.tDano = m.t; b.agresor = a.id;
         if (b.vida <= 0) m.jug[a.j].aplastados = (m.jug[a.j].aplastados || 0) + 1;
       }
@@ -2346,7 +2350,7 @@ globalThis.W = { VERSION: 'versión 28' };
     const lienzo = $('lienzo'), ctx = lienzo.getContext('2d');
     const mini = $('mini'), mctx = mini.getContext('2d'), MS = mini.width;
     let cw = 0, ch = 0, dpr = 1;
-    const cam = { x: m.mapa.bases[YO].x, y: m.mapa.bases[YO].y, z: 22 };
+    const cam = { x: m.mapa.bases[YO].x, y: m.mapa.bases[YO].y, z: 30 };
     W.cam = cam;
     const son = W.crearSonido();
     W.son = son;
@@ -2394,7 +2398,7 @@ globalThis.W = { VERSION: 'versión 28' };
     }
     function limitarCam() {
       // El mapa cubre siempre toda la ventana: ni zoom ni cámara dejan ver fuera de él.
-      cam.z = Math.max(Math.max(cw, ch) / N, Math.min(72, cam.z));
+      cam.z = Math.max(Math.max(cw, ch) / N, Math.min(120, cam.z));
       const mx = cw / 2 / cam.z, my = ch / 2 / cam.z;
       cam.x = Math.max(mx, Math.min(N - mx, cam.x)); cam.y = Math.max(my, Math.min(N - my, cam.y));
     }
@@ -2554,8 +2558,8 @@ globalThis.W = { VERSION: 'versión 28' };
         if (fuera(q.x, q.y) || !m.niebla[YO][Math.floor(q.y) * N + Math.floor(q.x)]) continue;
         const sx = ox + q.x * z, sy = oy + q.y * z;
         ctx.lineCap = 'round';
-        ctx.strokeStyle = '#5f5140'; ctx.lineWidth = Math.max(2, z * 0.2); ctx.beginPath(); ctx.arc(sx, sy, z * 0.44, q.ang - 2.1, q.ang + 2.1); ctx.stroke();
-        if (lod) { ctx.strokeStyle = '#a8977c'; ctx.lineWidth = Math.max(1, z * 0.06); ctx.beginPath(); ctx.arc(sx, sy, z * 0.56, q.ang - 1.9, q.ang + 1.9); ctx.stroke(); }
+        ctx.strokeStyle = '#5f5140'; ctx.lineWidth = Math.max(2, z * 0.2); ctx.beginPath(); ctx.arc(sx, sy, z * 0.3, q.ang - 2.1, q.ang + 2.1); ctx.stroke();
+        if (lod) { ctx.strokeStyle = '#a8977c'; ctx.lineWidth = Math.max(1, z * 0.06); ctx.beginPath(); ctx.arc(sx, sy, z * 0.39, q.ang - 1.9, q.ang + 1.9); ctx.stroke(); }
         ctx.lineCap = 'butt';
       }
       const descargando = new Set();
@@ -2674,13 +2678,13 @@ globalThis.W = { VERSION: 'versión 28' };
         }
         if (e.cava > 0) { // cavando: el parapeto se va cerrando
           const fr = 1 - e.cava / W.ECON.cavar;
-          ctx.strokeStyle = '#5f5140'; ctx.lineWidth = Math.max(2, z * 0.16); ctx.beginPath(); ctx.arc(px, py, z * 0.44, e.ang - 2.1 * fr, e.ang + 2.1 * fr); ctx.stroke();
+          ctx.strokeStyle = '#5f5140'; ctx.lineWidth = Math.max(2, z * 0.16); ctx.beginPath(); ctx.arc(px, py, z * 0.3, e.ang - 2.1 * fr, e.ang + 2.1 * fr); ctx.stroke();
         } else if (e.guardia && lod && !W.enTrinchera(m, e)) { // en guardia: una base fija bajo la unidad
           ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(px - r * 1.3, py + r * 1.9); ctx.lineTo(px + r * 1.3, py + r * 1.9); ctx.moveTo(px - r * 0.7, py + r * 1.9 + 3); ctx.lineTo(px + r * 0.7, py + r * 1.9 + 3); ctx.stroke();
         }
         if (e.j === YO) { if (m.t - e.llama < 14) signos.push([px, py - r * 1.9 - 20, '!']); else if (m.t - e.oyo < 36) signos.push([px, py - r * 1.9 - 20, '✓']); }
         const fuel = d.aire && e.j === YO ? e.fuel / d.fuel : -1;
-        if (sel.has(e.id) || e.vida < e.vidaMax || (fuel >= 0 && fuel < 0.35)) barras.push([px - r * 1.3, py - r * 1.9 - 8, r * 2.6, e.vida / e.vidaMax, m.t - e.curando < 12, fuel]);
+        if (sel.has(e.id) || e.vida < e.vidaMax || (fuel >= 0 && fuel < 0.35)) barras.push([px - Math.max(r * 1.3, 8), py - r * 1.9 - 8, Math.max(r * 2.6, 16), e.vida / e.vidaMax, m.t - e.curando < 12, fuel]);
       }
 
       // Obuses en vuelo, con estela.

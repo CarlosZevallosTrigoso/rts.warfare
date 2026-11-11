@@ -196,10 +196,10 @@
   }
   // Puestos de una formación, en coordenadas locales [avance, lateral] respecto del rumbo del grupo.
   function puestos(forma, n) {
-    const s = 1.3, out = [];
+    const s = 0.8, out = []; // separación entre puestos, en celdas
     for (let i = 0; i < n; i++) {
       if (forma === 'linea') { const por = Math.min(n, 12), fila = (i / por) | 0, enFila = Math.min(por, n - fila * por); out.push([-fila * s, ((i % por) - (enFila - 1) / 2) * s]); }
-      else if (forma === 'columna') out.push([-(i >> 1) * s, n > 1 ? (i % 2 ? 0.6 : -0.6) : 0]);
+      else if (forma === 'columna') out.push([-(i >> 1) * s, n > 1 ? (i % 2 ? 0.4 : -0.4) : 0]);
       else if (forma === 'cuna') { const r = Math.ceil(i / 2); out.push([-r * s * 0.9, (i % 2 ? 1 : -1) * r * s * 0.8]); }
       else { const lado = Math.ceil(Math.sqrt(n)), filas = Math.ceil(n / lado); out.push([-(((i / lado) | 0) - (filas - 1) / 2) * s, ((i % lado) - (lado - 1) / 2) * s]); } // cuadro
     }
@@ -223,16 +223,16 @@
       }
       return;
     }
-    const N = m.N, cx = Math.floor(x), cy = Math.floor(y);
+    const N = m.N, cx = Math.floor(x) + 0.5, cy = Math.floor(y) + 0.5, paso = aire ? 1 : 0.6; // racimo apretado: las unidades son pequeñas
     let k = 0;
     for (let i = 0; i < us.length; i++) {
-      let c = -1;
+      let px = -1, py = -1;
       while (k < ESPIRAL.length) {
-        const xx = cx + ESPIRAL[k][0], yy = cy + ESPIRAL[k][1]; k++;
-        if (xx >= 0 && yy >= 0 && xx < N && yy < N && (aire || m.paso[yy * N + xx])) { c = yy * N + xx; break; }
+        const xx = cx + ESPIRAL[k][0] * paso, yy = cy + ESPIRAL[k][1] * paso; k++;
+        if (xx >= 0 && yy >= 0 && xx < N && yy < N && (aire || m.paso[Math.floor(yy) * N + Math.floor(xx)])) { px = xx; py = yy; break; }
       }
-      if (c < 0) c = W.cercaLibre(m, x, y);
-      fn(us[i], (c % N) + 0.5, ((c / N) | 0) + 0.5);
+      if (px < 0) { const c = W.cercaLibre(m, x, y); px = (c % N) + 0.5; py = ((c / N) | 0) + 0.5; }
+      fn(us[i], px, py);
       if (rumboPedido !== undefined) us[i].angFin = rumboPedido; // al llegar queda encarada hacia donde se pidió
     }
   }
@@ -1047,7 +1047,8 @@
         if (b.edif || UNID[b.tipo].cat !== 'inf' || b.j === a.j || b.vida <= 0 || enTrinchera(m, b)) continue;
         const dx = b.x - a.x; if (dx > 0.5 || dx < -0.5) continue;
         const dy = b.y - a.y; if (dy > 0.5 || dy < -0.5) continue;
-        if (dx * dx + dy * dy >= 0.2) continue;
+        const lim = UNID[a.tipo].radio + UNID[b.tipo].radio + 0.08; // la tiene debajo
+        if (dx * dx + dy * dy >= lim * lim) continue;
         b.vida -= ECON.aplasta; b.tDano = m.t; b.agresor = a.id;
         if (b.vida <= 0) m.jug[a.j].aplastados = (m.jug[a.j].aplastados || 0) + 1;
       }

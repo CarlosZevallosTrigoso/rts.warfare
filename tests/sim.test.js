@@ -327,11 +327,11 @@ prueba('demoler devuelve parte del costo y las formaciones ordenan al grupo', ()
   W.orden(m, { t: 'mover', j: 0, ids, x: 70.5, y: 62.5, forma: 'linea' }); avanza(700);
   const xs = us.map((u) => u.x), ys = us.map((u) => u.y).sort((p, q) => p - q);
   assert.ok(Math.max(...xs) - Math.min(...xs) < 1.2, 'en línea debían quedar a la misma altura: ' + xs.map((v) => v.toFixed(1)));
-  assert.ok(ys[4] - ys[0] > 4, 'en línea debían abrirse a lo ancho: ' + ys.map((v) => v.toFixed(1)));
+  assert.ok(ys[4] - ys[0] > 2.8, 'en línea debían abrirse a lo ancho: ' + ys.map((v) => v.toFixed(1)));
   assert.ok(us.every((u) => Math.abs(u.ang) < 0.2), 'todas debían quedar mirando al frente');
   W.orden(m, { t: 'mover', j: 0, ids, x: 90.5, y: 62.5, forma: 'columna' }); avanza(700);
   const xs2 = us.map((u) => u.x), ys2 = us.map((u) => u.y);
-  assert.ok(Math.max(...xs2) - Math.min(...xs2) > 2 && Math.max(...ys2) - Math.min(...ys2) < 2.2, 'en columna debían alargarse en el sentido de la marcha');
+  assert.ok(Math.max(...xs2) - Math.min(...xs2) > 1.3 && Math.max(...ys2) - Math.min(...ys2) < 2.2, 'en columna debían alargarse en el sentido de la marcha');
   assert.ok(us.filter((u) => u.tipo === 'tanque').every((t) => t.x >= Math.min(...us.filter((u) => u.tipo === 'infanteria').map((i) => i.x)) - 0.5), 'los vehículos van delante');
 });
 
@@ -484,7 +484,7 @@ prueba('trincheras y orientación al llegar', () => {
   const g = [0, 1, 2].map((k) => W.crearUnidad(m, 0, 'tanque', cel(40, 64 + k * 2)));
   W.orden(m, { t: 'mover', j: 0, ids: g.map((u) => u.id), x: 80.5, y: 66.5, forma: 'linea', rumbo: -Math.PI / 2 }); avanza(700);
   const ys = g.map((u) => u.y), xs = g.map((u) => u.x);
-  assert.ok(Math.max(...ys) - Math.min(...ys) < 1 && Math.max(...xs) - Math.min(...xs) > 2, 'la línea debía orientarse según el rumbo pedido');
+  assert.ok(Math.max(...ys) - Math.min(...ys) < 1 && Math.max(...xs) - Math.min(...xs) > 1.4, 'la línea debía orientarse según el rumbo pedido');
   assert.ok(g.every((u) => Math.abs(u.ang + Math.PI / 2) < 0.05), 'y todas mirar hacia arriba');
 });
 
