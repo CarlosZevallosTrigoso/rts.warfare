@@ -56,7 +56,7 @@
       if ((J.cuenta[tipo] || 0) >= n) continue;
       if ((d.nivel || 1) > J.nivel) continue; // aún sin el nivel: se salta
       if (!W.tieneReq(m, j, d.req)) return null;
-      if (d.libre && !buscarSitio(m, j, tipo, patio)) continue; // sin yacimiento explorado: se salta
+      if (d.libre && !buscarSitio(m, j, tipo, patio)) { if (tipo === 'estacion' && !J.cuenta.laboratorio && W.tieneReq(m, j, EDIF.laboratorio.req)) return conEnergia('laboratorio'); continue; } // sin yacimiento explorado: se salta (y sin campo de conocimiento a mano, un laboratorio)
       if ((d.pet || 0) > J.petroleo && !J.cuenta.extractor) continue; // sin petróleo ni forma de sacarlo: se salta
       return conEnergia(tipo);
     }

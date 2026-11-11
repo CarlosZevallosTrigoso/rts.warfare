@@ -382,10 +382,12 @@
 
   // Disponible = tiene los edificios requeridos y el nivel tecnológico.
   W.disponible = function (m, j, d) { return W.tieneReq(m, j, d.req) && ((d.nivel || 1) <= m.jug[j].nivel || m.jug[j].tr.requisitos); };
+  const bonoE = (e) => 1 + ECON.mejoraBono * ((e.nivelE || 1) - 1); // lo que rinde de más un edificio mejorado
+  W.costoMejora = (e) => Math.round(EDIF[e.tipo].costo * ECON.mejoraCosto * (e.nivelE || 1));
   W.tieneReq = function (m, j, req) {
     const c = m.jug[j].cuenta;
     if (m.jug[j].tr.requisitos) return true; // ADMIN: sin requisitos
-    for (let k = 0; k < req.length; k++) if (!c[req[k]]) return false;
+    for (let k = 0; k < req.length; k++) if (!c[req[k]] && !(req[k] === 'estacion' && c.laboratorio)) return false; // el laboratorio vale como estación
     return true;
   };
 
@@ -465,7 +467,7 @@
       if (e.infra) continue;
       const en = EDIF[e.tipo].energia;
       if (e.tipo === 'patio') g.patio = true;
-      if (en > 0) g.prod += en * (m.jug[e.j].mejoras.turbinas ? 1.5 : 1); else g.uso -= en;
+      if (en > 0) g.prod += en * (m.jug[e.j].mejoras.turbinas ? 1.5 : 1) * bonoE(e); else g.uso -= en;
     }
     const sella = (f, cx, cy, r) => { const R = Math.ceil(r), r2 = r * r; for (let dy = -R; dy <= R; dy++) { const y = cy + dy; if (y < 0 || y >= N) continue; for (let dx = -R; dx <= R; dx++) { const x = cx + dx; if (x >= 0 && x < N && dx * dx + dy * dy <= r2) f[y * N + x] = 1; } } };
     for (let i = 0; i < its.length; i++) {
@@ -496,8 +498,8 @@
       J.cuenta[e.tipo] = (J.cuenta[e.tipo] || 0) + 1;
       if (e.edif) {
         const d = EDIF[e.tipo], en = d.energia;
-        if (en > 0) J.prod += en * (J.mejoras.turbinas ? 1.5 : 1); else J.uso -= en;
-        J.aguaProd += (d.agua || 0) * (e.tipo === 'bomba' && J.mejoras.depuracion ? 1.5 : 1);
+        if (en > 0) J.prod += en * (J.mejoras.turbinas ? 1.5 : 1) * bonoE(e); else J.uso -= en;
+        J.aguaProd += (d.agua || 0) * (e.tipo === 'bomba' && J.mejoras.depuracion ? 1.5 : 1) * (e.tipo === 'bomba' ? bonoE(e) : 1);
       }
       else { J.aguaUso += UNID[e.tipo].agua || 0; for (const p of e.pasajeros) { J.cuenta[p.tipo] = (J.cuenta[p.tipo] || 0) + 1; J.aguaUso += UNID[p.tipo].agua || 0; } } // los que van dentro de un transporte también cuentan
     }
@@ -706,6 +708,15 @@
       case 'trampa': // un interruptor del panel ADMIN
         trampa(m, cmd.j, cmd.clave, cmd.valor);
         return;
+      case 'mejorarEdif': { // sube un nivel el rendimiento de ese edificio (central, bomba, extractor, estación, laboratorio)
+        const e = m.porId.get(cmd.id);
+        if (!e || !e.edif || e.j !== cmd.j || e.vida <= 0 || !EDIF[e.tipo].mejora || (e.nivelE || 1) >= ECON.mejoraMax) return;
+        const precio = W.costoMejora(e); if (J.minerales < precio && !J.dios) return;
+        if (!J.dios) J.minerales -= precio;
+        e.nivelE = (e.nivelE || 1) + 1; m.redSucia = true;
+        m.efectos.push({ tipo: 'mejoraEdif', x1: e.cx, y1: e.cy, j: e.j, clase: e.tipo, nivel: e.nivelE, t: m.t });
+        return;
+      }
       case 'dronAtk': // enciende o apaga los drones de ataque de esos portadores
         for (const u of propias(m, cmd)) if (UNID[u.tipo].drones) u.dronAtk = !!cmd.on;
         return;
@@ -1983,7 +1994,7 @@
       else if (EDIF[e.tipo].arma) tickTorreta(m, e);
       else if (EDIF[e.tipo].da) { // extracción continua; con déficit de energía rinde la mitad
         const da = EDIF[e.tipo].da, J = m.jug[e.j];
-        e.acum += (e.sinLuz ? 0.5 : 1) * (e.tipo === 'estacion' && J.mejoras.analisis ? 1.5 : 1);
+        e.acum += (e.sinLuz ? 0.5 : 1) * (e.tipo === 'estacion' && J.mejoras.analisis ? 1.5 : 1) * bonoE(e);
         if (e.acum >= da.cada) { e.acum -= da.cada; J[da.rec]++; if (da.rec === 'petroleo') J.extraido++; }
       }
     }

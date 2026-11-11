@@ -31,6 +31,14 @@
       if (e.retro > 0.3) { c.fillStyle = col.fuego; c.beginPath(); c.arc(R * 2.45, 0, R * 0.34, 0, TAU); c.fill(); }
       c.restore(); return;
     }
+    if (inf && e.hundido) { // dentro de la trinchera: solo asoman el casco y el arma
+      const R = r * 1.4;
+      if (W.UNID[u.tipo].arma) { c.strokeStyle = col.osc; c.lineCap = 'round'; c.lineWidth = Math.max(1.2, R * 0.26); c.beginPath(); c.moveTo(R * 0.2, R * 0.2); c.lineTo(R * (1.25 - e.retro * 0.25), R * 0.2); c.stroke(); }
+      c.fillStyle = col.luz; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.arc(0, 0, R * 0.44, 0, TAU); c.fill(); c.stroke();
+      c.fillStyle = col.base; c.beginPath(); c.arc(0, 0, R * 0.2, 0, TAU); c.fill();
+      if (e.retro > 0.5) { c.fillStyle = col.fuego; c.beginPath(); c.arc(R * 1.45, R * 0.2, R * 0.26, 0, TAU); c.fill(); }
+      c.restore(); return;
+    }
     if (inf) {
       const R = r * 1.4;
       c.strokeStyle = col.osc; c.lineCap = at ? 'butt' : 'round'; c.lineWidth = Math.max(1.4, R * (at ? 0.55 : 0.3)); // fusil, o tubo lanzacohetes al hombro
@@ -427,6 +435,10 @@
       }
       c.fillStyle = tinta; c.beginPath(); c.arc(cx, cy, t * 0.05, 0, TAU); c.fill();
       if (lod === 2) { c.fillStyle = col.osc; c.fillRect(X(0.1), Y(0.76), t * 0.2, t * 0.12); c.fillRect(X(0.74), Y(0.1), t * 0.14, t * 0.14); }
+    } else if (e.tipo === 'laboratorio') { // un matraz con su líquido, que burbujea si hay energía
+      c.strokeStyle = col.luz; c.lineWidth = lw * 1.4; c.beginPath(); c.moveTo(X(0.42), Y(0.2)); c.lineTo(X(0.42), Y(0.42)); c.lineTo(X(0.24), Y(0.78)); c.lineTo(X(0.76), Y(0.78)); c.lineTo(X(0.58), Y(0.42)); c.lineTo(X(0.58), Y(0.2)); c.stroke();
+      c.fillStyle = s.deficit ? col.humo : col.agua; c.beginPath(); c.moveTo(X(0.34), Y(0.6)); c.lineTo(X(0.27), Y(0.75)); c.lineTo(X(0.73), Y(0.75)); c.lineTo(X(0.66), Y(0.6)); c.closePath(); c.fill();
+      if (!s.deficit) { const f = ((s.tiempo + s.id * 97) * 0.001) % 1; c.fillStyle = col.luz; c.beginPath(); c.arc(X(0.46 + 0.1 * Math.sin(s.id)), Y(0.58 - f * 0.3), t * 0.025, 0, TAU); c.fill(); }
     } else if (e.tipo === 'estDrones') { // plataforma de despegue con su H y un mástil
       c.strokeStyle = col.luz; c.lineWidth = lw * 1.4; c.beginPath(); c.arc(cx, cy, t * 0.3, 0, TAU); c.stroke();
       c.beginPath(); c.moveTo(X(0.4), Y(0.36)); c.lineTo(X(0.4), Y(0.64)); c.moveTo(X(0.6), Y(0.36)); c.lineTo(X(0.6), Y(0.64)); c.moveTo(X(0.4), Y(0.5)); c.lineTo(X(0.6), Y(0.5)); c.stroke();

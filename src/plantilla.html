@@ -37,6 +37,14 @@
   .btn.con-x .x { display: inline-block; }
   .btn .x:hover { background: var(--mal); color: #fff; }
   #obras { min-height: 34px; margin-top: 5px; }
+  #abreGuia { position: fixed; top: 8px; left: 78px; z-index: 3; font: inherit; color: var(--tinta); background: var(--panel); border: 1px solid var(--linea); border-radius: 2px; padding: 3px 8px; cursor: pointer; }
+  #guia { position: fixed; inset: 0 236px 0 0; z-index: 6; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.25); }
+  #guia .caja { width: min(780px, 94%); max-height: 88%; overflow-y: auto; background: var(--panel); border: 1px solid var(--tinta); border-radius: 3px; padding: 14px 18px 18px; }
+  #guia .cab { display: flex; justify-content: space-between; align-items: baseline; position: sticky; top: -14px; background: var(--panel); padding: 6px 0; margin-top: -6px; }
+  #guia .cab button { font: inherit; border: 1px solid var(--linea); background: var(--panel); color: var(--tinta); border-radius: 2px; cursor: pointer; padding: 2px 9px; }
+  #guia h3 { font-size: 10px; font-weight: 400; color: var(--suave); text-transform: uppercase; letter-spacing: .12em; margin: 14px 0 4px; border-bottom: 1px solid var(--linea); padding-bottom: 3px; }
+  #guia .fila3 { display: grid; grid-template-columns: 46px 150px 96px 1fr; gap: 8px; align-items: center; padding: 3px 0; border-bottom: 1px dotted var(--linea); user-select: text; -webkit-user-select: text; }
+  #guia .fila3 .ico { width: 46px; height: 20px; } #guia .fila3 b { font-weight: 600; } #guia .fila3 .c { color: var(--suave); font-variant-numeric: tabular-nums; }
   #bMuro .g3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; } #bMuro .grupo { justify-content: center; }
   #bLanzar { margin-top: 6px; } #bLanzar .btn { justify-content: space-between; } #misInfo { min-height: 30px; }
   #vacio { line-height: 1.7; } #vacio kbd { font: inherit; color: var(--tinta); }
@@ -96,7 +104,7 @@
   #ayuda kbd { font: inherit; color: var(--tinta); }
   #formas { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; }
   #formas .grupo { justify-content: center; }
-  #vender, #trinchera, #retiro, #desplegar, #descargar, #trazar, #conectar, #dronAtk, #verRed { justify-content: center; margin-top: 4px; }
+  #vender, #trinchera, #retiro, #desplegar, #descargar, #trazar, #conectar, #dronAtk, #verRed, #mejorar { justify-content: center; margin-top: 4px; }
   .chip.debe { border-style: dashed; opacity: .6; }
   /* Táctil: botonera sobre el mapa para lo que con teclado son teclas, y controles más grandes. */
   #tactil { position: fixed; left: 150px; right: 244px; bottom: 8px; z-index: 3; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; align-items: flex-end; pointer-events: none; }
@@ -158,6 +166,7 @@
 <body>
 <div id="app">
   <canvas id="lienzo"></canvas>
+  <button type="button" id="abreGuia" title="Para qué sirve cada edificio y cada unidad">guía</button>
   <details id="ayuda" class="tenue"><summary>ayuda</summary>
       <div>clic / caja: seleccionar</div>
       <div>clic derecho: mover, atacar, cosechar</div>
@@ -269,6 +278,7 @@
     <button type="button" id="trazar" class="btn" hidden title="La excavadora va hasta el punto que marques dejando camino. Camino militar: abre el bosque y tiende puentes sobre el agua (más caros). Solo tus vehículos corren por él. No lleva energía ni red: para eso está el ingeniero civil.">Trazar camino</button>
     <button type="button" id="descargar" class="btn" hidden></button>
     <button type="button" id="desplegar" class="btn" hidden title="Convierte el patio móvil en un patio, donde está. No se puede replegar.">Desplegar patio</button>
+    <button type="button" id="mejorar" class="btn" hidden title="Sube un nivel el rendimiento de este edificio: un 50 % más por nivel, hasta el nivel 3."></button>
     <button type="button" id="dronAtk" class="btn" hidden title="Los drones kamikaze y bombarderos del comando salen solos contra lo que tu bando vea dentro de su radio. Cada salida cuesta minerales. Clic derecho en un enemigo le da preferencia."></button>
     <button type="button" id="retiro" class="btn" hidden title="Con poca vida, la unidad se va sola a reparar y luego vuelve a su puesto."></button>
     <button type="button" id="trinchera" class="btn" hidden></button>
@@ -296,6 +306,7 @@
   <button type="button" id="continuar" hidden>Continuar la partida guardada</button>
   <div id="version">__VERSION__</div>
 </div></div>
+<div id="guia" hidden><div class="caja"><div class="cab"><strong>Guía: para qué sirve cada cosa</strong><button type="button" id="cierraGuia">cerrar</button></div><div id="guiaTxt"></div></div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finVer" href="#" title="Vuelve a ver la partida entera, con todo el mapa a la vista y a la velocidad que quieras.">ver repetición</a><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
 globalThis.W = { VERSION: '__VERSION__' };

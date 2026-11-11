@@ -1523,6 +1523,28 @@ prueba('drones: estación, operador y comando; kamikaze, bombardero, derribos e 
   assert.equal(drones(cmd, 'rec').length, 3, 'los que vuelan fuera de su radio siguen');
 });
 
+prueba('laboratorio y mejoras de rendimiento por edificio', () => {
+  const m = W.crearMundo(4242, { N: 128 }), J = m.jug[0], b = m.mapa.bases[0];
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  J.minerales = 20000;
+  const cen = W.crearEdificio(m, 0, 'central', b.x + 5, b.y), cen2 = W.crearEdificio(m, 0, 'central', b.x + 5, b.y + 3), lab = W.crearEdificio(m, 0, 'laboratorio', b.x + 5, b.y - 4);
+  avanza(2);
+  // el laboratorio da información sin campo, y vale como estación para lo que la pide
+  const i0 = J.info; avanza(400);
+  assert.ok(J.info - i0 >= 9 && J.info - i0 <= 11, 'una de información cada dos segundos: ' + (J.info - i0));
+  assert.ok(W.tieneReq(m, 0, ['estacion']), 'el laboratorio vale como estación');
+  // mejorar: cuesta, sube el rendimiento un 50 % por nivel y tiene tope
+  const p0 = J.prod, min0 = J.minerales, precio = W.costoMejora(cen);
+  W.orden(m, { t: 'mejorarEdif', j: 0, id: cen.id }); avanza(2);
+  assert.ok(cen.nivelE === 2 && J.prod === p0 + 50 && min0 - J.minerales >= precio - 20, 'central a nivel 2: +50 de energía, pagados ' + precio);
+  W.orden(m, { t: 'mejorarEdif', j: 0, id: cen.id }); avanza(2); W.orden(m, { t: 'mejorarEdif', j: 0, id: cen.id }); avanza(2);
+  assert.ok(cen.nivelE === 3 && J.prod === p0 + 100, 'tope en el nivel 3');
+  W.orden(m, { t: 'mejorarEdif', j: 0, id: lab.id }); avanza(2); const i1 = J.info; avanza(400);
+  assert.ok(lab.nivelE === 2 && J.info - i1 >= 14 && J.info - i1 <= 16, 'laboratorio mejorado: un 50 % más de información: ' + (J.info - i1));
+  const cu = W.crearEdificio(m, 0, 'cuartel', b.x + 8, b.y - 4); W.orden(m, { t: 'mejorarEdif', j: 0, id: cu.id }); avanza(2);
+  assert.ok(!cu.nivelE, 'el cuartel no se mejora'); void cen2;
+});
+
 prueba('puentes: la excavadora cruza el agua, todos lo usan y al caer se cierra', () => {
   const m = W.crearMundo(31, { N: 128 }), N = m.N, J = m.jug[0], T = W.TERRENO;
   m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);

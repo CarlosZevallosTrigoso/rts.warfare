@@ -37,6 +37,14 @@
   .btn.con-x .x { display: inline-block; }
   .btn .x:hover { background: var(--mal); color: #fff; }
   #obras { min-height: 34px; margin-top: 5px; }
+  #abreGuia { position: fixed; top: 8px; left: 78px; z-index: 3; font: inherit; color: var(--tinta); background: var(--panel); border: 1px solid var(--linea); border-radius: 2px; padding: 3px 8px; cursor: pointer; }
+  #guia { position: fixed; inset: 0 236px 0 0; z-index: 6; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.25); }
+  #guia .caja { width: min(780px, 94%); max-height: 88%; overflow-y: auto; background: var(--panel); border: 1px solid var(--tinta); border-radius: 3px; padding: 14px 18px 18px; }
+  #guia .cab { display: flex; justify-content: space-between; align-items: baseline; position: sticky; top: -14px; background: var(--panel); padding: 6px 0; margin-top: -6px; }
+  #guia .cab button { font: inherit; border: 1px solid var(--linea); background: var(--panel); color: var(--tinta); border-radius: 2px; cursor: pointer; padding: 2px 9px; }
+  #guia h3 { font-size: 10px; font-weight: 400; color: var(--suave); text-transform: uppercase; letter-spacing: .12em; margin: 14px 0 4px; border-bottom: 1px solid var(--linea); padding-bottom: 3px; }
+  #guia .fila3 { display: grid; grid-template-columns: 46px 150px 96px 1fr; gap: 8px; align-items: center; padding: 3px 0; border-bottom: 1px dotted var(--linea); user-select: text; -webkit-user-select: text; }
+  #guia .fila3 .ico { width: 46px; height: 20px; } #guia .fila3 b { font-weight: 600; } #guia .fila3 .c { color: var(--suave); font-variant-numeric: tabular-nums; }
   #bMuro .g3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; } #bMuro .grupo { justify-content: center; }
   #bLanzar { margin-top: 6px; } #bLanzar .btn { justify-content: space-between; } #misInfo { min-height: 30px; }
   #vacio { line-height: 1.7; } #vacio kbd { font: inherit; color: var(--tinta); }
@@ -96,7 +104,7 @@
   #ayuda kbd { font: inherit; color: var(--tinta); }
   #formas { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; }
   #formas .grupo { justify-content: center; }
-  #vender, #trinchera, #retiro, #desplegar, #descargar, #trazar, #conectar, #dronAtk, #verRed { justify-content: center; margin-top: 4px; }
+  #vender, #trinchera, #retiro, #desplegar, #descargar, #trazar, #conectar, #dronAtk, #verRed, #mejorar { justify-content: center; margin-top: 4px; }
   .chip.debe { border-style: dashed; opacity: .6; }
   /* Táctil: botonera sobre el mapa para lo que con teclado son teclas, y controles más grandes. */
   #tactil { position: fixed; left: 150px; right: 244px; bottom: 8px; z-index: 3; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; align-items: flex-end; pointer-events: none; }
@@ -158,6 +166,7 @@
 <body>
 <div id="app">
   <canvas id="lienzo"></canvas>
+  <button type="button" id="abreGuia" title="Para qué sirve cada edificio y cada unidad">guía</button>
   <details id="ayuda" class="tenue"><summary>ayuda</summary>
       <div>clic / caja: seleccionar</div>
       <div>clic derecho: mover, atacar, cosechar</div>
@@ -269,6 +278,7 @@
     <button type="button" id="trazar" class="btn" hidden title="La excavadora va hasta el punto que marques dejando camino. Camino militar: abre el bosque y tiende puentes sobre el agua (más caros). Solo tus vehículos corren por él. No lleva energía ni red: para eso está el ingeniero civil.">Trazar camino</button>
     <button type="button" id="descargar" class="btn" hidden></button>
     <button type="button" id="desplegar" class="btn" hidden title="Convierte el patio móvil en un patio, donde está. No se puede replegar.">Desplegar patio</button>
+    <button type="button" id="mejorar" class="btn" hidden title="Sube un nivel el rendimiento de este edificio: un 50 % más por nivel, hasta el nivel 3."></button>
     <button type="button" id="dronAtk" class="btn" hidden title="Los drones kamikaze y bombarderos del comando salen solos contra lo que tu bando vea dentro de su radio. Cada salida cuesta minerales. Clic derecho en un enemigo le da preferencia."></button>
     <button type="button" id="retiro" class="btn" hidden title="Con poca vida, la unidad se va sola a reparar y luego vuelve a su puesto."></button>
     <button type="button" id="trinchera" class="btn" hidden></button>
@@ -294,11 +304,12 @@
   <div><h2>Semilla del mapa</h2><input id="op-s" inputmode="numeric" placeholder="al azar" autocomplete="off"></div>
   <button type="button" id="empezar">Empezar</button>
   <button type="button" id="continuar" hidden>Continuar la partida guardada</button>
-  <div id="version">versión 58</div>
+  <div id="version">versión 59</div>
 </div></div>
+<div id="guia" hidden><div class="caja"><div class="cab"><strong>Guía: para qué sirve cada cosa</strong><button type="button" id="cierraGuia">cerrar</button></div><div id="guiaTxt"></div></div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finVer" href="#" title="Vuelve a ver la partida entera, con todo el mapa a la vista y a la velocidad que quieras.">ver repetición</a><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 58' };
+globalThis.W = { VERSION: 'versión 59' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -327,23 +338,25 @@ globalThis.W = { VERSION: 'versión 58' };
   // da: recurso que producen solos y cada cuántos ticks dan una unidad.
   W.EDIF = {
     patio:     { nombre: 'Patio',     tam: 3, vida: 2000, costo: 0,    tiempo: 0,   energia: 0,   vision: 8, req: [], agua: 8 },
-    central:   { nombre: 'Central',   tam: 2, vida: 500,  costo: 300,  tiempo: 200, energia: 100, vision: 5, req: ['patio'] },
+    central:   { nombre: 'Central',   tam: 2, vida: 500,  costo: 300,  tiempo: 200, energia: 100, vision: 5, req: ['patio'], mejora: true },
     refineria: { nombre: 'Refinería', tam: 3, vida: 900,  costo: 1200, tiempo: 400, energia: -30, vision: 6, req: ['central'] },
-    bomba:     { nombre: 'Bomba de agua', tam: 2, vida: 450, costo: 400, tiempo: 240, energia: -15, vision: 5, req: ['central'], agua: 12, juntoA: 'agua', libre: true },
+    bomba:     { nombre: 'Bomba de agua', tam: 2, vida: 450, costo: 400, tiempo: 240, energia: -15, vision: 5, req: ['central'], agua: 12, juntoA: 'agua', libre: true, mejora: true },
     cuartel:   { nombre: 'Cuartel',   tam: 2, vida: 700,  costo: 400,  tiempo: 300, energia: -20, vision: 5, req: ['central'] },
-    extractor: { nombre: 'Extractor', tam: 2, vida: 600,  costo: 700,  tiempo: 300, energia: -20, vision: 5, req: ['refineria'], sobre: 'petroleo', libre: true, da: { rec: 'petroleo', cada: 6 } },
+    extractor: { nombre: 'Extractor', tam: 2, vida: 600,  costo: 700,  tiempo: 300, energia: -20, vision: 5, req: ['refineria'], sobre: 'petroleo', libre: true, da: { rec: 'petroleo', cada: 6 }, mejora: true },
     fabrica:   { nombre: 'Fábrica',   tam: 3, vida: 1000, costo: 1400, pet: 100, tiempo: 500, energia: -40, vision: 5, req: ['refineria'] },
     torreta:   { nombre: 'Torreta',   tam: 1, vida: 600,  costo: 500,  tiempo: 300, energia: -25, vision: 8, req: ['cuartel'], arma: 'bateria', giroT: 0.2 },
     torreCanon: { nombre: 'Torre de cañón', tam: 2, vida: 1100, costo: 1200, pet: 60, tiempo: 500, energia: -40, vision: 9, req: ['fabrica'], arma: 'canonTorre', nivel: 2, giroT: 0.1 },
     aerodromo: { nombre: 'Aeródromo', tam: 3, vida: 900,  costo: 1600, pet: 150, tiempo: 500, energia: -40, vision: 6, req: ['fabrica'], nivel: 2 },
     antiaerea: { nombre: 'Antiaérea', tam: 1, vida: 500,  costo: 600,  tiempo: 300, energia: -20, vision: 9, req: ['cuartel'], arma: 'flak', nivel: 2, giroT: 0.28 },
-    estacion:  { nombre: 'Estación',  tam: 2, vida: 500,  costo: 900,  tiempo: 400, energia: -30, vision: 7, req: ['cuartel'], sobre: 'conocimiento', libre: true, da: { rec: 'info', cada: 20 } },
+    estacion:  { nombre: 'Estación',  tam: 2, vida: 500,  costo: 900,  tiempo: 400, energia: -30, vision: 7, req: ['cuartel'], sobre: 'conocimiento', libre: true, da: { rec: 'info', cada: 20 }, mejora: true },
     // Obras civiles: produce las unidades civiles (el ingeniero civil, que conecta edificios con líneas de servicio, y la excavadora).
     obras:     { nombre: 'Obras civiles', tam: 2, vida: 600, costo: 500, tiempo: 240, energia: -15, vision: 5, req: ['central'] },
     // Misilera: fabrica y guarda hasta diez misiles balísticos (W.MISILES) y los lanza a un punto explorado dentro de su alcance.
     misilera:  { nombre: 'Misilera', tam: 3, vida: 1000, costo: 2500, pet: 200, tiempo: 600, energia: -50, vision: 6, req: ['fabrica'], nivel: 2, misiles: true },
     // Interceptor: derriba los misiles enemigos que entran en su radio. Tiene pocas cargas y tarda en reponerlas.
     interceptor: { nombre: 'Interceptor', tam: 2, vida: 700, costo: 1500, pet: 100, tiempo: 500, energia: -40, vision: 7, req: ['fabrica'], nivel: 2, intercepta: 14, cargas: 4, reponeCarga: 600 },
+    // Laboratorio: da información sin depender de los campos de conocimiento (a la mitad de ritmo que una estación sobre su campo). Vale como estación para lo que la pida.
+    laboratorio: { nombre: 'Laboratorio', tam: 2, vida: 500, costo: 700, tiempo: 320, energia: -30, vision: 5, req: ['cuartel'], da: { rec: 'info', cada: 40 }, mejora: true },
     // Estación de drones: barata; mantiene dos drones de reconocimiento dando vueltas a su alrededor.
     estDrones: { nombre: 'Estación de drones', tam: 1, vida: 350, costo: 300, tiempo: 160, energia: -10, vision: 5, req: ['cuartel'], drones: { rec: 2 }, radioDron: 16 },
     // Torreta de muro: solo se monta sobre un muro reforzado propio (y ahí puede ir fuera de la cobertura). Cámara: ve lejos y en redondo, descubre a los escondidos y avisa; en la cobertura o sobre un muro propio.
@@ -483,7 +496,8 @@ globalThis.W = { VERSION: 'versión 58' };
     minuteman: { nombre: 'Minuteman', que: 'Intercontinental: el doble de alcance y de pegada.', alcance: 140, costo: 1800, pet: 200, raros: 30, tiempo: 800, dano: 950, area: 3.6, vel: 0.6, aguante: 1, nivel: 3 },
     sarmat:    { nombre: 'Sarmat',    que: 'Global: llega a cualquier punto del mapa; hacen falta dos interceptores para pararlo.', alcance: 0, costo: 4000, pet: 400, raros: 120, tiempo: 1500, dano: 2200, area: 5, vel: 0.7, aguante: 2, nivel: 3 },
   };
-  W.ECON = { misilesMax: 10, inicio: 2500, petInicio: 150, cosecha: 5, descarga: 25, colaMax: 9, separacionColocar: 3, goteoCada: 5, vistaInicial: 22, obrasMax: 8, curaUnidad: 0.01, curaEdificio: 0.0025, curaCosto: 0.15, venta: 0.5, trinchera: 0.45, arco: 0.14, arcoTrinchera: 1.05, visAd: 1.3, visLado: 0.75, visAt: 0.3, cono: 1.05, periferia: 1.83, flanco: 1.25, espalda: 1.5, bosqueVeh: 0.6, bosqueCubre: 0.7, reposta: 12, retiroBajo: 0.3, retiroAlto: 0.9, huida: 300, dia: 9600, diaLuz: 6000, nocheVis: 0.7, caminoVel: 1.6, tramoLargo: 4, enlace: 5, cobNodo: 14, cobEdif: 6, lineaVel: 0.12, lineaCelda: 3, sinSum: 400, sinSumRecarga: 1.5, dronFpv: 40, dronBomba: 15, dronRepone: 200, dronFpvCada: 60, hackInfo: 25, hackVeh: 240, hackEdif: 300, hackRecarga: 200, hackCanal: 40, trazaVel: 0.45, caminoLlano: 4, caminoBosque: 12, caminoAgua: 30, mandoCada: 40, mandoGiro: 1.5, captura: 600, capturaRadio: 2, antenaRadio: 12, depositoCada: 8, tallerRadio: 4, ocultaVe: 2.5, chatarra: 0.25, reparaRadio: 8, reparaVeh: 0.5, curaMedico: 0.35, reparaEdif: 0.8, rangos: [2, 5, 10], rangoDano: 0.1, rangoVida: 0.1, cupoAviones: 5, pasada: 7, orbita: 3.5, fuelCae: 80, cavar: 80, aplasta: 10, bonoProd: 0.5, bonoMax: 2.5 };
+  W.ECON = { misilesMax: 10, mejoraMax: 3, mejoraCosto: 0.6, mejoraBono: 0.5, // mejora de un edificio: hasta nivel 3; cada nivel cuesta el 60 % del edificio por el nivel que tiene y rinde un 50 % más
+    inicio: 2500, petInicio: 150, cosecha: 5, descarga: 25, colaMax: 9, separacionColocar: 3, goteoCada: 5, vistaInicial: 22, obrasMax: 8, curaUnidad: 0.01, curaEdificio: 0.0025, curaCosto: 0.15, venta: 0.5, trinchera: 0.45, arco: 0.14, arcoTrinchera: 1.05, visAd: 1.3, visLado: 0.75, visAt: 0.3, cono: 1.05, periferia: 1.83, flanco: 1.25, espalda: 1.5, bosqueVeh: 0.6, bosqueCubre: 0.7, reposta: 12, retiroBajo: 0.3, retiroAlto: 0.9, huida: 300, dia: 9600, diaLuz: 6000, nocheVis: 0.7, caminoVel: 1.6, tramoLargo: 4, enlace: 5, cobNodo: 14, cobEdif: 6, lineaVel: 0.12, lineaCelda: 3, sinSum: 400, sinSumRecarga: 1.5, dronFpv: 40, dronBomba: 15, dronRepone: 200, dronFpvCada: 60, hackInfo: 25, hackVeh: 240, hackEdif: 300, hackRecarga: 200, hackCanal: 40, trazaVel: 0.45, caminoLlano: 4, caminoBosque: 12, caminoAgua: 30, mandoCada: 40, mandoGiro: 1.5, captura: 600, capturaRadio: 2, antenaRadio: 12, depositoCada: 8, tallerRadio: 4, ocultaVe: 2.5, chatarra: 0.25, reparaRadio: 8, reparaVeh: 0.5, curaMedico: 0.35, reparaEdif: 0.8, rangos: [2, 5, 10], rangoDano: 0.1, rangoVida: 0.1, cupoAviones: 5, pasada: 7, orbita: 3.5, fuelCae: 80, cavar: 80, aplasta: 10, bonoProd: 0.5, bonoMax: 2.5 };
 })();
 
 // ===== sim/mapa.js =====
@@ -1141,10 +1155,12 @@ globalThis.W = { VERSION: 'versión 58' };
 
   // Disponible = tiene los edificios requeridos y el nivel tecnológico.
   W.disponible = function (m, j, d) { return W.tieneReq(m, j, d.req) && ((d.nivel || 1) <= m.jug[j].nivel || m.jug[j].tr.requisitos); };
+  const bonoE = (e) => 1 + ECON.mejoraBono * ((e.nivelE || 1) - 1); // lo que rinde de más un edificio mejorado
+  W.costoMejora = (e) => Math.round(EDIF[e.tipo].costo * ECON.mejoraCosto * (e.nivelE || 1));
   W.tieneReq = function (m, j, req) {
     const c = m.jug[j].cuenta;
     if (m.jug[j].tr.requisitos) return true; // ADMIN: sin requisitos
-    for (let k = 0; k < req.length; k++) if (!c[req[k]]) return false;
+    for (let k = 0; k < req.length; k++) if (!c[req[k]] && !(req[k] === 'estacion' && c.laboratorio)) return false; // el laboratorio vale como estación
     return true;
   };
 
@@ -1224,7 +1240,7 @@ globalThis.W = { VERSION: 'versión 58' };
       if (e.infra) continue;
       const en = EDIF[e.tipo].energia;
       if (e.tipo === 'patio') g.patio = true;
-      if (en > 0) g.prod += en * (m.jug[e.j].mejoras.turbinas ? 1.5 : 1); else g.uso -= en;
+      if (en > 0) g.prod += en * (m.jug[e.j].mejoras.turbinas ? 1.5 : 1) * bonoE(e); else g.uso -= en;
     }
     const sella = (f, cx, cy, r) => { const R = Math.ceil(r), r2 = r * r; for (let dy = -R; dy <= R; dy++) { const y = cy + dy; if (y < 0 || y >= N) continue; for (let dx = -R; dx <= R; dx++) { const x = cx + dx; if (x >= 0 && x < N && dx * dx + dy * dy <= r2) f[y * N + x] = 1; } } };
     for (let i = 0; i < its.length; i++) {
@@ -1255,8 +1271,8 @@ globalThis.W = { VERSION: 'versión 58' };
       J.cuenta[e.tipo] = (J.cuenta[e.tipo] || 0) + 1;
       if (e.edif) {
         const d = EDIF[e.tipo], en = d.energia;
-        if (en > 0) J.prod += en * (J.mejoras.turbinas ? 1.5 : 1); else J.uso -= en;
-        J.aguaProd += (d.agua || 0) * (e.tipo === 'bomba' && J.mejoras.depuracion ? 1.5 : 1);
+        if (en > 0) J.prod += en * (J.mejoras.turbinas ? 1.5 : 1) * bonoE(e); else J.uso -= en;
+        J.aguaProd += (d.agua || 0) * (e.tipo === 'bomba' && J.mejoras.depuracion ? 1.5 : 1) * (e.tipo === 'bomba' ? bonoE(e) : 1);
       }
       else { J.aguaUso += UNID[e.tipo].agua || 0; for (const p of e.pasajeros) { J.cuenta[p.tipo] = (J.cuenta[p.tipo] || 0) + 1; J.aguaUso += UNID[p.tipo].agua || 0; } } // los que van dentro de un transporte también cuentan
     }
@@ -1465,6 +1481,15 @@ globalThis.W = { VERSION: 'versión 58' };
       case 'trampa': // un interruptor del panel ADMIN
         trampa(m, cmd.j, cmd.clave, cmd.valor);
         return;
+      case 'mejorarEdif': { // sube un nivel el rendimiento de ese edificio (central, bomba, extractor, estación, laboratorio)
+        const e = m.porId.get(cmd.id);
+        if (!e || !e.edif || e.j !== cmd.j || e.vida <= 0 || !EDIF[e.tipo].mejora || (e.nivelE || 1) >= ECON.mejoraMax) return;
+        const precio = W.costoMejora(e); if (J.minerales < precio && !J.dios) return;
+        if (!J.dios) J.minerales -= precio;
+        e.nivelE = (e.nivelE || 1) + 1; m.redSucia = true;
+        m.efectos.push({ tipo: 'mejoraEdif', x1: e.cx, y1: e.cy, j: e.j, clase: e.tipo, nivel: e.nivelE, t: m.t });
+        return;
+      }
       case 'dronAtk': // enciende o apaga los drones de ataque de esos portadores
         for (const u of propias(m, cmd)) if (UNID[u.tipo].drones) u.dronAtk = !!cmd.on;
         return;
@@ -2742,7 +2767,7 @@ globalThis.W = { VERSION: 'versión 58' };
       else if (EDIF[e.tipo].arma) tickTorreta(m, e);
       else if (EDIF[e.tipo].da) { // extracción continua; con déficit de energía rinde la mitad
         const da = EDIF[e.tipo].da, J = m.jug[e.j];
-        e.acum += (e.sinLuz ? 0.5 : 1) * (e.tipo === 'estacion' && J.mejoras.analisis ? 1.5 : 1);
+        e.acum += (e.sinLuz ? 0.5 : 1) * (e.tipo === 'estacion' && J.mejoras.analisis ? 1.5 : 1) * bonoE(e);
         if (e.acum >= da.cada) { e.acum -= da.cada; J[da.rec]++; if (da.rec === 'petroleo') J.extraido++; }
       }
     }
@@ -2879,7 +2904,7 @@ globalThis.W = { VERSION: 'versión 58' };
       if ((J.cuenta[tipo] || 0) >= n) continue;
       if ((d.nivel || 1) > J.nivel) continue; // aún sin el nivel: se salta
       if (!W.tieneReq(m, j, d.req)) return null;
-      if (d.libre && !buscarSitio(m, j, tipo, patio)) continue; // sin yacimiento explorado: se salta
+      if (d.libre && !buscarSitio(m, j, tipo, patio)) { if (tipo === 'estacion' && !J.cuenta.laboratorio && W.tieneReq(m, j, EDIF.laboratorio.req)) return conEnergia('laboratorio'); continue; } // sin yacimiento explorado: se salta (y sin campo de conocimiento a mano, un laboratorio)
       if ((d.pet || 0) > J.petroleo && !J.cuenta.extractor) continue; // sin petróleo ni forma de sacarlo: se salta
       return conEnergia(tipo);
     }
@@ -3489,6 +3514,14 @@ globalThis.W = { VERSION: 'versión 58' };
       if (e.retro > 0.3) { c.fillStyle = col.fuego; c.beginPath(); c.arc(R * 2.45, 0, R * 0.34, 0, TAU); c.fill(); }
       c.restore(); return;
     }
+    if (inf && e.hundido) { // dentro de la trinchera: solo asoman el casco y el arma
+      const R = r * 1.4;
+      if (W.UNID[u.tipo].arma) { c.strokeStyle = col.osc; c.lineCap = 'round'; c.lineWidth = Math.max(1.2, R * 0.26); c.beginPath(); c.moveTo(R * 0.2, R * 0.2); c.lineTo(R * (1.25 - e.retro * 0.25), R * 0.2); c.stroke(); }
+      c.fillStyle = col.luz; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.arc(0, 0, R * 0.44, 0, TAU); c.fill(); c.stroke();
+      c.fillStyle = col.base; c.beginPath(); c.arc(0, 0, R * 0.2, 0, TAU); c.fill();
+      if (e.retro > 0.5) { c.fillStyle = col.fuego; c.beginPath(); c.arc(R * 1.45, R * 0.2, R * 0.26, 0, TAU); c.fill(); }
+      c.restore(); return;
+    }
     if (inf) {
       const R = r * 1.4;
       c.strokeStyle = col.osc; c.lineCap = at ? 'butt' : 'round'; c.lineWidth = Math.max(1.4, R * (at ? 0.55 : 0.3)); // fusil, o tubo lanzacohetes al hombro
@@ -3885,6 +3918,10 @@ globalThis.W = { VERSION: 'versión 58' };
       }
       c.fillStyle = tinta; c.beginPath(); c.arc(cx, cy, t * 0.05, 0, TAU); c.fill();
       if (lod === 2) { c.fillStyle = col.osc; c.fillRect(X(0.1), Y(0.76), t * 0.2, t * 0.12); c.fillRect(X(0.74), Y(0.1), t * 0.14, t * 0.14); }
+    } else if (e.tipo === 'laboratorio') { // un matraz con su líquido, que burbujea si hay energía
+      c.strokeStyle = col.luz; c.lineWidth = lw * 1.4; c.beginPath(); c.moveTo(X(0.42), Y(0.2)); c.lineTo(X(0.42), Y(0.42)); c.lineTo(X(0.24), Y(0.78)); c.lineTo(X(0.76), Y(0.78)); c.lineTo(X(0.58), Y(0.42)); c.lineTo(X(0.58), Y(0.2)); c.stroke();
+      c.fillStyle = s.deficit ? col.humo : col.agua; c.beginPath(); c.moveTo(X(0.34), Y(0.6)); c.lineTo(X(0.27), Y(0.75)); c.lineTo(X(0.73), Y(0.75)); c.lineTo(X(0.66), Y(0.6)); c.closePath(); c.fill();
+      if (!s.deficit) { const f = ((s.tiempo + s.id * 97) * 0.001) % 1; c.fillStyle = col.luz; c.beginPath(); c.arc(X(0.46 + 0.1 * Math.sin(s.id)), Y(0.58 - f * 0.3), t * 0.025, 0, TAU); c.fill(); }
     } else if (e.tipo === 'estDrones') { // plataforma de despegue con su H y un mástil
       c.strokeStyle = col.luz; c.lineWidth = lw * 1.4; c.beginPath(); c.arc(cx, cy, t * 0.3, 0, TAU); c.stroke();
       c.beginPath(); c.moveTo(X(0.4), Y(0.36)); c.lineTo(X(0.4), Y(0.64)); c.moveTo(X(0.6), Y(0.36)); c.lineTo(X(0.6), Y(0.64)); c.moveTo(X(0.4), Y(0.5)); c.lineTo(X(0.6), Y(0.5)); c.stroke();
@@ -4082,7 +4119,7 @@ globalThis.W = { VERSION: 'versión 58' };
 
     // Volumen: la vista sigue siendo cenital, pero cada cosa tiene altura. Los edificios muestran su pared sur y el tejado
     // se dibuja desplazado hacia arriba; las unidades llevan un canto; la roca y el agua, un escalón.
-    const ALTO = { patio: 0.3, central: 0.36, refineria: 0.32, bomba: 0.2, cuartel: 0.26, extractor: 0.3, fabrica: 0.34, torreta: 0.22, torreCanon: 0.36, aerodromo: 0.08, antiaerea: 0.22, estacion: 0.26, deposito: 0.22, obras: 0.28, misilera: 0.12, interceptor: 0.24, torretaMuro: 0.34, camara: 0.3, estDrones: 0.14 };
+    const ALTO = { patio: 0.3, central: 0.36, refineria: 0.32, bomba: 0.2, cuartel: 0.26, extractor: 0.3, fabrica: 0.34, torreta: 0.22, torreCanon: 0.36, aerodromo: 0.08, antiaerea: 0.22, estacion: 0.26, deposito: 0.22, obras: 0.28, misilera: 0.12, interceptor: 0.24, torretaMuro: 0.34, camara: 0.3, estDrones: 0.14, laboratorio: 0.26 };
     function entEn(wx, wy, holgura) { // holgura: margen extra (en celdas) para acertar con el dedo
       let mejor = null, md = Infinity;
       for (const e of m.ents) {
@@ -4138,6 +4175,7 @@ globalThis.W = { VERSION: 'versión 58' };
         if (e.tipo === 'misilera' && e.j === YO) { const g = Object.keys(MIS).filter((k) => e.silo && e.silo[k]).map((k) => e.silo[k] + ' ' + MIS[k].nombre).join(', '); t += ' · ' + (g || 'sin misiles'); }
         if (e.tipo === 'interceptor' && e.j === YO) t += ' · cargas ' + (e.cargas === undefined ? EDIF.interceptor.cargas : e.cargas) + '/' + EDIF.interceptor.cargas;
         { const dd = (e.edif ? EDIF : UNID)[e.tipo].drones; if (dd && e.j === YO && e.dr) t += ' · drones ' + (e.dr.rec.length + e.dr.bomba.length + e.dr.fpv.length) + ' en el aire' + (dd.fpv ? (e.dronAtk === false ? ' · ataque apagado' : '') : ''); }
+        if (e.edif && EDIF[e.tipo].mejora && e.j === YO) t += ' · nivel ' + (e.nivelE || 1) + ' de ' + W.ECON.mejoraMax;
         if (e.hack > m.t) t += ' · hackeado: ' + Math.ceil((e.hack - m.t) / 20) + ' s';
         if (!e.edif && UNID[e.tipo].monta && e.j === YO) t += (e.monta || 0) >= UNID[e.tipo].monta ? ' · montada' : ' · montando…';
         if (e.tipo === 'aerodromo' && e.j === YO) t += ' · aviones ' + m.ents.filter((u) => !u.edif && u.casa === e.id).length + '/' + W.ECON.cupoAviones;
@@ -4443,11 +4481,12 @@ globalThis.W = { VERSION: 'versión 58' };
           }
         }
         W.fichaEdificio(ctx, e, px, py - h, t, lod, col, est);
+        if (e.nivelE > 1 && lod) { ctx.fillStyle = P.bien; for (let k = 1; k < e.nivelE; k++) { ctx.beginPath(); ctx.arc(px + t - 5 - (k - 1) * 7, py - h + 5, 2.6, 0, TAU); ctx.fill(); } } // edificio mejorado: un punto verde por nivel ganado
         if (edadObra < 1) { ctx.restore(); ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.setLineDash([4, 3]); ctx.strokeRect(px + 1.5, py + 1.5, t - 3, t - 3); ctx.setLineDash([]); }
       };
       const descargando = new Set();
       for (const e of m.ents) if (!e.edif && e.est === 'descargar') descargando.add(e.ref);
-      for (const e of m.ents) {
+      for (const e of m.ents.filter((q) => q.edif && !q.infra).sort((a, b) => a.y + a.tam - (b.y + b.tam) || a.x - b.x)) { // de norte a sur: el de delante tapa al de detrás, y no al revés
         if (!e.edif || e.infra || !veo(e) || fuera(e.cx, e.cy) && fuera(e.x, e.y)) continue;
         const px = ox + e.x * z, py = oy + e.y * z, t = e.tam * z, Je = m.jug[e.j];
         const est = { tiempo, id: e.id, vida: e.vida / e.vidaMax, deficit: !!e.sinLuz || e.hack > m.t || (e.tipo === 'deposito' && !e.conRed), activo: false, descarga: descargando.has(e.id), ang: 0, retro: 0 };
@@ -4566,10 +4605,10 @@ globalThis.W = { VERSION: 'versión 58' };
           else if (!e.obj && e.orden === 'nada') { const ph = (tiempo / 1000 + e.id * 1.7) % 11; if (ph < 1.4) mec = Math.sin((ph / 1.4) * Math.PI) * 0.5 * (e.id % 2 ? 1 : -1); }
         }
         const st = {
-          ang: (d.cat === 'inf' && e.obj && !anda ? g.t : g.a) + mec, angT: g.t, retro: d.arma ? retroceso(e, d.arma) : 0, monta: d.monta ? (e.monta || 0) / d.monta : 1,
+          ang: (d.cat === 'inf' && e.obj && !anda ? g.t : g.a) + mec, angT: g.t, retro: d.arma ? retroceso(e, d.arma) : 0, hundido: d.cat === 'inf' && W.enTrinchera(m, e), monta: d.monta ? (e.monta || 0) / d.monta : 1,
           anda, tiempo, carga: e.carga / (d.carga || 1), cosecha: e.est === 'cosechar', raro: e.cargaTipo === 2,
         };
-        const canto = lod && !d.aire && r >= 3.5 ? Math.max(1, r * 0.26) : 0; // el cuerpo de la unidad: su silueta en oscuro, y encima la ficha
+        const canto = lod && !d.aire && r >= 3.5 && !st.hundido ? Math.max(1, r * 0.26) : 0; // el cuerpo de la unidad: su silueta en oscuro, y encima la ficha
         if (canto) { W.fichaUnidad(ctx, e, r, 1, e.j === YO ? COL.yoLado : COL.rivalLado, st); ctx.translate(0, -canto); }
         if (d.cat === 'veh' && !d.aire && lod) { // el casco tiene peso: cabecea al frenar y al arrancar, y recula con el disparo
           const quiere = Math.max(-1, Math.min(2, -(g.ac || 0) / d.acel)) * 0.075;
@@ -4955,6 +4994,8 @@ globalThis.W = { VERSION: 'versión 58' };
           if (d.derribo) { estallido(d.x2, d.y2, 2); aviso(d.j === YO ? 'Misil enemigo derribado' : 'Te han derribado un misil'); son.explosion(Math.max(0.2, cerca(d.x2, d.y2)), paneo(d.x2), false); }
         } else if (d.tipo === 'misilListo') {
           if (d.j === YO) { aviso(MIS[d.clase].nombre + ' listo en la misilera'); son.unidadLista(); }
+        } else if (d.tipo === 'mejoraEdif') {
+          if (d.j === YO) { aviso(EDIF[d.clase].nombre + ' mejorada a nivel ' + d.nivel); son.colocar(); }
         } else if (d.tipo === 'interferido') {
           if (d.j === YO && performance.now() - avisoInterf > 6000) { avisoInterf = performance.now(); aviso('Un vehículo de mando enemigo interfiere tus drones'); }
         } else if (d.tipo === 'hack') {
@@ -5226,6 +5267,38 @@ globalThis.W = { VERSION: 'versión 58' };
     $('desplegar').addEventListener('click', desplegar);
     if (!cargado) W.orden(m, { t: 'retiro', j: YO, on: true }); // por defecto, las unidades propias muy dañadas se retiran solas a reparar
     const paraRetiro = () => unidadesSel().filter((u) => !UNID[u.tipo].aire && u.tipo !== 'cosechadora');
+    const mejorable = () => { const es = edificiosSel().filter((e) => EDIF[e.tipo].mejora && (e.nivelE || 1) < W.ECON.mejoraMax); return es.length === 1 && sel.size === 1 ? es[0] : null; };
+    $('mejorar').addEventListener('click', () => { const e = mejorable(); if (!e) return; if (J.minerales < W.costoMejora(e) && !J.dios) { aviso('Faltan minerales para la mejora'); return; } W.orden(m, { t: 'mejorarEdif', j: YO, id: e.id }); });
+    // ---------- guía: para qué sirve cada cosa ----------
+    const QUE = {
+      patio: 'El centro de la base: desde él se encargan los edificios. Si pierdes todos, pierdes la partida.', central: 'Da energía a los edificios de su red.', refineria: 'Donde descargan las cosechadoras; trae una.', bomba: 'Da agua, que es el tope de tropa. Va junto al agua.',
+      cuartel: 'Produce la infantería.', extractor: 'Saca petróleo de un yacimiento.', fabrica: 'Produce los vehículos.', torreta: 'Defensa fija contra tierra y aire.', torreCanon: 'Defensa pesada de largo alcance contra blindados.', aerodromo: 'Produce y aloja hasta cinco aviones.',
+      antiaerea: 'Defensa fija solo contra el aire: aviones y drones.', estacion: 'Sobre un campo de conocimiento da información rápido; aloja la inteligencia.', laboratorio: 'Da información en la base, sin campo, más despacio. Vale como estación.', obras: 'Produce las unidades civiles: ingeniero civil y excavadora.',
+      deposito: 'Conectado a tu red, crea una zona con suministro donde también puedes construir.', misilera: 'Fabrica, guarda y lanza misiles balísticos.', interceptor: 'Derriba los misiles enemigos que entran en su radio.', estDrones: 'Mantiene dos drones de reconocimiento vigilando a su alrededor.',
+      torretaMuro: 'Torreta que se monta sobre un muro reforzado tuyo.', camara: 'Ve lejos y en redondo, descubre a los escondidos y avisa si entra un enemigo.',
+      infanteria: 'Barata y versátil; captura puestos, cava y ocupa trincheras.', antitanque: 'Infantería con cohetes: contra vehículos y aviones.', explorador: 'Rápido y ve lejos; explora solo con E.', ingeniero: 'Repara solo vehículos y edificios; cava más rápido.', medico: 'Cura solo a la infantería herida cercana.',
+      francotirador: 'Mata infantería desde muy lejos; se esconde.', gatling: 'Equipo de dos: tarda en montar, y montada tritura infantería y aviones bajos.', hacker: 'Apaga a distancia un vehículo o edificio enemigo unos segundos; cuesta información.', operador: 'Parado, despliega un dron de reconocimiento.',
+      tanque: 'El vehículo de combate básico.', artilleria: 'Dispara muy lejos, en área, a lo que vea cualquiera de los tuyos.', pesado: 'Tanque lento, muy duro y de gran pegada.', blindado: 'Rápido, con ametralladora: contra infantería.', antiaereoMovil: 'Antiaérea sobre ruedas para acompañar al ejército.',
+      transporte: 'Lleva infantería dentro, rápido.', lanzacohetes: 'Salvas de cohetes a mucha distancia, sobre una zona.', mando: 'Los tuyos a su alrededor ven en redondo y giran más rápido; interfiere drones enemigos. Gasta información.', comandoDrones: 'Lleva drones de reconocimiento, bombarderos y kamikazes que atacan solos.',
+      patioMovil: 'Se despliega como un patio nuevo donde lo lleves.', cosechadora: 'Recoge minerales (y chatarra) y los lleva a la refinería.', excavadora: 'Traza caminos militares: abre el bosque y tiende puentes.', civil: 'Conecta edificios con líneas de servicio y levanta muros, puertas y alambradas.',
+      caza: 'Avión contra aviones y vehículos; ataca de pasada.', bombardero: 'Suelta bombas en área sobre edificios y tropa.', dron: 'Avión de reconocimiento de largo alcance, sin armas.', helicoptero: 'Se queda sobre el blanco; bueno contra vehículos.',
+    };
+    function pintarGuia() {
+      const fila = (ico, nombre, costo, que) => '<div class="fila3"><i class="ico ' + (ico ? 'i-' + ico : '') + '"></i><b>' + nombre + '</b><span class="c">' + costo + '</span><span>' + que + '</span></div>';
+      const pide = (d) => (d.nivel > 1 ? ' Nivel ' + d.nivel + '.' : '') + (d.req && d.req.length ? ' Pide: ' + d.req.map((r) => EDIF[r].nombre.toLowerCase()).join(', ') + '.' : '');
+      let h = '<h3>Edificios (desde el patio)</h3>';
+      for (const t in EDIF) if (!EDIF[t].infra) h += fila(t, EDIF[t].nombre, precio(EDIF[t]) || '—', (QUE[t] || '') + pide(EDIF[t]));
+      const grupos = [['cuartel', 'Infantería (cuartel)'], ['fabrica', 'Vehículos (fábrica)'], ['obras', 'Civiles (obras civiles)'], ['aerodromo', 'Aviación (aeródromo)']];
+      for (const [lugar, titulo] of grupos) { h += '<h3>' + titulo + '</h3>'; for (const t in UNID) if (!UNID[t].mini && W.lugarDe(UNID[t]) === lugar) h += fila(t, UNID[t].nombre, precio(UNID[t]), (QUE[t] || '') + pide(UNID[t])); }
+      h += '<h3>Drones (los saca su portador)</h3>' + fila('dronRec', 'De reconocimiento', '40', 'Da vueltas alrededor del portador y ve.') + fila('dronFpv', 'Kamikaze', '40 por salida', 'Un solo uso, contra vehículos y edificios armados.') + fila('dronBomba', 'Bombardero', '15 por salida', 'Suelta una granada sobre la infantería y vuelve a recargar.');
+      h += '<h3>Muros (ingeniero civil)</h3>'; for (const k in W.MUROS) h += fila('', W.MUROS[k].nombre, W.MUROS[k].costo + ' por celda', W.MUROS[k].que + (W.MUROS[k].nivel ? ' Nivel ' + W.MUROS[k].nivel + '.' : ''));
+      h += '<h3>Misiles (misilera)</h3>'; for (const k in W.MISILES) h += fila('', W.MISILES[k].nombre, precio(W.MISILES[k]), W.MISILES[k].que + ' Nivel ' + W.MISILES[k].nivel + '.');
+      h += '<h3>Infraestructura</h3>' + fila('', 'Camino militar', '4 a 30 por celda', 'Lo traza la excavadora. Solo tus vehículos corren por él.') + fila('', 'Línea de servicio', '3 por celda', 'La tiende el ingeniero civil entre dos edificios: lleva energía y mete el edificio en tu red.') + fila('', 'Trinchera', 'gratis', 'La cava la infantería (Z). Cuatro puestos a cubierto; clic derecho para ocuparla.');
+      $('guiaTxt').innerHTML = h;
+    }
+    $('abreGuia').addEventListener('click', () => { pintarGuia(); $('guia').hidden = false; });
+    $('cierraGuia').addEventListener('click', () => { $('guia').hidden = true; });
+    $('guia').addEventListener('click', (ev) => { if (ev.target === $('guia')) $('guia').hidden = true; });
     const conDrones = () => unidadesSel().filter((u) => u.j === YO && UNID[u.tipo].drones && UNID[u.tipo].drones.fpv);
     $('dronAtk').addEventListener('click', () => { const us = conDrones(); if (us.length) W.orden(m, { t: 'dronAtk', j: YO, ids: us.map((u) => u.id), on: us.some((u) => u.dronAtk === false) }); });
     $('verRed').addEventListener('click', () => { if (conRed) verRed = !verRed; else aviso('Partida clásica: sin red'); });
@@ -5492,7 +5565,7 @@ globalThis.W = { VERSION: 'versión 58' };
       }
       listarGrupos(); actualizarTec(); actualizarTactil();
       { // pestañas: una sola rejilla a la vista, la que toca según lo seleccionado (o la que elija el jugador)
-        const disp = { edif: tipos.has('patio'), unid: hayUnid, tec: hayTecG, intel: tipos.has('estacion'), mis: tipos.has('misilera') }, firma = [...tipos].sort().join(',');
+        const disp = { edif: tipos.has('patio'), unid: hayUnid, tec: hayTecG, intel: tipos.has('estacion') || tipos.has('laboratorio'), mis: tipos.has('misilera') }, firma = [...tipos].sort().join(',');
         if (firma !== pestFirma) { pestFirma = firma; pestQuiero = ''; }
         const lista = Object.keys(disp).filter((k) => disp[k]), ver = disp[pestQuiero] ? pestQuiero : lista[0] || '';
         $('pest').hidden = lista.length < 2;
@@ -5519,6 +5592,7 @@ globalThis.W = { VERSION: 'versión 58' };
       { const hay = unidadesSel().some((u) => UNID[u.tipo].tiende), bc = $('conectar'); bc.hidden = !hay; bc.classList.toggle('listo', modo === 'conectar'); if (!hay && modo === 'conectar') modo = null; }
       { const hay = unidadesSel().some((u) => UNID[u.tipo].traza), bz = $('trazar'); bz.hidden = !hay; bz.classList.toggle('listo', modo === 'trazar'); }
       { const us = conCarga(), bd = $('descargar'); bd.hidden = !us.length; if (us.length) { const t = 'Descargar · ' + us.reduce((a, u) => a + u.pasajeros.length, 0) + ' dentro'; if (bd.textContent !== t) bd.textContent = t; } }
+      { const e = mejorable(), bm = $('mejorar'); bm.hidden = !e; if (e) { const pr = W.costoMejora(e), t = 'Mejorar a nivel ' + ((e.nivelE || 1) + 1) + ' · ' + pr, cl = 'btn' + (J.minerales < pr && !J.dios ? ' caro' : ''); if (bm.textContent !== t) bm.textContent = t; if (bm.className !== cl) bm.className = cl; } }
       { const us = conDrones(), bd = $('dronAtk'); bd.hidden = !us.length; if (us.length) { const t = 'Drones de ataque: ' + (us.every((u) => u.dronAtk !== false) ? 'sí' : us.some((u) => u.dronAtk !== false) ? 'algunos' : 'no'); if (bd.textContent !== t) bd.textContent = t; } }
       { const bv = $('verRed'), t = 'ver la red: ' + (verRed ? 'sí' : 'no'); if (bv.textContent !== t) { bv.textContent = t; bv.classList.toggle('on', verRed); } bv.hidden = !conRed; }
       { const us = paraRetiro(), br = $('retiro'); br.hidden = !us.length;
@@ -5858,7 +5932,7 @@ globalThis.W = { VERSION: 'versión 58' };
         case 'Equal': case 'NumpadAdd': raton.x = cw / 2; raton.y = ch / 2; zoom(1.25); break;
         case 'Minus': case 'NumpadSubtract': raton.x = cw / 2; raton.y = ch / 2; zoom(0.8); break;
         case 'KeyT': ponerTema(tema === 'clara' ? 'oscura' : 'clara'); break;
-        case 'Escape': modo = null; sel.clear(); break;
+        case 'Escape': if (!$('guia').hidden) { $('guia').hidden = true; break; } modo = null; sel.clear(); break;
       }
     });
     window.addEventListener('keyup', (ev) => teclas.delete(ev.code));
