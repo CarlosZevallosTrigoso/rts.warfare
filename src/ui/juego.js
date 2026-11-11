@@ -440,7 +440,9 @@
       giroCerca = false;
       if (giroPend) { // tras ordenar mover: la flecha sigue al cursor y un segundo clic derecho fija la orientación
         const g = giroPend, wx = aMundoX(raton.x), wy = aMundoY(raton.y), d = Math.hypot(wx - g.x, wy - g.y);
-        if (performance.now() - g.t0 > 15000 || !mismaSel(g.ids)) giroPend = null;
+        g.ids = g.ids.filter((id) => m.porId.has(id)); // las bajas no anulan la orden
+        if (g.ids.some((id) => m.porId.get(id).orden !== 'nada')) g.t0 = performance.now(); // mientras sigan en camino, el plazo no corre
+        if (performance.now() - g.t0 > 12000 || !g.ids.length || !mismaSel(g.ids)) giroPend = null;
         else if (raton.dentro && d > 0.4 && d < 9) {
           giroCerca = true;
           ctx.globalAlpha = 0.8; flecha(ox + g.x * z, oy + g.y * z, raton.x, raton.y, P.tinta); ctx.globalAlpha = 1;
@@ -893,7 +895,7 @@
     function ordenar(wx, wy, enc) {
         if (modo) { modo = null; return; }
         if (wx < 0 || wy < 0 || wx >= N || wy >= N) return;
-        if (giroPend && !enc && performance.now() - giroPend.t0 < 15000 && mismaSel(giroPend.ids)) {
+        if (giroPend && !enc && mismaSel(giroPend.ids)) {
           const g = giroPend, d = Math.hypot(wx - g.x, wy - g.y), en = entEn(wx, wy);
           if (d > 0.4 && d < 9 && !(en && en.j !== YO)) { // clic cerca del destino: es la orientación, no otra orden
             const rumbo = Math.atan2(wy - g.y, wx - g.x);
