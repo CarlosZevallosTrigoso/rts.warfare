@@ -171,7 +171,7 @@
       <div>clic / caja: seleccionar</div>
       <div>clic derecho: mover, atacar, cosechar</div>
       <div><kbd>Mayús</kbd>+clic derecho: encadenar órdenes</div>
-      <div><kbd>R</kbd> patrulla · <kbd>E</kbd> explorar sola · <kbd>F</kbd> formación</div>
+      <div><kbd>R</kbd> patrulla: marca los puntos con clic y cierra con clic derecho · <kbd>E</kbd> explorar sola · <kbd>F</kbd> formación</div>
       <div><kbd>L</kbd> vista de la red: cobertura (suministro y dónde construir) y qué está conectado</div>
       <div>ingeniero civil: muros, puertas y alambradas en línea recta; clic derecho con tropa sobre un muro enemigo lo ataca</div>
       <div><kbd>J</kbd> con un ingeniero civil: conectar edificios con líneas de servicio · <kbd>K</kbd> con la excavadora: camino militar</div>
@@ -186,7 +186,7 @@
       <div>tanques y torres giran la torreta, el resto gira entero</div>
       <div>vehículos: +25 % de daño por el costado, +50 % por la espalda</div>
       <div>aviones: 5 por aeródromo; salen, cumplen y vuelven a posarse;</div>
-      <div><kbd>R</kbd> patrulla aérea: dan vueltas, repostan solos y la retoman;</div>
+      <div><kbd>R</kbd> patrulla aérea: con un punto dan vueltas sobre él; repostan solos y la retoman;</div>
       <div>no se alejan más que su radio de vuelo; posados no se les ataca;</div>
       <div>solo les alcanzan fusil, cohete, torreta, antiaérea y caza</div>
       <div><b>!</b> pide apoyo · <b>✓</b> acude a la llamada</div>
@@ -275,6 +275,7 @@
     <div id="sel" class="tenue"></div>
     <div id="bMuro" hidden><h2 title="El ingeniero civil levanta muros en línea recta: toca dónde empieza y dónde acaba.">Muros</h2><div class="g3"><button type="button" class="grupo" data-m="muro">muro</button><button type="button" class="grupo" data-m="reforzado">reforzado</button><button type="button" class="grupo" data-m="puerta">puerta</button><button type="button" class="grupo" data-m="alambrada">alambrada</button><button type="button" class="grupo" data-m="quitar">quitar</button></div></div>
     <button type="button" id="conectar" class="btn" hidden title="El ingeniero civil une edificios tuyos con una línea de servicio: lleva la energía y los mete en tu red. Cruza cualquier terreno.">Conectar edificios</button>
+    <button type="button" id="autoCivil" class="btn" hidden title="En automático, el ingeniero civil busca solo los edificios tuyos que estén fuera de la red y los conecta. Cualquier orden a mano lo saca del automático."></button>
     <button type="button" id="trazar" class="btn" hidden title="La excavadora va hasta el punto que marques dejando camino. Camino militar: abre el bosque y tiende puentes sobre el agua (más caros). Solo tus vehículos corren por él. No lleva energía ni red: para eso está el ingeniero civil.">Trazar camino</button>
     <button type="button" id="descargar" class="btn" hidden></button>
     <button type="button" id="desplegar" class="btn" hidden title="Convierte el vehículo en su edificio, donde está: el patio móvil en un patio; el puesto móvil en un puesto de avanzada. No se puede replegar.">Desplegar</button>
@@ -304,12 +305,12 @@
   <div><h2>Semilla del mapa</h2><input id="op-s" inputmode="numeric" placeholder="al azar" autocomplete="off"></div>
   <button type="button" id="empezar">Empezar</button>
   <button type="button" id="continuar" hidden>Continuar la partida guardada</button>
-  <div id="version">versión 61</div>
+  <div id="version">versión 62</div>
 </div></div>
 <div id="guia" hidden><div class="caja"><div class="cab"><strong>Guía: para qué sirve cada cosa</strong><button type="button" id="cierraGuia">cerrar</button></div><div id="guiaTxt"></div></div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finVer" href="#" title="Vuelve a ver la partida entera, con todo el mapa a la vista y a la velocidad que quieras.">ver repetición</a><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 61' };
+globalThis.W = { VERSION: 'versión 62' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -871,6 +872,24 @@ globalThis.W = { VERSION: 'versión 61' };
     m.ents.push(e); m.porId.set(e.id, e); m.redSucia = true;
     return e;
   }
+  // Ingeniero civil en automático: busca el edificio propio sin red que tenga más cerca (y que no esté ya encargado a otro) y lo une con el edificio conectado más próximo a él.
+  function autoConectar(m, u) {
+    const tomados = new Set();
+    for (const o of m.ents) if (!o.edif && o.j === u.j && o !== u && o.orden === 'conectar' && o.obra) for (const p of o.obra.pares) { tomados.add(p[0]); tomados.add(p[1]); }
+    let b = null, db = Infinity;
+    for (const e of m.ents) {
+      if (!e.edif || e.infra || e.j !== u.j || e.vida <= 0 || e.conRed || e.tipo === 'avanzada' || tomados.has(e.id)) continue;
+      const d0 = Math.hypot(e.cx - u.x, e.cy - u.y); if (d0 < db) { db = d0; b = e; }
+    }
+    if (!b) return;
+    let a = null, da = Infinity;
+    for (const e of m.ents) {
+      if (!e.edif || e.infra || e.j !== u.j || e.vida <= 0 || !e.conRed) continue;
+      const d0 = Math.hypot(e.cx - b.cx, e.cy - b.cy); if (d0 < da) { da = d0; a = e; }
+    }
+    if (!a) return;
+    u.orden = 'conectar'; u.obra = { pares: [[a.id, b.id]], prog: 0, hecho: 0, ult: 0, auto: true }; u.ruta = null; u.pend = null; u.obj = 0;
+  }
   // El ingeniero civil conectando: va al primer edificio del par y, desde ahí, la línea avanza sola hasta el segundo, tramo a tramo y pagando cada uno.
   function tickConectar(m, u) {
     const ob = u.obra, J = m.jug[u.j];
@@ -880,7 +899,7 @@ globalThis.W = { VERSION: 'versión 61' };
     if (!ob.pares.length) { fin(); return; }
     const a = m.porId.get(ob.pares[0][0]), b = m.porId.get(ob.pares[0][1]);
     if (dist(u.x, u.y, a) > 2.2) { // aún no ha llegado al edificio de partida
-      if (u.fallo) { u.fallo = false; m.efectos.push({ tipo: 'sinLinea', x1: u.x, y1: u.y, j: u.j, t: m.t, llegar: true }); fin(); return; }
+      if (u.fallo) { u.fallo = false; if (ob.auto) u.autoT = m.t + 600; else m.efectos.push({ tipo: 'sinLinea', x1: u.x, y1: u.y, j: u.j, t: m.t, llegar: true }); fin(); return; }
       if (!u.pend && !u.ruta) pedirRuta(m, u, a.cx, a.cy, a.tam / 2 + 1.2);
       avanzar(m, u); return;
     }
@@ -1175,7 +1194,7 @@ globalThis.W = { VERSION: 'versión 61' };
       carga: 0, est: tipo === 'cosechadora' ? 'buscar' : '', celda: -1, ref: 0, espera: 0, pref: null,
       quiere: 1, cargaTipo: 1, // cosechadora: qué busca y qué lleva (1 minerales, 2 raros)
       fuel: d.fuel || 0, repostando: false, casa: 0, enTierra: false, slot: 0, // aviación: su aeródromo y si está posado en él
-      cola: [], patrulla: null, explora: false, // órdenes encadenadas, ruta de patrulla, exploración automática
+      auto: !!d.tiende, cola: [], patrulla: null, explora: false, // órdenes encadenadas, ruta de patrulla, exploración automática
       retira: m.jug[j].retiro, retirando: false, volver: null, tRet: 0, huye: 0, // retirada automática a reparar; cosechadora que huye
       bajas: 0, rango: 0, // veteranía
       trazas: [], // excavadora: tramos de camino pendientes
@@ -1488,11 +1507,15 @@ globalThis.W = { VERSION: 'versión 61' };
   function siguienteOrden(m, u) {
     while (u.cola.length) if (asignar(m, u, u.cola.shift())) return;
     if (u.patrulla) {
-      const p = u.patrulla; p.i = (p.i + 1) % p.pts.length;
+      const p = u.patrulla;
+      if (p.g && (p.esp = (p.esp || 0) + 1) < 200) { // patrulla en grupo: en cada punto espera (un rato) a los compañeros que aún vienen de camino
+        for (const o of m.ents) if (o !== u && !o.edif && o.vida > 0 && o.patrulla && o.patrulla.g === p.g && o.patrulla.i === p.i && o.orden !== 'nada' && o.dest && Math.hypot(o.x - o.dest.x, o.y - o.dest.y) > 2.5) return;
+      }
+      p.esp = 0; p.i = (p.i + 1) % p.pts.length;
       if (UNID[u.tipo].aire && p.pts.length === 1) { // patrulla aérea sobre un punto: da vueltas a su alrededor
         p.a = (p.a === undefined ? u.id * 2.4 : p.a) + 0.8; // cada avión entra en la órbita por un punto distinto, para no ir encimados
         asignar(m, u, { t: 'amover', x: p.pts[0].x + Math.cos(p.a) * ECON.orbita, y: p.pts[0].y + Math.sin(p.a) * ECON.orbita });
-      } else asignar(m, u, { t: 'amover', x: p.pts[p.i].x, y: p.pts[p.i].y });
+      } else asignar(m, u, { t: 'amover', x: p.pts[p.i].x, y: p.pts[p.i].y, tope: p.tope || 0 });
     } else if (u.explora) {
       const c = celdaSinExplorar(m, u);
       if (c < 0) { u.explora = false; m.efectos.push({ tipo: 'explorado', x1: u.x, y1: u.y, j: u.j, t: m.t }); } else asignar(m, u, { t: 'mover', x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 });
@@ -1518,7 +1541,9 @@ globalThis.W = { VERSION: 'versión 61' };
       const mision = m.sigMision++;
       for (const id of cmd.ids) { const u = m.porId.get(id); if (u && !u.edif && u.j === cmd.j) u.mision = mision; }
     }
+    if (cmd.ids && cmd.t !== 'autoCivil') for (const id of cmd.ids) { const u = m.porId.get(id); if (u && !u.edif && u.j === cmd.j && u.auto) u.auto = false; } // una orden a mano saca al ingeniero civil del automático
     switch (cmd.t) {
+      case 'autoCivil': for (const u of propias(m, cmd)) if (UNID[u.tipo].tiende) u.auto = !!cmd.on; return;
       case 'dios': // modo GOD: recursos infinitos; al apagarlo vuelve el saldo anterior
         J.dios = !J.dios;
         if (J.dios) J.antesDios = [J.minerales, J.petroleo, J.raros, J.info]; else [J.minerales, J.petroleo, J.raros, J.info] = J.antesDios;
@@ -1808,6 +1833,18 @@ globalThis.W = { VERSION: 'versión 61' };
         return;
       }
       case 'patrulla': // va y vuelve entre puntos, atacando lo que encuentre; con enc se añade otro punto
+        if (cmd.pts && cmd.pts.length) { // ruta entera, compartida por el grupo: cada unidad lleva su puesto en cada punto y todas van al paso de la más lenta
+          const us = propias(m, cmd).filter((u) => u.tipo !== 'cosechadora'), pts = cmd.pts.slice(0, 12), rutas = new Map();
+          let tope = Infinity; for (const u of us) tope = Math.min(tope, UNID[u.tipo].vel);
+          for (const q of pts) destinos(m, us, q.x, q.y, (u, x, y) => { let r = rutas.get(u.id); if (!r) rutas.set(u.id, r = []); r.push({ x, y }); });
+          for (const u of us) {
+            const r = rutas.get(u.id); if (!r || !r.length) continue;
+            limpiar(u); u.orden = 'nada'; u.obj = 0; u.ruta = null; u.pend = null;
+            if (UNID[u.tipo].aire) u.patrulla = pts.length === 1 ? { pts: [{ x: pts[0].x, y: pts[0].y }], i: 0 } : { pts: pts.map((q) => ({ x: q.x, y: q.y })), i: -1 };
+            else u.patrulla = r.length === 1 ? { pts: [{ x: u.x, y: u.y }, r[0]], i: 0, tope, g: us.length > 1 ? u.mision : 0 } : { pts: r, i: -1, tope, g: us.length > 1 ? u.mision : 0 };
+          }
+          return;
+        }
         destinos(m, propias(m, cmd).filter((u) => u.tipo !== 'cosechadora'), cmd.x, cmd.y, (u, x, y) => {
           if (cmd.enc && u.patrulla) { if (u.patrulla.pts.length < 12) u.patrulla.pts.push({ x, y }); return; }
           limpiar(u); u.orden = 'nada'; u.obj = 0; u.ruta = null; u.pend = null;
@@ -2438,6 +2475,7 @@ globalThis.W = { VERSION: 'versión 61' };
       if (u.orden === 'hackear') { tickHackear(m, u); return; }
       if (u.orden === 'murar') { tickMurar(m, u); return; }
       if (u.orden !== 'nada') { u.arregla = 0; if (avanzar(m, u) || (!u.ruta && !u.pend)) u.orden = 'nada'; return; }
+      if (d.tiende && u.auto && m.logistica !== false && (m.t + u.id) % 30 === 0 && m.t >= (u.autoT || 0)) autoConectar(m, u);
       if (d.repara || d.cura) tickIngeniero(m, u);
       return;
     }
@@ -4240,6 +4278,7 @@ globalThis.W = { VERSION: 'versión 61' };
       if (e) {
         let t = (e.muro ? W.MURO_N[e.muro] : (e.edif ? EDIF : UNID)[e.tipo]).nombre + (e.j === YO ? '' : ' rival') + ' · ' + Math.ceil(e.vida) + '/' + e.vidaMax;
         if (e.tipo === 'cosechadora' && e.j === YO) t += ' · carga ' + e.carga;
+        if (!e.edif && UNID[e.tipo].tiende && e.j === YO && m.logistica !== false) t += e.orden === 'conectar' ? ' · tendiendo línea' : e.auto ? ' · automático' : ' · manual';
         if (e.cava > 0) t += ' · cavando'; else if (e.guardia && e.j === YO && !W.enTrinchera(m, e)) t += ' · en guardia';
         if (UNID[e.tipo] && UNID[e.tipo].aire && e.j === YO) t += (e.enTierra ? ' · en tierra' : e.repostando ? ' · vuelve a repostar' : e.patrulla ? ' · patrulla' : '') + ' · combustible ' + Math.round(e.fuel / UNID[e.tipo].fuel * 100) + ' %';
         if (!e.edif && e.rango) t += ' · veterano ' + '▲'.repeat(e.rango);
@@ -4928,7 +4967,17 @@ globalThis.W = { VERSION: 'versión 61' };
       ctx.font = '11px "Fira Code", ui-monospace, monospace';
       if (pausa || modo === 'amover' || modo === 'patrulla' || modo === 'barrido') {
         ctx.fillStyle = P.tinta;
-        ctx.fillText(pausa ? 'pausa' : modo === 'amover' ? 'atacar al avanzar: elige destino' : modo === 'barrido' ? 'barrido: elige la zona a revelar' : 'patrulla: elige el punto (con Mayús añades más)', 12, ch - 14);
+        ctx.fillText(pausa ? 'pausa' : modo === 'amover' ? 'atacar al avanzar: elige destino' : modo === 'barrido' ? 'barrido: elige la zona a revelar' : rutaP.length ? 'patrulla: ' + rutaP.length + (rutaP.length === 1 ? ' punto' : ' puntos') + ' · clic derecho, Enter o R: en marcha · Retroceso: quita el último · Esc: cancela' : 'patrulla: marca los puntos con clic; clic derecho, Enter o R para ponerla en marcha', 12, ch - 14);
+      }
+      if (modo === 'patrulla' && !rutaP.length && raton.dentro) { ctx.fillStyle = P.tinta; ctx.fillText('patrulla: marca el primer punto', raton.x + 14, raton.y - 8); }
+      if (modo === 'patrulla' && rutaP.length) { // la ruta que se está armando: puntos numerados, cerrada si es un circuito, y el tramo hasta el cursor
+        ctx.strokeStyle = P.mal; ctx.fillStyle = P.mal; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.beginPath();
+        rutaP.forEach((q, i) => { const px = ox + q.x * z, py = oy + q.y * z; if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py); });
+        if (raton.dentro && rutaP.length < 12) ctx.lineTo(raton.x, raton.y);
+        if (rutaP.length + (raton.dentro ? 1 : 0) >= 3) ctx.closePath();
+        ctx.stroke(); ctx.setLineDash([]);
+        if (raton.dentro) { ctx.fillStyle = P.tinta; ctx.fillText('clic: otro punto · clic derecho: en marcha', raton.x + 14, raton.y - 8); }
+        rutaP.forEach((q, i) => { const px = ox + q.x * z, py = oy + q.y * z; ctx.fillStyle = P.mal; ctx.beginPath(); ctx.arc(px, py, 8, 0, TAU); ctx.fill(); ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.fillText(String(i + 1), px, py + 4); ctx.textAlign = 'left'; });
       }
       if (modo === 'conectar' && raton.dentro) { // la línea que saldría del último edificio marcado, y lo que costaría
         const a = conectaDesde ? m.porId.get(conectaDesde) : null, wx = aMundoX(raton.x), wy = aMundoY(raton.y), e = entEn(wx, wy), vale = e && e.edif && !e.infra && e.j === YO;
@@ -5349,6 +5398,14 @@ globalThis.W = { VERSION: 'versión 61' };
     let conectaDesde = 0, conectaN = 0; // conectar: el último edificio marcado y cuántos tramos van
     function conectar() { if (unidadesSel().some((u) => UNID[u.tipo].tiende)) { modo = 'conectar'; conectaDesde = 0; conectaN = 0; aviso('Conectar: toca el edificio de partida y luego los que quieras unir · Esc termina'); } }
     $('conectar').addEventListener('click', conectar);
+    $('autoCivil').addEventListener('click', () => { const cs = unidadesSel().filter((u) => UNID[u.tipo].tiende); if (!cs.length) return; const on = !cs.every((u) => u.auto); W.orden(m, { t: 'autoCivil', j: YO, ids: cs.map((u) => u.id), on }); aviso(on ? 'Ingeniero en automático: conecta solo lo que esté fuera de la red' : 'Ingeniero en manual'); });
+    // Patrulla: R abre el modo; cada clic añade un punto; clic derecho, Enter o R otra vez la ponen en marcha; Esc la cancela.
+    let rutaP = [];
+    function cerrarPatrulla() {
+      const ids = unidadesSel().map((u) => u.id);
+      if (rutaP.length && ids.length) { W.orden(m, { t: 'patrulla', j: YO, ids, pts: rutaP }); son.orden(); aviso(rutaP.length === 1 ? 'Patrulla: ida y vuelta' : rutaP.length === 2 ? 'Patrulla entre dos puntos' : 'Patrulla en circuito de ' + rutaP.length + ' puntos'); }
+      modo = null; rutaP = [];
+    }
     function trazar() { if (unidadesSel().some((u) => UNID[u.tipo].traza)) { modo = 'trazar'; trazaDesde = null; if (tactil) aviso('Arrastra hasta donde debe llegar el camino y suelta'); } }
     $('trazar').addEventListener('click', trazar);
     const paraDesplegar = () => unidadesSel().filter((u) => UNID[u.tipo].despliega);
@@ -5432,7 +5489,7 @@ globalThis.W = { VERSION: 'versión 61' };
         else L.push('clic derecho: mover' + (armadas ? ' o atacar' : '') + ' · otro clic cerca: orientar');
         if (us.some((u) => u.tipo === 'cosechadora')) L.push('clic derecho en una veta: cosechar');
         if (!soloAire) {
-          L.push((armadas ? k('A') + ' atacar al avanzar · ' : '') + k('R') + ' patrulla · ' + k('E') + ' explorar');
+          L.push((armadas ? k('A') + ' atacar al avanzar · ' : '') + k('R') + ' patrulla (clic: puntos; clic derecho: en marcha) · ' + k('E') + ' explorar');
           L.push(k('S') + ' detener · ' + k('G') + ' guardia · ' + k('Mayús') + ' encadenar');
         }
         if (us.length > 1) L.push(k('F') + ' formación: ' + forma);
@@ -5442,7 +5499,7 @@ globalThis.W = { VERSION: 'versión 61' };
       }
       if (us.some((u) => UNID[u.tipo].aire)) {
         L.push('<b>aviones: al acabar la orden vuelven a su aeródromo</b>');
-        L.push(k('R') + ' patrulla aérea: da vueltas sobre el punto; con ' + k('Mayús') + ', más puntos');
+        L.push(k('R') + ' patrulla aérea: con un punto da vueltas sobre él; con más, los recorre');
         L.push('repostan solos y retoman la patrulla · círculo: radio de vuelo');
       }
       if (eds.some((e) => W.PRODUCE[e.tipo]) && !us.length) L.push('barra: encargar · clic en la cola: cancelar' + (eds.length > 1 ? ' · el encargo va a la cola más corta' : ''));
@@ -5685,7 +5742,7 @@ globalThis.W = { VERSION: 'versión 61' };
       if (dentroT) { const t = 'Salir de la trinchera · ' + dentroT; if (bt.textContent !== t) bt.textContent = t; }
       $('desplegar').hidden = !paraDesplegar().length;
       { const hay = unidadesSel().some((u) => UNID[u.tipo].tiende), bm = $('bMuro'); bm.hidden = !hay; if (!hay && (modo === 'murar' || modo === 'quitarMuro')) modo = null; for (const b of bm.querySelectorAll('[data-m]')) b.classList.toggle('on', (modo === 'murar' || modo === 'quitarMuro') && muroTipo === b.dataset.m); }
-      { const hay = unidadesSel().some((u) => UNID[u.tipo].tiende), bc = $('conectar'); bc.hidden = !hay; bc.classList.toggle('listo', modo === 'conectar'); if (!hay && modo === 'conectar') modo = null; }
+      { const cs = unidadesSel().filter((u) => UNID[u.tipo].tiende), hay = cs.length > 0, bc = $('conectar'), ba = $('autoCivil'); ba.hidden = !hay || m.logistica === false; if (hay) { const on = cs.every((u) => u.auto), tx = on ? 'Automático: sí' : 'Automático: no'; if (ba.textContent !== tx) ba.textContent = tx; ba.classList.toggle('listo', on); } bc.hidden = !hay; bc.classList.toggle('listo', modo === 'conectar'); if (!hay && modo === 'conectar') modo = null; }
       { const hay = unidadesSel().some((u) => UNID[u.tipo].traza), bz = $('trazar'); bz.hidden = !hay; bz.classList.toggle('listo', modo === 'trazar'); }
       { const us = conCarga(), bd = $('descargar'); bd.hidden = !us.length; if (us.length) { const t = 'Descargar · ' + us.reduce((a, u) => a + u.pasajeros.length, 0) + ' dentro'; if (bd.textContent !== t) bd.textContent = t; } }
       { const e = mejorable(), bm = $('mejorar'); bm.hidden = !e; if (e) { const pr = W.costoMejora(e), t = 'Mejorar a nivel ' + ((e.nivelE || 1) + 1) + ' · ' + pr, cl = 'btn' + (J.minerales < pr && !J.dios ? ' caro' : ''); if (bm.textContent !== t) bm.textContent = t; if (bm.className !== cl) bm.className = cl; } }
@@ -5753,13 +5810,14 @@ globalThis.W = { VERSION: 'versión 61' };
           if (!ev.shiftKey) { modo = null; trazaDesde = null; }
           return;
         }
-        if (modo === 'amover' || modo === 'patrulla') {
+        if (modo === 'patrulla') { if (rutaP.length < 12) { rutaP.push({ x: wx, y: wy }); marca(wx, wy, P.mal); } return; }
+        if (modo === 'amover') {
           const ids = unidadesSel().map((u) => u.id);
           if (ids.length) {
             W.orden(m, { t: modo, j: YO, ids, x: wx, y: wy, enc: ev.shiftKey, forma }); marca(wx, wy, P.mal); son.orden();
             if (modo === 'amover' && !ev.shiftKey) giroPend = { tipo: 'amover', ids, x: wx, y: wy, forma, t0: performance.now() };
           }
-          if (!(modo === 'patrulla' && ev.shiftKey)) modo = null; // con Mayús se siguen añadiendo puntos de patrulla
+          modo = null;
           return;
         }
         raton.izq = true; raton.x0 = raton.x; raton.y0 = raton.y;
@@ -5848,6 +5906,7 @@ globalThis.W = { VERSION: 'versión 61' };
       if (ev.button === 2 && raton.der) {
         const fue = raton.arrastre;
         raton.der = false; raton.arrastre = false;
+        if (!fue && modo === 'patrulla') { cerrarPatrulla(); return; }
         if (!fue) ordenar(aMundoX(raton.x), aMundoY(raton.y), ev.shiftKey);
         return;
       }
@@ -6010,7 +6069,8 @@ globalThis.W = { VERSION: 'versión 61' };
       }
       switch (ev.code) {
         case 'KeyA': if (unidadesSel().length) modo = 'amover'; break;
-        case 'KeyR': if (unidadesSel().length) modo = 'patrulla'; break;
+        case 'KeyR': if (modo === 'patrulla') cerrarPatrulla(); else if (unidadesSel().length) { modo = 'patrulla'; rutaP = []; } break;
+        case 'Enter': case 'NumpadEnter': if (modo === 'patrulla') cerrarPatrulla(); break;
         case 'KeyZ': atrincherar(); break;
         case 'KeyD': desplegar(); break;
         case 'F6': ev.preventDefault(); guardar(); break;
@@ -6024,7 +6084,7 @@ globalThis.W = { VERSION: 'versión 61' };
         case 'KeyG': { const ids = unidadesSel().map((u) => u.id); if (ids.length) { W.orden(m, { t: 'guardia', j: YO, ids }); son.orden(); } break; }
         case 'KeyC': W.orden(m, { t: 'colmena', j: YO }); aviso(J.colmena ? 'Colmena desactivada: nadie acude solo' : 'Colmena activada'); break;
         case 'KeyF': ponerForma(FORMAS[(FORMAS.indexOf(forma) + 1) % FORMAS.length]); break;
-        case 'Delete': case 'Backspace': vender(); break;
+        case 'Delete': case 'Backspace': if (modo === 'patrulla') { rutaP.pop(); break; } vender(); break;
         case 'KeyE': { const ids = unidadesSel().map((u) => u.id); if (ids.length) { W.orden(m, { t: 'explorar', j: YO, ids }); son.orden(); } break; }
         case 'KeyS': { const ids = unidadesSel().map((u) => u.id); if (ids.length) W.orden(m, { t: 'detener', j: YO, ids }); break; }
         case 'KeyH': cam.x = m.mapa.bases[YO].x; cam.y = m.mapa.bases[YO].y; break;
@@ -6036,7 +6096,7 @@ globalThis.W = { VERSION: 'versión 61' };
         case 'Equal': case 'NumpadAdd': raton.x = cw / 2; raton.y = ch / 2; zoom(1.25); break;
         case 'Minus': case 'NumpadSubtract': raton.x = cw / 2; raton.y = ch / 2; zoom(0.8); break;
         case 'KeyT': ponerTema(tema === 'clara' ? 'oscura' : 'clara'); break;
-        case 'Escape': if (!$('guia').hidden) { $('guia').hidden = true; break; } modo = null; sel.clear(); break;
+        case 'Escape': if (!$('guia').hidden) { $('guia').hidden = true; break; } if (modo === 'patrulla') { modo = null; rutaP = []; break; } modo = null; sel.clear(); break;
       }
     });
     window.addEventListener('keyup', (ev) => teclas.delete(ev.code));
