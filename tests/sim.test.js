@@ -1015,6 +1015,31 @@ prueba('aviones: el caza y el bombardero atacan de pasada; el helicóptero se qu
   assert.ok(heli.quieto > 300 && heli.maxD < W.ARMAS.coheteAire.alcance + 1 && heli.dano > 100, 'el helicóptero se queda en el aire frente al blanco: ' + JSON.stringify(heli));
 });
 
+prueba('carril: los vehículos entran al camino y lo siguen por el centro', () => {
+  const m = W.crearMundo(31, { N: 128 }), N = m.N, J = m.jug[0], T = W.TERRENO;
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const cel = (x, y) => y * N + x;
+  for (let y = 40; y < 80; y++) for (let x = 30; x < 100; x++) if (!m.ocup[cel(x, y)]) { const i = cel(x, y); m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  J.minerales = 5000;
+  const ex = W.crearUnidad(m, 0, 'excavadora', cel(40, 48));
+  W.orden(m, { t: 'trazar', j: 0, ids: [ex.id], x: 80.5, y: 70.5 }); // un camino en diagonal tendida, como el de la captura
+  W.tick(m); for (let i = 0; i < 6000 && ex.orden === 'trazar'; i++) W.tick(m);
+  assert.ok(ex.orden !== 'trazar' && Math.hypot(ex.x - 80.5, ex.y - 70.5) < 1.5, 'la excavadora debía terminar el camino');
+  const tr = m.caminos[m.caminos.length - 1];
+  const alCarril = (x, y) => { let mejor = 1e9; for (let k = 0; k + 3 < tr.length; k += 2) { const ax = tr[k], ay = tr[k + 1], bx = tr[k + 2] - ax, by = tr[k + 3] - ay, q = Math.max(0, Math.min(1, ((x - ax) * bx + (y - ay) * by) / (bx * bx + by * by || 1))); mejor = Math.min(mejor, Math.hypot(x - ax - bx * q, y - ay - by * q)); } return mejor; };
+  ex.vida = 0; W.tick(m);
+  const tq = W.crearUnidad(m, 0, 'tanque', cel(42, 46)); // empieza fuera del camino, a un par de celdas
+  W.orden(m, { t: 'mover', j: 0, ids: [tq.id], x: 79.5, y: 72.5 });
+  let enCamino = 0, centrado = 0, total = 0;
+  W.tick(m); for (let i = 0; i < 3000 && (tq.ruta || tq.pend); i++) {
+    W.tick(m); total++;
+    if (m.mapa.terreno[cel(Math.floor(tq.x), Math.floor(tq.y))] === T.CAMINO) { enCamino++; if (alCarril(tq.x, tq.y) < 0.3) centrado++; }
+  }
+  assert.ok(Math.hypot(tq.x - 79.5, tq.y - 72.5) < 1, 'el tanque debía llegar');
+  assert.ok(enCamino > total * 0.75, 'debía hacer casi todo el viaje por el camino: ' + enCamino + ' de ' + total);
+  assert.ok(centrado > enCamino * 0.85, 'y por el centro del carril: ' + centrado + ' de ' + enCamino);
+});
+
 prueba('bosque cerrado a los vehículos, excavadora y caminos', () => {
   // en cualquier mapa queda un corredor de llano entre las dos bases
   for (let semilla = 1; semilla <= 12; semilla++) {

@@ -29,7 +29,7 @@
     const mapa = W.generarMapa(semilla, op.N), N = mapa.N, NN = N * N;
     const m = {
       N, semilla, mapa, t: 0, ents: [], porId: new Map(), sigId: 1,
-      ocup: new Int32Array(NN), paso: new Uint8Array(NN), pasoV: new Uint8Array(NN), hayCaminos: false, terrenoV: 0, caminos: [], // caminos: el recorrido de cada trazado [x0, y0, x1, y1…], para dibujarlo como un carril
+      ocup: new Int32Array(NN), paso: new Uint8Array(NN), pasoV: new Uint8Array(NN), hayCaminos: false, terrenoV: 0, carrilX: new Float32Array(NN), carrilY: new Float32Array(NN), caminos: [], // carrilX/Y: por cada celda de camino, el punto del carril que le toca (0 = ninguno); // caminos: el recorrido de cada trazado [x0, y0, x1, y1…], para dibujarlo como un carril
       jug: [nuevoJugador(op.inicio), nuevoJugador(op.inicio)],
       niebla: [new Uint8Array(NN), new Uint8Array(NN)],
       cola: [], colaRutas: [], efectos: [], proy: [], barridos: [], trincheras: new Map(), focos: [[], []], sigFoco: 1, sigMision: 1, minas: [], raros: [], ganador: -1, embarques: [],
@@ -537,7 +537,8 @@
     const terr = m.mapa.terreno[Math.floor(u.y) * N + Math.floor(u.x)];
     const vmax = (u.tope && u.tope < vel ? u.tope : vel) * (u.orden === 'trazar' ? ECON.trazaVel : d.cat === 'veh' && terr === T.CAMINO ? ECON.caminoVel : 1); // por camino los vehículos van más rápido; trazándolo, despacio
     const alFinal = u.ri === u.ruta.length - 1 && u.fin;
-    const tx = alFinal ? u.fin.x : (c % N) + 0.5, ty = alFinal ? u.fin.y : ((c / N) | 0) + 0.5, dx = tx - u.x, dy = ty - u.y, dd = Math.hypot(dx, dy);
+    const carril = !alFinal && d.cat === 'veh' && u.orden !== 'trazar' && m.carrilX && m.carrilX[c] > 0 && m.mapa.terreno[c] === T.CAMINO; // por camino, los vehículos van por el carril y no por el centro de cada celda
+    const tx = alFinal ? u.fin.x : carril ? m.carrilX[c] : (c % N) + 0.5, ty = alFinal ? u.fin.y : carril ? m.carrilY[c] : ((c / N) | 0) + 0.5, dx = tx - u.x, dy = ty - u.y, dd = Math.hypot(dx, dy);
     let alin = 1;
     if (dd > 0.4) { // muy cerca del punto ya no exige alinearse: evita quedarse pivotando si lo empujan
       const meta = Math.atan2(dy, dx);
@@ -948,6 +949,12 @@
       const precio = terr[c] === T.BOSQUE ? ECON.caminoBosque : ECON.caminoLlano;
       if (J.minerales < precio) { u.orden = 'nada'; u.ruta = null; u.trazas = []; m.efectos.push({ tipo: 'sinCamino', x1: u.x, y1: u.y, j: u.j, t: m.t }); return; }
       J.minerales -= precio; terr[c] = T.CAMINO; m.paso[c] = 1; m.pasoV[c] = 1; m.hayCaminos = true; m.terrenoV++;
+    }
+    if (m.carrilX) for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) { // a cada celda de camino le toca el punto del carril más cercano a su centro
+      const x = x0 + dx, y = y0 + dy, c = y * N + x;
+      if (x < 0 || y < 0 || x >= N || y >= N || terr[c] !== T.CAMINO) continue;
+      const px = m.carrilX[c], py = m.carrilY[c];
+      if (!px || Math.hypot(u.x - x - 0.5, u.y - y - 0.5) < Math.hypot(px - x - 0.5, py - y - 0.5)) { m.carrilX[c] = u.x; m.carrilY[c] = u.y; }
     }
     if (u.fallo) { u.fallo = false; u.orden = 'nada'; u.trazas = []; m.efectos.push({ tipo: 'sinCamino', x1: u.x, y1: u.y, j: u.j, t: m.t, corte: true }); return; }
     const tr = m.caminos[u.trazo]; // el carril: se apunta el recorrido cada poco
