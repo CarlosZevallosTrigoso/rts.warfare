@@ -37,8 +37,8 @@
       ruta: W.crearRuta(N),
     };
     for (let i = 0; i < NN; i++) {
-      m.paso[i] = mapa.terreno[i] === T.LLANO || mapa.terreno[i] === T.BOSQUE || mapa.terreno[i] === T.CAMINO ? 1 : 0; // a pie
-      m.pasoV[i] = mapa.terreno[i] === T.LLANO || mapa.terreno[i] === T.CAMINO ? 1 : 0; // sobre ruedas u orugas: el bosque no
+      m.paso[i] = mapa.terreno[i] === T.LLANO || mapa.terreno[i] === T.BOSQUE || mapa.terreno[i] >= T.CAMINO ? 1 : 0; // a pie
+      m.pasoV[i] = mapa.terreno[i] === T.LLANO || mapa.terreno[i] >= T.CAMINO ? 1 : 0; // sobre ruedas u orugas: el bosque no
       if (mapa.tipoMin[i] === 1) m.minas.push(i); else if (mapa.tipoMin[i] === 2) m.raros.push(i);
     }
     for (let j = 0; j < 2; j++) {
@@ -84,14 +84,15 @@
       if (m.tramoEn[c] !== e.id) continue;
       m.tramoEn[c] = 0; m.carrilX[c] = 0; m.carrilY[c] = 0; terr[c] = e.antes[k];
       if (e.antes[k] === T.BOSQUE) { m.pasoV[c] = 0; cerrado = true; }
+      else if (e.antes[k] === T.AGUA) { m.paso[c] = 0; m.pasoV[c] = 0; cerrado = true; } // el puente caído vuelve a ser agua
     }
     m.terrenoV++;
     if (!cerrado) return;
-    for (const u of m.ents) { // el vehículo que estaba encima sale al claro más cercano
-      if (u.edif || u.vida <= 0 || UNID[u.tipo].cat !== 'veh' || UNID[u.tipo].aire || u.orden === 'trazar') continue;
-      const c = Math.floor(u.y) * m.N + Math.floor(u.x);
-      if (m.pasoV[c] || !m.paso[c]) continue;
-      const l = W.cercaLibre(m, u.x, u.y, true); u.x = (l % m.N) + 0.5; u.y = ((l / m.N) | 0) + 0.5; u.ruta = null; u.v = 0;
+    for (const u of m.ents) { // quien estaba encima sale al suelo firme más cercano
+      if (u.edif || u.vida <= 0 || UNID[u.tipo].aire) continue;
+      const c = Math.floor(u.y) * m.N + Math.floor(u.x), veh = UNID[u.tipo].cat === 'veh';
+      if (u.orden === 'trazar' ? pisaTraza(m, c) : (veh ? m.pasoV : m.paso)[c]) continue;
+      const l = W.cercaLibre(m, u.x, u.y, veh); u.x = (l % m.N) + 0.5; u.y = ((l / m.N) | 0) + 0.5; u.ruta = null; u.v = 0;
       if (u.meta) pedirRuta(m, u, u.meta.x, u.meta.y, u.meta.radio);
     }
   }
@@ -227,6 +228,13 @@
 
   // Por dónde puede pasar cada unidad: los vehículos no entran al bosque, salvo la excavadora mientras traza un camino.
   const pasoDe = (m, u) => (UNID[u.tipo].cat === 'veh' && u.orden !== 'trazar' ? m.pasoV : m.paso);
+  // La excavadora, mientras traza, también puede meterse al agua: va tendiendo un puente.
+  const pisaTraza = (m, c) => m.paso[c] || (m.mapa.terreno[c] === T.AGUA && !m.ocup[c] ? 1 : 0);
+  function tablaTraza(m) {
+    const NN = m.N * m.N; if (!m.pasoT) m.pasoT = new Uint8Array(NN);
+    for (let i = 0; i < NN; i++) m.pasoT[i] = pisaTraza(m, i);
+    return m.pasoT;
+  }
   function pedirRuta(m, u, x, y, radio) {
     if (UNID[u.tipo].aire) { // un avión no busca camino: va en línea recta
       const casa = u.casa ? m.porId.get(u.casa) : null, rv = UNID[u.tipo].radioVuelo;
@@ -559,12 +567,13 @@
     if (u.ri >= u.ruta.length) { u.ruta = null; u.v = 0; return true; }
     const N = m.N, d = UNID[u.tipo], c = u.ruta[u.ri];
     const replantear = () => { u.ruta = null; u.v = 0; u.tReplan = m.t; if (u.meta) pedirRuta(m, u, u.meta.x, u.meta.y, u.meta.radio); };
-    if (!d.aire && !pasoDe(m, u)[c] && pasoDe(m, u)[Math.floor(u.y) * N + Math.floor(u.x)]) { replantear(); return false; } // alguien construyó en el punto de paso
+    const pisa = (i) => (u.orden === 'trazar' ? pisaTraza(m, i) : pasoDe(m, u)[i]);
+    if (!d.aire && !pisa(c) && pisa(Math.floor(u.y) * N + Math.floor(u.x))) { replantear(); return false; } // alguien construyó en el punto de paso
     const vel = d.vel * (d.cat === 'veh' && m.jug[u.j].mejoras.motores ? 1.15 : 1);
     const terr = m.mapa.terreno[Math.floor(u.y) * N + Math.floor(u.x)];
-    const vmax = (u.tope && u.tope < vel ? u.tope : vel) * (u.orden === 'trazar' ? ECON.trazaVel : d.cat === 'veh' && terr === T.CAMINO ? ECON.caminoVel : 1); // por camino los vehículos van más rápido; trazándolo, despacio
+    const vmax = (u.tope && u.tope < vel ? u.tope : vel) * (u.orden === 'trazar' ? ECON.trazaVel : d.cat === 'veh' && terr >= T.CAMINO ? ECON.caminoVel : 1); // por camino los vehículos van más rápido; trazándolo, despacio
     const alFinal = u.ri === u.ruta.length - 1 && u.fin;
-    const carril = !alFinal && d.cat === 'veh' && u.orden !== 'trazar' && m.carrilX && m.carrilX[c] > 0 && m.mapa.terreno[c] === T.CAMINO; // por camino, los vehículos van por el carril y no por el centro de cada celda
+    const carril = !alFinal && d.cat === 'veh' && u.orden !== 'trazar' && m.carrilX && m.carrilX[c] > 0 && m.mapa.terreno[c] >= T.CAMINO; // por camino, los vehículos van por el carril y no por el centro de cada celda
     const tx = alFinal ? u.fin.x : carril ? m.carrilX[c] : (c % N) + 0.5, ty = alFinal ? u.fin.y : carril ? m.carrilY[c] : ((c / N) | 0) + 0.5, dx = tx - u.x, dy = ty - u.y, dd = Math.hypot(dx, dy);
     let alin = 1;
     if (dd > 0.4) { // muy cerca del punto ya no exige alinearse: evita quedarse pivotando si lo empujan
@@ -621,7 +630,7 @@
       const u = m.porId.get(m.colaRutas.shift());
       if (!u || !u.pend) continue;
       const p = u.pend; u.pend = null; n++;
-      const paso = pasoDe(m, u);
+      const traza = u.orden === 'trazar', paso = traza ? tablaTraza(m) : pasoDe(m, u);
       const camino = m.ruta(paso, m.mapa.terreno, Math.floor(u.x), Math.floor(u.y), p.x, p.y, p.radio, m.hayCaminos ? 0.62 : 1);
       if (camino) {
         u.fin = null;
@@ -629,7 +638,7 @@
           const cf = Math.floor(p.y) * N + Math.floor(p.x);
           if (p.x >= 0 && p.y >= 0 && p.x < N && p.y < N && paso[cf]) { if (camino[camino.length - 1] !== cf) camino.push(cf); u.fin = { x: p.x, y: p.y }; }
         }
-        u.ruta = m.hayCaminos && paso === m.pasoV ? camino : suavizar(m, u.x, u.y, camino, paso); u.ri = 0; // con caminos, los vehículos siguen la ruta tal cual, para no salirse de ellos
+        u.ruta = m.hayCaminos && paso === m.pasoV ? camino : suavizar(m, u.x, u.y, camino, traza && !camino.some((c) => m.mapa.terreno[c] === T.AGUA) ? m.paso : paso); u.ri = 0; // (la excavadora solo recorta por el agua si de verdad tiene que cruzarla) // con caminos, los vehículos siguen la ruta tal cual, para no salirse de ellos
       } else { u.ruta = null; u.fallo = true; }
     }
   }
@@ -972,17 +981,17 @@
     const N = m.N, J = m.jug[u.j], terr = m.mapa.terreno, x0 = Math.floor(u.x - 0.5), y0 = Math.floor(u.y - 0.5);
     for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) {
       const x = x0 + dx, y = y0 + dy, c = y * N + x;
-      if (x < 0 || y < 0 || x >= N || y >= N || (terr[c] !== T.LLANO && terr[c] !== T.BOSQUE) || m.ocup[c] || m.mapa.mineral[c] || m.mapa.sitioEn[c]) continue;
-      const precio = terr[c] === T.BOSQUE ? ECON.caminoBosque : ECON.caminoLlano;
+      if (x < 0 || y < 0 || x >= N || y >= N || (terr[c] !== T.LLANO && terr[c] !== T.BOSQUE && terr[c] !== T.AGUA) || m.ocup[c] || m.mapa.mineral[c] || m.mapa.sitioEn[c]) continue;
+      const agua = terr[c] === T.AGUA, precio = agua ? ECON.caminoAgua : terr[c] === T.BOSQUE ? ECON.caminoBosque : ECON.caminoLlano;
       if (J.minerales < precio) { u.orden = 'nada'; u.ruta = null; u.trazas = []; m.efectos.push({ tipo: 'sinCamino', x1: u.x, y1: u.y, j: u.j, t: m.t }); return; }
       let tr = u.tramo ? m.porId.get(u.tramo) : null; // el tramo en curso; si no hay (o ya mide lo suyo), empieza otro
-      if (!tr || tr.vida <= 0) { const f = u.tramoFin, sigue = f && Math.hypot(f.x - u.x, f.y - u.y) < 3.5; tr = crearTramo(m, u.j, sigue ? f.x : u.x, sigue ? f.y : u.y); u.tramo = tr.id; } // empieza donde acabó el anterior, para que el carril no se corte
+      if (!tr || tr.vida <= 0) { const f = u.tramoFin, sigue = f && Math.hypot(f.x - u.x, f.y - u.y) < 3.5; tr = crearTramo(m, u.j, sigue ? f.x : u.x, sigue ? f.y : u.y); u.tramo = tr.id; const cc = terr[Math.floor(u.y) * N + Math.floor(u.x)]; tr.puente = cc === T.AGUA || cc === T.PUENTE; } // empieza donde acabó el anterior, para que el carril no se corte
       tr.celdas.push(c); tr.antes.push(terr[c]); m.tramoEn[c] = tr.id;
-      J.minerales -= precio; terr[c] = T.CAMINO; m.paso[c] = 1; m.pasoV[c] = 1; m.hayCaminos = true; m.terrenoV++;
+      J.minerales -= precio; terr[c] = agua ? T.PUENTE : T.CAMINO; m.paso[c] = 1; m.pasoV[c] = 1; m.hayCaminos = true; m.terrenoV++;
     }
     if (m.carrilX) for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) { // a cada celda de camino le toca el punto del carril más cercano a su centro
       const x = x0 + dx, y = y0 + dy, c = y * N + x;
-      if (x < 0 || y < 0 || x >= N || y >= N || terr[c] !== T.CAMINO) continue;
+      if (x < 0 || y < 0 || x >= N || y >= N || terr[c] < T.CAMINO) continue;
       const px = m.carrilX[c], py = m.carrilY[c];
       if (!px || Math.hypot(u.x - x - 0.5, u.y - y - 0.5) < Math.hypot(px - x - 0.5, py - y - 0.5)) { m.carrilX[c] = u.x; m.carrilY[c] = u.y; }
     }
@@ -992,6 +1001,9 @@
       if (tr && tr.vida > 0) {
         const p = tr.pts, d = Math.hypot(u.x - p[p.length - 2], u.y - p[p.length - 1]);
         if (m.tramoEn[Math.floor(u.y) * N + Math.floor(u.x)] !== tr.id) { if (p.length >= 4) { u.tramo = 0; u.tramoFin = { x: p[p.length - 2], y: p[p.length - 1] }; } } // va sobre un camino que ya existía: no se dibuja dos veces
+        else if ((terr[Math.floor(u.y) * N + Math.floor(u.x)] === T.PUENTE) !== !!tr.puente) { // pasa de tierra a agua o al revés: el puente es un tramo aparte
+          if (p.length >= 4) { u.tramo = 0; u.tramoFin = { x: p[p.length - 2], y: p[p.length - 1] }; } else tr.puente = !tr.puente;
+        }
         else if (d > 0.35) {
           p.push(u.x, u.y); tr.largo += d;
           const q = (p.length >> 2) << 1; tr.cx = p[q]; tr.cy = p[q + 1]; tr.x = tr.cx - 0.5; tr.y = tr.cy - 0.5; // su centro: el punto medio del recorrido

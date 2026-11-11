@@ -1097,6 +1097,44 @@ prueba('camino como infraestructura: tramos con vida, se destruyen por orden y e
   assert.equal(W.huella(copia), W.huella(m), 'con caminos, la partida cargada sigue igual');
 });
 
+prueba('puentes: la excavadora cruza el agua, todos lo usan y al caer se cierra', () => {
+  const m = W.crearMundo(31, { N: 128 }), N = m.N, J = m.jug[0], T = W.TERRENO;
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const cel = (x, y) => y * N + x;
+  const pon = (x, y, t) => { const i = cel(x, y); m.mapa.terreno[i] = t; m.mapa.mineral[i] = 0; m.paso[i] = t === 1 || t === 2 ? 0 : 1; m.pasoV[i] = t === 0 || t === 4 ? 1 : 0; };
+  for (let y = 40; y < 80; y++) for (let x = 30; x < 100; x++) if (!m.ocup[cel(x, y)]) pon(x, y, 0);
+  for (let y = 40; y < 80; y++) for (let x = 60; x < 66; x++) pon(x, y, 2); // un río de 6 celdas, de lado a lado
+  for (let x = 30; x < 100; x++) { pon(x, 39, 1); pon(x, 80, 1); } for (let y = 39; y <= 80; y++) { pon(29, y, 1); pon(100, y, 1); }
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  J.dios = false; J.minerales = 5000;
+  // nadie cruza el río; la excavadora, moviéndose normal, tampoco
+  const tq = W.crearUnidad(m, 0, 'tanque', cel(50, 60)), so = W.crearUnidad(m, 0, 'infanteria', cel(50, 62)), ex = W.crearUnidad(m, 0, 'excavadora', cel(52, 64));
+  W.orden(m, { t: 'mover', j: 0, ids: [tq.id, so.id, ex.id], x: 75.5, y: 60.5 }); avanza(700);
+  assert.ok(tq.x < 60 && so.x < 60 && ex.x < 60, 'sin puente no se cruza');
+  assert.ok(!m.ents.some((e) => e.infra), 'moverse no deja camino');
+  const min1 = J.minerales;
+  // trazando, sí: tiende un puente, que cuesta más que el camino
+  W.orden(m, { t: 'trazar', j: 0, ids: [ex.id], x: 72.5, y: 64.5 }); avanza(2);
+  for (let i = 0; i < 6000 && ex.orden === 'trazar'; i++) W.tick(m);
+  assert.ok(ex.x > 71, 'la excavadora debía llegar al otro lado: ' + ex.x.toFixed(1));
+  const puentes = m.ents.filter((e) => e.infra && e.puente);
+  let nPuente = 0; for (let i = 0; i < N * N; i++) if (m.mapa.terreno[i] === T.PUENTE) nPuente++;
+  assert.ok(puentes.length >= 1 && nPuente >= 10 && nPuente <= 16, 'unas 12 celdas de puente: ' + nPuente);
+  assert.ok(min1 - J.minerales >= nPuente * W.ECON.caminoAgua - 150, 'el puente se paga a su precio: ' + (min1 - J.minerales));
+  // tanque e infantería cruzan
+  W.orden(m, { t: 'mover', j: 0, ids: [tq.id, so.id], x: 75.5, y: 60.5 }); avanza(1200);
+  assert.ok(tq.x > 73 && so.x > 73, 'por el puente cruzan los dos: ' + tq.x.toFixed(1) + ' ' + so.x.toFixed(1));
+  // con una unidad encima, el puente cae: la unidad sale a tierra y el paso se cierra
+  W.orden(m, { t: 'mover', j: 0, ids: [tq.id], x: 50.5, y: 64.5 });
+  for (let i = 0; i < 2000 && m.mapa.terreno[cel(Math.floor(tq.x), Math.floor(tq.y))] !== T.PUENTE; i++) W.tick(m);
+  assert.equal(m.mapa.terreno[cel(Math.floor(tq.x), Math.floor(tq.y))], T.PUENTE, 'el tanque debía estar sobre el puente');
+  puentes.forEach((e) => { e.vida = 0; }); avanza(3);
+  assert.ok(m.pasoV[cel(Math.floor(tq.x), Math.floor(tq.y))], 'el tanque sale a tierra firme');
+  for (let y = 41; y < 79; y++) for (let x = 62; x < 64; x++) assert.ok(m.mapa.terreno[cel(x, y)] === T.AGUA && !m.paso[cel(x, y)] && !m.pasoV[cel(x, y)], 'el río vuelve a estar cerrado por el medio');
+  W.orden(m, { t: 'mover', j: 0, ids: [so.id], x: 50.5, y: 60.5 }); avanza(900);
+  assert.ok(so.x > 66, 'sin puente la infantería ya no vuelve: ' + so.x.toFixed(1));
+});
+
 prueba('bosque cerrado a los vehículos, excavadora y caminos', () => {
   // en cualquier mapa queda un corredor de llano entre las dos bases
   for (let semilla = 1; semilla <= 12; semilla++) {

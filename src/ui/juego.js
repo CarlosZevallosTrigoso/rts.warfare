@@ -91,7 +91,7 @@
     const cNie = document.createElement('canvas'); cNie.width = cNie.height = N;
     const xNie = cNie.getContext('2d'), imgNie = xNie.createImageData(N, N);
     function pintarTerreno() {
-      const img = xTerr.createImageData(N, N), cols = [P.llano, P.roca, P.agua, P.bosque, P.llano].map(hex); // el camino se dibuja aparte, como un carril; debajo queda suelo despejado
+      const img = xTerr.createImageData(N, N), cols = [P.llano, P.roca, P.agua, P.bosque, P.llano, P.agua].map(hex); // el camino se dibuja aparte, como un carril; debajo queda suelo despejado
       for (let i = 0; i < N * N; i++) { const c = cols[m.mapa.terreno[i]]; img.data[i * 4] = c[0]; img.data[i * 4 + 1] = c[1]; img.data[i * 4 + 2] = c[2]; img.data[i * 4 + 3] = 255; }
       xTerr.putImageData(img, 0, 0);
     }
@@ -109,7 +109,7 @@
       const lado = (c) => ({ base: c, osc: c, luz: c, suelo: c, mineral: c, raro: c, humo: c, fuego: 'rgba(0,0,0,0)', mal: c, agua: c, tinta: c }); // paleta de un solo tono: el canto de las fichas
       COL = { yo: Object.assign({ base: P.yo, osc: P.yoOsc, pared: tono(P.yoOsc, 0.68) }, comun), rival: Object.assign({ base: P.rival, osc: P.rivalOsc, pared: tono(P.rivalOsc, 0.68) }, comun) };
       COL.yoLado = lado(COL.yo.pared); COL.rivalLado = lado(COL.rival.pared);
-      COL.caminoBorde = tono(P.camino, tema === 'clara' ? 0.82 : 1.3);
+      COL.caminoBorde = tono(P.camino, tema === 'clara' ? 0.82 : 1.3); COL.puente = tono(P.camino, tema === 'clara' ? 0.5 : 1.7);
       COL.rocaCara = tono(P.roca, tema === 'clara' ? 0.62 : 0.55); COL.rocaLuz = tono(P.roca, tema === 'clara' ? 1.35 : 1.3); COL.copa = tono(P.bosque, tema === 'clara' ? 0.74 : 1.5);
       pintarTerreno(); pintarNiebla(); hacerIconos();
     }
@@ -153,7 +153,7 @@
     const unidadesSel = () => { const out = []; for (const id of sel) { const e = m.porId.get(id); if (e && !e.edif) out.push(e); } return out; };
     const esquinaColocar = (tipo) => { const t = EDIF[tipo].tam; return { x: Math.round(aMundoX(raton.x) - t / 2), y: Math.round(aMundoY(raton.y) - t / 2) }; };
 
-    const NOMBRE_TERRENO = ['Llano', 'Roca · no se puede pasar', 'Agua · no se puede pasar', 'Bosque · cubre y esconde a la infantería; los vehículos no pasan', 'Camino · los vehículos van mucho más rápido'];
+    const NOMBRE_TERRENO = ['Llano', 'Roca · no se puede pasar', 'Agua · no se puede pasar', 'Bosque · cubre y esconde a la infantería; los vehículos no pasan', 'Camino · los vehículos van mucho más rápido', 'Puente · cruza el agua; si lo destruyen, se cierra el paso'];
     const sitioPorCelda = new Map(m.mapa.sitios.map((s) => [s.y * N + s.x, s.tipo]));
     // Lo que el terreno (o la trinchera) le da o le quita a una unidad, en texto.
     const pct = (k) => Math.round(Math.abs(1 - k) * 100) + ' %';
@@ -162,7 +162,7 @@
       const inf = UNID[e.tipo].cat === 'inf', out = [];
       if (W.enTrinchera(m, e)) out.push('trinchera: −' + pct(W.ECON.trinchera) + ' daño, no la atropellan');
       if (W.enBosque(m, e)) out.push(inf ? 'bosque: −' + pct(W.ECON.bosqueCubre) + ' daño' : 'abriendo bosque');
-      if (!inf && !UNID[e.tipo].aire && m.mapa.terreno[Math.floor(e.y) * N + Math.floor(e.x)] === 4) out.push('camino: +' + Math.round((W.ECON.caminoVel - 1) * 100) + ' % velocidad');
+      if (!inf && !UNID[e.tipo].aire && m.mapa.terreno[Math.floor(e.y) * N + Math.floor(e.x)] >= 4) out.push('camino: +' + Math.round((W.ECON.caminoVel - 1) * 100) + ' % velocidad');
       return out.join(' · ');
     }
     const NOMBRE_PUESTO = { antena: 'Antena (da visión de la zona)', deposito: 'Depósito (da petróleo)', taller: 'Taller (repara a los tuyos cerca)' };
@@ -266,7 +266,11 @@
       const tramos = m.ents.filter((e) => e.infra); // caminos: cada tramo es una pieza de infraestructura, dibujada como un carril continuo con su borde
       if (tramos.length) {
         const linea = (p) => { ctx.moveTo(ox + p[0] * z, oy + p[1] * z); if (p.length < 4) ctx.lineTo(ox + p[0] * z + 0.01, oy + p[1] * z); for (let k = 2; k < p.length; k += 2) ctx.lineTo(ox + p[k] * z, oy + p[k + 1] * z); };
-        ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        ctx.lineJoin = 'round'; ctx.lineCap = 'butt'; // los puentes: un tablero más ancho y oscuro debajo del carril
+        ctx.strokeStyle = COL.puente; ctx.lineWidth = Math.max(2.5, z * 1.3); ctx.beginPath();
+        for (const e of tramos) if (e.puente) linea(e.pts);
+        ctx.stroke();
+        ctx.lineCap = 'round';
         for (const [ancho, color] of [[1.0, COL.caminoBorde], [0.78, P.camino]]) {
           ctx.strokeStyle = color; ctx.lineWidth = Math.max(1.5, z * ancho); ctx.beginPath();
           for (const e of tramos) linea(e.pts);
@@ -739,8 +743,8 @@
           let costo = 0, mal = wx < 0 || wy < 0 || wx >= N || wy >= N;
           for (let i = 0, n = Math.ceil(L * 2); i <= n && !mal; i++) {
             const t = m.mapa.terreno[Math.floor(y0 + ((wy - y0) * i) / (n || 1)) * N + Math.floor(x0 + ((wx - x0) * i) / (n || 1))];
-            if (i === n && (t === 1 || t === 2)) mal = true;
-            costo += t === 3 ? W.ECON.caminoBosque : t === 0 ? W.ECON.caminoLlano : 0; // dos muestras por celda y dos celdas de ancho: sale la cuenta
+            if (i === n && t === 1) mal = true;
+            costo += t === 3 ? W.ECON.caminoBosque : t === 2 ? W.ECON.caminoAgua : t === 0 ? W.ECON.caminoLlano : 0; // dos muestras por celda y dos celdas de ancho: sale la cuenta
           }
           ctx.strokeStyle = mal ? P.mal : P.bien; ctx.lineWidth = Math.max(3, z * 0.9); ctx.globalAlpha = 0.28; ctx.lineCap = 'round';
           ctx.beginPath(); ctx.moveTo(ox + x0 * z, oy + y0 * z); ctx.lineTo(raton.x, raton.y); ctx.stroke(); ctx.globalAlpha = 1; ctx.lineCap = 'butt';
@@ -1354,7 +1358,7 @@
         if (modo === 'barrido') { W.orden(m, { t: 'intel', j: YO, clave: 'barrido', x: wx, y: wy }); son.orden(); modo = null; return; }
         if (modo === 'trazar') { // destino del camino; con Mayús se siguen añadiendo tramos
           const ids = unidadesSel().filter((u) => UNID[u.tipo].traza).map((u) => u.id), t = m.mapa.terreno[Math.floor(wy) * N + Math.floor(wx)];
-          if (t === 1 || t === 2 || wx < 0 || wy < 0 || wx >= N || wy >= N) { aviso('Ahí no se puede llevar un camino'); return; }
+          if (t === 1 || wx < 0 || wy < 0 || wx >= N || wy >= N) { aviso('Ahí no se puede llevar un camino'); return; }
           if (ids.length) { W.orden(m, { t: 'trazar', j: YO, ids, x: wx, y: wy, enc: ev.shiftKey }); trazaDesde = { x: wx, y: wy }; marca(wx, wy, P.bien); son.orden(); }
           if (!ev.shiftKey) { modo = null; trazaDesde = null; }
           return;
