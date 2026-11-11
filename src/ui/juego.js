@@ -29,6 +29,9 @@
     let cw = 0, ch = 0, dpr = 1;
     const cam = { x: m.mapa.bases[YO].x, y: m.mapa.bases[YO].y, z: 14 };
     W.cam = cam;
+    const son = W.crearSonido();
+    W.son = son;
+    const oido = { t: m.t, listas: 0, producidas: J.producidas, edificios: 0, bajas: 0, alerta: -999 };
     let tecleado = ''; // últimas letras escritas, para el código "god"
     const sel = new Set(), grupos = {}, teclas = new Set(), marcas = [];
     let modo = null; // null | 'colocar' | 'amover'
@@ -233,6 +236,34 @@
       mctx.strokeRect((cam.x - cw / 2 / cam.z) * k + 0.5, (cam.y - ch / 2 / cam.z) * k + 0.5, (cw / cam.z) * k, (ch / cam.z) * k);
     }
 
+    // ---------- sonido: se deduce de los cambios del mundo, sin tocar la simulación ----------
+    function sonar() {
+      const cerca = (x, y) => { // 1 en el centro de la pantalla, 0 fuera de ella
+        const dx = Math.abs(x - cam.x) / (cw / cam.z), dy = Math.abs(y - cam.y) / (ch / cam.z);
+        return dx > 0.6 || dy > 0.6 ? 0 : 1 - Math.max(dx, dy);
+      };
+      let n = 0;
+      for (const d of m.efectos) {
+        if (d.t < oido.t || n >= 5) continue;
+        const v = visible(d.x2, d.y2) || visible(d.x1, d.y1) ? cerca(d.x2, d.y2) : 0;
+        if (v > 0) { son.disparo(d.arma, v); n++; }
+      }
+      oido.t = m.t;
+      const listas = J.obras.filter((o) => o.listo).length;
+      if (listas > oido.listas) son.obraLista();
+      oido.listas = listas;
+      if (J.producidas > oido.producidas) son.unidadLista();
+      oido.producidas = J.producidas;
+      let edificios = 0;
+      for (const tipo in EDIF) edificios += J.cuenta[tipo] || 0;
+      if (edificios > oido.edificios && oido.edificios) son.colocar();
+      oido.edificios = edificios;
+      const bajas = m.jug[0].bajas + m.jug[1].bajas;
+      if (bajas > oido.bajas) son.explosion(0.5);
+      oido.bajas = bajas;
+      if (J.alerta && J.alerta.t > oido.alerta + 300) { oido.alerta = J.alerta.t; if (cerca(J.alerta.x, J.alerta.y) === 0) son.alerta(); }
+    }
+
     // ---------- barra lateral ----------
     const botones = [];
     function boton(cont, tipo, d, esEdif) {
@@ -242,6 +273,7 @@
       b.querySelector('.n').textContent = d.nombre;
       b.title = 'Requiere: ' + d.req.map((r) => EDIF[r].nombre).join(', ');
       b.addEventListener('click', () => {
+        son.activar();
         if (esEdif) {
           if (obraLista(tipo)) { modo = 'colocar'; tipoColocar = tipo; }
           else W.orden(m, { t: 'construir', j: YO, tipo });
@@ -309,6 +341,7 @@
     lienzo.addEventListener('mouseenter', () => { raton.dentro = true; });
     lienzo.addEventListener('mouseleave', () => { raton.dentro = false; });
     lienzo.addEventListener('mousedown', (ev) => {
+      son.activar();
       posRaton(ev);
       const wx = aMundoX(raton.x), wy = aMundoY(raton.y);
       if (ev.button === 1) { raton.medio = true; ev.preventDefault(); return; }
@@ -341,7 +374,7 @@
           const resto = us.filter((u) => u.tipo !== 'cosechadora').map((u) => u.id);
           if (resto.length) W.orden(m, { t: 'mover', j: YO, ids: resto, x: wx, y: wy });
         } else W.orden(m, { t: 'mover', j: YO, ids, x: wx, y: wy });
-        marca(wx, wy, P.bien);
+        marca(wx, wy, P.bien); son.orden();
     }
     window.addEventListener('mousemove', (ev) => {
       const ax = raton.x, ay = raton.y;
@@ -404,6 +437,7 @@
 
     window.addEventListener('keydown', (ev) => {
       if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+      son.activar();
       teclas.add(ev.code);
       if (ev.key.length === 1) {
         tecleado = (tecleado + ev.key.toLowerCase()).slice(-3);
@@ -432,6 +466,7 @@
         case 'Space': if (J.alerta) { cam.x = J.alerta.x; cam.y = J.alerta.y; } break;
         case 'KeyP': pausa = !pausa; break;
         case 'KeyM': deslizar = !deslizar; break;
+        case 'KeyN': son.alternar(); break;
         case 'Equal': case 'NumpadAdd': raton.x = cw / 2; raton.y = ch / 2; zoom(1.25); break;
         case 'Minus': case 'NumpadSubtract': raton.x = cw / 2; raton.y = ch / 2; zoom(0.8); break;
         case 'KeyT': ponerTema(tema === 'clara' ? 'oscura' : 'clara'); break;
@@ -461,6 +496,7 @@
         let n = 0;
         while (acum >= PASO && n < 4) { W.iaTick(m, ia); W.tick(m); acum -= PASO; n++; }
         if (n === 4) acum = 0;
+        if (n) sonar();
       }
       for (const id of sel) if (!m.porId.has(id)) sel.delete(id);
       if (modo === 'colocar' && !obraLista(tipoColocar)) modo = null;
@@ -471,6 +507,7 @@
       if (m.ganador >= 0 && !finMostrado) {
         finMostrado = true;
         $('finTxt').textContent = m.ganador === YO ? 'victoria' : m.ganador === 2 ? 'empate' : 'derrota';
+        son.fin(m.ganador === YO);
         $('finSub').textContent = 'semilla ' + semilla + ' · ' + Math.round(m.t / W.TPS / 60) + ' min';
         $('fin').hidden = false;
       }

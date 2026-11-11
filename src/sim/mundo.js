@@ -288,7 +288,7 @@
     const blindaje = b.edif ? 'edificio' : UNID[b.tipo].blindaje;
     b.vida -= arma.dano * arma.vs[blindaje];
     a.recarga = arma.recarga;
-    m.efectos.push({ x1: posX(a), y1: posY(a), x2: posX(b), y2: posY(b), j: a.j, t: m.t });
+    m.efectos.push({ x1: posX(a), y1: posY(a), x2: posX(b), y2: posY(b), j: a.j, t: m.t, arma: a.edif ? EDIF[a.tipo].arma : UNID[a.tipo].arma });
     m.jug[b.j].alerta = { x: posX(b), y: posY(b), t: m.t };
     if (!b.edif && b.orden === 'nada' && !b.obj && UNID[b.tipo].arma) b.obj = a.id;
   }

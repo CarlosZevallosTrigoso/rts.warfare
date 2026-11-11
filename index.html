@@ -68,7 +68,8 @@
       <div><kbd>H</kbd> base · <kbd>espacio</kbd> alerta</div>
       <div><kbd>Mayús+1…9</kbd> guardar grupo · <kbd>1…9</kbd> ir a él</div>
       <div><kbd>×</kbd> o clic derecho en botón: cancelar</div>
-      <div><kbd>P</kbd> pausa · <kbd>T</kbd> tema · <span id="semilla"></span></div>
+      <div><kbd>P</kbd> pausa · <kbd>T</kbd> tema · <kbd>N</kbd> silenciar</div>
+      <div id="semilla"></div>
       <div>escribe <kbd>god</kbd>: recursos infinitos</div>
     </div>
   </aside>
@@ -616,7 +617,7 @@
     const blindaje = b.edif ? 'edificio' : UNID[b.tipo].blindaje;
     b.vida -= arma.dano * arma.vs[blindaje];
     a.recarga = arma.recarga;
-    m.efectos.push({ x1: posX(a), y1: posY(a), x2: posX(b), y2: posY(b), j: a.j, t: m.t });
+    m.efectos.push({ x1: posX(a), y1: posY(a), x2: posX(b), y2: posY(b), j: a.j, t: m.t, arma: a.edif ? EDIF[a.tipo].arma : UNID[a.tipo].arma });
     m.jug[b.j].alerta = { x: posX(b), y: posY(b), t: m.t };
     if (!b.edif && b.orden === 'nada' && !b.obj && UNID[b.tipo].arma) b.obj = a.id;
   }
@@ -984,6 +985,75 @@
   };
 })();
 
+// ===== ui/sonido.js =====
+// rts.warfare — sonido sintetizado con Web Audio. Sin archivos: todo son osciladores y ruido.
+(function () {
+  const W = globalThis.W;
+
+  W.crearSonido = function () {
+    let ctx = null, salida = null, mudo = false, bufRuido = null;
+    const s = { sonados: 0 };
+
+    // Los navegadores solo dejan arrancar el audio tras un gesto del usuario.
+    s.activar = function () {
+      if (!ctx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return false;
+        ctx = new AC();
+        salida = ctx.createGain(); salida.gain.value = 0.3; salida.connect(ctx.destination);
+        bufRuido = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+        const d = bufRuido.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      }
+      if (ctx.state === 'suspended') ctx.resume();
+      return true;
+    };
+    s.alternar = function () { mudo = !mudo; return mudo; };
+    s.mudo = () => mudo;
+
+    function envolvente(vol, dur, cuando) {
+      const g = ctx.createGain(), t = ctx.currentTime + (cuando || 0);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(Math.max(0.0002, vol), t + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      g.connect(salida);
+      return { g, t };
+    }
+    function tono(f0, f1, dur, forma, vol, cuando) {
+      if (!ctx || mudo) return;
+      const { g, t } = envolvente(vol, dur, cuando), o = ctx.createOscillator();
+      o.type = forma; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+      o.connect(g); o.start(t); o.stop(t + dur + 0.02);
+      s.sonados++;
+    }
+    function ruido(frec, dur, vol, cuando) {
+      if (!ctx || mudo) return;
+      const { g, t } = envolvente(vol, dur, cuando), n = ctx.createBufferSource(), f = ctx.createBiquadFilter();
+      n.buffer = bufRuido; f.type = 'bandpass'; f.frequency.value = frec; f.Q.value = 0.9;
+      n.connect(f); f.connect(g); n.start(t, Math.random() * 0.5, dur + 0.02);
+      s.sonados++;
+    }
+
+    // v: cercanía a la cámara, de 0 a 1.
+    s.disparo = function (arma, v) {
+      if (arma === 'fusil') ruido(2400, 0.05, 0.18 * v);
+      else if (arma === 'canon') { ruido(420, 0.22, 0.5 * v); tono(150, 45, 0.2, 'sine', 0.45 * v); }
+      else { ruido(900, 0.12, 0.35 * v); tono(320, 110, 0.12, 'square', 0.12 * v); }
+    };
+    s.explosion = function (v) { ruido(180, 0.5, 0.6 * v); tono(90, 30, 0.45, 'sine', 0.5 * v); };
+    s.obraLista = function () { tono(440, 440, 0.12, 'triangle', 0.3); tono(660, 660, 0.18, 'triangle', 0.3, 0.12); };
+    s.colocar = function () { tono(120, 60, 0.18, 'sine', 0.6); ruido(300, 0.12, 0.25); };
+    s.unidadLista = function () { tono(880, 880, 0.07, 'square', 0.12); };
+    s.orden = function () { tono(520, 620, 0.05, 'triangle', 0.12); };
+    s.alerta = function () { for (let k = 0; k < 3; k++) tono(740, 520, 0.16, 'sawtooth', 0.16, k * 0.2); };
+    s.fin = function (gano) {
+      const notas = gano ? [392, 494, 587, 784] : [392, 349, 294, 196];
+      notas.forEach((f, k) => tono(f, f, 0.35, 'triangle', 0.3, k * 0.22));
+    };
+    return s;
+  };
+})();
+
 // ===== ui/juego.js =====
 // rts.warfare — interfaz: dibujo en canvas, entrada y barra lateral. Lee el mundo y emite comandos.
 (function () {
@@ -1016,6 +1086,9 @@
     let cw = 0, ch = 0, dpr = 1;
     const cam = { x: m.mapa.bases[YO].x, y: m.mapa.bases[YO].y, z: 14 };
     W.cam = cam;
+    const son = W.crearSonido();
+    W.son = son;
+    const oido = { t: m.t, listas: 0, producidas: J.producidas, edificios: 0, bajas: 0, alerta: -999 };
     let tecleado = ''; // últimas letras escritas, para el código "god"
     const sel = new Set(), grupos = {}, teclas = new Set(), marcas = [];
     let modo = null; // null | 'colocar' | 'amover'
@@ -1220,6 +1293,34 @@
       mctx.strokeRect((cam.x - cw / 2 / cam.z) * k + 0.5, (cam.y - ch / 2 / cam.z) * k + 0.5, (cw / cam.z) * k, (ch / cam.z) * k);
     }
 
+    // ---------- sonido: se deduce de los cambios del mundo, sin tocar la simulación ----------
+    function sonar() {
+      const cerca = (x, y) => { // 1 en el centro de la pantalla, 0 fuera de ella
+        const dx = Math.abs(x - cam.x) / (cw / cam.z), dy = Math.abs(y - cam.y) / (ch / cam.z);
+        return dx > 0.6 || dy > 0.6 ? 0 : 1 - Math.max(dx, dy);
+      };
+      let n = 0;
+      for (const d of m.efectos) {
+        if (d.t < oido.t || n >= 5) continue;
+        const v = visible(d.x2, d.y2) || visible(d.x1, d.y1) ? cerca(d.x2, d.y2) : 0;
+        if (v > 0) { son.disparo(d.arma, v); n++; }
+      }
+      oido.t = m.t;
+      const listas = J.obras.filter((o) => o.listo).length;
+      if (listas > oido.listas) son.obraLista();
+      oido.listas = listas;
+      if (J.producidas > oido.producidas) son.unidadLista();
+      oido.producidas = J.producidas;
+      let edificios = 0;
+      for (const tipo in EDIF) edificios += J.cuenta[tipo] || 0;
+      if (edificios > oido.edificios && oido.edificios) son.colocar();
+      oido.edificios = edificios;
+      const bajas = m.jug[0].bajas + m.jug[1].bajas;
+      if (bajas > oido.bajas) son.explosion(0.5);
+      oido.bajas = bajas;
+      if (J.alerta && J.alerta.t > oido.alerta + 300) { oido.alerta = J.alerta.t; if (cerca(J.alerta.x, J.alerta.y) === 0) son.alerta(); }
+    }
+
     // ---------- barra lateral ----------
     const botones = [];
     function boton(cont, tipo, d, esEdif) {
@@ -1229,6 +1330,7 @@
       b.querySelector('.n').textContent = d.nombre;
       b.title = 'Requiere: ' + d.req.map((r) => EDIF[r].nombre).join(', ');
       b.addEventListener('click', () => {
+        son.activar();
         if (esEdif) {
           if (obraLista(tipo)) { modo = 'colocar'; tipoColocar = tipo; }
           else W.orden(m, { t: 'construir', j: YO, tipo });
@@ -1296,6 +1398,7 @@
     lienzo.addEventListener('mouseenter', () => { raton.dentro = true; });
     lienzo.addEventListener('mouseleave', () => { raton.dentro = false; });
     lienzo.addEventListener('mousedown', (ev) => {
+      son.activar();
       posRaton(ev);
       const wx = aMundoX(raton.x), wy = aMundoY(raton.y);
       if (ev.button === 1) { raton.medio = true; ev.preventDefault(); return; }
@@ -1328,7 +1431,7 @@
           const resto = us.filter((u) => u.tipo !== 'cosechadora').map((u) => u.id);
           if (resto.length) W.orden(m, { t: 'mover', j: YO, ids: resto, x: wx, y: wy });
         } else W.orden(m, { t: 'mover', j: YO, ids, x: wx, y: wy });
-        marca(wx, wy, P.bien);
+        marca(wx, wy, P.bien); son.orden();
     }
     window.addEventListener('mousemove', (ev) => {
       const ax = raton.x, ay = raton.y;
@@ -1391,6 +1494,7 @@
 
     window.addEventListener('keydown', (ev) => {
       if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+      son.activar();
       teclas.add(ev.code);
       if (ev.key.length === 1) {
         tecleado = (tecleado + ev.key.toLowerCase()).slice(-3);
@@ -1419,6 +1523,7 @@
         case 'Space': if (J.alerta) { cam.x = J.alerta.x; cam.y = J.alerta.y; } break;
         case 'KeyP': pausa = !pausa; break;
         case 'KeyM': deslizar = !deslizar; break;
+        case 'KeyN': son.alternar(); break;
         case 'Equal': case 'NumpadAdd': raton.x = cw / 2; raton.y = ch / 2; zoom(1.25); break;
         case 'Minus': case 'NumpadSubtract': raton.x = cw / 2; raton.y = ch / 2; zoom(0.8); break;
         case 'KeyT': ponerTema(tema === 'clara' ? 'oscura' : 'clara'); break;
@@ -1448,6 +1553,7 @@
         let n = 0;
         while (acum >= PASO && n < 4) { W.iaTick(m, ia); W.tick(m); acum -= PASO; n++; }
         if (n === 4) acum = 0;
+        if (n) sonar();
       }
       for (const id of sel) if (!m.porId.has(id)) sel.delete(id);
       if (modo === 'colocar' && !obraLista(tipoColocar)) modo = null;
@@ -1458,6 +1564,7 @@
       if (m.ganador >= 0 && !finMostrado) {
         finMostrado = true;
         $('finTxt').textContent = m.ganador === YO ? 'victoria' : m.ganador === 2 ? 'empate' : 'derrota';
+        son.fin(m.ganador === YO);
         $('finSub').textContent = 'semilla ' + semilla + ' · ' + Math.round(m.t / W.TPS / 60) + ' min';
         $('fin').hidden = false;
       }
