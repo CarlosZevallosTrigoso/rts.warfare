@@ -86,7 +86,7 @@
     function ponerTema(t) {
       tema = t; P = PALETAS[t]; document.body.dataset.tema = t;
       try { localStorage.setItem('rts.tema', t); } catch (e) { /* no pasa nada */ }
-      const comun = { luz: P.llano, suelo: P.llano, mineral: P.mineral, humo: P.roca, fuego: '#e8912d', mal: P.mal };
+      const comun = { luz: P.llano, suelo: P.llano, mineral: P.mineral, raro: P.raro, humo: P.roca, fuego: '#e8912d', mal: P.mal, agua: '#4f86b0', tinta: P.tinta };
       COL = { yo: Object.assign({ base: P.yo, osc: P.yoOsc }, comun), rival: Object.assign({ base: P.rival, osc: P.rivalOsc }, comun) };
       pintarTerreno(); pintarNiebla();
     }
@@ -186,7 +186,7 @@
       ctx.fill();
       ctx.strokeStyle = P.tinta; ctx.fillStyle = P.tinta; ctx.lineWidth = Math.max(1, z * 0.09);
       for (const s of mp.sitios) {
-        if (fuera(s.x, s.y) || !f[s.y * N + s.x]) continue;
+        if (fuera(s.x, s.y) || !f[s.y * N + s.x] || m.ocup[s.y * N + s.x]) continue; // con edificio encima no se dibuja
         const px = ox + (s.x + 0.5) * z, py = oy + (s.y + 0.5) * z;
         if (s.tipo === 'petroleo') {
           ctx.beginPath(); ctx.arc(px, py, z * 0.5, 0, TAU); ctx.stroke();
@@ -278,7 +278,7 @@
         ctx.save(); ctx.translate(px, py);
         W.fichaUnidad(ctx, e, r, lod, e.j === YO ? COL.yo : COL.rival, {
           ang: e.tipo === 'infanteria' && e.obj && !anda ? g.t : g.a, angT: g.t, retro: d.arma ? retroceso(e, d.arma) : 0,
-          anda, tiempo, carga: e.carga / (d.carga || 1), cosecha: e.est === 'cosechar',
+          anda, tiempo, carga: e.carga / (d.carga || 1), cosecha: e.est === 'cosechar', raro: e.cargaTipo === 2,
         });
         ctx.restore();
         if (sel.has(e.id)) { ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(px, py, r * 1.9 + 2, 0, TAU); ctx.stroke(); }
@@ -312,6 +312,15 @@
       }
       ctx.globalAlpha = 1;
 
+      if (modo === 'colocar' && EDIF[tipoColocar].sobre) { // señala los sitios donde cabe este edificio
+        const f2 = 0.5 + 0.5 * Math.sin(performance.now() * 0.006);
+        ctx.strokeStyle = P.bien; ctx.lineWidth = 2; ctx.globalAlpha = 0.4 + 0.5 * f2;
+        for (const s of mp.sitios) {
+          if (s.tipo !== EDIF[tipoColocar].sobre || fuera(s.x, s.y) || !f[s.y * N + s.x] || m.ocup[s.y * N + s.x]) continue;
+          ctx.beginPath(); ctx.arc(ox + (s.x + 0.5) * z, oy + (s.y + 0.5) * z, z * (1.5 + f2 * 0.4), 0, TAU); ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      }
       if (modo === 'colocar' && raton.dentro) {
         const p = esquinaColocar(tipoColocar), t = EDIF[tipoColocar].tam, vale = W.puedeColocar(m, YO, tipoColocar, p.x, p.y);
         ctx.fillStyle = vale ? P.bien : P.mal; ctx.globalAlpha = 0.45;
@@ -347,6 +356,10 @@
       mctx.drawImage(cTerr, 0, 0, MS, MS);
       mctx.fillStyle = P.mineral;
       for (const c of m.minas) if (f[c]) mctx.fillRect((c % N) * k, ((c / N) | 0) * k, 2, 2);
+      mctx.fillStyle = P.raro;
+      for (const c of m.raros) if (f[c]) mctx.fillRect((c % N) * k, ((c / N) | 0) * k, 2, 2);
+      mctx.fillStyle = P.tinta; // yacimientos y campos: cuadro pequeño
+      for (const s of m.mapa.sitios) if (f[s.y * N + s.x]) mctx.fillRect(s.x * k - 1, s.y * k - 1, 3, 3);
       for (const e of m.ents) {
         if (!veo(e)) continue;
         mctx.fillStyle = e.j === YO ? P.yo : P.rival;
@@ -438,7 +451,10 @@
       b.className = 'btn'; b.type = 'button';
       b.innerHTML = '<span class="n"></span><span class="d"><span class="c"></span><span class="x" title="Cancelar">×</span></span>';
       b.querySelector('.n').textContent = d.nombre;
-      b.title = 'Requiere: ' + d.req.map((r) => EDIF[r].nombre).join(', ');
+      b.title = 'Requiere: ' + d.req.map((r) => EDIF[r].nombre).join(', ')
+        + (d.sobre ? '. Se coloca sobre un ' + (d.sobre === 'petroleo' ? 'yacimiento de petróleo' : 'campo de conocimiento') + ' explorado, en cualquier parte del mapa.' : '')
+        + (d.juntoA ? '. Se coloca junto al agua, en cualquier parte explorada.' : '')
+        + (d.agua && d.juntoA ? ' Da ' + d.agua + ' de agua.' : '') + (d.agua && !esEdif ? '. Consume ' + d.agua + ' de agua.' : '');
       b.addEventListener('click', () => {
         son.activar();
         if (esEdif) {
@@ -460,12 +476,15 @@
     for (const tipo in UNID) boton($('bUnid'), tipo, UNID[tipo], false);
 
     function actualizarBarra() {
-      $('rMin').textContent = J.dios ? '∞' : Math.floor(J.minerales);
+      const num = (v) => (J.dios ? '∞' : String(Math.floor(v)));
+      $('rMin').textContent = num(J.minerales); $('rPet').textContent = num(J.petroleo); $('rRar').textContent = num(J.raros); $('rInf').textContent = num(J.info);
       $('dios').hidden = !J.dios;
-      const e = $('rEne'); e.textContent = J.prod + ' / ' + J.uso; e.className = J.uso > J.prod ? 'mal' : '';
+      const e = $('rEne'); e.textContent = J.uso + ' / ' + J.prod; e.className = J.uso > J.prod ? 'mal' : '';
+      const ag = $('rAgu'); ag.textContent = J.aguaUso + ' / ' + (J.dios ? '∞' : J.aguaProd); ag.className = !J.dios && J.aguaUso >= J.aguaProd ? 'mal' : '';
       for (const o of botones) {
         const d = o.d, req = W.tieneReq(m, YO, d.req);
-        let clase = 'btn', txt = String(d.costo), p = 0, nombre = d.nombre;
+        let clase = 'btn', txt = d.costo + (d.pet ? ' + ' + d.pet + ' pet' : ''), p = 0, nombre = d.nombre;
+        const caro = !W.puedePagar(J, d);
         if (o.esEdif) {
           let n = 0, listas = 0, avance = 0;
           for (const a of J.obras) if (a.tipo === o.tipo) { n++; if (a.listo) listas++; else avance = Math.max(avance, a.prog / d.tiempo); }
@@ -474,12 +493,12 @@
           if (listas) { clase += ' listo'; txt = 'colocar'; }
           else if (n) { p = avance; txt = Math.floor(p * 100) + '%'; }
           else if (!req) clase += ' no';
-          else if (J.minerales < d.costo) clase += ' caro';
+          else if (caro) clase += ' caro';
         } else {
           const q = J.colas[d.cat], n = q.lista.filter((t) => t === o.tipo).length;
           if (n) { nombre += ' ×' + n; clase += ' con-x'; }
-          if (q.lista[0] === o.tipo) p = q.prog / d.tiempo;
-          if (!req) clase += ' no'; else if (J.minerales < d.costo) clase += ' caro';
+          if (q.lista[0] === o.tipo) { p = q.prog / d.tiempo; if (q.sinAgua) txt = 'falta agua'; }
+          if (!req) clase += ' no'; else if (caro || (n && q.sinAgua && q.lista[0] === o.tipo)) clase += ' caro';
         }
         if (o.b.className !== clase) o.b.className = clase;
         if (o.c.textContent !== txt) o.c.textContent = txt;
@@ -545,7 +564,7 @@
         const ids = us.map((u) => u.id), o = entEn(wx, wy), c = Math.floor(wy) * N + Math.floor(wx);
         if (o && o.j !== YO) { W.orden(m, { t: 'atacar', j: YO, ids, obj: o.id, enc }); marca(wx, wy, P.mal); return; }
         const cos = us.filter((u) => u.tipo === 'cosechadora').map((u) => u.id);
-        if (cos.length && m.mapa.tipoMin[c] === 1 && m.niebla[YO][c]) {
+        if (cos.length && m.mapa.tipoMin[c] >= 1 && m.niebla[YO][c]) {
           W.orden(m, { t: 'cosechar', j: YO, ids: cos, x: wx, y: wy });
           const resto = us.filter((u) => u.tipo !== 'cosechadora').map((u) => u.id);
           if (resto.length) W.orden(m, { t: 'mover', j: YO, ids: resto, x: wx, y: wy, enc });

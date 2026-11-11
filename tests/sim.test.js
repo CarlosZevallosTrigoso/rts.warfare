@@ -35,6 +35,9 @@ prueba('mapa: simetría, conexión y recursos en 20 semillas', () => {
     assert.ok(raros >= 4, 'sin minerales raros, semilla ' + s);
     assert.ok(mp.sitios.filter((x) => x.tipo === 'petroleo').length >= 4, 'poco petróleo, semilla ' + s);
     assert.ok(mp.sitios.filter((x) => x.tipo === 'conocimiento').length >= 2, 'sin conocimiento, semilla ' + s);
+    let agua = false;
+    for (let dy = -12; dy <= 12 && !agua; dy++) for (let dx = -12; dx <= 12; dx++) if (mp.terreno[(A.y + dy) * N + A.x + dx] === 2) { agua = true; break; }
+    assert.ok(agua, 'sin agua junto a la base, semilla ' + s);
   }
 });
 
@@ -178,6 +181,64 @@ prueba('órdenes encadenadas, patrulla, exploración y punto de reunión', () =>
   assert.ok(nueva && Math.hypot(nueva.x - r.x, nueva.y - r.y) < 2.5, 'la unidad nueva no fue al punto de reunión');
 });
 
+prueba('fase 1: petróleo, agua, información y minerales raros', () => {
+  const m = W.crearMundo(4242, { N: 128 }), J = m.jug[0], b = m.mapa.bases[0], N = m.N;
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  const sitio = (tipo) => m.mapa.sitios.filter((s) => s.tipo === tipo).sort((p, q) => Math.hypot(p.x - b.x, p.y - b.y) - Math.hypot(q.x - b.x, q.y - b.y))[0];
+  const pet = sitio('petroleo'), con = sitio('conocimiento');
+  // colocación: sobre el yacimiento, y solo si está explorado
+  assert.ok(!W.puedeColocar(m, 0, 'central', pet.x, pet.y), 'un edificio normal no puede tapar un yacimiento');
+  assert.ok(!W.puedeColocar(m, 0, 'extractor', b.x + 4, b.y), 'extractor fuera de yacimiento');
+  m.niebla[0].fill(0); W.actualizarNiebla(m);
+  if (!m.niebla[0][pet.y * N + pet.x]) assert.ok(!W.puedeColocar(m, 0, 'extractor', pet.x, pet.y), 'extractor en terreno sin explorar');
+  m.niebla[0].fill(1);
+  assert.ok(W.puedeColocar(m, 0, 'extractor', pet.x, pet.y), 'extractor sobre yacimiento explorado, lejos de la base');
+  assert.ok(W.puedeColocar(m, 0, 'estacion', con.x, con.y), 'estación sobre campo de conocimiento');
+  assert.ok(!W.puedeColocar(m, 0, 'estacion', pet.x, pet.y), 'estación sobre petróleo');
+  // bomba: solo junto al agua
+  let conAgua = null, sinAgua = null;
+  for (let y = 4; y < N - 4 && !(conAgua && sinAgua); y++) for (let x = 4; x < N - 4; x++) {
+    if (!conAgua && W.puedeColocar(m, 0, 'bomba', x, y)) conAgua = { x, y };
+    if (!sinAgua && !W.puedeColocar(m, 0, 'bomba', x, y) && W.puedeColocar(m, 0, 'extractor', pet.x, pet.y) && m.mapa.terreno[y * N + x] === 0 && lejosDeAgua(m, x, y)) sinAgua = { x, y };
+  }
+  assert.ok(conAgua, 'ningún sitio válido para la bomba');
+  assert.ok(sinAgua, 'la bomba se deja colocar lejos del agua');
+  // extracción continua
+  W.crearEdificio(m, 0, 'central', b.x + 3, b.y - 1); W.crearEdificio(m, 0, 'central', b.x + 3, b.y + 2);
+  W.crearEdificio(m, 0, 'extractor', pet.x, pet.y); W.crearEdificio(m, 0, 'estacion', con.x, con.y);
+  const p0 = J.petroleo; avanza(600);
+  assert.strictEqual(J.petroleo - p0, 600 / W.EDIF.extractor.da.cada, 'ritmo de petróleo');
+  assert.strictEqual(J.info, 600 / W.EDIF.estacion.da.cada, 'ritmo de información');
+  // costos en petróleo
+  W.crearEdificio(m, 0, 'refineria', b.x - 6, b.y - 6); W.crearEdificio(m, 0, 'fabrica', b.x - 6, b.y + 3); W.crearEdificio(m, 0, 'cuartel', b.x + 6, b.y - 4);
+  J.minerales = 5000; J.petroleo = 40; avanza(1);
+  W.orden(m, { t: 'entrenar', j: 0, tipo: 'tanque' }); avanza(1);
+  assert.strictEqual(J.colas.veh.lista.length, 0, 'aceptó un tanque sin petróleo');
+  J.petroleo = 60; W.orden(m, { t: 'entrenar', j: 0, tipo: 'tanque' }); avanza(1);
+  assert.strictEqual(J.colas.veh.lista.length, 1); assert.ok(J.petroleo < 20, 'no cobró el petróleo');
+  W.orden(m, { t: 'cancelarUnidad', j: 0, tipo: 'tanque' }); avanza(1);
+  assert.ok(J.petroleo >= 60, 'cancelar no devolvió el petróleo');
+  // agua: el patio sostiene 8; al llenarse, la cola espera hasta que haya una bomba
+  assert.strictEqual(J.aguaProd, 8);
+  for (let k = 0; k < 9; k++) W.orden(m, { t: 'entrenar', j: 0, tipo: 'infanteria' });
+  avanza(W.UNID.infanteria.tiempo * 10);
+  assert.strictEqual(J.aguaUso, 8, 'la tropa pasó del agua disponible: ' + J.aguaUso);
+  assert.ok(J.colas.inf.sinAgua && J.colas.inf.lista.length > 0, 'la cola debía quedar esperando agua');
+  W.crearEdificio(m, 0, 'bomba', conAgua.x, conAgua.y); avanza(W.UNID.infanteria.tiempo * 4);
+  assert.ok(J.aguaUso > 8 && J.aguaProd === 20, 'con bomba la tropa debía crecer');
+  // minerales raros: la cosechadora señalada a una veta trae raros
+  const cos = m.ents.find((e) => e.j === 0 && e.tipo === 'cosechadora') || W.crearUnidad(m, 0, 'cosechadora', W.cercaLibre(m, b.x - 4, b.y - 2));
+  assert.ok(m.raros.length > 0);
+  const veta = m.raros[0];
+  W.orden(m, { t: 'cosechar', j: 0, ids: [cos.id], x: (veta % N) + 0.5, y: ((veta / N) | 0) + 0.5 });
+  for (let i = 0; i < 6000 && J.raros === 0; i++) W.tick(m);
+  assert.ok(J.raros > 0, 'la cosechadora no trajo minerales raros');
+});
+function lejosDeAgua(m, x, y) {
+  for (let dy = -3; dy <= 4; dy++) for (let dx = -3; dx <= 4; dx++) { const xx = x + dx, yy = y + dy; if (xx >= 0 && yy >= 0 && xx < m.N && yy < m.N && m.mapa.terreno[yy * m.N + xx] === 2) return false; }
+  return true;
+}
+
 prueba('determinismo: misma semilla, misma partida', () => {
   const corre = () => {
     const m = W.crearMundo(777), a = W.iaCrear(0), b = W.iaCrear(1);
@@ -196,10 +257,11 @@ prueba('partidas completas IA contra IA', () => {
     let maxEnts = 0;
     while (m.ganador < 0 && m.t < LIMITE) { W.iaTick(m, a); W.iaTick(m, b); W.tick(m); if (m.ents.length > maxEnts) maxEnts = m.ents.length; }
     const [J0, J1] = m.jug;
-    console.log(`      semilla ${s}: ganador ${m.ganador} en ${(m.t / 1200).toFixed(1)} min de juego · cosechado ${J0.cosechado}/${J1.cosechado} · producidas ${J0.producidas}/${J1.producidas} · bajas ${J0.bajas}/${J1.bajas} · máx entidades ${maxEnts} · ${(Date.now() - t0)} ms (${((Date.now() - t0) / m.t).toFixed(3)} ms/tick)`);
+    console.log(`      semilla ${s}: ganador ${m.ganador} en ${(m.t / 1200).toFixed(1)} min de juego · cosechado ${J0.cosechado}/${J1.cosechado} · producidas ${J0.producidas}/${J1.producidas} · bajas ${J0.bajas}/${J1.bajas} · petróleo ${J0.extraido}/${J1.extraido} · info ${J0.info}/${J1.info} · máx entidades ${maxEnts} · ${(Date.now() - t0)} ms (${((Date.now() - t0) / m.t).toFixed(3)} ms/tick)`);
     for (const J of [J0, J1]) {
       assert.ok(J.cosechado > 3000, 'economía parada, semilla ' + s);
       assert.ok(J.producidas > 8, 'sin producción, semilla ' + s);
+      assert.ok(J.extraido > 0, 'la IA no extrajo petróleo, semilla ' + s);
     }
     assert.ok(J0.bajas + J1.bajas > 5, 'sin combate, semilla ' + s);
     if (m.ganador >= 0) conGanador++;

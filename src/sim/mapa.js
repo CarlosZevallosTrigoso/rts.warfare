@@ -39,6 +39,17 @@
     const dBase = (x, y) => Math.min(Math.hypot(x - A.x, y - A.y), Math.hypot(x - B.x, y - B.y));
     for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (dBase(x, y) <= 11) terreno[y * N + x] = T.LLANO;
 
+    // Un estanque junto a cada base: garantiza agua al alcance para la primera bomba.
+    for (let k = 0; k < 80; k++) {
+      const ang = r() * Math.PI * 2, x = Math.round(A.x + Math.cos(ang) * 9.5), y = Math.round(A.y + Math.sin(ang) * 9.5);
+      if (x < 4 || y < 4 || x >= N - 4 || y >= N - 4) continue;
+      for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) {
+        if (Math.hypot(dx, dy) > 2.3) continue;
+        const i = (y + dy) * N + x + dx; terreno[i] = T.AGUA; terreno[espejo(i)] = T.AGUA;
+      }
+      break;
+    }
+
     const transitable = (i) => terreno[i] === T.LLANO || terreno[i] === T.BOSQUE;
     function inundar() {
       const visto = new Uint8Array(NN), cola = new Int32Array(NN);
@@ -132,6 +143,7 @@
       sitio('conocimiento', x, y); n++;
     }
 
-    return { N, semilla, terreno, mineral, tipoMin, sitios, sitioEn, bases, alcanzable };
+    const sitioTipo = new Map(sitios.map((s) => [s.y * N + s.x, s.tipo]));
+    return { N, semilla, terreno, mineral, tipoMin, sitios, sitioEn, sitioTipo, bases, alcanzable };
   };
 })();

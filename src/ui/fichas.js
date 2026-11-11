@@ -65,7 +65,7 @@
       if (lod === 2) { c.fillStyle = col.luz; c.fillRect(-L * 0.68, -w * 0.4, L * 0.07, w * 0.8); }
       const bx = -L * 0.45, bw = L * 1.02; // tolva: se llena con la carga
       c.fillStyle = col.luz; c.fillRect(bx, -w * 0.56, bw, w * 1.12);
-      if (e.carga > 0) { c.fillStyle = col.mineral; c.fillRect(bx, -w * 0.56, bw * e.carga, w * 1.12); }
+      if (e.carga > 0) { c.fillStyle = e.raro ? col.raro : col.mineral; c.fillRect(bx, -w * 0.56, bw * e.carga, w * 1.12); }
       c.strokeStyle = col.osc; c.strokeRect(bx, -w * 0.56, bw, w * 1.12);
     }
     c.restore();
@@ -190,6 +190,39 @@
         c.stroke();
         c.fillStyle = col.osc; c.fillRect(X(0.74), Y(0.44), t * 0.12, t * 0.12); c.fillRect(X(0.74), Y(0.6), t * 0.12, t * 0.08);
       }
+    } else if (e.tipo === 'bomba') {
+      c.lineWidth = lw * 1.4; c.beginPath(); c.moveTo(cx, cy); c.lineTo(X(0.5), Y(0.95)); c.moveTo(cx, cy); c.lineTo(X(0.95), Y(0.5)); c.stroke(); // tuberías
+      c.fillStyle = col.agua; c.beginPath(); c.arc(cx, cy, t * 0.3, 0, TAU); c.fill(); c.lineWidth = lw * 1.2; c.stroke(); // depósito
+      c.save(); c.translate(cx, cy); c.rotate(s.deficit ? 0.4 : s.tiempo * 0.004 + s.id); // rodete: gira si hay energía
+      c.strokeStyle = col.luz; c.lineWidth = lw * 1.6; c.beginPath();
+      for (let k = 0; k < 3; k++) { const a = k / 3 * TAU; c.moveTo(0, 0); c.quadraticCurveTo(Math.cos(a + 0.6) * t * 0.14, Math.sin(a + 0.6) * t * 0.14, Math.cos(a) * t * 0.22, Math.sin(a) * t * 0.22); }
+      c.stroke(); c.restore();
+      c.fillStyle = col.osc; c.beginPath(); c.arc(cx, cy, t * 0.06, 0, TAU); c.fill();
+      if (lod === 2) { c.fillStyle = col.osc; c.fillRect(X(0.12), Y(0.12), t * 0.16, t * 0.12); c.fillRect(X(0.12), Y(0.28), t * 0.1, t * 0.08); }
+    } else if (e.tipo === 'extractor') {
+      c.fillStyle = col.tinta; c.beginPath(); c.arc(X(0.3), Y(0.62), t * 0.07, 0, TAU); c.fill(); // boca del pozo
+      c.fillStyle = col.osc; c.beginPath(); c.arc(X(0.76), Y(0.26), t * 0.15, 0, TAU); c.fill(); c.lineWidth = lw; c.stroke(); // tanque
+      if (lod === 2) { c.beginPath(); c.arc(X(0.76), Y(0.26), t * 0.08, 3.6, 5.4); c.stroke(); c.beginPath(); c.moveTo(X(0.62), Y(0.3)); c.lineTo(X(0.4), Y(0.5)); c.stroke(); }
+      c.lineWidth = lw * 1.4; c.beginPath(); c.moveTo(X(0.5), Y(0.86)); c.lineTo(X(0.6), Y(0.56)); c.lineTo(X(0.7), Y(0.86)); c.stroke(); // caballete
+      const bal = s.deficit ? 0.2 : Math.sin(s.tiempo * 0.004 + s.id) * 0.32; // balancín: cabecea al bombear
+      c.save(); c.translate(X(0.6), Y(0.56)); c.rotate(bal);
+      c.strokeStyle = col.luz; c.lineWidth = lw * 2; c.beginPath(); c.moveTo(-t * 0.34, 0); c.lineTo(t * 0.2, 0); c.stroke();
+      c.fillStyle = col.luz; c.beginPath(); c.arc(-t * 0.34, 0, t * 0.07, 0.5 * Math.PI, 1.5 * Math.PI); c.fill(); // cabeza de mula
+      c.fillStyle = col.osc; c.fillRect(t * 0.12, -t * 0.06, t * 0.12, t * 0.12); // contrapeso
+      c.restore();
+    } else if (e.tipo === 'estacion') {
+      const tinta = s.deficit ? col.mal : col.luz;
+      c.strokeStyle = tinta; c.lineWidth = lw * 1.3;
+      c.beginPath(); c.arc(cx, cy, t * 0.26, 0, TAU); c.stroke(); // plato
+      c.lineWidth = lw; c.beginPath(); c.arc(cx, cy, t * 0.14, 0, TAU); c.stroke();
+      if (!s.deficit) { // barrido y ondas: la estación escucha
+        const a = s.tiempo * 0.002 + s.id;
+        c.lineWidth = lw * 1.4; c.beginPath(); c.moveTo(cx, cy); c.lineTo(cx + Math.cos(a) * t * 0.26, cy + Math.sin(a) * t * 0.26); c.stroke();
+        const f = ((s.tiempo + s.id * 211) * 0.0005) % 1;
+        c.globalAlpha = 1 - f; c.setLineDash([lw * 2, lw * 2]); c.lineWidth = lw; c.beginPath(); c.arc(cx, cy, t * (0.26 + f * 0.2), 0, TAU); c.stroke(); c.setLineDash([]); c.globalAlpha = 1;
+      }
+      c.fillStyle = tinta; c.beginPath(); c.arc(cx, cy, t * 0.05, 0, TAU); c.fill();
+      if (lod === 2) { c.fillStyle = col.osc; c.fillRect(X(0.1), Y(0.76), t * 0.2, t * 0.12); c.fillRect(X(0.74), Y(0.1), t * 0.14, t * 0.14); }
     }
     danos(c, cx, cy, t, col, s);
   };

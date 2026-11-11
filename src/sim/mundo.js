@@ -14,6 +14,7 @@
       obras: [], // [{ tipo, prog, listo }]: varias a la vez, se reparten la velocidad
       colas: { inf: { lista: [], prog: 0 }, veh: { lista: [], prog: 0 } },
       alerta: null, cosechado: 0, bajas: 0, producidas: 0,
+      petroleo: ECON.petInicio, raros: 0, info: 0, aguaProd: 0, aguaUso: 0, extraido: 0,
     };
   }
 
@@ -47,7 +48,7 @@
   // ---------- entidades ----------
   function crearEdificio(m, j, tipo, x, y) {
     const d = EDIF[tipo], N = m.N;
-    const e = { id: m.sigId++, j, tipo, edif: true, x, y, tam: d.tam, cx: x + d.tam / 2, cy: y + d.tam / 2, vida: d.vida, vidaMax: d.vida, recarga: 0, obj: 0, reunion: null };
+    const e = { id: m.sigId++, j, tipo, edif: true, x, y, tam: d.tam, cx: x + d.tam / 2, cy: y + d.tam / 2, vida: d.vida, vidaMax: d.vida, recarga: 0, obj: 0, reunion: null, acum: 0 };
     for (let dy = 0; dy < d.tam; dy++) for (let dx = 0; dx < d.tam; dx++) { const i = (y + dy) * N + x + dx; m.ocup[i] = e.id; m.paso[i] = 0; }
     m.ents.push(e); m.porId.set(e.id, e);
     return e;
@@ -58,6 +59,7 @@
       id: m.sigId++, j, tipo, edif: false, x, y, px: x, py: y, vida: d.vida, vidaMax: d.vida,
       orden: 'nada', ruta: null, ri: 0, dest: null, meta: null, pend: null, fallo: false, obj: 0, recarga: 0, fijo: false,
       carga: 0, est: tipo === 'cosechadora' ? 'buscar' : '', celda: -1, ref: 0, espera: 0, pref: null,
+      quiere: 1, cargaTipo: 1, // cosechadora: qué busca y qué lleva (1 minerales, 2 raros)
       cola: [], patrulla: null, explora: false, // órdenes encadenadas, ruta de patrulla, exploración automática
     };
     m.ents.push(u); m.porId.set(u.id, u);
@@ -85,11 +87,20 @@
   W.puedeColocar = function (m, j, tipo, x, y) {
     const d = EDIF[tipo], N = m.N, t = d.tam;
     if (x < 0 || y < 0 || x + t > N || y + t > N) return false;
+    let sitio = false;
     for (let dy = 0; dy < t; dy++) for (let dx = 0; dx < t; dx++) {
       const i = (y + dy) * N + x + dx;
-      if (m.mapa.terreno[i] !== T.LLANO || m.ocup[i] || m.mapa.mineral[i] || m.mapa.sitioEn[i]) return false;
+      if (m.mapa.terreno[i] !== T.LLANO || m.ocup[i] || m.mapa.mineral[i]) return false;
+      if (m.mapa.sitioEn[i]) { if (!d.sobre || m.mapa.sitioTipo.get(i) !== d.sobre) return false; sitio = true; }
     }
-    let junto = false;
+    if (d.sobre && !sitio) return false; // debe cubrir su yacimiento o su campo
+    if (d.juntoA === 'agua') { // debe tener agua a dos celdas o menos
+      let agua = false;
+      for (let yy = Math.max(0, y - 2); yy < Math.min(N, y + t + 2) && !agua; yy++) for (let xx = Math.max(0, x - 2); xx < Math.min(N, x + t + 2); xx++) if (m.mapa.terreno[yy * N + xx] === T.AGUA) { agua = true; break; }
+      if (!agua) return false;
+    }
+    if (d.libre && !m.niebla[j][y * N + x]) return false; // solo en terreno explorado
+    let junto = !!d.libre;
     const s = ECON.separacionColocar;
     for (let k = 0; k < m.ents.length; k++) {
       const e = m.ents[k];
@@ -112,14 +123,26 @@
   W.dist = dist;
 
   function contar(m) {
-    for (let j = 0; j < 2; j++) { const J = m.jug[j]; J.prod = 0; J.uso = 0; J.cuenta = {}; }
+    for (let j = 0; j < 2; j++) { const J = m.jug[j]; J.prod = 0; J.uso = 0; J.aguaProd = 0; J.aguaUso = 0; J.cuenta = {}; }
     for (let k = 0; k < m.ents.length; k++) {
       const e = m.ents[k], J = m.jug[e.j];
       J.cuenta[e.tipo] = (J.cuenta[e.tipo] || 0) + 1;
-      if (e.edif) { const en = EDIF[e.tipo].energia; if (en > 0) J.prod += en; else J.uso -= en; }
+      if (e.edif) { const d = EDIF[e.tipo], en = d.energia; if (en > 0) J.prod += en; else J.uso -= en; J.aguaProd += d.agua || 0; }
+      else J.aguaUso += UNID[e.tipo].agua || 0;
     }
-    for (let j = 0; j < 2; j++) { const J = m.jug[j]; if (J.dios) { J.minerales = 999999; if (J.prod < J.uso) J.prod = J.uso; } }
+    for (let j = 0; j < 2; j++) {
+      const J = m.jug[j];
+      if (!J.dios) continue;
+      J.minerales = J.petroleo = J.raros = J.info = 999999;
+      if (J.prod < J.uso) J.prod = J.uso;
+      J.aguaProd = Math.max(J.aguaProd, J.aguaUso + 50);
+    }
   }
+
+  // ---------- pagos ----------
+  W.puedePagar = function (J, d) { return J.minerales >= d.costo && J.petroleo >= (d.pet || 0); };
+  function cobrar(J, d) { J.minerales -= d.costo; J.petroleo -= d.pet || 0; }
+  function devolver(J, d) { J.minerales += d.costo; J.petroleo += d.pet || 0; }
 
   // ---------- comandos ----------
   W.orden = function (m, cmd) { m.cola.push(cmd); };
@@ -193,19 +216,19 @@
     switch (cmd.t) {
       case 'dios': // modo GOD: recursos infinitos; al apagarlo vuelve el saldo anterior
         J.dios = !J.dios;
-        if (J.dios) J.antesDios = J.minerales; else J.minerales = J.antesDios;
+        if (J.dios) J.antesDios = [J.minerales, J.petroleo, J.raros, J.info]; else [J.minerales, J.petroleo, J.raros, J.info] = J.antesDios;
         return;
       case 'construir': {
         const d = EDIF[cmd.tipo];
-        if (!d || cmd.tipo === 'patio' || J.obras.length >= ECON.obrasMax || !W.tieneReq(m, cmd.j, d.req) || J.minerales < d.costo) return;
-        J.minerales -= d.costo; J.obras.push({ tipo: cmd.tipo, prog: 0, listo: false });
+        if (!d || cmd.tipo === 'patio' || J.obras.length >= ECON.obrasMax || !W.tieneReq(m, cmd.j, d.req) || !W.puedePagar(J, d)) return;
+        cobrar(J, d); J.obras.push({ tipo: cmd.tipo, prog: 0, listo: false });
         return;
       }
       case 'cancelarEdif': { // cancela la obra más reciente de ese tipo (primero las que siguen en curso) y devuelve su costo
         let i = -1;
         for (let k = J.obras.length - 1; k >= 0; k--) if (J.obras[k].tipo === cmd.tipo && (i < 0 || (J.obras[i].listo && !J.obras[k].listo))) i = k;
         if (i < 0) return;
-        J.minerales += EDIF[cmd.tipo].costo; J.obras.splice(i, 1);
+        devolver(J, EDIF[cmd.tipo]); J.obras.splice(i, 1);
         return;
       }
       case 'colocar': {
@@ -219,17 +242,17 @@
       }
       case 'entrenar': {
         const d = UNID[cmd.tipo];
-        if (!d || !W.tieneReq(m, cmd.j, d.req) || J.minerales < d.costo) return;
+        if (!d || !W.tieneReq(m, cmd.j, d.req) || !W.puedePagar(J, d)) return;
         const q = J.colas[d.cat];
         if (q.lista.length >= ECON.colaMax) return;
-        J.minerales -= d.costo; q.lista.push(cmd.tipo);
+        cobrar(J, d); q.lista.push(cmd.tipo);
         return;
       }
       case 'cancelarUnidad': {
         const d = UNID[cmd.tipo]; if (!d) return;
         const q = J.colas[d.cat], i = q.lista.lastIndexOf(cmd.tipo);
         if (i < 0) return;
-        q.lista.splice(i, 1); J.minerales += d.costo;
+        q.lista.splice(i, 1); devolver(J, d);
         if (i === 0) q.prog = 0;
         return;
       }
@@ -265,7 +288,9 @@
         for (const u of propias(m, cmd)) { limpiar(u); u.orden = 'nada'; u.obj = 0; u.ruta = null; u.pend = null; if (u.tipo === 'cosechadora') u.est = 'quieto'; }
         return;
       case 'cosechar':
-        for (const u of propias(m, cmd)) if (u.tipo === 'cosechadora') { limpiar(u); u.orden = 'nada'; u.ruta = null; u.pend = null; u.est = 'buscar'; u.pref = { x: cmd.x, y: cmd.y }; }
+        for (const u of propias(m, cmd)) if (u.tipo === 'cosechadora') { limpiar(u); u.orden = 'nada'; u.ruta = null; u.pend = null; u.est = 'buscar'; u.pref = { x: cmd.x, y: cmd.y };
+          const cx = Math.floor(cmd.x), cy = Math.floor(cmd.y); // si se señala una veta rara, va por raros
+          u.quiere = cx >= 0 && cy >= 0 && cx < m.N && cy < m.N && m.mapa.tipoMin[cy * m.N + cx] === 2 ? 2 : 1; }
         return;
     }
   }
@@ -402,9 +427,11 @@
   // ---------- cosecha ----------
   function minaCercana(m, u) {
     const N = m.N, rx = u.pref ? u.pref.x : u.x, ry = u.pref ? u.pref.y : u.y;
+    if (u.quiere === 2 && !m.raros.length) u.quiere = 1; // se acabaron los raros: vuelve a los minerales
+    const lista = u.quiere === 2 ? m.raros : m.minas;
     let mejor = -1, md = Infinity;
-    for (let k = 0; k < m.minas.length; k++) {
-      const c = m.minas[k];
+    for (let k = 0; k < lista.length; k++) {
+      const c = lista[k];
       const d = Math.hypot((c % N) + 0.5 - rx, ((c / N) | 0) + 0.5 - ry) + ((c * 7 + u.id * 13) % 5) * 0.3;
       if (d < md) { md = d; mejor = c; }
     }
@@ -412,8 +439,10 @@
     return mejor;
   }
   function quitarMina(m, c) {
-    const i = m.minas.indexOf(c);
-    if (i >= 0) { m.minas[i] = m.minas[m.minas.length - 1]; m.minas.pop(); }
+    for (const lista of [m.minas, m.raros]) {
+      const i = lista.indexOf(c);
+      if (i >= 0) { lista[i] = lista[lista.length - 1]; lista.pop(); }
+    }
     m.mapa.tipoMin[c] = 0;
   }
   function refineriaCercana(m, u) {
@@ -438,6 +467,7 @@
       case 'buscar': {
         if (u.carga >= d.carga) { u.est = 'volver0'; break; }
         const c = minaCercana(m, u);
+        if (u.carga > 0 && u.cargaTipo !== u.quiere) { u.est = 'volver0'; break; } // no mezcla cargas: descarga primero
         if (c < 0) { if (u.carga > 0) u.est = 'volver0'; else { u.est = 'espera'; u.espera = 60; } break; }
         u.celda = c; pedirRuta(m, u, (c % N) + 0.5, ((c / N) | 0) + 0.5, 0); u.est = 'ir';
         break;
@@ -455,6 +485,7 @@
         u.fijo = true;
         const hay = m.mapa.mineral[u.celda];
         if (hay <= 0) { quitarMina(m, u.celda); u.est = 'buscar'; break; }
+        if (u.carga === 0) u.cargaTipo = m.mapa.tipoMin[u.celda] || 1;
         const q = Math.min(ECON.cosecha, d.carga - u.carga, hay);
         m.mapa.mineral[u.celda] -= q; u.carga += q;
         if (m.mapa.mineral[u.celda] <= 0) quitarMina(m, u.celda);
@@ -482,7 +513,8 @@
         u.fijo = true;
         if (!m.porId.get(u.ref)) { u.est = 'volver0'; break; }
         const q = Math.min(ECON.descarga, u.carga);
-        u.carga -= q; J.minerales += q; J.cosechado += q;
+        u.carga -= q;
+        if (u.cargaTipo === 2) J.raros += q; else { J.minerales += q; J.cosechado += q; }
         if (u.carga <= 0) u.est = 'buscar';
         break;
       }
@@ -514,7 +546,9 @@
       const q = J.colas[cat];
       if (!q.lista.length) continue;
       const fabs = edificiosDe(m, j, cat === 'inf' ? 'cuartel' : 'fabrica');
-      if (!fabs.length) { for (const t of q.lista) J.minerales += UNID[t].costo; q.lista.length = 0; q.prog = 0; continue; }
+      if (!fabs.length) { for (const t of q.lista) devolver(J, UNID[t]); q.lista.length = 0; q.prog = 0; continue; }
+      q.sinAgua = J.aguaUso + (UNID[q.lista[0]].agua || 0) > J.aguaProd; // sin agua no se sostiene más tropa
+      if (q.sinAgua) continue;
       const fab = fabs[J.producidas % fabs.length]; // las unidades van saliendo por turnos de cada edificio
       q.prog += factor * W.ritmo(fabs.length);
       const tipo = q.lista[0];
@@ -562,7 +596,13 @@
     tickProduccion(m, 0); tickProduccion(m, 1);
     for (let k = 0, n = m.ents.length; k < n; k++) {
       const e = m.ents[k];
-      if (e.edif) { if (EDIF[e.tipo].arma) tickTorreta(m, e); } else tickUnidad(m, e);
+      if (!e.edif) tickUnidad(m, e);
+      else if (EDIF[e.tipo].arma) tickTorreta(m, e);
+      else if (EDIF[e.tipo].da) { // extracción continua; con déficit de energía rinde la mitad
+        const da = EDIF[e.tipo].da, J = m.jug[e.j];
+        e.acum += J.uso > J.prod ? 0.5 : 1;
+        if (e.acum >= da.cada) { e.acum -= da.cada; J[da.rec]++; if (da.rec === 'petroleo') J.extraido++; }
+      }
     }
     separar(m);
 
