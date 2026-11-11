@@ -76,26 +76,35 @@ prueba('economía: construir, colocar, cosechar', () => {
   assert.ok(m.jug[0].cosechado > antes + 1000, 'no cosechó: ' + m.jug[0].cosechado);
 });
 
-prueba('obras en cola: una tras otra, y se cancelan con reembolso', () => {
-  const m = W.crearMundo(4242), J = m.jug[0], T = W.EDIF.central.tiempo, T2 = W.EDIF.cuartel.tiempo;
+prueba('colas por tipo: el mismo tipo va en fila, tipos distintos a la vez repartiendo velocidad', () => {
+  const m = W.crearMundo(4242), J = m.jug[0], b = m.mapa.bases[0], T = W.EDIF.central.tiempo;
   const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
-  J.minerales = 5000;
+  J.minerales = 9000;
   W.orden(m, { t: 'construir', j: 0, tipo: 'central' }); avanza(T + 2);
-  assert.ok(J.obras[0].listo);
-  W.orden(m, { t: 'colocar', j: 0, tipo: 'central', x: m.mapa.bases[0].x + 3, y: m.mapa.bases[0].y - 1 }); avanza(1);
-  assert.strictEqual(J.cuenta.central, 1);
-  W.orden(m, { t: 'construir', j: 0, tipo: 'central' }); W.orden(m, { t: 'construir', j: 0, tipo: 'cuartel' }); avanza(T + 2);
-  assert.strictEqual(J.obras.length, 2);
-  assert.ok(J.obras[0].listo, 'la primera de la cola va a ritmo pleno');
-  assert.ok(J.obras[1].prog <= 2, 'la segunda debía esperar su turno: ' + J.obras[1].prog);
-  avanza(T2);
-  assert.ok(J.obras[1].listo, 'al terminar la primera, sigue la segunda');
-  W.orden(m, { t: 'construir', j: 0, tipo: 'cuartel' }); avanza(5);
+  assert.ok(J.obras[0].listo, 'una sola obra va a ritmo pleno');
+  W.orden(m, { t: 'colocar', j: 0, tipo: 'central', x: b.x + 3, y: b.y - 1 }); avanza(1);
+  // dos del mismo tipo: en fila
+  W.orden(m, { t: 'construir', j: 0, tipo: 'central' }); W.orden(m, { t: 'construir', j: 0, tipo: 'central' }); avanza(T + 2);
+  assert.ok(J.obras[0].listo && J.obras[1].prog <= 2, 'dos centrales debían ir una tras otra');
+  avanza(T);
+  assert.ok(J.obras[1].listo, 'al terminar la primera central sigue la segunda');
+  W.orden(m, { t: 'colocar', j: 0, tipo: 'central', x: b.x + 3, y: b.y + 2 }); W.orden(m, { t: 'colocar', j: 0, tipo: 'central', x: b.x + 6, y: b.y - 1 }); avanza(1);
+  assert.strictEqual(J.obras.length, 0);
+  // tipos distintos: a la vez, cada uno a la mitad
+  W.orden(m, { t: 'construir', j: 0, tipo: 'central' }); W.orden(m, { t: 'construir', j: 0, tipo: 'cuartel' }); avanza(101);
+  assert.ok(Math.abs(J.obras[0].prog - 50) <= 1 && Math.abs(J.obras[1].prog - 50) <= 1, 'dos tipos debían avanzar a la vez y a la mitad: ' + J.obras.map((o) => o.prog));
   const antes = J.minerales;
   W.orden(m, { t: 'cancelarEdif', j: 0, tipo: 'cuartel' }); avanza(1);
-  assert.strictEqual(J.obras.length, 2);
-  assert.ok(J.obras.every((o) => o.listo), 'debía cancelarse la que seguía en curso');
+  assert.strictEqual(J.obras.length, 1);
   assert.ok(J.minerales >= antes + W.EDIF.cuartel.costo, 'cancelar no devolvió el costo');
+  const p = J.obras[0].prog; avanza(10);
+  assert.ok(Math.abs(J.obras[0].prog - p - 10) < 0.01, 'al quedar un solo tipo vuelve al ritmo pleno');
+  // unidades: tanque y cosechadora a la vez desde la fábrica; dos tanques, en fila
+  J.dios = true;
+  W.crearEdificio(m, 0, 'refineria', b.x - 7, b.y - 6); W.crearEdificio(m, 0, 'fabrica', b.x - 7, b.y + 3); avanza(1);
+  W.orden(m, { t: 'entrenar', j: 0, tipo: 'tanque' }); W.orden(m, { t: 'entrenar', j: 0, tipo: 'tanque' }); W.orden(m, { t: 'entrenar', j: 0, tipo: 'cosechadora' }); avanza(101);
+  assert.strictEqual(J.colas.tanque.n, 2);
+  assert.ok(Math.abs(J.colas.tanque.prog - 50) <= 1 && Math.abs(J.colas.cosechadora.prog - 50) <= 1, 'tanque y cosechadora debían avanzar a la vez y a la mitad');
 });
 
 prueba('contraataque, disparo en marcha, curación y atropello', () => {
@@ -272,9 +281,9 @@ prueba('fase 1: petróleo, agua, información y minerales raros', () => {
   W.crearEdificio(m, 0, 'refineria', b.x - 6, b.y - 6); W.crearEdificio(m, 0, 'fabrica', b.x - 6, b.y + 3); W.crearEdificio(m, 0, 'cuartel', b.x + 6, b.y - 4);
   J.minerales = 5000; J.petroleo = 40; avanza(1);
   W.orden(m, { t: 'entrenar', j: 0, tipo: 'tanque' }); avanza(1);
-  assert.strictEqual(J.colas.veh.lista.length, 0, 'aceptó un tanque sin petróleo');
+  assert.strictEqual(J.colas.tanque.n, 0, 'aceptó un tanque sin petróleo');
   J.petroleo = 60; W.orden(m, { t: 'entrenar', j: 0, tipo: 'tanque' }); avanza(1);
-  assert.strictEqual(J.colas.veh.lista.length, 1); assert.ok(J.petroleo < 20, 'no cobró el petróleo');
+  assert.strictEqual(J.colas.tanque.n, 1); assert.ok(J.petroleo < 20, 'no cobró el petróleo');
   W.orden(m, { t: 'cancelarUnidad', j: 0, tipo: 'tanque' }); avanza(1);
   assert.ok(J.petroleo >= 60, 'cancelar no devolvió el petróleo');
   // agua: el patio sostiene 8; al llenarse, la cola espera hasta que haya una bomba
@@ -282,7 +291,7 @@ prueba('fase 1: petróleo, agua, información y minerales raros', () => {
   for (let k = 0; k < 9; k++) W.orden(m, { t: 'entrenar', j: 0, tipo: 'infanteria' });
   avanza(W.UNID.infanteria.tiempo * 10);
   assert.strictEqual(J.aguaUso, 8, 'la tropa pasó del agua disponible: ' + J.aguaUso);
-  assert.ok(J.colas.inf.sinAgua && J.colas.inf.lista.length > 0, 'la cola debía quedar esperando agua');
+  assert.ok(J.colas.infanteria.sinAgua && J.colas.infanteria.n > 0, 'la cola debía quedar esperando agua');
   W.crearEdificio(m, 0, 'bomba', conAgua.x, conAgua.y); avanza(W.UNID.infanteria.tiempo * 4);
   assert.ok(J.aguaUso > 8 && J.aguaProd === 20, 'con bomba la tropa debía crecer');
   // minerales raros: la cosechadora señalada a una veta trae raros

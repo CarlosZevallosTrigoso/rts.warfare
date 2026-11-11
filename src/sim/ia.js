@@ -89,7 +89,7 @@
     }
 
     // Sin cosechadoras no hay economía: reponerlas va antes que todo lo demás.
-    const cosech = (J.cuenta.cosechadora || 0) + J.colas.veh.lista.filter((t) => t === 'cosechadora').length;
+    const cosech = (J.cuenta.cosechadora || 0) + J.colas.cosechadora.n;
     const urgente = cosech === 0 && J.cuenta.fabrica && J.cuenta.refineria;
 
     // Construcción
@@ -110,8 +110,8 @@
       W.orden(m, { t: 'entrenar', j, tipo: 'cosechadora' }); dinero -= UNID.cosechadora.costo;
     }
     if (soldados.length < 40 && !urgente) {
-      if (J.cuenta.fabrica && !J.colas.veh.lista.length && dinero >= UNID.tanque.costo && J.petroleo >= UNID.tanque.pet) { W.orden(m, { t: 'entrenar', j, tipo: 'tanque' }); dinero -= UNID.tanque.costo; }
-      if (J.cuenta.cuartel && J.colas.inf.lista.length < 2 && dinero >= UNID.infanteria.costo) W.orden(m, { t: 'entrenar', j, tipo: 'infanteria' });
+      if (J.cuenta.fabrica && !J.colas.tanque.n && dinero >= UNID.tanque.costo && J.petroleo >= UNID.tanque.pet) { W.orden(m, { t: 'entrenar', j, tipo: 'tanque' }); dinero -= UNID.tanque.costo; }
+      if (J.cuenta.cuartel && J.colas.infanteria.n < 2 && dinero >= UNID.infanteria.costo) W.orden(m, { t: 'entrenar', j, tipo: 'infanteria' });
     }
 
     // Ejército

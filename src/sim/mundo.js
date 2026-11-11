@@ -12,7 +12,7 @@
     return {
       minerales: inicio || ECON.inicio, prod: 0, uso: 0, cuenta: {}, vivo: true, dios: false,
       obras: [], // [{ tipo, prog, listo }]: varias a la vez, se reparten la velocidad
-      colas: { inf: { lista: [], prog: 0 }, veh: { lista: [], prog: 0 } },
+      colas: Object.fromEntries(Object.keys(UNID).map((t) => [t, { n: 0, prog: 0, sinAgua: false }])), // una cola por tipo de unidad
       alerta: null, cosechado: 0, bajas: 0, producidas: 0,
       petroleo: ECON.petInicio, raros: 0, info: 0, aguaProd: 0, aguaUso: 0, extraido: 0,
     };
@@ -39,6 +39,14 @@
       crearEdificio(m, j, 'patio', b.x - 1, b.y - 1);
       const haciaCentro = j === 0 ? 1 : -1;
       for (let k = 0; k < 2; k++) crearUnidad(m, j, 'infanteria', W.cercaLibre(m, b.x + (3 + k) * haciaCentro, b.y - 3 * haciaCentro));
+    }
+    // Los alrededores de cada base ya se conocen al empezar: ahí están el agua, el campo y el primer yacimiento.
+    for (let j = 0; j < 2; j++) {
+      const b = mapa.bases[j], R = ECON.vistaInicial;
+      for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+        const x = b.x + dx, y = b.y + dy;
+        if (x >= 0 && y >= 0 && x < N && y < N && dx * dx + dy * dy <= R * R) m.niebla[j][y * N + x] = 1;
+      }
     }
     contar(m);
     W.actualizarNiebla(m);
@@ -244,17 +252,17 @@
       case 'entrenar': {
         const d = UNID[cmd.tipo];
         if (!d || !W.tieneReq(m, cmd.j, d.req) || !W.puedePagar(J, d)) return;
-        const q = J.colas[d.cat];
-        if (q.lista.length >= ECON.colaMax) return;
-        cobrar(J, d); q.lista.push(cmd.tipo);
+        const q = J.colas[cmd.tipo];
+        if (q.n >= ECON.colaMax) return;
+        cobrar(J, d); q.n++;
         return;
       }
       case 'cancelarUnidad': {
         const d = UNID[cmd.tipo]; if (!d) return;
-        const q = J.colas[d.cat], i = q.lista.lastIndexOf(cmd.tipo);
-        if (i < 0) return;
-        q.lista.splice(i, 1); devolver(J, d);
-        if (i === 0) q.prog = 0;
+        const q = J.colas[cmd.tipo];
+        if (!q.n) return;
+        q.n--; devolver(J, d);
+        if (!q.n) q.prog = 0;
         return;
       }
       // cmd.enc (encadenar): la orden se añade a la cola de la unidad en vez de reemplazar lo que hace.
@@ -602,21 +610,27 @@
     if (!J.vivo) return;
     const factor = J.uso > J.prod ? 0.5 : 1; // déficit de energía: todo a media velocidad
     if (m.t % ECON.goteoCada === 0) J.minerales += 1; // ingreso mínimo del patio: evita el bloqueo total
-    // Las obras forman una cola: solo avanza la primera sin terminar; las demás esperan su turno.
-    const obra = J.obras.find((o) => !o.listo);
-    if (obra) { obra.prog += factor * W.ritmo(J.cuenta.patio || 0); if (obra.prog >= EDIF[obra.tipo].tiempo) obra.listo = true; }
+    // Cada tipo de edificio tiene su propia cola: dos del mismo tipo van uno tras otro.
+    // Tipos distintos avanzan a la vez, repartiéndose la velocidad entre los que están en curso.
+    const vistos = new Set(), activas = [];
+    for (const o of J.obras) if (!o.listo && !vistos.has(o.tipo)) { vistos.add(o.tipo); activas.push(o); }
+    const ritmoObras = (factor * W.ritmo(J.cuenta.patio || 0)) / (activas.length || 1);
+    for (const o of activas) { o.prog += ritmoObras; if (o.prog >= EDIF[o.tipo].tiempo) o.listo = true; }
+    // Unidades: igual, una cola por tipo; las de un mismo edificio (cuartel o fábrica) se reparten su velocidad.
     for (const cat of ['inf', 'veh']) {
-      const q = J.colas[cat];
-      if (!q.lista.length) continue;
+      const tipos = Object.keys(UNID).filter((t) => UNID[t].cat === cat && J.colas[t].n > 0);
+      if (!tipos.length) continue;
       const fabs = edificiosDe(m, j, cat === 'inf' ? 'cuartel' : 'fabrica');
-      if (!fabs.length) { for (const t of q.lista) devolver(J, UNID[t]); q.lista.length = 0; q.prog = 0; continue; }
-      q.sinAgua = J.aguaUso + (UNID[q.lista[0]].agua || 0) > J.aguaProd; // sin agua no se sostiene más tropa
+      if (!fabs.length) { for (const t of tipos) { const q = J.colas[t]; for (let k = 0; k < q.n; k++) devolver(J, UNID[t]); q.n = 0; q.prog = 0; } continue; }
+      let enCurso = 0;
+      for (const t of tipos) { const q = J.colas[t]; q.sinAgua = J.aguaUso + (UNID[t].agua || 0) > J.aguaProd; if (!q.sinAgua) enCurso++; } // sin agua no se sostiene más tropa
+      for (const tipo of tipos) {
+      const q = J.colas[tipo];
       if (q.sinAgua) continue;
       const fab = fabs[J.producidas % fabs.length]; // las unidades van saliendo por turnos de cada edificio
-      q.prog += factor * W.ritmo(fabs.length);
-      const tipo = q.lista[0];
-      if (q.prog < UNID[tipo].tiempo) continue;
-      q.lista.shift(); q.prog = 0;
+      q.prog += (factor * W.ritmo(fabs.length)) / enCurso;
+      if (q.prog < UNID[tipo].tiempo || J.aguaUso + (UNID[tipo].agua || 0) > J.aguaProd) continue;
+      q.n--; q.prog = 0; J.aguaUso += UNID[tipo].agua || 0;
       const u = crearUnidad(m, j, tipo, W.cercaLibre(m, fab.cx, fab.y + fab.tam + 0.5));
       if (fab.reunion) { // va al punto de reunión del edificio
         if (tipo === 'cosechadora') u.pref = { x: fab.reunion.x, y: fab.reunion.y };
@@ -626,6 +640,7 @@
         const c = W.cercaLibre(m, fab.cx + (cx / cd) * (fab.tam + 2), fab.cy + (cy / cd) * (fab.tam + 2));
         u.orden = 'mover'; u.dest = { x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 };
         pedirRuta(m, u, u.dest.x, u.dest.y, 0);
+      }
       }
     }
   }

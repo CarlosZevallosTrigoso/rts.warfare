@@ -200,9 +200,12 @@
       for (const s of mp.sitios) {
         if (fuera(s.x, s.y) || !f[s.y * N + s.x] || m.ocup[s.y * N + s.x]) continue; // con edificio encima no se dibuja
         const px = ox + (s.x + 0.5) * z, py = oy + (s.y + 0.5) * z;
-        if (s.tipo === 'petroleo') {
-          ctx.beginPath(); ctx.arc(px, py, z * 0.5, 0, TAU); ctx.stroke();
-          ctx.beginPath(); ctx.arc(px, py, z * 0.17, 0, TAU); ctx.fill();
+        if (s.tipo === 'petroleo') { // mancha negra con anillo: se reconoce también de lejos
+          const r = Math.max(4, z * 0.62);
+          ctx.beginPath(); ctx.arc(px, py, r, 0, TAU); ctx.fill();
+          ctx.beginPath(); ctx.arc(px + r * 0.7, py + r * 0.55, r * 0.45, 0, TAU); ctx.arc(px - r * 0.75, py + r * 0.35, r * 0.32, 0, TAU); ctx.fill();
+          ctx.lineWidth = Math.max(1, z * 0.07); ctx.beginPath(); ctx.arc(px, py, r * 1.75, 0, TAU); ctx.stroke();
+          ctx.lineWidth = Math.max(1, z * 0.09);
         } else {
           ctx.beginPath(); ctx.arc(px, py, z * 0.55, 0, TAU); ctx.moveTo(px + z * 0.28, py); ctx.arc(px, py, z * 0.28, 0, TAU);
           ctx.moveTo(px - z * 0.85, py); ctx.lineTo(px + z * 0.85, py); ctx.moveTo(px, py - z * 0.85); ctx.lineTo(px, py + z * 0.85); ctx.stroke();
@@ -247,7 +250,7 @@
         const px = ox + e.x * z, py = oy + e.y * z, t = e.tam * z, Je = m.jug[e.j];
         const est = { tiempo, id: e.id, vida: e.vida / e.vidaMax, deficit: Je.uso > Je.prod, activo: false, descarga: descargando.has(e.id), ang: 0, retro: 0 };
         if (e.tipo === 'patio') est.activo = Je.obras.some((o) => !o.listo);
-        else if (e.tipo === 'fabrica') est.activo = Je.colas.veh.lista.length > 0;
+        else if (e.tipo === 'fabrica') est.activo = Je.colas.tanque.n + Je.colas.cosechadora.n > 0;
         else if (e.tipo === 'torreta') { est.ang = giro(e).t; est.retro = retroceso(e, 'bateria'); }
         if (lod) { // sombra
           ctx.fillStyle = 'rgba(0,0,0,0.17)';
@@ -602,27 +605,19 @@
         let clase = 'btn', txt = d.costo + (d.pet ? ' + ' + d.pet + ' pet' : ''), p = 0, nombre = d.nombre;
         const caro = !W.puedePagar(J, d);
         if (o.esEdif) {
-          const activa = J.obras.find((a) => !a.listo); // la cola avanza de una en una
-          let n = 0, listas = 0, turno = 0;
-          for (let k = 0, pos = 0; k < J.obras.length; k++) {
-            const a = J.obras[k];
-            if (!a.listo) pos++;
-            if (a.tipo !== o.tipo) continue;
-            n++;
-            if (a.listo) listas++; else if (!turno) turno = pos;
-          }
+          let n = 0, listas = 0, activa = null; // cada tipo tiene su cola: avanza la primera sin terminar
+          for (const a of J.obras) if (a.tipo === o.tipo) { n++; if (a.listo) listas++; else if (!activa) activa = a; }
           if (n > 1) nombre += ' ×' + n;
           if (n) clase += ' con-x';
-          if (listas) { clase += ' listo'; txt = 'colocar'; }
-          else if (n && activa.tipo === o.tipo) { p = activa.prog / d.tiempo; txt = Math.floor(p * 100) + '%'; }
-          else if (n) txt = 'en cola · ' + turno + 'º';
+          if (listas) { clase += ' listo'; txt = 'colocar' + (activa ? ' · ' + Math.floor((activa.prog / d.tiempo) * 100) + '%' : ''); }
+          else if (activa) { p = activa.prog / d.tiempo; txt = Math.floor(p * 100) + '%'; }
           else if (!req) clase += ' no';
           else if (caro) clase += ' caro';
         } else {
-          const q = J.colas[d.cat], n = q.lista.filter((t) => t === o.tipo).length;
+          const q = J.colas[o.tipo], n = q.n;
           if (n) { nombre += ' ×' + n; clase += ' con-x'; }
-          if (q.lista[0] === o.tipo) { p = q.prog / d.tiempo; if (q.sinAgua) txt = 'falta agua'; }
-          if (!req) clase += ' no'; else if (caro || (n && q.sinAgua && q.lista[0] === o.tipo)) clase += ' caro';
+          if (n) { p = q.prog / d.tiempo; if (q.sinAgua) txt = 'falta agua'; }
+          if (!req) clase += ' no'; else if (caro || (n && q.sinAgua)) clase += ' caro';
         }
         if (o.b.className !== clase) o.b.className = clase;
         if (o.c.textContent !== txt) o.c.textContent = txt;
@@ -630,8 +625,8 @@
         o.b.style.setProperty('--p', (p * 100).toFixed(1) + '%');
       }
       listarGrupos();
-      const enCurso = J.obras.filter((a) => !a.listo).length;
-      const reparto = enCurso > 1 ? enCurso + ' obras en cola: se construyen de una en una' : '';
+      const enCurso = new Set(J.obras.filter((a) => !a.listo).map((a) => a.tipo)).size;
+      const reparto = enCurso > 1 ? enCurso + ' tipos a la vez: cada uno a 1/' + enCurso + ' de velocidad' : '';
       if ($('obras').textContent !== reparto) $('obras').textContent = reparto;
       const nc = J.cuenta.cuartel || 0, nf = J.cuenta.fabrica || 0;
       const bono = (n, uno, varios) => n + ' ' + (n > 1 ? varios : uno) + ' ×' + W.ritmo(n);
