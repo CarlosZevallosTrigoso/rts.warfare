@@ -58,7 +58,7 @@
     W.cam = cam;
     const son = W.crearSonido();
     W.son = son;
-    const oido = { t: m.t, listas: 0, producidas: J.producidas, edificios: 0, bajas: 0, alerta: -999 };
+    const oido = { llamada: 0, t: m.t, listas: 0, producidas: J.producidas, edificios: 0, bajas: 0, alerta: -999 };
     let tecleado = ''; // últimas letras escritas, para el código "god"
     const sel = new Set(), grupos = {}, teclas = new Set(), marcas = [];
     let modo = null; // null | 'colocar' | 'amover' | 'patrulla'
@@ -133,6 +133,7 @@
       if (e) {
         let t = (e.edif ? EDIF : UNID)[e.tipo].nombre + (e.j === YO ? '' : ' rival') + ' · ' + Math.ceil(e.vida) + '/' + e.vidaMax;
         if (e.tipo === 'cosechadora' && e.j === YO) t += ' · carga ' + e.carga;
+        if (e.guardia && e.j === YO) t += ' · en guardia';
         return t;
       }
       const sitio = sitioPorCelda.get(c);
@@ -143,7 +144,7 @@
     }
 
     // ---------- partículas y marcas en el suelo: solo dibujo, la simulación no las conoce ----------
-    const parts = [], suelo = [], azar = Math.random;
+    const parts = [], suelo = [], senales = [], azar = Math.random; // senales: ondas de llamada y enlaces de la colmena
     let dtCuadro = 16;
     function parte(k, x, y, vx, vy, vida, s) { if (parts.length > 700) parts.shift(); parts.push({ k, x, y, vx, vy, v: 0, m: vida, s }); }
     function marcaSuelo(k, x, y, s, ang, dur, clase) { if (suelo.length > 500) suelo.shift(); suelo.push({ k, x, y, s, ang, t0: performance.now(), dur, clase }); }
@@ -214,7 +215,7 @@
         }
       }
 
-      const barras = [], tiempo = performance.now();
+      const barras = [], signos = [], tiempo = performance.now();
       const lod = z >= 16 ? 2 : z >= 8 ? 1 : 0; // nivel de detalle según el zoom
       const so = z * 0.13; // desplazamiento de las sombras
 
@@ -282,6 +283,7 @@
           ctx.beginPath(); ctx.moveTo(rx, ry - 14); ctx.lineTo(rx + 9, ry - 10.5); ctx.lineTo(rx, ry - 7); ctx.closePath(); ctx.fill();
         }
         if (sel.has(e.id) || e.vida < e.vidaMax) barras.push([px, py - 6, t, e.vida / e.vidaMax, m.t - e.curando < 12]);
+        if (e.j === YO && m.t - e.llama < 14) signos.push([px + t / 2, py - 18, '!']);
       }
 
       // Líneas de recorrido de las unidades seleccionadas: ruta pendiente, destino y objetivo.
@@ -349,6 +351,10 @@
         });
         ctx.restore();
         if (sel.has(e.id)) { ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(px, py, r * 1.9 + 2, 0, TAU); ctx.stroke(); }
+        if (e.guardia && lod) { // en guardia: una base fija bajo la unidad
+          ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(px - r * 1.3, py + r * 1.9); ctx.lineTo(px + r * 1.3, py + r * 1.9); ctx.moveTo(px - r * 0.7, py + r * 1.9 + 3); ctx.lineTo(px + r * 0.7, py + r * 1.9 + 3); ctx.stroke();
+        }
+        if (e.j === YO) { if (m.t - e.llama < 14) signos.push([px, py - r * 1.9 - 20, '!']); else if (m.t - e.oyo < 36) signos.push([px, py - r * 1.9 - 20, '✓']); }
         if (sel.has(e.id) || e.vida < e.vidaMax) barras.push([px - r * 1.3, py - r * 1.9 - 8, r * 2.6, e.vida / e.vidaMax, m.t - e.curando < 12]);
       }
 
@@ -394,6 +400,24 @@
       ctx.imageSmoothingEnabled = true;
       ctx.drawImage(cNie, ox, oy, N * z, N * z);
       ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.strokeRect(ox - 0.5, oy - 0.5, N * z + 1, N * z + 1);
+
+      // Colmena: ondas de llamada que se desvanecen al alejarse, y enlaces entre quien llama y quien acude.
+      for (let i = senales.length - 1; i >= 0; i--) {
+        const q = senales[i], fr = (performance.now() - q.t0) / q.dur;
+        if (fr >= 1) { senales.splice(i, 1); continue; }
+        ctx.strokeStyle = q.k === 'onda' ? P.mal : P.bien; ctx.lineWidth = 1.2;
+        if (q.k === 'onda') { ctx.globalAlpha = 0.55 * (1 - fr) * (1 - fr); ctx.beginPath(); ctx.arc(ox + q.x * z, oy + q.y * z, q.r * z * fr, 0, TAU); ctx.stroke(); }
+        else { ctx.globalAlpha = 0.7 * (1 - fr); ctx.setLineDash([2, 4]); ctx.beginPath(); ctx.moveTo(ox + q.x * z, oy + q.y * z); ctx.lineTo(ox + q.x2 * z, oy + q.y2 * z); ctx.stroke(); ctx.setLineDash([]); }
+      }
+      ctx.globalAlpha = 1;
+      for (const s of signos) { // ! pide apoyo, ✓ acude
+        const k = 6 + (s[2] === '!' ? Math.sin(performance.now() * 0.012) * 1.5 : 0);
+        ctx.fillStyle = s[2] === '!' ? P.mal : P.bien; ctx.beginPath(); ctx.arc(s[0], s[1], k + 2, 0, TAU); ctx.fill();
+        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.beginPath();
+        if (s[2] === '!') { ctx.moveTo(s[0], s[1] - 4); ctx.lineTo(s[0], s[1] + 0.5); ctx.moveTo(s[0], s[1] + 3.6); ctx.lineTo(s[0], s[1] + 3.7); }
+        else { ctx.moveTo(s[0] - 3.5, s[1]); ctx.lineTo(s[0] - 1, s[1] + 2.8); ctx.lineTo(s[0] + 3.8, s[1] - 2.8); }
+        ctx.stroke(); ctx.lineCap = 'butt';
+      }
 
       for (const b of barras) {
         ctx.fillStyle = P.fondo; ctx.fillRect(b[0], b[1], b[2], 3);
@@ -521,6 +545,14 @@
             marcaSuelo('resto', d.x2, d.y2, UNID[d.clase].radio, d.ang, 25000, d.clase);
           }
           son.explosion(Math.max(0.12, cerca(d.x2, d.y2)), paneo(d.x2), d.edif);
+        } else if (d.tipo === 'llama') { // onda de la llamada: solo se ve y se oye la propia
+          if (d.j !== YO) continue;
+          senales.push({ k: 'onda', x: d.x2, y: d.y2, r: d.r, t0: performance.now(), dur: 900 });
+          if (performance.now() - oido.llamada > 2500) { oido.llamada = performance.now(); son.llamada(Math.max(0.25, cerca(d.x2, d.y2)), paneo(d.x2)); }
+        } else if (d.tipo === 'oye') {
+          if (d.j !== YO) continue;
+          senales.push({ k: 'enlace', x: d.x1, y: d.y1, x2: d.x2, y2: d.y2, t0: performance.now(), dur: 1100 });
+          if (n++ < 6) son.acude(Math.max(0.2, cerca(d.x1, d.y1)), paneo(d.x1));
         } else if (d.tipo === 'venta') {
           for (let k = 0; k < d.tam * 4; k++) parte('polvo', d.x2 + (azar() - 0.5) * d.tam, d.y2 + (azar() - 0.5) * d.tam, (azar() - 0.5) * 0.6, -0.2 - azar() * 0.4, 1 + azar(), 0.4);
           if (d.j === YO) son.colocar();
@@ -696,7 +728,7 @@
     function actualizarBarra() {
       const num = (v) => (J.dios ? '∞' : String(Math.floor(v)));
       $('rMin').textContent = num(J.minerales); $('rPet').textContent = num(J.petroleo); $('rRar').textContent = num(J.raros); $('rInf').textContent = num(J.info);
-      $('dios').hidden = !J.dios;
+      $('dios').hidden = !J.dios; $('sinColmena').hidden = J.colmena;
       const e = $('rEne'); e.textContent = J.uso + ' / ' + J.prod; e.className = J.uso > J.prod ? 'mal' : '';
       const ag = $('rAgu'); ag.textContent = J.aguaUso + ' / ' + (J.dios ? '∞' : J.aguaProd); ag.className = !J.dios && J.aguaUso >= J.aguaProd ? 'mal' : '';
       for (const o of botones) {
@@ -876,6 +908,8 @@
       switch (ev.code) {
         case 'KeyA': if (unidadesSel().length) modo = 'amover'; break;
         case 'KeyR': if (unidadesSel().length) modo = 'patrulla'; break;
+        case 'KeyG': { const ids = unidadesSel().map((u) => u.id); if (ids.length) { W.orden(m, { t: 'guardia', j: YO, ids }); son.orden(); } break; }
+        case 'KeyC': W.orden(m, { t: 'colmena', j: YO }); aviso(J.colmena ? 'Colmena desactivada: nadie acude solo' : 'Colmena activada'); break;
         case 'KeyF': ponerForma(FORMAS[(FORMAS.indexOf(forma) + 1) % FORMAS.length]); break;
         case 'Delete': case 'Backspace': vender(); break;
         case 'KeyE': { const ids = unidadesSel().map((u) => u.id); if (ids.length) { W.orden(m, { t: 'explorar', j: YO, ids }); son.orden(); } break; }

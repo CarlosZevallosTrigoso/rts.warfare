@@ -14,6 +14,7 @@
       obras: [], // [{ tipo, prog, listo }]: varias a la vez, se reparten la velocidad
       colas: Object.fromEntries(Object.keys(UNID).map((t) => [t, { n: 0, prog: 0, sinAgua: false }])), // una cola por tipo de unidad
       alerta: null, cosechado: 0, bajas: 0, producidas: 0,
+      colmena: true, // inteligencia de colmena: las unidades piden y dan apoyo solas
       nivel: 1, mejoras: {}, inv: [], intercepta: -1, // tecnología: nivel, mejoras hechas, investigaciones en curso
       petroleo: ECON.petInicio, raros: 0, info: 0, aguaProd: 0, aguaUso: 0, extraido: 0,
     };
@@ -28,7 +29,7 @@
       ocup: new Int32Array(NN), paso: new Uint8Array(NN),
       jug: [nuevoJugador(op.inicio), nuevoJugador(op.inicio)],
       niebla: [new Uint8Array(NN), new Uint8Array(NN)],
-      cola: [], colaRutas: [], efectos: [], proy: [], barridos: [], minas: [], raros: [], ganador: -1,
+      cola: [], colaRutas: [], efectos: [], proy: [], barridos: [], focos: [[], []], sigFoco: 1, sigMision: 1, minas: [], raros: [], ganador: -1,
       ruta: W.crearRuta(N),
     };
     for (let i = 0; i < NN; i++) {
@@ -77,7 +78,8 @@
     const u = {
       id: m.sigId++, j, tipo, edif: false, x, y, px: x, py: y, vida: vidaDe(m.jug[j], tipo), vidaMax: vidaDe(m.jug[j], tipo),
       orden: 'nada', ruta: null, ri: 0, dest: null, meta: null, pend: null, fallo: false, obj: 0, recarga: 0, fijo: false,
-      ang: Math.atan2(N / 2 - y, N / 2 - x), v: 0, tReplan: -99, tRep: -999, tope: 0, angFin: null, // rumbo, velocidad actual
+      ang: Math.atan2(N / 2 - y, N / 2 - x), v: 0, tReplan: -99, tRep: -999, tope: 0, angFin: null,
+      guardia: false, mision: 0, acude: 0, salto: 0, origen: null, previo: null, // colmena: modo fijo, misión, foco al que acude // rumbo, velocidad actual
       carga: 0, est: tipo === 'cosechadora' ? 'buscar' : '', celda: -1, ref: 0, espera: 0, pref: null,
       quiere: 1, cargaTipo: 1, // cosechadora: qué busca y qué lleva (1 minerales, 2 raros)
       cola: [], patrulla: null, explora: false, // órdenes encadenadas, ruta de patrulla, exploración automática
@@ -225,15 +227,15 @@
   }
 
   // ---------- órdenes de unidad: directa, encadenada, patrulla y exploración ----------
-  function limpiar(u) { u.cola.length = 0; u.patrulla = null; u.explora = false; }
+  function limpiar(u) { u.cola.length = 0; u.patrulla = null; u.explora = false; u.acude = 0; }
   function asignar(m, u, o) {
     if (o.t === 'atacar') {
       const ob = m.porId.get(o.obj);
       if (!ob || ob.vida <= 0) return false;
-      u.orden = 'atacar'; u.obj = ob.id; u.ruta = null; u.pend = null;
+      u.orden = 'atacar'; u.obj = ob.id; u.ruta = null; u.pend = null; u.guardia = false;
       return true;
     }
-    u.orden = o.t; u.obj = 0; u.dest = { x: o.x, y: o.y }; u.ruta = null; u.tope = 0; u.angFin = null;
+    u.orden = o.t; u.obj = 0; u.dest = { x: o.x, y: o.y }; u.ruta = null; u.tope = 0; u.angFin = null; u.guardia = false;
     pedirRuta(m, u, o.x, o.y, 0);
     return true;
   }
@@ -266,6 +268,10 @@
   function aplicar(m, cmd) {
     const J = m.jug[cmd.j];
     if (!J || !J.vivo) return;
+    if (cmd.ids && (cmd.t === 'mover' || cmd.t === 'amover' || cmd.t === 'atacar' || cmd.t === 'patrulla')) { // misma orden, misma misión
+      const mision = m.sigMision++;
+      for (const id of cmd.ids) { const u = m.porId.get(id); if (u && !u.edif && u.j === cmd.j) u.mision = mision; }
+    }
     switch (cmd.t) {
       case 'dios': // modo GOD: recursos infinitos; al apagarlo vuelve el saldo anterior
         J.dios = !J.dios;
@@ -339,6 +345,10 @@
         else { const f = m.niebla[cmd.j]; for (let i = 0; i < f.length; i++) if (!f[i]) f[i] = 1; m.nieblaV++; }
         return;
       }
+      case 'guardia': // modo fijo: no se mueve ni para perseguir ni para acudir; dispara a lo que entre en su alcance
+        for (const u of propias(m, cmd)) if (UNID[u.tipo].arma) { limpiar(u); u.orden = 'nada'; u.obj = 0; u.ruta = null; u.pend = null; u.guardia = true; }
+        return;
+      case 'colmena': J.colmena = !J.colmena; return;
       case 'vender': { // demoler un edificio propio: devuelve parte de su costo, según la vida que le quede
         const e = m.porId.get(cmd.id);
         if (!e || !e.edif || e.j !== cmd.j || e.tipo === 'patio' || e.vida <= 0) return;
@@ -497,16 +507,94 @@
     return mejor;
   }
 
-  function herir(m, b, arma, mult) { b.vida -= arma.dano * (mult || 1) * arma.vs[b.edif ? 'edificio' : UNID[b.tipo].blindaje]; b.tDano = m.t; }
-  // Contraataque: el atacado y sus compañeros cercanos sin otra tarea van por el agresor.
+  function herir(m, b, arma, mult, de) { b.vida -= arma.dano * (mult || 1) * arma.vs[b.edif ? 'edificio' : UNID[b.tipo].blindaje]; b.tDano = m.t; b.agresor = de; }
+  // Contraataque: el atacado va por su agresor. Los compañeros llegan por la colmena (ver más abajo).
   function alertar(m, a, b) {
-    const bx = posX(b), by = posY(b);
-    m.jug[b.j].alerta = { x: bx, y: by, t: m.t };
-    for (let k = 0; k < m.ents.length; k++) {
-      const e = m.ents[k];
-      if (e.j !== b.j || e.edif || e.obj || !UNID[e.tipo].arma || (e.orden !== 'nada' && e.orden !== 'amover')) continue;
-      if (e !== b && Math.hypot(e.x - bx, e.y - by) > 7) continue;
-      e.obj = a.id; e.tRep = m.t; e.ruta = null; e.pend = null;
+    m.jug[b.j].alerta = { x: posX(b), y: posY(b), t: m.t };
+    if (b.edif || b.obj || !UNID[b.tipo].arma || (b.orden !== 'nada' && b.orden !== 'amover')) return;
+    b.obj = a.id; b.tRep = m.t; b.ruta = null; b.pend = null;
+  }
+
+  // ---------- inteligencia de colmena ----------
+  // Cada medio segundo: lo atacado forma un "foco". El foco estima la amenaza (valor de los enemigos cercanos)
+  // y la compara con el apoyo presente y el que ya va en camino. Si falta fuerza, la llamada se propaga:
+  // la oyen las unidades dentro de un radio que crece, y también las que están cerca de quien ya acude
+  // (hasta tres saltos). Acuden primero las más cercanas y solo hasta cubrir la necesidad.
+  const valor = (e) => (e.edif ? (EDIF[e.tipo].arma ? EDIF[e.tipo].costo * 0.8 : 0) : UNID[e.tipo].arma ? UNID[e.tipo].costo : 0) * Math.max(0.2, e.vida / e.vidaMax);
+  function soltar(m, f) { // fin del foco: quienes acudieron retoman lo suyo o vuelven a su puesto
+    for (const id of f.resp) {
+      const u = m.porId.get(id);
+      if (!u || u.acude !== f.id) continue;
+      u.acude = 0;
+      if (u.previo) asignar(m, u, u.previo);
+      else if (!u.patrulla && !u.cola.length && u.origen) asignar(m, u, { t: 'amover', x: u.origen.x, y: u.origen.y });
+    }
+  }
+  function colmena(m) {
+    for (let j = 0; j < 2; j++) {
+      const J = m.jug[j], focos = m.focos[j];
+      if (!J.colmena) { for (const f of focos) soltar(m, f); focos.length = 0; continue; }
+      for (const f of focos) { f.victimas = []; f.agresores = []; }
+      for (const e of m.ents) { // lo herido hace poco se agrupa por cercanía
+        if (e.j !== j || e.tDano === undefined || m.t - e.tDano > 40 || !e.agresor) continue;
+        const x = posX(e), y = posY(e);
+        let f = focos.find((q) => Math.hypot(q.x - x, q.y - y) < 7);
+        if (!f) { f = { id: m.sigFoco++, x, y, radio: 8, resp: [], victimas: [], agresores: [], visto: m.t }; focos.push(f); }
+        f.victimas.push(e); f.visto = m.t;
+        const a = m.porId.get(e.agresor); if (a && !f.agresores.includes(a)) f.agresores.push(a);
+      }
+      for (let k = focos.length - 1; k >= 0; k--) {
+        const f = focos[k];
+        if (m.t - f.visto > 60) { soltar(m, f); focos.splice(k, 1); continue; } // tres segundos de calma: se acabó
+        if (!f.victimas.length) continue;
+        f.x = posX(f.victimas[0]); f.y = posY(f.victimas[0]);
+        f.resp = f.resp.filter((id) => { const u = m.porId.get(id); return u && u.acude === f.id; });
+        const vict = new Set(f.victimas.map((e) => e.id));
+        let amenaza = 0, presente = 0, camino = 0, ayudan = 0;
+        f.ox = f.x; f.oy = f.y;
+        let dmin = Infinity;
+        for (const a of f.agresores) { const d = Math.hypot(posX(a) - f.x, posY(a) - f.y); if (d < dmin) { dmin = d; f.ox = posX(a); f.oy = posY(a); } }
+        for (const e of m.ents) {
+          const v = valor(e);
+          if (!v || e.vida <= 0) continue;
+          const x = posX(e), y = posY(e), d = Math.hypot(x - f.x, y - f.y);
+          if (e.j !== j) { if (d <= 7 || f.agresores.some((a) => Math.hypot(posX(a) - x, posY(a) - y) <= 4)) amenaza += v; }
+          else if (vict.has(e.id)) presente += v * 0.5; // quien está recibiendo el golpe cuenta la mitad
+          else if (e.acude === f.id) { if (d <= 6) { presente += v; ayudan++; } else camino += v; }
+          else if (d <= 6 && e.obj) { presente += v; ayudan++; } // compañera cercana que ya está peleando
+        }
+        f.amenaza = amenaza; f.necesidad = amenaza * 1.2 - presente - camino;
+        f.sinApoyo = ayudan === 0 && amenaza > 0;
+        if (f.sinApoyo) { // la alerta solo se muestra mientras nadie ha llegado a ayudar
+          for (const e of f.victimas) e.llama = m.t;
+          m.efectos.push({ tipo: 'llama', x2: f.x, y2: f.y, r: f.radio, j, t: m.t });
+        }
+        if (f.necesidad <= 0) continue;
+        const nodos = [{ x: f.x, y: f.y, r: f.radio, salto: 0 }]; // la red: el foco y quienes ya acuden, que retransmiten
+        for (const id of f.resp) { const u = m.porId.get(id); nodos.push({ x: u.x, y: u.y, r: 8, salto: u.salto }); }
+        const cand = [];
+        for (const u of m.ents) {
+          if (u.j !== j || u.edif || u.acude || u.guardia || u.vida <= 0 || vict.has(u.id) || !UNID[u.tipo].arma) continue;
+          const libre = (u.orden === 'nada' || u.orden === 'amover') && !u.obj;
+          // Con una orden directa solo acude si atacan a una compañera que marcha en su misma misión.
+          if (!libre && !(u.orden !== 'nada' && u.mision && f.victimas.some((v) => !v.edif && v.mision === u.mision && v.orden !== 'nada'))) continue;
+          let salto = 99;
+          for (const n of nodos) if (n.salto < 3 && n.salto + 1 < salto && Math.hypot(n.x - u.x, n.y - u.y) <= n.r) salto = n.salto + 1;
+          if (salto <= 3) cand.push({ u, d: Math.hypot(u.x - f.x, u.y - f.y), salto });
+        }
+        cand.sort((a, b) => a.d - b.d || a.u.id - b.u.id);
+        for (const c of cand) {
+          if (f.necesidad <= 0) break;
+          const u = c.u;
+          u.previo = u.orden === 'atacar' ? { t: 'atacar', obj: u.obj } : u.orden !== 'nada' && !u.patrulla && u.dest ? { t: u.orden, x: u.dest.x, y: u.dest.y } : null;
+          u.origen = { x: u.x, y: u.y };
+          asignar(m, u, { t: 'amover', x: f.ox, y: f.oy });
+          u.acude = f.id; u.salto = c.salto; u.oyo = m.t;
+          f.resp.push(u.id); f.necesidad -= valor(u);
+          m.efectos.push({ tipo: 'oye', x1: u.x, y1: u.y, x2: f.x, y2: f.y, j, t: m.t });
+        }
+        f.radio = Math.min(30, f.radio + 1); // nadie basta todavía: la llamada llega más lejos
+      }
     }
   }
   // Los efectos son avisos para la interfaz (dibujo y sonido); la simulación no los lee.
@@ -515,10 +603,10 @@
     const mult = !a.edif && UNID[a.tipo].cat === 'inf' && m.jug[a.j].mejoras.perforante ? 1.25 : 1;
     a.recarga = arma.recarga;
     if (arma.vuelo) { // obús: vuela hasta donde estaba el blanco al disparar
-      m.proy.push({ x: ax, y: ay, px: ax, py: ay, tx: bx, ty: by, obj: b.id, j: a.j, arma: clave, mult });
+      m.proy.push({ x: ax, y: ay, px: ax, py: ay, tx: bx, ty: by, obj: b.id, j: a.j, arma: clave, mult, de: a.id });
       m.efectos.push({ tipo: 'boca', x1: ax, y1: ay, x2: bx, y2: by, j: a.j, t: m.t, arma: clave });
     } else {
-      herir(m, b, arma, mult);
+      herir(m, b, arma, mult, a.id);
       m.efectos.push({ tipo: 'traza', x1: ax, y1: ay, x2: bx, y2: by, j: a.j, t: m.t, arma: clave });
     }
     alertar(m, a, b);
@@ -530,11 +618,11 @@
       if (dd > arma.vuelo) { p.x += (dx / dd) * arma.vuelo; p.y += (dy / dd) * arma.vuelo; continue; }
       let acierto = false;
       if (arma.area) { // explosión: daña a todo enemigo dentro del radio
-        for (const e of m.ents) if (e.j !== p.j && e.vida > 0 && dist(p.tx, p.ty, e) <= arma.area) { herir(m, e, arma, p.mult); acierto = true; }
+        for (const e of m.ents) if (e.j !== p.j && e.vida > 0 && dist(p.tx, p.ty, e) <= arma.area) { herir(m, e, arma, p.mult, p.de); acierto = true; }
       } else {
         const o = m.porId.get(p.obj);
         acierto = !!o && o.vida > 0 && dist(p.tx, p.ty, o) <= 0.9; // si el blanco se apartó, falla
-        if (acierto) herir(m, o, arma, p.mult);
+        if (acierto) herir(m, o, arma, p.mult, p.de);
       }
       m.efectos.push({ tipo: 'impacto', x1: p.x, y1: p.y, x2: p.tx, y2: p.ty, j: p.j, t: m.t, arma: p.arma, acierto });
       m.proy[k] = m.proy[m.proy.length - 1]; m.proy.pop();
@@ -557,7 +645,7 @@
     if (u.recarga > 0) u.recarga--;
     if (u.tipo === 'cosechadora') { tickCosechadora(m, u); return; }
     if (u.fallo) { u.fallo = false; u.orden = 'nada'; u.obj = 0; limpiar(u); }
-    if (u.orden === 'nada' && !u.obj && (u.cola.length || u.patrulla || u.explora)) siguienteOrden(m, u);
+    if (u.orden === 'nada' && !u.obj && !u.acude && (u.cola.length || u.patrulla || u.explora)) siguienteOrden(m, u);
     if (u.orden === 'nada' && !u.obj && u.angFin != null) { // en su puesto, se encara como el resto de la formación
       const dif = ((u.angFin - u.ang + Math.PI) % TAU + TAU) % TAU - Math.PI;
       if (Math.abs(dif) <= d.giro) { u.ang = u.angFin; u.angFin = null; } else u.ang += Math.sign(dif) * d.giro;
@@ -571,13 +659,15 @@
     let o = u.obj ? m.porId.get(u.obj) : null;
     if (u.obj && (!o || o.vida <= 0)) { o = null; u.obj = 0; u.ruta = null; if (u.orden === 'atacar') u.orden = 'nada'; }
     if (!o && (m.t + u.id) % 5 === 0) {
-      o = buscarEnemigo(m, u, u.x, u.y, alc + 2);
+      o = buscarEnemigo(m, u, u.x, u.y, alc + (u.guardia ? 0 : 2));
       if (o) { u.obj = o.id; u.ruta = null; u.pend = null; }
     }
     if (o) {
       const dd = dist(u.x, u.y, o);
       if (dd <= alc) {
         if (u.recarga <= 0 && dd >= (arma.alcanceMin || 0)) disparar(m, u, o, arma); // demasiado cerca, la artillería no puede tirar
+      } else if (u.guardia) {
+        u.obj = 0; // en guardia no persigue
       } else if (u.orden !== 'atacar' && dd > alc + (m.t - u.tRep < 240 ? 14 : 4)) { // al agresor lo persigue más lejos
         u.obj = 0; u.ruta = null; // se alejó demasiado: lo suelta
       } else {
@@ -789,7 +879,7 @@
         const dx = b.x - a.x; if (dx > 0.5 || dx < -0.5) continue;
         const dy = b.y - a.y; if (dy > 0.5 || dy < -0.5) continue;
         if (dx * dx + dy * dy >= 0.2) continue;
-        b.vida -= ECON.aplasta; b.tDano = m.t;
+        b.vida -= ECON.aplasta; b.tDano = m.t; b.agresor = a.id;
         if (b.vida <= 0) m.jug[a.j].aplastados = (m.jug[a.j].aplastados || 0) + 1;
       }
     }
@@ -843,7 +933,7 @@
     separar(m);
     aplastar(m);
     tickProyectiles(m);
-    if (m.t % 10 === 0) curar(m);
+    if (m.t % 10 === 0) { curar(m); colmena(m); }
 
     let muertos = false;
     for (let k = 0; k < m.ents.length; k++) {

@@ -13,7 +13,9 @@
   body { background: var(--fondo); color: var(--tinta); font: 12px/1.45 "Fira Code", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow: hidden; user-select: none; -webkit-user-select: none; }
   #app { display: grid; grid-template-columns: 1fr 236px; height: 100%; }
   #lienzo { width: 100%; height: 100%; display: block; cursor: crosshair; min-width: 0; }
-  #barra { border-left: 1px solid var(--linea); padding: 12px 13px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+  #barra { border-left: 1px solid var(--linea); padding: 12px 13px 0; overflow: hidden; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+  #panel { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; margin: 0 -13px; padding: 2px 13px 14px; border-top: 1px solid var(--linea); }
+  #recursos, #mini, #titulo { flex: none; }
   h1 { font-size: 14px; margin: 0; font-weight: 600; cursor: pointer; letter-spacing: .02em; }
   h1 span { color: var(--suave); font-weight: 400; }
   h2 { font-size: 10px; margin: 0 0 5px; font-weight: 400; color: var(--suave); text-transform: uppercase; letter-spacing: .12em; }
@@ -67,6 +69,7 @@
   #menu .ops button.on small { color: var(--fondo); }
   #op-s { cursor: text; width: 100%; }
   #empezar { font: inherit; font-weight: 600; padding: 10px; border: 1px solid var(--tinta); border-radius: 2px; background: var(--tinta); color: var(--fondo); cursor: pointer; }
+  #sinColmena { color: var(--suave); font-size: 10px; letter-spacing: .1em; margin-left: 6px; font-weight: 400; }
   #dios { color: var(--mal); font-size: 10px; letter-spacing: .12em; margin-left: 6px; }
 </style>
 </head>
@@ -79,6 +82,8 @@
       <div><kbd>Mayús</kbd>+clic derecho: encadenar órdenes</div>
       <div><kbd>R</kbd> patrulla · <kbd>E</kbd> explorar sola · <kbd>F</kbd> formación</div>
       <div><kbd>Supr</kbd> demoler el edificio seleccionado</div>
+      <div><kbd>G</kbd> guardia: la unidad queda fija · <kbd>C</kbd> colmena sí/no</div>
+      <div><b>!</b> pide apoyo · <b>✓</b> acude a la llamada</div>
       <div>la información paga niveles, mejoras e inteligencia</div>
       <div>cuartel o fábrica + clic derecho: punto de reunión</div>
       <div>la línea punteada es el recorrido de lo seleccionado</div>
@@ -94,7 +99,7 @@
       <div>escribe <kbd>god</kbd>: recursos infinitos</div>
   </details>
   <aside id="barra">
-    <h1 id="titulo" title="Recargar">rts<span>.</span>warfare<b id="dios" hidden>GOD</b></h1>
+    <h1 id="titulo" title="Recargar">rts<span>.</span>warfare<b id="dios" hidden>GOD</b><b id="sinColmena" hidden>SIN COLMENA</b></h1>
     <div id="recursos">
       <div class="fila"><span>minerales</span><b id="rMin">0</b></div>
       <div class="fila" title="Lo da el extractor, sobre un yacimiento. Lo piden la fábrica y los vehículos."><span>petróleo</span><b id="rPet">0</b></div>
@@ -105,6 +110,7 @@
       <div class="fila" title="Usada / disponible. En déficit todo va a media velocidad y las torretas se apagan."><span>energía</span><b id="rEne">0 / 0</b></div>
     </div>
     <canvas id="mini" width="208" height="208"></canvas>
+    <div id="panel">
     <section><h2>Edificios</h2><div id="bEdif"></div><div id="obras" class="tenue"></div></section>
     <section><h2>Unidades</h2><div id="bUnid"></div><div id="ritmo" class="tenue"></div></section>
     <section><h2>Tecnología · nivel <span id="nivel">1</span></h2><div id="bTec"></div><div id="hechas" class="tenue"></div></section>
@@ -115,6 +121,7 @@
       <button type="button" class="grupo" data-f="cuna">cuña</button><button type="button" class="grupo" data-f="cuadro">cuadro</button></div></section>
     <div id="sel" class="tenue"></div>
     <button type="button" id="vender" class="btn" hidden></button>
+    </div>
   </aside>
 </div>
 <div id="menu"><div class="caja">

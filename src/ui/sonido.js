@@ -126,6 +126,8 @@
     s.obraLista = function () { const b = ui(); if (!b) return; tono(b, 'triangle', 523, 523, 0.16, 0.3); tono(b, 'sine', 1046, 1046, 0.1, 0.1); tono(b, 'triangle', 784, 784, 0.28, 0.32, 0.13); tono(b, 'sine', 1568, 1568, 0.2, 0.1, 0.13); };
     s.colocar = function () { const b = ui(); if (!b) return; tono(b, 'sine', 115, 46, 0.24, 0.9); ruido(b, 'lowpass', 500, 120, 0.16, 0.5); ruido(b, 'bandpass', 2700, 2400, 0.05, 0.3, 0.02); };
     s.unidadLista = function () { const b = ui(); if (!b) return; tono(b, 'sine', 880, 880, 0.07, 0.16); tono(b, 'sine', 1320, 1320, 0.09, 0.14, 0.07); };
+    s.llamada = function (v, pan) { if (!listo(v)) return; const b = bus(v * 0.7, pan, 0.8); tono(b, 'sine', 1180, 1180, 0.09, 0.22); tono(b, 'sine', 1560, 1560, 0.12, 0.2, 0.1); };
+    s.acude = function (v, pan) { if (!listo(v)) return; const b = bus(v * 0.6, pan, 0.6); tono(b, 'triangle', 780, 980, 0.07, 0.18); };
     s.orden = function () { const b = ui(); if (!b) return; tono(b, 'triangle', 560, 680, 0.05, 0.12); };
     s.alerta = function () { const b = ui(); if (!b) return; for (let i = 0; i < 3; i++) { tono(b, 'sawtooth', 640, 470, 0.24, 0.14, i * 0.27); tono(b, 'square', 320, 235, 0.24, 0.06, i * 0.27); } };
     s.fin = function (gano) { const b = ui(); if (!b) return; (gano ? [392, 494, 587, 784] : [392, 349, 294, 196]).forEach((f, i) => { tono(b, 'triangle', f, f, 0.5, 0.3, i * 0.24); tono(b, 'sine', f / 2, f / 2, 0.6, 0.25, i * 0.24); }); };

@@ -13,7 +13,9 @@
   body { background: var(--fondo); color: var(--tinta); font: 12px/1.45 "Fira Code", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow: hidden; user-select: none; -webkit-user-select: none; }
   #app { display: grid; grid-template-columns: 1fr 236px; height: 100%; }
   #lienzo { width: 100%; height: 100%; display: block; cursor: crosshair; min-width: 0; }
-  #barra { border-left: 1px solid var(--linea); padding: 12px 13px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+  #barra { border-left: 1px solid var(--linea); padding: 12px 13px 0; overflow: hidden; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+  #panel { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; margin: 0 -13px; padding: 2px 13px 14px; border-top: 1px solid var(--linea); }
+  #recursos, #mini, #titulo { flex: none; }
   h1 { font-size: 14px; margin: 0; font-weight: 600; cursor: pointer; letter-spacing: .02em; }
   h1 span { color: var(--suave); font-weight: 400; }
   h2 { font-size: 10px; margin: 0 0 5px; font-weight: 400; color: var(--suave); text-transform: uppercase; letter-spacing: .12em; }
@@ -67,6 +69,7 @@
   #menu .ops button.on small { color: var(--fondo); }
   #op-s { cursor: text; width: 100%; }
   #empezar { font: inherit; font-weight: 600; padding: 10px; border: 1px solid var(--tinta); border-radius: 2px; background: var(--tinta); color: var(--fondo); cursor: pointer; }
+  #sinColmena { color: var(--suave); font-size: 10px; letter-spacing: .1em; margin-left: 6px; font-weight: 400; }
   #dios { color: var(--mal); font-size: 10px; letter-spacing: .12em; margin-left: 6px; }
 </style>
 </head>
@@ -79,6 +82,8 @@
       <div><kbd>Mayús</kbd>+clic derecho: encadenar órdenes</div>
       <div><kbd>R</kbd> patrulla · <kbd>E</kbd> explorar sola · <kbd>F</kbd> formación</div>
       <div><kbd>Supr</kbd> demoler el edificio seleccionado</div>
+      <div><kbd>G</kbd> guardia: la unidad queda fija · <kbd>C</kbd> colmena sí/no</div>
+      <div><b>!</b> pide apoyo · <b>✓</b> acude a la llamada</div>
       <div>la información paga niveles, mejoras e inteligencia</div>
       <div>cuartel o fábrica + clic derecho: punto de reunión</div>
       <div>la línea punteada es el recorrido de lo seleccionado</div>
@@ -94,7 +99,7 @@
       <div>escribe <kbd>god</kbd>: recursos infinitos</div>
   </details>
   <aside id="barra">
-    <h1 id="titulo" title="Recargar">rts<span>.</span>warfare<b id="dios" hidden>GOD</b></h1>
+    <h1 id="titulo" title="Recargar">rts<span>.</span>warfare<b id="dios" hidden>GOD</b><b id="sinColmena" hidden>SIN COLMENA</b></h1>
     <div id="recursos">
       <div class="fila"><span>minerales</span><b id="rMin">0</b></div>
       <div class="fila" title="Lo da el extractor, sobre un yacimiento. Lo piden la fábrica y los vehículos."><span>petróleo</span><b id="rPet">0</b></div>
@@ -105,6 +110,7 @@
       <div class="fila" title="Usada / disponible. En déficit todo va a media velocidad y las torretas se apagan."><span>energía</span><b id="rEne">0 / 0</b></div>
     </div>
     <canvas id="mini" width="208" height="208"></canvas>
+    <div id="panel">
     <section><h2>Edificios</h2><div id="bEdif"></div><div id="obras" class="tenue"></div></section>
     <section><h2>Unidades</h2><div id="bUnid"></div><div id="ritmo" class="tenue"></div></section>
     <section><h2>Tecnología · nivel <span id="nivel">1</span></h2><div id="bTec"></div><div id="hechas" class="tenue"></div></section>
@@ -115,6 +121,7 @@
       <button type="button" class="grupo" data-f="cuna">cuña</button><button type="button" class="grupo" data-f="cuadro">cuadro</button></div></section>
     <div id="sel" class="tenue"></div>
     <button type="button" id="vender" class="btn" hidden></button>
+    </div>
   </aside>
 </div>
 <div id="menu"><div class="caja">
@@ -129,11 +136,11 @@
     <button type="button" data-v="normal">normal</button><button type="button" data-v="agresivo">agresivo<small>ataca pronto</small></button></div></div>
   <div><h2>Semilla del mapa</h2><input id="op-s" inputmode="numeric" placeholder="al azar" autocomplete="off"></div>
   <button type="button" id="empezar">Empezar</button>
-  <div id="version">versión 19</div>
+  <div id="version">versión 20</div>
 </div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><p><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 19' };
+globalThis.W = { VERSION: 'versión 20' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -454,6 +461,7 @@ globalThis.W = { VERSION: 'versión 19' };
       obras: [], // [{ tipo, prog, listo }]: varias a la vez, se reparten la velocidad
       colas: Object.fromEntries(Object.keys(UNID).map((t) => [t, { n: 0, prog: 0, sinAgua: false }])), // una cola por tipo de unidad
       alerta: null, cosechado: 0, bajas: 0, producidas: 0,
+      colmena: true, // inteligencia de colmena: las unidades piden y dan apoyo solas
       nivel: 1, mejoras: {}, inv: [], intercepta: -1, // tecnología: nivel, mejoras hechas, investigaciones en curso
       petroleo: ECON.petInicio, raros: 0, info: 0, aguaProd: 0, aguaUso: 0, extraido: 0,
     };
@@ -468,7 +476,7 @@ globalThis.W = { VERSION: 'versión 19' };
       ocup: new Int32Array(NN), paso: new Uint8Array(NN),
       jug: [nuevoJugador(op.inicio), nuevoJugador(op.inicio)],
       niebla: [new Uint8Array(NN), new Uint8Array(NN)],
-      cola: [], colaRutas: [], efectos: [], proy: [], barridos: [], minas: [], raros: [], ganador: -1,
+      cola: [], colaRutas: [], efectos: [], proy: [], barridos: [], focos: [[], []], sigFoco: 1, sigMision: 1, minas: [], raros: [], ganador: -1,
       ruta: W.crearRuta(N),
     };
     for (let i = 0; i < NN; i++) {
@@ -517,7 +525,8 @@ globalThis.W = { VERSION: 'versión 19' };
     const u = {
       id: m.sigId++, j, tipo, edif: false, x, y, px: x, py: y, vida: vidaDe(m.jug[j], tipo), vidaMax: vidaDe(m.jug[j], tipo),
       orden: 'nada', ruta: null, ri: 0, dest: null, meta: null, pend: null, fallo: false, obj: 0, recarga: 0, fijo: false,
-      ang: Math.atan2(N / 2 - y, N / 2 - x), v: 0, tReplan: -99, tRep: -999, tope: 0, angFin: null, // rumbo, velocidad actual
+      ang: Math.atan2(N / 2 - y, N / 2 - x), v: 0, tReplan: -99, tRep: -999, tope: 0, angFin: null,
+      guardia: false, mision: 0, acude: 0, salto: 0, origen: null, previo: null, // colmena: modo fijo, misión, foco al que acude // rumbo, velocidad actual
       carga: 0, est: tipo === 'cosechadora' ? 'buscar' : '', celda: -1, ref: 0, espera: 0, pref: null,
       quiere: 1, cargaTipo: 1, // cosechadora: qué busca y qué lleva (1 minerales, 2 raros)
       cola: [], patrulla: null, explora: false, // órdenes encadenadas, ruta de patrulla, exploración automática
@@ -665,15 +674,15 @@ globalThis.W = { VERSION: 'versión 19' };
   }
 
   // ---------- órdenes de unidad: directa, encadenada, patrulla y exploración ----------
-  function limpiar(u) { u.cola.length = 0; u.patrulla = null; u.explora = false; }
+  function limpiar(u) { u.cola.length = 0; u.patrulla = null; u.explora = false; u.acude = 0; }
   function asignar(m, u, o) {
     if (o.t === 'atacar') {
       const ob = m.porId.get(o.obj);
       if (!ob || ob.vida <= 0) return false;
-      u.orden = 'atacar'; u.obj = ob.id; u.ruta = null; u.pend = null;
+      u.orden = 'atacar'; u.obj = ob.id; u.ruta = null; u.pend = null; u.guardia = false;
       return true;
     }
-    u.orden = o.t; u.obj = 0; u.dest = { x: o.x, y: o.y }; u.ruta = null; u.tope = 0; u.angFin = null;
+    u.orden = o.t; u.obj = 0; u.dest = { x: o.x, y: o.y }; u.ruta = null; u.tope = 0; u.angFin = null; u.guardia = false;
     pedirRuta(m, u, o.x, o.y, 0);
     return true;
   }
@@ -706,6 +715,10 @@ globalThis.W = { VERSION: 'versión 19' };
   function aplicar(m, cmd) {
     const J = m.jug[cmd.j];
     if (!J || !J.vivo) return;
+    if (cmd.ids && (cmd.t === 'mover' || cmd.t === 'amover' || cmd.t === 'atacar' || cmd.t === 'patrulla')) { // misma orden, misma misión
+      const mision = m.sigMision++;
+      for (const id of cmd.ids) { const u = m.porId.get(id); if (u && !u.edif && u.j === cmd.j) u.mision = mision; }
+    }
     switch (cmd.t) {
       case 'dios': // modo GOD: recursos infinitos; al apagarlo vuelve el saldo anterior
         J.dios = !J.dios;
@@ -779,6 +792,10 @@ globalThis.W = { VERSION: 'versión 19' };
         else { const f = m.niebla[cmd.j]; for (let i = 0; i < f.length; i++) if (!f[i]) f[i] = 1; m.nieblaV++; }
         return;
       }
+      case 'guardia': // modo fijo: no se mueve ni para perseguir ni para acudir; dispara a lo que entre en su alcance
+        for (const u of propias(m, cmd)) if (UNID[u.tipo].arma) { limpiar(u); u.orden = 'nada'; u.obj = 0; u.ruta = null; u.pend = null; u.guardia = true; }
+        return;
+      case 'colmena': J.colmena = !J.colmena; return;
       case 'vender': { // demoler un edificio propio: devuelve parte de su costo, según la vida que le quede
         const e = m.porId.get(cmd.id);
         if (!e || !e.edif || e.j !== cmd.j || e.tipo === 'patio' || e.vida <= 0) return;
@@ -937,16 +954,94 @@ globalThis.W = { VERSION: 'versión 19' };
     return mejor;
   }
 
-  function herir(m, b, arma, mult) { b.vida -= arma.dano * (mult || 1) * arma.vs[b.edif ? 'edificio' : UNID[b.tipo].blindaje]; b.tDano = m.t; }
-  // Contraataque: el atacado y sus compañeros cercanos sin otra tarea van por el agresor.
+  function herir(m, b, arma, mult, de) { b.vida -= arma.dano * (mult || 1) * arma.vs[b.edif ? 'edificio' : UNID[b.tipo].blindaje]; b.tDano = m.t; b.agresor = de; }
+  // Contraataque: el atacado va por su agresor. Los compañeros llegan por la colmena (ver más abajo).
   function alertar(m, a, b) {
-    const bx = posX(b), by = posY(b);
-    m.jug[b.j].alerta = { x: bx, y: by, t: m.t };
-    for (let k = 0; k < m.ents.length; k++) {
-      const e = m.ents[k];
-      if (e.j !== b.j || e.edif || e.obj || !UNID[e.tipo].arma || (e.orden !== 'nada' && e.orden !== 'amover')) continue;
-      if (e !== b && Math.hypot(e.x - bx, e.y - by) > 7) continue;
-      e.obj = a.id; e.tRep = m.t; e.ruta = null; e.pend = null;
+    m.jug[b.j].alerta = { x: posX(b), y: posY(b), t: m.t };
+    if (b.edif || b.obj || !UNID[b.tipo].arma || (b.orden !== 'nada' && b.orden !== 'amover')) return;
+    b.obj = a.id; b.tRep = m.t; b.ruta = null; b.pend = null;
+  }
+
+  // ---------- inteligencia de colmena ----------
+  // Cada medio segundo: lo atacado forma un "foco". El foco estima la amenaza (valor de los enemigos cercanos)
+  // y la compara con el apoyo presente y el que ya va en camino. Si falta fuerza, la llamada se propaga:
+  // la oyen las unidades dentro de un radio que crece, y también las que están cerca de quien ya acude
+  // (hasta tres saltos). Acuden primero las más cercanas y solo hasta cubrir la necesidad.
+  const valor = (e) => (e.edif ? (EDIF[e.tipo].arma ? EDIF[e.tipo].costo * 0.8 : 0) : UNID[e.tipo].arma ? UNID[e.tipo].costo : 0) * Math.max(0.2, e.vida / e.vidaMax);
+  function soltar(m, f) { // fin del foco: quienes acudieron retoman lo suyo o vuelven a su puesto
+    for (const id of f.resp) {
+      const u = m.porId.get(id);
+      if (!u || u.acude !== f.id) continue;
+      u.acude = 0;
+      if (u.previo) asignar(m, u, u.previo);
+      else if (!u.patrulla && !u.cola.length && u.origen) asignar(m, u, { t: 'amover', x: u.origen.x, y: u.origen.y });
+    }
+  }
+  function colmena(m) {
+    for (let j = 0; j < 2; j++) {
+      const J = m.jug[j], focos = m.focos[j];
+      if (!J.colmena) { for (const f of focos) soltar(m, f); focos.length = 0; continue; }
+      for (const f of focos) { f.victimas = []; f.agresores = []; }
+      for (const e of m.ents) { // lo herido hace poco se agrupa por cercanía
+        if (e.j !== j || e.tDano === undefined || m.t - e.tDano > 40 || !e.agresor) continue;
+        const x = posX(e), y = posY(e);
+        let f = focos.find((q) => Math.hypot(q.x - x, q.y - y) < 7);
+        if (!f) { f = { id: m.sigFoco++, x, y, radio: 8, resp: [], victimas: [], agresores: [], visto: m.t }; focos.push(f); }
+        f.victimas.push(e); f.visto = m.t;
+        const a = m.porId.get(e.agresor); if (a && !f.agresores.includes(a)) f.agresores.push(a);
+      }
+      for (let k = focos.length - 1; k >= 0; k--) {
+        const f = focos[k];
+        if (m.t - f.visto > 60) { soltar(m, f); focos.splice(k, 1); continue; } // tres segundos de calma: se acabó
+        if (!f.victimas.length) continue;
+        f.x = posX(f.victimas[0]); f.y = posY(f.victimas[0]);
+        f.resp = f.resp.filter((id) => { const u = m.porId.get(id); return u && u.acude === f.id; });
+        const vict = new Set(f.victimas.map((e) => e.id));
+        let amenaza = 0, presente = 0, camino = 0, ayudan = 0;
+        f.ox = f.x; f.oy = f.y;
+        let dmin = Infinity;
+        for (const a of f.agresores) { const d = Math.hypot(posX(a) - f.x, posY(a) - f.y); if (d < dmin) { dmin = d; f.ox = posX(a); f.oy = posY(a); } }
+        for (const e of m.ents) {
+          const v = valor(e);
+          if (!v || e.vida <= 0) continue;
+          const x = posX(e), y = posY(e), d = Math.hypot(x - f.x, y - f.y);
+          if (e.j !== j) { if (d <= 7 || f.agresores.some((a) => Math.hypot(posX(a) - x, posY(a) - y) <= 4)) amenaza += v; }
+          else if (vict.has(e.id)) presente += v * 0.5; // quien está recibiendo el golpe cuenta la mitad
+          else if (e.acude === f.id) { if (d <= 6) { presente += v; ayudan++; } else camino += v; }
+          else if (d <= 6 && e.obj) { presente += v; ayudan++; } // compañera cercana que ya está peleando
+        }
+        f.amenaza = amenaza; f.necesidad = amenaza * 1.2 - presente - camino;
+        f.sinApoyo = ayudan === 0 && amenaza > 0;
+        if (f.sinApoyo) { // la alerta solo se muestra mientras nadie ha llegado a ayudar
+          for (const e of f.victimas) e.llama = m.t;
+          m.efectos.push({ tipo: 'llama', x2: f.x, y2: f.y, r: f.radio, j, t: m.t });
+        }
+        if (f.necesidad <= 0) continue;
+        const nodos = [{ x: f.x, y: f.y, r: f.radio, salto: 0 }]; // la red: el foco y quienes ya acuden, que retransmiten
+        for (const id of f.resp) { const u = m.porId.get(id); nodos.push({ x: u.x, y: u.y, r: 8, salto: u.salto }); }
+        const cand = [];
+        for (const u of m.ents) {
+          if (u.j !== j || u.edif || u.acude || u.guardia || u.vida <= 0 || vict.has(u.id) || !UNID[u.tipo].arma) continue;
+          const libre = (u.orden === 'nada' || u.orden === 'amover') && !u.obj;
+          // Con una orden directa solo acude si atacan a una compañera que marcha en su misma misión.
+          if (!libre && !(u.orden !== 'nada' && u.mision && f.victimas.some((v) => !v.edif && v.mision === u.mision && v.orden !== 'nada'))) continue;
+          let salto = 99;
+          for (const n of nodos) if (n.salto < 3 && n.salto + 1 < salto && Math.hypot(n.x - u.x, n.y - u.y) <= n.r) salto = n.salto + 1;
+          if (salto <= 3) cand.push({ u, d: Math.hypot(u.x - f.x, u.y - f.y), salto });
+        }
+        cand.sort((a, b) => a.d - b.d || a.u.id - b.u.id);
+        for (const c of cand) {
+          if (f.necesidad <= 0) break;
+          const u = c.u;
+          u.previo = u.orden === 'atacar' ? { t: 'atacar', obj: u.obj } : u.orden !== 'nada' && !u.patrulla && u.dest ? { t: u.orden, x: u.dest.x, y: u.dest.y } : null;
+          u.origen = { x: u.x, y: u.y };
+          asignar(m, u, { t: 'amover', x: f.ox, y: f.oy });
+          u.acude = f.id; u.salto = c.salto; u.oyo = m.t;
+          f.resp.push(u.id); f.necesidad -= valor(u);
+          m.efectos.push({ tipo: 'oye', x1: u.x, y1: u.y, x2: f.x, y2: f.y, j, t: m.t });
+        }
+        f.radio = Math.min(30, f.radio + 1); // nadie basta todavía: la llamada llega más lejos
+      }
     }
   }
   // Los efectos son avisos para la interfaz (dibujo y sonido); la simulación no los lee.
@@ -955,10 +1050,10 @@ globalThis.W = { VERSION: 'versión 19' };
     const mult = !a.edif && UNID[a.tipo].cat === 'inf' && m.jug[a.j].mejoras.perforante ? 1.25 : 1;
     a.recarga = arma.recarga;
     if (arma.vuelo) { // obús: vuela hasta donde estaba el blanco al disparar
-      m.proy.push({ x: ax, y: ay, px: ax, py: ay, tx: bx, ty: by, obj: b.id, j: a.j, arma: clave, mult });
+      m.proy.push({ x: ax, y: ay, px: ax, py: ay, tx: bx, ty: by, obj: b.id, j: a.j, arma: clave, mult, de: a.id });
       m.efectos.push({ tipo: 'boca', x1: ax, y1: ay, x2: bx, y2: by, j: a.j, t: m.t, arma: clave });
     } else {
-      herir(m, b, arma, mult);
+      herir(m, b, arma, mult, a.id);
       m.efectos.push({ tipo: 'traza', x1: ax, y1: ay, x2: bx, y2: by, j: a.j, t: m.t, arma: clave });
     }
     alertar(m, a, b);
@@ -970,11 +1065,11 @@ globalThis.W = { VERSION: 'versión 19' };
       if (dd > arma.vuelo) { p.x += (dx / dd) * arma.vuelo; p.y += (dy / dd) * arma.vuelo; continue; }
       let acierto = false;
       if (arma.area) { // explosión: daña a todo enemigo dentro del radio
-        for (const e of m.ents) if (e.j !== p.j && e.vida > 0 && dist(p.tx, p.ty, e) <= arma.area) { herir(m, e, arma, p.mult); acierto = true; }
+        for (const e of m.ents) if (e.j !== p.j && e.vida > 0 && dist(p.tx, p.ty, e) <= arma.area) { herir(m, e, arma, p.mult, p.de); acierto = true; }
       } else {
         const o = m.porId.get(p.obj);
         acierto = !!o && o.vida > 0 && dist(p.tx, p.ty, o) <= 0.9; // si el blanco se apartó, falla
-        if (acierto) herir(m, o, arma, p.mult);
+        if (acierto) herir(m, o, arma, p.mult, p.de);
       }
       m.efectos.push({ tipo: 'impacto', x1: p.x, y1: p.y, x2: p.tx, y2: p.ty, j: p.j, t: m.t, arma: p.arma, acierto });
       m.proy[k] = m.proy[m.proy.length - 1]; m.proy.pop();
@@ -997,7 +1092,7 @@ globalThis.W = { VERSION: 'versión 19' };
     if (u.recarga > 0) u.recarga--;
     if (u.tipo === 'cosechadora') { tickCosechadora(m, u); return; }
     if (u.fallo) { u.fallo = false; u.orden = 'nada'; u.obj = 0; limpiar(u); }
-    if (u.orden === 'nada' && !u.obj && (u.cola.length || u.patrulla || u.explora)) siguienteOrden(m, u);
+    if (u.orden === 'nada' && !u.obj && !u.acude && (u.cola.length || u.patrulla || u.explora)) siguienteOrden(m, u);
     if (u.orden === 'nada' && !u.obj && u.angFin != null) { // en su puesto, se encara como el resto de la formación
       const dif = ((u.angFin - u.ang + Math.PI) % TAU + TAU) % TAU - Math.PI;
       if (Math.abs(dif) <= d.giro) { u.ang = u.angFin; u.angFin = null; } else u.ang += Math.sign(dif) * d.giro;
@@ -1011,13 +1106,15 @@ globalThis.W = { VERSION: 'versión 19' };
     let o = u.obj ? m.porId.get(u.obj) : null;
     if (u.obj && (!o || o.vida <= 0)) { o = null; u.obj = 0; u.ruta = null; if (u.orden === 'atacar') u.orden = 'nada'; }
     if (!o && (m.t + u.id) % 5 === 0) {
-      o = buscarEnemigo(m, u, u.x, u.y, alc + 2);
+      o = buscarEnemigo(m, u, u.x, u.y, alc + (u.guardia ? 0 : 2));
       if (o) { u.obj = o.id; u.ruta = null; u.pend = null; }
     }
     if (o) {
       const dd = dist(u.x, u.y, o);
       if (dd <= alc) {
         if (u.recarga <= 0 && dd >= (arma.alcanceMin || 0)) disparar(m, u, o, arma); // demasiado cerca, la artillería no puede tirar
+      } else if (u.guardia) {
+        u.obj = 0; // en guardia no persigue
       } else if (u.orden !== 'atacar' && dd > alc + (m.t - u.tRep < 240 ? 14 : 4)) { // al agresor lo persigue más lejos
         u.obj = 0; u.ruta = null; // se alejó demasiado: lo suelta
       } else {
@@ -1229,7 +1326,7 @@ globalThis.W = { VERSION: 'versión 19' };
         const dx = b.x - a.x; if (dx > 0.5 || dx < -0.5) continue;
         const dy = b.y - a.y; if (dy > 0.5 || dy < -0.5) continue;
         if (dx * dx + dy * dy >= 0.2) continue;
-        b.vida -= ECON.aplasta; b.tDano = m.t;
+        b.vida -= ECON.aplasta; b.tDano = m.t; b.agresor = a.id;
         if (b.vida <= 0) m.jug[a.j].aplastados = (m.jug[a.j].aplastados || 0) + 1;
       }
     }
@@ -1283,7 +1380,7 @@ globalThis.W = { VERSION: 'versión 19' };
     separar(m);
     aplastar(m);
     tickProyectiles(m);
-    if (m.t % 10 === 0) curar(m);
+    if (m.t % 10 === 0) { curar(m); colmena(m); }
 
     let muertos = false;
     for (let k = 0; k < m.ents.length; k++) {
@@ -1626,6 +1723,8 @@ globalThis.W = { VERSION: 'versión 19' };
     s.obraLista = function () { const b = ui(); if (!b) return; tono(b, 'triangle', 523, 523, 0.16, 0.3); tono(b, 'sine', 1046, 1046, 0.1, 0.1); tono(b, 'triangle', 784, 784, 0.28, 0.32, 0.13); tono(b, 'sine', 1568, 1568, 0.2, 0.1, 0.13); };
     s.colocar = function () { const b = ui(); if (!b) return; tono(b, 'sine', 115, 46, 0.24, 0.9); ruido(b, 'lowpass', 500, 120, 0.16, 0.5); ruido(b, 'bandpass', 2700, 2400, 0.05, 0.3, 0.02); };
     s.unidadLista = function () { const b = ui(); if (!b) return; tono(b, 'sine', 880, 880, 0.07, 0.16); tono(b, 'sine', 1320, 1320, 0.09, 0.14, 0.07); };
+    s.llamada = function (v, pan) { if (!listo(v)) return; const b = bus(v * 0.7, pan, 0.8); tono(b, 'sine', 1180, 1180, 0.09, 0.22); tono(b, 'sine', 1560, 1560, 0.12, 0.2, 0.1); };
+    s.acude = function (v, pan) { if (!listo(v)) return; const b = bus(v * 0.6, pan, 0.6); tono(b, 'triangle', 780, 980, 0.07, 0.18); };
     s.orden = function () { const b = ui(); if (!b) return; tono(b, 'triangle', 560, 680, 0.05, 0.12); };
     s.alerta = function () { const b = ui(); if (!b) return; for (let i = 0; i < 3; i++) { tono(b, 'sawtooth', 640, 470, 0.24, 0.14, i * 0.27); tono(b, 'square', 320, 235, 0.24, 0.06, i * 0.27); } };
     s.fin = function (gano) { const b = ui(); if (!b) return; (gano ? [392, 494, 587, 784] : [392, 349, 294, 196]).forEach((f, i) => { tono(b, 'triangle', f, f, 0.5, 0.3, i * 0.24); tono(b, 'sine', f / 2, f / 2, 0.6, 0.25, i * 0.24); }); };
@@ -1977,7 +2076,7 @@ globalThis.W = { VERSION: 'versión 19' };
     W.cam = cam;
     const son = W.crearSonido();
     W.son = son;
-    const oido = { t: m.t, listas: 0, producidas: J.producidas, edificios: 0, bajas: 0, alerta: -999 };
+    const oido = { llamada: 0, t: m.t, listas: 0, producidas: J.producidas, edificios: 0, bajas: 0, alerta: -999 };
     let tecleado = ''; // últimas letras escritas, para el código "god"
     const sel = new Set(), grupos = {}, teclas = new Set(), marcas = [];
     let modo = null; // null | 'colocar' | 'amover' | 'patrulla'
@@ -2052,6 +2151,7 @@ globalThis.W = { VERSION: 'versión 19' };
       if (e) {
         let t = (e.edif ? EDIF : UNID)[e.tipo].nombre + (e.j === YO ? '' : ' rival') + ' · ' + Math.ceil(e.vida) + '/' + e.vidaMax;
         if (e.tipo === 'cosechadora' && e.j === YO) t += ' · carga ' + e.carga;
+        if (e.guardia && e.j === YO) t += ' · en guardia';
         return t;
       }
       const sitio = sitioPorCelda.get(c);
@@ -2062,7 +2162,7 @@ globalThis.W = { VERSION: 'versión 19' };
     }
 
     // ---------- partículas y marcas en el suelo: solo dibujo, la simulación no las conoce ----------
-    const parts = [], suelo = [], azar = Math.random;
+    const parts = [], suelo = [], senales = [], azar = Math.random; // senales: ondas de llamada y enlaces de la colmena
     let dtCuadro = 16;
     function parte(k, x, y, vx, vy, vida, s) { if (parts.length > 700) parts.shift(); parts.push({ k, x, y, vx, vy, v: 0, m: vida, s }); }
     function marcaSuelo(k, x, y, s, ang, dur, clase) { if (suelo.length > 500) suelo.shift(); suelo.push({ k, x, y, s, ang, t0: performance.now(), dur, clase }); }
@@ -2133,7 +2233,7 @@ globalThis.W = { VERSION: 'versión 19' };
         }
       }
 
-      const barras = [], tiempo = performance.now();
+      const barras = [], signos = [], tiempo = performance.now();
       const lod = z >= 16 ? 2 : z >= 8 ? 1 : 0; // nivel de detalle según el zoom
       const so = z * 0.13; // desplazamiento de las sombras
 
@@ -2201,6 +2301,7 @@ globalThis.W = { VERSION: 'versión 19' };
           ctx.beginPath(); ctx.moveTo(rx, ry - 14); ctx.lineTo(rx + 9, ry - 10.5); ctx.lineTo(rx, ry - 7); ctx.closePath(); ctx.fill();
         }
         if (sel.has(e.id) || e.vida < e.vidaMax) barras.push([px, py - 6, t, e.vida / e.vidaMax, m.t - e.curando < 12]);
+        if (e.j === YO && m.t - e.llama < 14) signos.push([px + t / 2, py - 18, '!']);
       }
 
       // Líneas de recorrido de las unidades seleccionadas: ruta pendiente, destino y objetivo.
@@ -2268,6 +2369,10 @@ globalThis.W = { VERSION: 'versión 19' };
         });
         ctx.restore();
         if (sel.has(e.id)) { ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(px, py, r * 1.9 + 2, 0, TAU); ctx.stroke(); }
+        if (e.guardia && lod) { // en guardia: una base fija bajo la unidad
+          ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(px - r * 1.3, py + r * 1.9); ctx.lineTo(px + r * 1.3, py + r * 1.9); ctx.moveTo(px - r * 0.7, py + r * 1.9 + 3); ctx.lineTo(px + r * 0.7, py + r * 1.9 + 3); ctx.stroke();
+        }
+        if (e.j === YO) { if (m.t - e.llama < 14) signos.push([px, py - r * 1.9 - 20, '!']); else if (m.t - e.oyo < 36) signos.push([px, py - r * 1.9 - 20, '✓']); }
         if (sel.has(e.id) || e.vida < e.vidaMax) barras.push([px - r * 1.3, py - r * 1.9 - 8, r * 2.6, e.vida / e.vidaMax, m.t - e.curando < 12]);
       }
 
@@ -2313,6 +2418,24 @@ globalThis.W = { VERSION: 'versión 19' };
       ctx.imageSmoothingEnabled = true;
       ctx.drawImage(cNie, ox, oy, N * z, N * z);
       ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.strokeRect(ox - 0.5, oy - 0.5, N * z + 1, N * z + 1);
+
+      // Colmena: ondas de llamada que se desvanecen al alejarse, y enlaces entre quien llama y quien acude.
+      for (let i = senales.length - 1; i >= 0; i--) {
+        const q = senales[i], fr = (performance.now() - q.t0) / q.dur;
+        if (fr >= 1) { senales.splice(i, 1); continue; }
+        ctx.strokeStyle = q.k === 'onda' ? P.mal : P.bien; ctx.lineWidth = 1.2;
+        if (q.k === 'onda') { ctx.globalAlpha = 0.55 * (1 - fr) * (1 - fr); ctx.beginPath(); ctx.arc(ox + q.x * z, oy + q.y * z, q.r * z * fr, 0, TAU); ctx.stroke(); }
+        else { ctx.globalAlpha = 0.7 * (1 - fr); ctx.setLineDash([2, 4]); ctx.beginPath(); ctx.moveTo(ox + q.x * z, oy + q.y * z); ctx.lineTo(ox + q.x2 * z, oy + q.y2 * z); ctx.stroke(); ctx.setLineDash([]); }
+      }
+      ctx.globalAlpha = 1;
+      for (const s of signos) { // ! pide apoyo, ✓ acude
+        const k = 6 + (s[2] === '!' ? Math.sin(performance.now() * 0.012) * 1.5 : 0);
+        ctx.fillStyle = s[2] === '!' ? P.mal : P.bien; ctx.beginPath(); ctx.arc(s[0], s[1], k + 2, 0, TAU); ctx.fill();
+        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.beginPath();
+        if (s[2] === '!') { ctx.moveTo(s[0], s[1] - 4); ctx.lineTo(s[0], s[1] + 0.5); ctx.moveTo(s[0], s[1] + 3.6); ctx.lineTo(s[0], s[1] + 3.7); }
+        else { ctx.moveTo(s[0] - 3.5, s[1]); ctx.lineTo(s[0] - 1, s[1] + 2.8); ctx.lineTo(s[0] + 3.8, s[1] - 2.8); }
+        ctx.stroke(); ctx.lineCap = 'butt';
+      }
 
       for (const b of barras) {
         ctx.fillStyle = P.fondo; ctx.fillRect(b[0], b[1], b[2], 3);
@@ -2440,6 +2563,14 @@ globalThis.W = { VERSION: 'versión 19' };
             marcaSuelo('resto', d.x2, d.y2, UNID[d.clase].radio, d.ang, 25000, d.clase);
           }
           son.explosion(Math.max(0.12, cerca(d.x2, d.y2)), paneo(d.x2), d.edif);
+        } else if (d.tipo === 'llama') { // onda de la llamada: solo se ve y se oye la propia
+          if (d.j !== YO) continue;
+          senales.push({ k: 'onda', x: d.x2, y: d.y2, r: d.r, t0: performance.now(), dur: 900 });
+          if (performance.now() - oido.llamada > 2500) { oido.llamada = performance.now(); son.llamada(Math.max(0.25, cerca(d.x2, d.y2)), paneo(d.x2)); }
+        } else if (d.tipo === 'oye') {
+          if (d.j !== YO) continue;
+          senales.push({ k: 'enlace', x: d.x1, y: d.y1, x2: d.x2, y2: d.y2, t0: performance.now(), dur: 1100 });
+          if (n++ < 6) son.acude(Math.max(0.2, cerca(d.x1, d.y1)), paneo(d.x1));
         } else if (d.tipo === 'venta') {
           for (let k = 0; k < d.tam * 4; k++) parte('polvo', d.x2 + (azar() - 0.5) * d.tam, d.y2 + (azar() - 0.5) * d.tam, (azar() - 0.5) * 0.6, -0.2 - azar() * 0.4, 1 + azar(), 0.4);
           if (d.j === YO) son.colocar();
@@ -2615,7 +2746,7 @@ globalThis.W = { VERSION: 'versión 19' };
     function actualizarBarra() {
       const num = (v) => (J.dios ? '∞' : String(Math.floor(v)));
       $('rMin').textContent = num(J.minerales); $('rPet').textContent = num(J.petroleo); $('rRar').textContent = num(J.raros); $('rInf').textContent = num(J.info);
-      $('dios').hidden = !J.dios;
+      $('dios').hidden = !J.dios; $('sinColmena').hidden = J.colmena;
       const e = $('rEne'); e.textContent = J.uso + ' / ' + J.prod; e.className = J.uso > J.prod ? 'mal' : '';
       const ag = $('rAgu'); ag.textContent = J.aguaUso + ' / ' + (J.dios ? '∞' : J.aguaProd); ag.className = !J.dios && J.aguaUso >= J.aguaProd ? 'mal' : '';
       for (const o of botones) {
@@ -2795,6 +2926,8 @@ globalThis.W = { VERSION: 'versión 19' };
       switch (ev.code) {
         case 'KeyA': if (unidadesSel().length) modo = 'amover'; break;
         case 'KeyR': if (unidadesSel().length) modo = 'patrulla'; break;
+        case 'KeyG': { const ids = unidadesSel().map((u) => u.id); if (ids.length) { W.orden(m, { t: 'guardia', j: YO, ids }); son.orden(); } break; }
+        case 'KeyC': W.orden(m, { t: 'colmena', j: YO }); aviso(J.colmena ? 'Colmena desactivada: nadie acude solo' : 'Colmena activada'); break;
         case 'KeyF': ponerForma(FORMAS[(FORMAS.indexOf(forma) + 1) % FORMAS.length]); break;
         case 'Delete': case 'Backspace': vender(); break;
         case 'KeyE': { const ids = unidadesSel().map((u) => u.id); if (ids.length) { W.orden(m, { t: 'explorar', j: YO, ids }); son.orden(); } break; }

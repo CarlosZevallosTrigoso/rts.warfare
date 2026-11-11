@@ -129,9 +129,9 @@ prueba('contraataque, disparo en marcha, curación y atropello', () => {
   const torre = W.crearEdificio(m, 1, 'torreta', 46, 61); m.jug[1].dios = true; // a 6: alcanza a "a" pero no a "b"
   a.obj = 0; avanza(m, 40);
   assert.ok(a.vida < a.vidaMax, 'la torreta debía herir al primero');
-  assert.strictEqual(b.obj, torre.id, 'el compañero cercano no acudió');
-  avanza(m, 800);
-  assert.ok(!m.porId.has(torre.id), 'entre todos debían destruir al agresor');
+  assert.ok(b.acude, 'el compañero cercano no acudió a la llamada');
+  avanza(m, 250);
+  assert.ok(torre.vida < torre.vidaMax - 200, 'entre los dos debían castigar al agresor: ' + torre.vida);
   assert.ok(lejos.vida === lejos.vidaMax);
 
   // curación: cerca del cuartel la infantería herida se recupera; lejos, no
@@ -402,6 +402,52 @@ prueba('fase 2: niveles, mejoras, unidades nuevas e inteligencia', () => {
   W.orden(m, { t: 'intel', j: 0, clave: 'cartografia' }); W.orden(m, { t: 'intel', j: 0, clave: 'interceptar' }); avanza(2);
   assert.ok(m.niebla[0].every((v) => v > 0), 'la cartografía revela todo el terreno');
   assert.ok(J.intercepta > m.t, 'interceptar debía quedar activo');
+});
+
+prueba('colmena: llamada, red, necesidad, modo fijo y misiones', () => {
+  const nuevo = () => { const m = W.crearMundo(4242, { N: 128 }); m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m); const N = m.N; for (let y = 40; y < 90; y++) for (let x = 20; x < 110; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; } } return m; };
+  const avanza = (m, n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  const en = (m, x, y) => y * m.N + x;
+  // Un tanque solo, atacado por dos. Hay una compañera a 12 celdas, otra 7 más atrás (solo oye por la red),
+  // una muy lejos, una en guardia al lado y otra cumpliendo una orden.
+  let m = nuevo();
+  const a = W.crearUnidad(m, 0, 'tanque', en(m, 60, 64)), b = W.crearUnidad(m, 0, 'tanque', en(m, 48, 64)), d = W.crearUnidad(m, 0, 'tanque', en(m, 41, 64));
+  const lejos = W.crearUnidad(m, 0, 'tanque', en(m, 24, 80)), fijo = W.crearUnidad(m, 0, 'tanque', en(m, 56, 70)), ocupado = W.crearUnidad(m, 0, 'tanque', en(m, 52, 60));
+  W.orden(m, { t: 'guardia', j: 0, ids: [fijo.id] }); W.orden(m, { t: 'mover', j: 0, ids: [ocupado.id], x: 30.5, y: 44.5 });
+  const e1 = W.crearUnidad(m, 1, 'tanque', en(m, 65, 63)), e2 = W.crearUnidad(m, 1, 'tanque', en(m, 65, 66));
+  m.jug[1].colmena = false;
+  let llamo = false, visto = { b: 0, d: 0 };
+  for (let i = 0; i < 160; i++) { W.tick(m); if (a.llama !== undefined) llamo = true; if (b.acude && !visto.b) visto.b = m.t; if (d.acude && !visto.d) visto.d = m.t; }
+  assert.ok(llamo, 'el tanque atacado y solo debía lanzar la alerta');
+  assert.ok(visto.b, 'la compañera cercana debía responder');
+  assert.ok(visto.d && visto.d >= visto.b, 'la de más atrás debía enterarse por la red, después');
+  assert.ok(!lejos.acude, 'cubierta la necesidad, la lejana no acude');
+  assert.ok(fijo.guardia && Math.hypot(fijo.x - 56.5, fijo.y - 70.5) < 0.3, 'la unidad en guardia no se mueve');
+  assert.ok(!ocupado.acude && ocupado.orden === 'mover', 'la que cumple una orden ajena no la abandona');
+  const sinApoyo = m.focos[0][0] ? m.focos[0][0].sinApoyo : false;
+  for (let i = 0; i < 200; i++) W.tick(m);
+  assert.ok(Math.hypot(b.x - 60, b.y - 64) < 9 || !m.porId.has(b.id), 'la que respondió debía llegar a la pelea');
+  assert.ok(a.llama === undefined || m.t - a.llama > 20 || !m.porId.has(a.id), 'con apoyo presente la alerta se apaga');
+  // al acabar la amenaza, vuelven a su puesto
+  for (const e of [e1, e2]) e.vida = 0;
+  avanza(m, 600);
+  if (m.porId.has(d.id)) assert.ok(Math.hypot(d.x - 41.5, d.y - 64.5) < 2.5, 'pasada la amenaza debía volver a su puesto: ' + d.x.toFixed(1));
+  // misiones: dos tanques marchan juntos; atacan a uno y el otro acude aunque tenga orden; un tercero con otra orden no
+  m = nuevo(); m.jug[1].colmena = false;
+  const p = W.crearUnidad(m, 0, 'tanque', en(m, 40, 60)), q = W.crearUnidad(m, 0, 'tanque', en(m, 40, 70)), otro = W.crearUnidad(m, 0, 'tanque', en(m, 40, 76));
+  W.orden(m, { t: 'mover', j: 0, ids: [p.id, q.id], x: 90.5, y: 64.5, forma: 'linea' }); W.orden(m, { t: 'mover', j: 0, ids: [otro.id], x: 90.5, y: 80.5 });
+  avanza(m, 60);
+  for (let k = 0; k < 3; k++) { const emb = W.crearUnidad(m, 1, 'antitanque', en(m, Math.round(p.x) + 3 + k, 56)); emb.orden = 'atacar'; emb.obj = p.id; } // emboscada a uno solo
+  let acudio = false;
+  for (let i = 0; i < 120; i++) { W.tick(m); if (q.acude) acudio = true; }
+  assert.ok(acudio, 'la compañera de misión debía acudir aunque tuviera orden');
+  assert.ok(!otro.acude, 'la de otra misión sigue su orden');
+  // interruptor
+  m = nuevo(); m.jug[1].colmena = false;
+  const s1 = W.crearUnidad(m, 0, 'tanque', en(m, 60, 64)), s2 = W.crearUnidad(m, 0, 'tanque', en(m, 50, 64));
+  W.orden(m, { t: 'colmena', j: 0 }); W.crearUnidad(m, 1, 'tanque', en(m, 65, 63)); W.crearUnidad(m, 1, 'tanque', en(m, 65, 66)); avanza(m, 100);
+  assert.ok(!s2.acude && Math.hypot(s2.x - 50.5, s2.y - 64.5) < 0.3, 'con la colmena apagada nadie acude solo');
+  assert.ok(s1.vida < s1.vidaMax);
 });
 
 prueba('determinismo: misma semilla, misma partida', () => {
