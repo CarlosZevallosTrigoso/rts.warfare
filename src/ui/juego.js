@@ -290,6 +290,10 @@
       const enCurso = J.obras.filter((a) => !a.listo).length;
       const reparto = enCurso > 1 ? enCurso + ' obras a la vez: cada una a 1/' + enCurso + ' de velocidad' : '';
       if ($('obras').textContent !== reparto) $('obras').textContent = reparto;
+      const nc = J.cuenta.cuartel || 0, nf = J.cuenta.fabrica || 0;
+      const bono = (n, uno, varios) => n + ' ' + (n > 1 ? varios : uno) + ' ×' + W.ritmo(n);
+      const ritmos = nc > 1 || nf > 1 ? [nc ? bono(nc, 'cuartel', 'cuarteles') : '', nf ? bono(nf, 'fábrica', 'fábricas') : ''].filter(Boolean).join(' · ') : '';
+      if ($('ritmo').textContent !== ritmos) $('ritmo').textContent = ritmos;
       let s = '';
       const vivos = [...sel].map((id) => m.porId.get(id)).filter(Boolean);
       if (vivos.length === 1) { const v = vivos[0]; s = (v.edif ? EDIF : UNID)[v.tipo].nombre + ' · ' + Math.ceil(v.vida) + ' / ' + v.vidaMax; }

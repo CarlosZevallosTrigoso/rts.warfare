@@ -434,10 +434,13 @@
   }
 
   // ---------- producción ----------
-  function edificioDe(m, j, tipo) {
-    for (let k = 0; k < m.ents.length; k++) if (m.ents[k].j === j && m.ents[k].tipo === tipo) return m.ents[k];
-    return null;
+  function edificiosDe(m, j, tipo) {
+    const out = [];
+    for (let k = 0; k < m.ents.length; k++) if (m.ents[k].j === j && m.ents[k].tipo === tipo) out.push(m.ents[k]);
+    return out;
   }
+  // Varios edificios productivos del mismo tipo aceleran su cola: +50 % por cada uno extra, hasta ×2,5.
+  W.ritmo = function (n) { return n < 1 ? 0 : Math.min(1 + ECON.bonoProd * (n - 1), ECON.bonoMax); };
   function tickProduccion(m, j) {
     const J = m.jug[j];
     if (!J.vivo) return;
@@ -446,13 +449,15 @@
     // Las obras en curso se reparten la velocidad: una sola va a ritmo pleno, dos a la mitad cada una.
     let activas = 0;
     for (const o of J.obras) if (!o.listo) activas++;
-    for (const o of J.obras) if (!o.listo) { o.prog += factor / activas; if (o.prog >= EDIF[o.tipo].tiempo) o.listo = true; }
+    const ritmoObras = factor * W.ritmo(J.cuenta.patio || 0);
+    for (const o of J.obras) if (!o.listo) { o.prog += ritmoObras / activas; if (o.prog >= EDIF[o.tipo].tiempo) o.listo = true; }
     for (const cat of ['inf', 'veh']) {
       const q = J.colas[cat];
       if (!q.lista.length) continue;
-      const fab = edificioDe(m, j, cat === 'inf' ? 'cuartel' : 'fabrica');
-      if (!fab) { for (const t of q.lista) J.minerales += UNID[t].costo; q.lista.length = 0; q.prog = 0; continue; }
-      q.prog += factor;
+      const fabs = edificiosDe(m, j, cat === 'inf' ? 'cuartel' : 'fabrica');
+      if (!fabs.length) { for (const t of q.lista) J.minerales += UNID[t].costo; q.lista.length = 0; q.prog = 0; continue; }
+      const fab = fabs[J.producidas % fabs.length]; // las unidades van saliendo por turnos de cada edificio
+      q.prog += factor * W.ritmo(fabs.length);
       const tipo = q.lista[0];
       if (q.prog < UNID[tipo].tiempo) continue;
       q.lista.shift(); q.prog = 0;

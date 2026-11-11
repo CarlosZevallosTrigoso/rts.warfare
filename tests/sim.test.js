@@ -93,6 +93,26 @@ prueba('obras en paralelo: se reparten la velocidad y se cancelan con reembolso'
   assert.ok(Math.abs(J.obras[0].prog - p - 10) < 0.01, 'al quedar una sola obra debe volver al ritmo pleno');
 });
 
+prueba('varios edificios productivos aceleran la cola, con tope', () => {
+  assert.deepStrictEqual([0, 1, 2, 3, 4, 5, 9].map(W.ritmo), [0, 1, 1.5, 2, 2.5, 2.5, 2.5]);
+  const tiempoCon = (cuarteles) => {
+    const m = W.crearMundo(4242), J = m.jug[0], b = m.mapa.bases[0];
+    J.dios = true;
+    W.crearEdificio(m, 0, 'central', b.x + 3, b.y - 1);
+    for (let k = 0; k < cuarteles; k++) W.crearEdificio(m, 0, 'cuartel', b.x - 5 + k * 3, b.y - 6);
+    W.tick(m);
+    const antes = J.cuenta.infanteria;
+    W.orden(m, { t: 'entrenar', j: 0, tipo: 'infanteria' });
+    let n = 0;
+    while ((J.cuenta.infanteria || 0) === antes && n < 1000) { W.tick(m); n++; }
+    return n;
+  };
+  const t1 = tiempoCon(1), t2 = tiempoCon(2), t6 = tiempoCon(6);
+  assert.ok(Math.abs(t1 - W.UNID.infanteria.tiempo) <= 3, 'un cuartel: ' + t1);
+  assert.ok(Math.abs(t2 - t1 / 1.5) <= 3, 'dos cuarteles: ' + t2);
+  assert.ok(Math.abs(t6 - t1 / 2.5) <= 3, 'seis cuarteles (tope): ' + t6);
+});
+
 prueba('determinismo: misma semilla, misma partida', () => {
   const corre = () => {
     const m = W.crearMundo(777), a = W.iaCrear(0), b = W.iaCrear(1);

@@ -32,7 +32,7 @@
   .btn .x { display: none; margin: -5px -7px -5px 8px; padding: 5px 8px; border-left: 1px solid var(--linea); font-weight: 600; }
   .btn.con-x .x { display: inline-block; }
   .btn .x:hover { background: var(--mal); color: #fff; }
-  #obras { min-height: 16px; }
+  #obras, #ritmo { min-height: 16px; }
   #sel { min-height: 18px; }
   #ayuda { margin-top: auto; border-top: 1px solid var(--linea); padding-top: 9px; }
   #ayuda kbd { font: inherit; color: var(--tinta); }
@@ -56,7 +56,7 @@
     </div>
     <canvas id="mini" width="208" height="208"></canvas>
     <section><h2>Edificios</h2><div id="bEdif"></div><div id="obras" class="tenue"></div></section>
-    <section><h2>Unidades</h2><div id="bUnid"></div></section>
+    <section><h2>Unidades</h2><div id="bUnid"></div><div id="ritmo" class="tenue"></div></section>
     <div id="sel" class="tenue"></div>
     <div id="ayuda" class="tenue">
       <div>clic / caja: seleccionar</div>
@@ -120,7 +120,7 @@
     bateria: { alcance: 6.5, dano: 30, recarga: 30, vs: { ligero: 0.8, pesado: 1,    edificio: 0.5 } },
   };
 
-  W.ECON = { inicio: 2500, cosecha: 5, descarga: 25, colaMax: 9, separacionColocar: 3, goteoCada: 5, obrasMax: 8 };
+  W.ECON = { inicio: 2500, cosecha: 5, descarga: 25, colaMax: 9, separacionColocar: 3, goteoCada: 5, obrasMax: 8, bonoProd: 0.5, bonoMax: 2.5 };
 })();
 
 // ===== sim/mapa.js =====
@@ -762,10 +762,13 @@
   }
 
   // ---------- producción ----------
-  function edificioDe(m, j, tipo) {
-    for (let k = 0; k < m.ents.length; k++) if (m.ents[k].j === j && m.ents[k].tipo === tipo) return m.ents[k];
-    return null;
+  function edificiosDe(m, j, tipo) {
+    const out = [];
+    for (let k = 0; k < m.ents.length; k++) if (m.ents[k].j === j && m.ents[k].tipo === tipo) out.push(m.ents[k]);
+    return out;
   }
+  // Varios edificios productivos del mismo tipo aceleran su cola: +50 % por cada uno extra, hasta ×2,5.
+  W.ritmo = function (n) { return n < 1 ? 0 : Math.min(1 + ECON.bonoProd * (n - 1), ECON.bonoMax); };
   function tickProduccion(m, j) {
     const J = m.jug[j];
     if (!J.vivo) return;
@@ -774,13 +777,15 @@
     // Las obras en curso se reparten la velocidad: una sola va a ritmo pleno, dos a la mitad cada una.
     let activas = 0;
     for (const o of J.obras) if (!o.listo) activas++;
-    for (const o of J.obras) if (!o.listo) { o.prog += factor / activas; if (o.prog >= EDIF[o.tipo].tiempo) o.listo = true; }
+    const ritmoObras = factor * W.ritmo(J.cuenta.patio || 0);
+    for (const o of J.obras) if (!o.listo) { o.prog += ritmoObras / activas; if (o.prog >= EDIF[o.tipo].tiempo) o.listo = true; }
     for (const cat of ['inf', 'veh']) {
       const q = J.colas[cat];
       if (!q.lista.length) continue;
-      const fab = edificioDe(m, j, cat === 'inf' ? 'cuartel' : 'fabrica');
-      if (!fab) { for (const t of q.lista) J.minerales += UNID[t].costo; q.lista.length = 0; q.prog = 0; continue; }
-      q.prog += factor;
+      const fabs = edificiosDe(m, j, cat === 'inf' ? 'cuartel' : 'fabrica');
+      if (!fabs.length) { for (const t of q.lista) J.minerales += UNID[t].costo; q.lista.length = 0; q.prog = 0; continue; }
+      const fab = fabs[J.producidas % fabs.length]; // las unidades van saliendo por turnos de cada edificio
+      q.prog += factor * W.ritmo(fabs.length);
       const tipo = q.lista[0];
       if (q.prog < UNID[tipo].tiempo) continue;
       q.lista.shift(); q.prog = 0;
@@ -864,7 +869,7 @@
   const EDIF = W.EDIF, UNID = W.UNID;
 
   // Orden de construcción: [tipo, cantidad deseada].
-  const PLAN = [['central', 1], ['refineria', 1], ['cuartel', 1], ['fabrica', 1], ['torreta', 1], ['refineria', 2], ['torreta', 2], ['torreta', 3]];
+  const PLAN = [['central', 1], ['refineria', 1], ['cuartel', 1], ['fabrica', 1], ['torreta', 1], ['refineria', 2], ['torreta', 2], ['cuartel', 2], ['torreta', 3], ['fabrica', 2]];
 
   W.iaCrear = function (j) {
     return { j, oleada: 6, atacantes: new Set(), reunidos: new Set(), fallos: 0 };
@@ -1272,6 +1277,10 @@
       const enCurso = J.obras.filter((a) => !a.listo).length;
       const reparto = enCurso > 1 ? enCurso + ' obras a la vez: cada una a 1/' + enCurso + ' de velocidad' : '';
       if ($('obras').textContent !== reparto) $('obras').textContent = reparto;
+      const nc = J.cuenta.cuartel || 0, nf = J.cuenta.fabrica || 0;
+      const bono = (n, uno, varios) => n + ' ' + (n > 1 ? varios : uno) + ' ×' + W.ritmo(n);
+      const ritmos = nc > 1 || nf > 1 ? [nc ? bono(nc, 'cuartel', 'cuarteles') : '', nf ? bono(nf, 'fábrica', 'fábricas') : ''].filter(Boolean).join(' · ') : '';
+      if ($('ritmo').textContent !== ritmos) $('ritmo').textContent = ritmos;
       let s = '';
       const vivos = [...sel].map((id) => m.porId.get(id)).filter(Boolean);
       if (vivos.length === 1) { const v = vivos[0]; s = (v.edif ? EDIF : UNID)[v.tipo].nombre + ' · ' + Math.ceil(v.vida) + ' / ' + v.vidaMax; }

@@ -5,7 +5,7 @@
   const EDIF = W.EDIF, UNID = W.UNID;
 
   // Orden de construcción: [tipo, cantidad deseada].
-  const PLAN = [['central', 1], ['refineria', 1], ['cuartel', 1], ['fabrica', 1], ['torreta', 1], ['refineria', 2], ['torreta', 2], ['torreta', 3]];
+  const PLAN = [['central', 1], ['refineria', 1], ['cuartel', 1], ['fabrica', 1], ['torreta', 1], ['refineria', 2], ['torreta', 2], ['cuartel', 2], ['torreta', 3], ['fabrica', 2]];
 
   W.iaCrear = function (j) {
     return { j, oleada: 6, atacantes: new Set(), reunidos: new Set(), fallos: 0 };
