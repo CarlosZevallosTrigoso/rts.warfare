@@ -114,6 +114,31 @@
     ob.ult = tr.id; ob.hecho = sig;
     if (sig >= L) { tr.a = b.id; m.redSucia = true; ob.pares.shift(); ob.prog = 0; ob.hecho = 0; ob.ult = 0; }
   }
+  // ¿Se puede hackear? Vehículos de tierra y edificios enemigos (no la infantería, ni los aviones, ni caminos o líneas).
+  const hackeable = (u, o) => !!o && o.vida > 0 && o.j !== u.j && !o.infra && (o.edif || (UNID[o.tipo].cat === 'veh' && !UNID[o.tipo].aire));
+  W.hackeable = hackeable;
+  // El hacker con orden: se acerca hasta tener el blanco a su alcance, teclea un par de segundos y lo apaga. Cuesta información.
+  function tickHackear(m, u) {
+    const o = m.porId.get(u.hackObj), d = UNID[u.tipo], J = m.jug[u.j];
+    const fin = () => { u.orden = 'nada'; u.hackObj = 0; u.canal = 0; u.ruta = null; };
+    if (!hackeable(u, o)) { fin(); return; }
+    if (dist(u.x, u.y, o) > d.alcanceHack) {
+      u.canal = 0;
+      if (u.fallo) { u.fallo = false; fin(); return; }
+      if (!u.pend && (!u.ruta || (!o.edif && (m.t + u.id) % 20 === 0))) pedirRuta(m, u, posX(o), posY(o), d.alcanceHack - 1.5);
+      avanzar(m, u); return;
+    }
+    u.ruta = null; u.pend = null; u.v = 0; u.ang = Math.atan2(posY(o) - u.y, posX(o) - u.x);
+    if (u.recarga > 0) return; // aún se recupera del anterior
+    if (J.info < ECON.hackInfo && !J.dios) { m.efectos.push({ tipo: 'sinInfo', x1: u.x, y1: u.y, j: u.j, t: m.t }); fin(); return; }
+    u.canal = (u.canal || 0) + 1;
+    if (u.canal < ECON.hackCanal) return;
+    if (!J.dios) J.info -= ECON.hackInfo;
+    o.hack = m.t + (o.edif ? ECON.hackEdif : ECON.hackVeh); if (!o.edif) { o.v = 0; o.obj = 0; }
+    u.recarga = ECON.hackRecarga;
+    m.efectos.push({ tipo: 'hack', x1: u.x, y1: u.y, x2: posX(o), y2: posY(o), j: u.j, de: o.j, clase: o.tipo, t: m.t });
+    fin();
+  }
   // Tramo destruido o demolido: sus celdas vuelven a ser lo que eran (el bosque se cierra otra vez a los vehículos).
   function quitarTramo(m, e) {
     const terr = m.mapa.terreno; let cerrado = false;
@@ -501,6 +526,11 @@
       case 'trampa': // un interruptor del panel ADMIN
         trampa(m, cmd.j, cmd.clave, cmd.valor);
         return;
+      case 'hackear': { // los hackers elegidos van por ese vehículo o edificio enemigo
+        const o = m.porId.get(cmd.obj);
+        for (const u of propias(m, cmd)) if (UNID[u.tipo].hackea && hackeable(u, o)) { limpiar(u); u.obj = 0; u.ruta = null; u.pend = null; u.guardia = false; u.orden = 'hackear'; u.hackObj = o.id; u.canal = 0; }
+        return;
+      }
       case 'ocupar': { // la infantería se mete en la trinchera de esa celda, hasta llenar sus puestos; va cada una a su puesto y se queda
         const q = m.trincheras.get(cmd.c); if (!q) return;
         if (!q.dentro) q.dentro = [];
@@ -725,6 +755,7 @@
     if (u.ri >= u.ruta.length) { u.ruta = null; u.v = 0; return true; }
     const N = m.N, d = UNID[u.tipo], c = u.ruta[u.ri];
     const replantear = () => { u.ruta = null; u.v = 0; u.tReplan = m.t; if (u.meta) pedirRuta(m, u, u.meta.x, u.meta.y, u.meta.radio); };
+    if (d.monta && u.monta > 0) { u.monta = Math.max(0, u.monta - 2); u.v = 0; return false; } // antes de moverse hay que desmontar el arma
     const pisa = (i) => (u.orden === 'trazar' ? pisaTraza(m, i) : pasoDe(m, u)[i]);
     if (!d.aire && !pisa(c) && pisa(Math.floor(u.y) * N + Math.floor(u.x))) { replantear(); return false; } // alguien construyó en el punto de paso
     const vel = d.vel * (d.cat === 'veh' && m.jug[u.j].mejoras.motores ? 1.15 : 1);
@@ -1269,6 +1300,11 @@
     const d = UNID[u.tipo];
     u.px = u.x; u.py = u.y;
     if (u.recarga > 0) u.recarga--;
+    if (u.hack > m.t) { u.v = 0; return; } // hackeado: ni se mueve ni dispara
+    if (d.monta) { // arma de equipo: quieta, se va montando; hasta estar montada no dispara
+      if (!u.ruta && !u.pend && u.v === 0) u.monta = Math.min(d.monta, (u.monta || 0) + 1);
+      if ((u.monta || 0) < d.monta && u.recarga < 1) u.recarga = 1;
+    }
     if (d.aire && tickVuelo(m, u)) return;
     if (u.tipo === 'cosechadora') { tickCosechadora(m, u); return; }
     if (d.giroT) { if (!u.apunto) u.angT = girarHacia(u.angT, u.ang, d.giroT); } else u.angT = u.ang; // sin blanco, la torreta vuelve al frente
@@ -1297,6 +1333,7 @@
       if (u.orden === 'atacar') { u.orden = 'nada'; u.obj = 0; }
       if (u.orden === 'trazar') { tickTraza(m, u); return; }
       if (u.orden === 'conectar') { tickConectar(m, u); return; }
+      if (u.orden === 'hackear') { tickHackear(m, u); return; }
       if (u.orden !== 'nada') { u.arregla = 0; if (avanzar(m, u) || (!u.ruta && !u.pend)) u.orden = 'nada'; return; }
       if (d.repara || d.cura) tickIngeniero(m, u);
       return;
@@ -1491,7 +1528,7 @@
         let g = porPatio.get(o.patio); if (!g) { g = { vistos: new Set(), activas: [] }; porPatio.set(o.patio, g); }
         if (!g.vistos.has(o.tipo)) { g.vistos.add(o.tipo); g.activas.push(o); }
       }
-      for (const [idp, g] of porPatio) for (const o of g.activas) { const pt = m.porId.get(idp); o.prog += (base * (pt && pt.deficit ? 0.5 : 1)) / g.activas.length; if (o.prog >= EDIF[o.tipo].tiempo) o.listo = true; }
+      for (const [idp, g] of porPatio) for (const o of g.activas) { const pt = m.porId.get(idp); o.prog += pt && pt.hack > m.t ? 0 : (base * (pt && pt.deficit ? 0.5 : 1)) / g.activas.length; if (o.prog >= EDIF[o.tipo].tiempo) o.listo = true; }
     }
     // Unidades: cada cuartel, fábrica y aeródromo tiene su propia cola y la despacha en orden, uno tras otro.
     // Dos edificios iguales producen a la vez. J.colas guarda el total encargado por tipo (para la IA y el cupo).
@@ -1508,7 +1545,7 @@
         if (fab.sinFondos) continue;
         cobrar(J, UNID[tipo]); fab.pago[0] = true;
       }
-      fab.prog += base * (fab.sinLuz ? 0.5 : 1);
+      fab.prog += fab.hack > m.t ? 0 : base * (fab.sinLuz ? 0.5 : 1); // hackeado: parado
       if (fab.prog > q.prog) q.prog = fab.prog;
       if (fab.prog < UNID[tipo].tiempo) continue;
       fab.cola.shift(); fab.pago.shift(); fab.prog = 0; q.n--; J.aguaUso += UNID[tipo].agua || 0;
@@ -1689,6 +1726,7 @@
     for (let k = 0, n = m.ents.length; k < n; k++) {
       const e = m.ents[k];
       if (!e.edif) tickUnidad(m, e);
+      else if (e.hack > m.t) { e.obj = 0; } // edificio hackeado: apagado
       else if (EDIF[e.tipo].arma) tickTorreta(m, e);
       else if (EDIF[e.tipo].da) { // extracción continua; con déficit de energía rinde la mitad
         const da = EDIF[e.tipo].da, J = m.jug[e.j];

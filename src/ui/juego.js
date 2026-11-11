@@ -197,6 +197,8 @@
         if (!e.edif && e.j === YO && W.oculta(m, e)) t += ' · oculta';
         if (e.retirando) t += ' · se retira a reparar'; else if (e.huye > m.t) t += ' · huye';
         if (e.j === YO && conRed) { if (e.edif && !e.infra && !e.conRed) t += e.tipo === 'deposito' ? ' · sin conexión: únelo a tu base con un ingeniero civil' : ' · fuera de la red'; if (e.linea && !e.conRed) t += ' · no llega a tu red'; if (e.sinLuz) t += ' · sin energía: a media marcha'; if (!e.edif && e.sinSum >= W.ECON.sinSum) t += ' · sin suministro: dispara más lento y no se repara'; }
+        if (e.hack > m.t) t += ' · hackeado: ' + Math.ceil((e.hack - m.t) / 20) + ' s';
+        if (!e.edif && UNID[e.tipo].monta && e.j === YO) t += (e.monta || 0) >= UNID[e.tipo].monta ? ' · montada' : ' · montando…';
         if (e.tipo === 'aerodromo' && e.j === YO) t += ' · aviones ' + m.ents.filter((u) => !u.edif && u.casa === e.id).length + '/' + W.ECON.cupoAviones;
         const ef = efectos(e); if (ef) t += ' · ' + ef;
         return t;
@@ -492,7 +494,7 @@
       for (const e of m.ents) {
         if (!e.edif || e.infra || !veo(e) || fuera(e.cx, e.cy) && fuera(e.x, e.y)) continue;
         const px = ox + e.x * z, py = oy + e.y * z, t = e.tam * z, Je = m.jug[e.j];
-        const est = { tiempo, id: e.id, vida: e.vida / e.vidaMax, deficit: !!e.sinLuz || (e.tipo === 'deposito' && !e.conRed), activo: false, descarga: descargando.has(e.id), ang: 0, retro: 0 };
+        const est = { tiempo, id: e.id, vida: e.vida / e.vidaMax, deficit: !!e.sinLuz || e.hack > m.t || (e.tipo === 'deposito' && !e.conRed), activo: false, descarga: descargando.has(e.id), ang: 0, retro: 0 };
         if (e.tipo === 'patio') est.activo = Je.obras.some((o) => !o.listo);
         else if (e.tipo === 'fabrica') est.activo = e.cola.length > 0;
         else if (EDIF[e.tipo].arma) { est.ang = giro(e).t; est.retro = retroceso(e, EDIF[e.tipo].arma); }
@@ -608,7 +610,7 @@
           else if (!e.obj && e.orden === 'nada') { const ph = (tiempo / 1000 + e.id * 1.7) % 11; if (ph < 1.4) mec = Math.sin((ph / 1.4) * Math.PI) * 0.5 * (e.id % 2 ? 1 : -1); }
         }
         const st = {
-          ang: (d.cat === 'inf' && e.obj && !anda ? g.t : g.a) + mec, angT: g.t, retro: d.arma ? retroceso(e, d.arma) : 0,
+          ang: (d.cat === 'inf' && e.obj && !anda ? g.t : g.a) + mec, angT: g.t, retro: d.arma ? retroceso(e, d.arma) : 0, monta: d.monta ? (e.monta || 0) / d.monta : 1,
           anda, tiempo, carga: e.carga / (d.carga || 1), cosecha: e.est === 'cosechar', raro: e.cargaTipo === 2,
         };
         const canto = lod && !d.aire && r >= 3.5 ? Math.max(1, r * 0.26) : 0; // el cuerpo de la unidad: su silueta en oscuro, y encima la ficha
@@ -659,6 +661,9 @@
         if (d.despliega && sel.has(e.id) && e.j === YO) { // dónde quedaría el patio: verde si cabe
           const bx = ox + (Math.floor(e.x) - 1) * z, by = oy + (Math.floor(e.y) - 1) * z;
           ctx.strokeStyle = W.puedeDesplegar(m, e) ? P.bien : P.mal; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.strokeRect(bx, by, z * 3, z * 3); ctx.setLineDash([]);
+        }
+        if (e.hack > m.t && lod) { // hackeado: un rayo quebrado encima
+          const gx = px, gy = py - r * 1.6 - 6; ctx.strokeStyle = P.mal; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(gx - 5, gy - 4); ctx.lineTo(gx + 1, gy - 1); ctx.lineTo(gx - 2, gy + 1); ctx.lineTo(gx + 5, gy + 5); ctx.stroke();
         }
         if (lod && e.j === YO && e.sinSum >= W.ECON.sinSum) { // sin suministro: un rombo hueco rojo sobre la unidad
           const gx = px - r * 1.2 - 4, gy = py - r - 3; ctx.strokeStyle = P.mal; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(gx, gy - 4); ctx.lineTo(gx + 4, gy); ctx.lineTo(gx, gy + 4); ctx.lineTo(gx - 4, gy); ctx.closePath(); ctx.stroke();
@@ -942,6 +947,11 @@
           if (n++ < 6) son.impacto(cerca(d.x2, d.y2), paneo(d.x2));
         } else if (d.tipo === 'explorado') {
           if (d.j === YO && performance.now() - (avisoExpl || 0) > 3000) { avisoExpl = performance.now(); aviso(J.tr.mapa ? 'Nada que explorar: el mapa está revelado desde ADMIN' : 'No queda nada por explorar'); }
+        } else if (d.tipo === 'hack') {
+          if (d.de === YO) { aviso('¡Te han hackeado: ' + (EDIF[d.clase] || UNID[d.clase]).nombre.toLowerCase() + '!'); son.alerta(); } else if (d.j === YO) aviso('Hackeado: ' + (EDIF[d.clase] || UNID[d.clase]).nombre.toLowerCase());
+          if (visible(d.x2, d.y2)) senales.push({ k: 'onda', x: d.x2, y: d.y2, r: 2.2, t0: performance.now(), dur: 700 });
+        } else if (d.tipo === 'sinInfo') {
+          if (d.j === YO) aviso('Sin información: el hacker no puede (' + W.ECON.hackInfo + ' por hackeo)');
         } else if (d.tipo === 'sinLinea') {
           if (d.j === YO) aviso(d.llegar ? 'El ingeniero civil no puede llegar a ese edificio' : 'Sin minerales: la línea de servicio espera');
         } else if (d.tipo === 'sinCamino') {
@@ -1219,6 +1229,8 @@
         if (us.some((u) => UNID[u.tipo].plazas)) L.push('<b>transporte: la infantería sube con clic derecho sobre él · ' + k('U') + ' descargar</b>');
         if (us.some((u) => UNID[u.tipo].mando)) L.push('<b>mando: los tuyos en su radio ven en redondo y giran más rápido; gasta información</b>');
         if (us.some((u) => UNID[u.tipo].despliega)) L.push('<b>patio móvil: ' + k('D') + ' lo despliega aquí como patio nuevo (no se repliega)</b>');
+        if (us.some((u) => UNID[u.tipo].hackea)) L.push('<b>hacker: clic derecho en un vehículo o edificio enemigo lo apaga unos segundos · ' + W.ECON.hackInfo + ' de información</b>');
+        if (us.some((u) => UNID[u.tipo].monta)) L.push('<b>gatling: quieta se monta sola (3 s) y entonces dispara; para moverse desmonta</b>');
         if (us.some((u) => UNID[u.tipo].tiende)) L.push('<b>ingeniero civil: ' + k('J') + ' conectar edificios con una línea de servicio (energía y red)</b>');
         if (us.some((u) => UNID[u.tipo].cura)) L.push('<b>médico: cura solo a la infantería herida que tenga cerca</b>');
         if (us.some((u) => UNID[u.tipo].repara)) L.push('<b>ingeniero: repara solo los vehículos y edificios cercanos</b>');
@@ -1528,6 +1540,7 @@
         }
         const ids = us.map((u) => u.id), o = entEn(wx, wy), c = Math.floor(wy) * N + Math.floor(wx);
         if (o && o.j !== YO) {
+          { const hk = us.filter((u) => UNID[u.tipo].hackea).map((u) => u.id); if (hk.length) { if (W.hackeable(us.find((u) => UNID[u.tipo].hackea), o)) { W.orden(m, { t: 'hackear', j: YO, ids: hk, obj: o.id }); marca(wx, wy, P.mal); son.orden(); } else aviso('El hacker solo puede con vehículos y edificios'); if (hk.length === us.length) return; } }
           if (!us.some((u) => UNID[u.tipo].arma && W.puedeAtacar(u, o))) aviso(UNID[o.tipo] && UNID[o.tipo].aire ? 'Estas unidades no alcanzan a los aviones' : 'Estas unidades no pueden atacar eso');
           W.orden(m, { t: 'atacar', j: YO, ids, obj: o.id, enc }); marca(wx, wy, P.mal); return;
         }

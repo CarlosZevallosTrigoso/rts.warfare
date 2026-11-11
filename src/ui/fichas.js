@@ -8,7 +8,7 @@
   // El contexto llega trasladado al centro de la unidad. r = radio en píxeles.
   // e = { ang, angT, retro (0..1), anda, tiempo, carga (0..1), cosecha }
   W.fichaUnidad = function (c, u, r, lod, col, e) {
-    const inf = W.UNID[u.tipo].cat === 'inf', at = u.tipo === 'antitanque', pesado = u.tipo === 'pesado', expl = u.tipo === 'explorador', ing = u.tipo === 'ingeniero', med = u.tipo === 'medico', civ = u.tipo === 'civil', franco = u.tipo === 'francotirador';
+    const inf = W.UNID[u.tipo].cat === 'inf', at = u.tipo === 'antitanque', pesado = u.tipo === 'pesado', expl = u.tipo === 'explorador', ing = u.tipo === 'ingeniero', med = u.tipo === 'medico', civ = u.tipo === 'civil', hk = u.tipo === 'hacker', franco = u.tipo === 'francotirador';
     if (lod === 0) {
       c.fillStyle = col.base; c.beginPath();
       if (inf) c.arc(0, 0, r, 0, TAU);
@@ -18,11 +18,27 @@
       return;
     }
     c.save(); c.rotate(e.ang); c.lineJoin = 'round';
+    if (u.tipo === 'gatling') { // dos sirvientes, y entre ambos el arma: al hombro mientras caminan, sobre su trípode cuando está montada
+      const R = r * 1.12, mo = e.monta === undefined ? 1 : e.monta;
+      c.strokeStyle = col.osc; c.lineCap = 'butt';
+      if (mo > 0) { c.lineWidth = Math.max(1, R * 0.14); c.beginPath(); for (const a of [2.2, -2.2, 0]) { c.moveTo(R * 0.5, 0); c.lineTo(R * 0.5 + Math.cos(a) * R * 0.9 * mo, Math.sin(a) * R * 0.9 * mo); } c.stroke(); } // patas del trípode, que se abren al montar
+      c.lineWidth = Math.max(2, R * 0.42); c.beginPath(); c.moveTo(R * 0.2, 0); c.lineTo(R * (1.5 + mo * 0.7 - e.retro * 0.15), 0); c.stroke(); // el haz de cañones
+      c.fillStyle = col.osc; c.fillRect(-R * 0.1, -R * 0.3, R * 0.6, R * 0.6); // cajón del mecanismo
+      for (const lado of [-1, 1]) { // los dos sirvientes, uno a cada lado
+        c.fillStyle = col.base; c.beginPath(); c.ellipse(-R * 0.35, lado * R * 0.95, R * 0.5, R * 0.72, 0, 0, TAU); c.fill(); c.strokeStyle = col.osc; c.lineWidth = 1; c.stroke();
+        c.fillStyle = col.luz; c.beginPath(); c.arc(-R * 0.3, lado * R * 0.95, R * 0.32, 0, TAU); c.fill(); c.stroke();
+      }
+      if (e.retro > 0.3) { c.fillStyle = col.fuego; c.beginPath(); c.arc(R * 2.45, 0, R * 0.34, 0, TAU); c.fill(); }
+      c.restore(); return;
+    }
     if (inf) {
       const R = r * 1.4;
       c.strokeStyle = col.osc; c.lineCap = at ? 'butt' : 'round'; c.lineWidth = Math.max(1.4, R * (at ? 0.55 : 0.3)); // fusil, o tubo lanzacohetes al hombro
       if (ing) { // sin arma: lleva una llave inglesa por delante
         c.lineWidth = Math.max(1.2, R * 0.26); c.beginPath(); c.moveTo(R * 0.3, R * 0.45); c.lineTo(R * 1.25, R * 0.45); c.moveTo(R * 1.25, R * 0.15); c.lineTo(R * 1.25, R * 0.75); c.stroke();
+      } else if (hk) { // sin arma: un portátil abierto por delante y una antena
+        c.fillStyle = col.osc; c.fillRect(R * 0.7, -R * 0.4, R * 0.5, R * 0.8); c.fillStyle = col.luz; c.fillRect(R * 0.78, -R * 0.3, R * 0.16, R * 0.6);
+        c.lineWidth = 1; c.beginPath(); c.moveTo(-R * 0.6, R * 0.3); c.lineTo(-R * 1.6, R * 1.0); c.stroke();
       } else if (civ) { // sin arma: un rollo de cable al costado
         c.lineWidth = Math.max(1, R * 0.16); c.beginPath(); c.arc(R * 0.75, R * 0.55, R * 0.32, 0, TAU); c.stroke();
       } else if (med) { // sin arma: un maletín por delante
@@ -38,7 +54,7 @@
       c.fillStyle = col.base; c.beginPath(); c.ellipse(0, 0, R * 0.62, R, 0, 0, TAU); c.fill(); // hombros
       c.strokeStyle = col.osc; c.lineWidth = 1; c.stroke();
       c.fillStyle = at ? col.osc : col.luz; c.strokeStyle = at ? col.luz : col.osc; c.beginPath(); c.arc(R * 0.08, 0, R * 0.42, 0, TAU); c.fill(); c.stroke(); // casco
-      if (franco) { c.fillStyle = col.osc; c.beginPath(); c.arc(R * 0.08, 0, R * 0.42, Math.PI * 0.5, Math.PI * 1.5); c.fill(); } // capucha
+      if (franco || hk) { c.fillStyle = col.osc; c.beginPath(); c.arc(R * 0.08, 0, R * 0.42, Math.PI * 0.5, Math.PI * 1.5); c.fill(); } // capucha
       if (civ) { c.fillStyle = '#e0b83a'; c.beginPath(); c.arc(R * 0.08, 0, R * 0.42, 0, TAU); c.fill(); c.strokeStyle = col.osc; c.lineWidth = 1; c.stroke(); c.beginPath(); c.moveTo(R * 0.08, -R * 0.42); c.lineTo(R * 0.08, R * 0.42); c.stroke(); } // casco de obra
       if (med) { c.strokeStyle = col.mal; c.lineWidth = Math.max(1.2, R * 0.2); c.beginPath(); c.moveTo(R * 0.08 - R * 0.28, 0); c.lineTo(R * 0.08 + R * 0.28, 0); c.moveTo(R * 0.08, -R * 0.28); c.lineTo(R * 0.08, R * 0.28); c.stroke(); } // cruz en el casco
       if (ing) { c.strokeStyle = col.osc; c.lineWidth = Math.max(1, R * 0.2); c.beginPath(); c.moveTo(R * 0.08 - R * 0.42, 0); c.lineTo(R * 0.08 + R * 0.42, 0); c.stroke(); } // franja del casco

@@ -1326,6 +1326,42 @@ prueba('trincheras ocupables: cuatro puestos, ocupar, salir, y vacía la toma cu
   assert.ok(dDentro > 0, 'dentro también se recibe daño, pero menos');
 });
 
+prueba('tanda 2: la gatling monta antes de disparar y el hacker apaga vehículos y edificios', () => {
+  const m = W.crearMundo(4242, { N: 128 }), N = m.N, J = m.jug[0];
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  for (let y = 40; y < 90; y++) for (let x = 20; x < 110; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; } }
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  // gatling: recién llegada no dispara hasta montar; montada, dispara mucho; al moverla, desmonta primero
+  const g = W.crearUnidad(m, 0, 'gatling', 60 * N + 40), blanco = W.crearEdificio(m, 1, 'central', 44, 59); blanco.vida = blanco.vidaMax = 99999; g.ang = 0;
+  W.orden(m, { t: 'atacar', j: 0, ids: [g.id], obj: blanco.id });
+  let primero = -1, tiros = 0, ult = -1;
+  for (let i = 0; i < 200; i++) { W.tick(m); if (g.tDisparo !== undefined && g.tDisparo !== ult) { ult = g.tDisparo; tiros++; if (primero < 0) primero = i; } }
+  assert.ok(primero >= W.UNID.gatling.monta - 5, 'no dispara hasta montar el arma: primer tiro en el tick ' + primero);
+  assert.ok(tiros > 30, 'montada, dispara en ráfaga: ' + tiros + ' tiros');
+  const x0 = g.x; W.orden(m, { t: 'mover', j: 0, ids: [g.id], x: 30.5, y: 60.5 }); avanza(20);
+  assert.ok(Math.abs(g.x - x0) < 0.05 && g.monta < W.UNID.gatling.monta, 'antes de andar, desmonta: ' + (x0 - g.x).toFixed(2));
+  avanza(200); assert.ok(g.x < x0 - 3, 'y luego sí se mueve');
+  // hacker: apaga un tanque enemigo a distancia, pagando información; no puede con la infantería
+  J.info = 100;
+  const hk = W.crearUnidad(m, 0, 'hacker', 75 * N + 40), tq = W.crearUnidad(m, 1, 'tanque', 75 * N + 47), sol = W.crearUnidad(m, 1, 'infanteria', 78 * N + 46);
+  tq.guardia = true; sol.guardia = true; sol.recarga = 99999; tq.recarga = 99999;
+  W.orden(m, { t: 'hackear', j: 0, ids: [hk.id], obj: sol.id }); avanza(3);
+  assert.ok(hk.orden === 'nada', 'a la infantería no se la hackea');
+  W.orden(m, { t: 'hackear', j: 0, ids: [hk.id], obj: tq.id }); avanza(W.ECON.hackCanal + 8);
+  assert.ok(tq.hack > m.t && J.info === 100 - W.ECON.hackInfo, 'tanque hackeado y cobrado: info ' + J.info);
+  tq.recarga = 0; W.orden(m, { t: 'mover', j: 1, ids: [tq.id], x: 60.5, y: 75.5 }); const tx = tq.x; avanza(100);
+  assert.ok(Math.abs(tq.x - tx) < 0.01 && tq.tDisparo === undefined, 'hackeado ni se mueve ni dispara');
+  avanza(W.ECON.hackVeh); assert.ok(!(tq.hack > m.t) && Math.abs(tq.x - tx) > 1, 'pasado el efecto, vuelve a andar');
+  // un edificio hackeado deja de producir; sin información no hay hackeo
+  const cu = W.crearEdificio(m, 1, 'cuartel', 48, 80); m.jug[1].minerales = 5000;
+  W.orden(m, { t: 'entrenar', j: 1, tipo: 'infanteria', ids: [cu.id] }); avanza(3);
+  hk.recarga = 0; W.orden(m, { t: 'hackear', j: 0, ids: [hk.id], obj: cu.id }); avanza(W.ECON.hackCanal + 60);
+  assert.ok(cu.hack > m.t, 'cuartel hackeado');
+  const p0 = cu.prog; avanza(60); assert.equal(cu.prog, p0, 'hackeado no produce');
+  J.info = 0; hk.recarga = 0; W.orden(m, { t: 'hackear', j: 0, ids: [hk.id], obj: tq.id }); avanza(200);
+  assert.ok(!(tq.hack > m.t), 'sin información no hay hackeo');
+});
+
 prueba('puentes: la excavadora cruza el agua, todos lo usan y al caer se cierra', () => {
   const m = W.crearMundo(31, { N: 128 }), N = m.N, J = m.jug[0], T = W.TERRENO;
   m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
