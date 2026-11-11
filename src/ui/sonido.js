@@ -127,8 +127,8 @@
     // nivel: de 0 a 1, cuántos vehículos se mueven cerca.
     s.motor = function (nivel) {
       if (!ctx) return;
-      motor.g.gain.setTargetAtTime(mudo ? 0 : Math.min(1, nivel) * 0.16, ctx.currentTime, 0.3);
-      motor.f.frequency.setTargetAtTime(140 + Math.min(1, nivel) * 220, ctx.currentTime, 0.3);
+      motor.g.gain.setTargetAtTime(mudo ? 0 : Math.min(1, nivel) * 0.05, ctx.currentTime, 0.4);
+      motor.f.frequency.setTargetAtTime(120 + Math.min(1, nivel) * 110, ctx.currentTime, 0.4);
     };
     return s;
   };

@@ -307,6 +307,34 @@ function lejosDeAgua(m, x, y) {
   return true;
 }
 
+prueba('demoler devuelve parte del costo y las formaciones ordenan al grupo', () => {
+  const m = W.crearMundo(4242, { N: 128 }), J = m.jug[0], b = m.mapa.bases[0], N = m.N;
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  const c = W.crearEdificio(m, 0, 'cuartel', b.x + 4, b.y - 1), patio = m.ents.find((e) => e.j === 0 && e.tipo === 'patio');
+  c.vida = c.vidaMax / 2; avanza(1);
+  const antes = J.minerales;
+  W.orden(m, { t: 'vender', j: 0, id: patio.id }); W.orden(m, { t: 'vender', j: 1, id: c.id }); avanza(1);
+  assert.ok(m.porId.has(patio.id) && m.porId.has(c.id), 'no se puede demoler el patio ni un edificio ajeno');
+  W.orden(m, { t: 'vender', j: 0, id: c.id }); avanza(1);
+  assert.ok(!m.porId.has(c.id), 'el edificio debía desaparecer');
+  assert.ok(Math.abs(J.minerales - antes - W.EDIF.cuartel.costo * W.ECON.venta * 0.5) <= 1, 'con media vida devuelve la mitad de la parte recuperable');
+  assert.strictEqual(m.paso[(b.y - 1) * N + b.x + 4], 1, 'la celda debía quedar libre');
+  // formaciones en campo abierto
+  for (let y = 50; y < 80; y++) for (let x = 30; x < 100; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; } }
+  const us = [];
+  for (let k = 0; k < 5; k++) us.push(W.crearUnidad(m, 0, k < 3 ? 'tanque' : 'infanteria', (60 + k) * N + 40));
+  const ids = us.map((u) => u.id);
+  W.orden(m, { t: 'mover', j: 0, ids, x: 70.5, y: 62.5, forma: 'linea' }); avanza(700);
+  const xs = us.map((u) => u.x), ys = us.map((u) => u.y).sort((p, q) => p - q);
+  assert.ok(Math.max(...xs) - Math.min(...xs) < 1.2, 'en línea debían quedar a la misma altura: ' + xs.map((v) => v.toFixed(1)));
+  assert.ok(ys[4] - ys[0] > 4, 'en línea debían abrirse a lo ancho: ' + ys.map((v) => v.toFixed(1)));
+  assert.ok(us.every((u) => Math.abs(u.ang) < 0.2), 'todas debían quedar mirando al frente');
+  W.orden(m, { t: 'mover', j: 0, ids, x: 90.5, y: 62.5, forma: 'columna' }); avanza(700);
+  const xs2 = us.map((u) => u.x), ys2 = us.map((u) => u.y);
+  assert.ok(Math.max(...xs2) - Math.min(...xs2) > 2 && Math.max(...ys2) - Math.min(...ys2) < 2.2, 'en columna debían alargarse en el sentido de la marcha');
+  assert.ok(us.filter((u) => u.tipo === 'tanque').every((t) => t.x >= Math.min(...us.filter((u) => u.tipo === 'infanteria').map((i) => i.x)) - 0.5), 'los vehículos van delante');
+});
+
 prueba('determinismo: misma semilla, misma partida', () => {
   const corre = () => {
     const m = W.crearMundo(777), a = W.iaCrear(0), b = W.iaCrear(1);

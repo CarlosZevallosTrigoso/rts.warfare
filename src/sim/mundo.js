@@ -66,7 +66,7 @@
     const u = {
       id: m.sigId++, j, tipo, edif: false, x, y, px: x, py: y, vida: d.vida, vidaMax: d.vida,
       orden: 'nada', ruta: null, ri: 0, dest: null, meta: null, pend: null, fallo: false, obj: 0, recarga: 0, fijo: false,
-      ang: Math.atan2(N / 2 - y, N / 2 - x), v: 0, tReplan: -99, tRep: -999, // rumbo, velocidad actual
+      ang: Math.atan2(N / 2 - y, N / 2 - x), v: 0, tReplan: -99, tRep: -999, tope: 0, angFin: null, // rumbo, velocidad actual
       carga: 0, est: tipo === 'cosechadora' ? 'buscar' : '', celda: -1, ref: 0, espera: 0, pref: null,
       quiere: 1, cargaTipo: 1, // cosechadora: qué busca y qué lleva (1 minerales, 2 raros)
       cola: [], patrulla: null, explora: false, // órdenes encadenadas, ruta de patrulla, exploración automática
@@ -166,7 +166,34 @@
     for (let k = 0; k < cmd.ids.length; k++) { const u = m.porId.get(cmd.ids[k]); if (u && !u.edif && u.j === cmd.j) out.push(u); }
     return out;
   }
-  function destinos(m, us, x, y, fn) {
+  // Puestos de una formación, en coordenadas locales [avance, lateral] respecto del rumbo del grupo.
+  function puestos(forma, n) {
+    const s = 1.3, out = [];
+    for (let i = 0; i < n; i++) {
+      if (forma === 'linea') { const por = Math.min(n, 12), fila = (i / por) | 0, enFila = Math.min(por, n - fila * por); out.push([-fila * s, ((i % por) - (enFila - 1) / 2) * s]); }
+      else if (forma === 'columna') out.push([-(i >> 1) * s, n > 1 ? (i % 2 ? 0.6 : -0.6) : 0]);
+      else if (forma === 'cuna') { const r = Math.ceil(i / 2); out.push([-r * s * 0.9, (i % 2 ? 1 : -1) * r * s * 0.8]); }
+      else { const lado = Math.ceil(Math.sqrt(n)), filas = Math.ceil(n / lado); out.push([-(((i / lado) | 0) - (filas - 1) / 2) * s, ((i % lado) - (lado - 1) / 2) * s]); } // cuadro
+    }
+    return out;
+  }
+  // Reparte destinos. Sin formación (o 'grupo'): racimo alrededor del punto. Con formación: cada unidad a su
+  // puesto, orientada según el rumbo del grupo, y todas al paso de la más lenta para llegar juntas.
+  function destinos(m, us, x, y, fn, forma) {
+    if (forma && forma !== 'grupo' && us.length > 1) {
+      let sx = 0, sy = 0, tope = Infinity;
+      for (const u of us) { sx += u.x; sy += u.y; tope = Math.min(tope, UNID[u.tipo].vel); }
+      const rumbo = Math.atan2(y - sy / us.length, x - sx / us.length), c = Math.cos(rumbo), s = Math.sin(rumbo);
+      const orden = us.slice().sort((a, b) => (UNID[a.tipo].cat === 'veh' ? 0 : 1) - (UNID[b.tipo].cat === 'veh' ? 0 : 1) || a.id - b.id); // vehículos delante
+      const ps = puestos(forma, orden.length);
+      for (let i = 0; i < orden.length; i++) {
+        const px = x + ps[i][0] * c - ps[i][1] * s, py = y + ps[i][0] * s + ps[i][1] * c, cel = W.cercaLibre(m, px, py);
+        const libre = px >= 0 && py >= 0 && px < m.N && py < m.N && m.paso[Math.floor(py) * m.N + Math.floor(px)];
+        fn(orden[i], libre ? px : (cel % m.N) + 0.5, libre ? py : ((cel / m.N) | 0) + 0.5);
+        orden[i].tope = tope; orden[i].angFin = rumbo;
+      }
+      return;
+    }
     const N = m.N, cx = Math.floor(x), cy = Math.floor(y);
     let k = 0;
     for (let i = 0; i < us.length; i++) {
@@ -189,7 +216,7 @@
       u.orden = 'atacar'; u.obj = ob.id; u.ruta = null; u.pend = null;
       return true;
     }
-    u.orden = o.t; u.obj = 0; u.dest = { x: o.x, y: o.y }; u.ruta = null;
+    u.orden = o.t; u.obj = 0; u.dest = { x: o.x, y: o.y }; u.ruta = null; u.tope = 0; u.angFin = null;
     pedirRuta(m, u, o.x, o.y, 0);
     return true;
   }
@@ -267,11 +294,18 @@
       }
       // cmd.enc (encadenar): la orden se añade a la cola de la unidad en vez de reemplazar lo que hace.
       case 'mover':
-        destinos(m, propias(m, cmd), cmd.x, cmd.y, (u, x, y) => encargar(m, u, { t: 'mover', x, y }, cmd.enc && u.tipo !== 'cosechadora'));
+        destinos(m, propias(m, cmd), cmd.x, cmd.y, (u, x, y) => encargar(m, u, { t: 'mover', x, y }, cmd.enc && u.tipo !== 'cosechadora'), cmd.forma);
         return;
       case 'amover':
-        destinos(m, propias(m, cmd).filter((u) => UNID[u.tipo].arma), cmd.x, cmd.y, (u, x, y) => encargar(m, u, { t: 'amover', x, y }, cmd.enc));
+        destinos(m, propias(m, cmd).filter((u) => UNID[u.tipo].arma), cmd.x, cmd.y, (u, x, y) => encargar(m, u, { t: 'amover', x, y }, cmd.enc), cmd.forma);
         return;
+      case 'vender': { // demoler un edificio propio: devuelve parte de su costo, según la vida que le quede
+        const e = m.porId.get(cmd.id);
+        if (!e || !e.edif || e.j !== cmd.j || e.tipo === 'patio' || e.vida <= 0) return;
+        J.minerales += Math.floor(EDIF[e.tipo].costo * ECON.venta * (e.vida / e.vidaMax));
+        e.vida = 0; e.vendido = true;
+        return;
+      }
       case 'atacar': {
         const o = m.porId.get(cmd.obj);
         if (!o || o.j === cmd.j) return;
@@ -312,8 +346,9 @@
     const N = m.N, d = UNID[u.tipo], c = u.ruta[u.ri];
     const replantear = () => { u.ruta = null; u.v = 0; u.tReplan = m.t; if (u.meta) pedirRuta(m, u, u.meta.x, u.meta.y, u.meta.radio); };
     if (!m.paso[c]) { replantear(); return false; } // alguien construyó en el punto de paso
-    const vmax = d.vel * (m.mapa.terreno[Math.floor(u.y) * N + Math.floor(u.x)] === T.BOSQUE ? 0.6 : 1);
-    const tx = (c % N) + 0.5, ty = ((c / N) | 0) + 0.5, dx = tx - u.x, dy = ty - u.y, dd = Math.hypot(dx, dy);
+    const vmax = (u.tope && u.tope < d.vel ? u.tope : d.vel) * (m.mapa.terreno[Math.floor(u.y) * N + Math.floor(u.x)] === T.BOSQUE ? 0.6 : 1);
+    const alFinal = u.ri === u.ruta.length - 1 && u.fin;
+    const tx = alFinal ? u.fin.x : (c % N) + 0.5, ty = alFinal ? u.fin.y : ((c / N) | 0) + 0.5, dx = tx - u.x, dy = ty - u.y, dd = Math.hypot(dx, dy);
     let alin = 1;
     if (dd > 0.4) { // muy cerca del punto ya no exige alinearse: evita quedarse pivotando si lo empujan
       const meta = Math.atan2(dy, dx);
@@ -368,7 +403,14 @@
       if (!u || !u.pend) continue;
       const p = u.pend; u.pend = null; n++;
       const camino = m.ruta(m.paso, m.mapa.terreno, Math.floor(u.x), Math.floor(u.y), p.x, p.y, p.radio);
-      if (camino) { u.ruta = suavizar(m, u.x, u.y, camino); u.ri = 0; } else { u.ruta = null; u.fallo = true; }
+      if (camino) {
+        u.fin = null;
+        if (p.radio === 0) { // destino exacto: el último tramo va al punto pedido, no al centro de su celda
+          const cf = Math.floor(p.y) * N + Math.floor(p.x);
+          if (p.x >= 0 && p.y >= 0 && p.x < N && p.y < N && m.paso[cf]) { if (camino[camino.length - 1] !== cf) camino.push(cf); u.fin = { x: p.x, y: p.y }; }
+        }
+        u.ruta = suavizar(m, u.x, u.y, camino); u.ri = 0;
+      } else { u.ruta = null; u.fallo = true; }
     }
   }
 
@@ -468,6 +510,10 @@
     if (u.tipo === 'cosechadora') { tickCosechadora(m, u); return; }
     if (u.fallo) { u.fallo = false; u.orden = 'nada'; u.obj = 0; limpiar(u); }
     if (u.orden === 'nada' && !u.obj && (u.cola.length || u.patrulla || u.explora)) siguienteOrden(m, u);
+    if (u.orden === 'nada' && !u.obj && u.angFin != null) { // en su puesto, se encara como el resto de la formación
+      const dif = ((u.angFin - u.ang + Math.PI) % TAU + TAU) % TAU - Math.PI;
+      if (Math.abs(dif) <= d.giro) { u.ang = u.angFin; u.angFin = null; } else u.ang += Math.sign(dif) * d.giro;
+    }
     const arma = ARMAS[d.arma];
     if (u.orden === 'mover') { // cumple la orden sin desviarse, pero dispara a lo que tenga a tiro
       if (u.recarga <= 0 && (m.t + u.id) % 4 === 0) { const e = buscarEnemigo(m, u, u.x, u.y, arma.alcance); if (e) disparar(m, u, e, arma); }
@@ -735,7 +781,7 @@
       const e = m.ents[k];
       if (e.vida > 0) continue;
       muertos = true; m.porId.delete(e.id); m.jug[e.j].bajas++;
-      m.efectos.push({ tipo: 'muerte', x2: posX(e), y2: posY(e), edif: e.edif, tam: e.tam || 0, clase: e.tipo, ang: e.ang || 0, j: e.j, t: m.t });
+      m.efectos.push({ tipo: e.vendido ? 'venta' : 'muerte', x2: posX(e), y2: posY(e), edif: e.edif, tam: e.tam || 0, clase: e.tipo, ang: e.ang || 0, j: e.j, t: m.t });
       if (e.edif) {
         const N = m.N;
         for (let dy = 0; dy < e.tam; dy++) for (let dx = 0; dx < e.tam; dx++) { const i = (e.y + dy) * N + e.x + dx; m.ocup[i] = 0; m.paso[i] = 1; }

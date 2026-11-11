@@ -8,6 +8,7 @@
   :root { --fondo: #e4e4e4; --panel: #f4f4f4; --tinta: #1a1a1a; --suave: #6e6e6e; --linea: #bdbdbd; --relleno: #cfcfcf; --mal: #b0362f; }
   body[data-tema="oscura"] { --fondo: #1c1c1c; --panel: #262626; --tinta: #e6e6e6; --suave: #9a9a9a; --linea: #444444; --relleno: #474747; --mal: #d0554a; }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html, body { height: 100%; margin: 0; }
   body { background: var(--fondo); color: var(--tinta); font: 12px/1.45 "Fira Code", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow: hidden; user-select: none; -webkit-user-select: none; }
   #app { display: grid; grid-template-columns: 1fr 236px; height: 100%; }
@@ -39,8 +40,17 @@
   .grupo.on { background: var(--tinta); color: var(--fondo); border-color: var(--tinta); }
   .grupo b { font-size: 12px; }
   #sel { min-height: 18px; }
-  #ayuda { margin-top: auto; border-top: 1px solid var(--linea); padding-top: 9px; }
+  #ayuda { position: fixed; top: 8px; left: 8px; z-index: 3; background: var(--panel); border: 1px solid var(--linea); border-radius: 2px; padding: 3px 8px; max-width: 330px; }
+  #ayuda summary { cursor: pointer; color: var(--tinta); list-style: none; }
+  #ayuda summary::after { content: ' ▾'; }
+  #ayuda[open] summary { margin-bottom: 5px; }
+  #ayuda[open] summary::after { content: ' ▴'; }
   #ayuda kbd { font: inherit; color: var(--tinta); }
+  #formas { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; }
+  #formas .grupo { justify-content: center; }
+  #vender { justify-content: center; margin-top: 4px; }
+  #vender:hover { background: var(--mal); color: #fff; border-color: var(--mal); }
+  #version { color: var(--suave); font-size: 10px; text-align: center; }
   #fin { position: fixed; inset: 0 236px 0 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
   #fin[hidden] { display: none; }
   #fin div { pointer-events: auto; background: var(--fondo); border: 1px solid var(--tinta); border-radius: 2px; padding: 22px 30px; text-align: center; }
@@ -63,6 +73,25 @@
 <body>
 <div id="app">
   <canvas id="lienzo"></canvas>
+  <details id="ayuda" class="tenue"><summary>ayuda</summary>
+      <div>clic / caja: seleccionar</div>
+      <div>clic derecho: mover, atacar, cosechar</div>
+      <div><kbd>Mayús</kbd>+clic derecho: encadenar órdenes</div>
+      <div><kbd>R</kbd> patrulla · <kbd>E</kbd> explorar sola · <kbd>F</kbd> formación</div>
+      <div><kbd>Supr</kbd> demoler el edificio seleccionado</div>
+      <div>cuartel o fábrica + clic derecho: punto de reunión</div>
+      <div>la línea punteada es el recorrido de lo seleccionado</div>
+      <div><kbd>A</kbd> atacar al avanzar · <kbd>S</kbd> detener</div>
+      <div>arrastrar con clic derecho, o flechas: cámara</div>
+      <div>trackpad: dos dedos desplazan, pellizco zoom</div>
+      <div>rueda o <kbd>+</kbd> <kbd>−</kbd>: zoom · <kbd>M</kbd> cambia rueda</div>
+      <div><kbd>H</kbd> base · <kbd>espacio</kbd> alerta</div>
+      <div><kbd>Mayús+1…9</kbd> guardar grupo · <kbd>1…9</kbd> elegirlo, dos veces ir</div>
+      <div><kbd>×</kbd> o clic derecho en botón: cancelar</div>
+      <div><kbd>P</kbd> pausa · <kbd>T</kbd> tema · <kbd>N</kbd> silenciar</div>
+      <div id="semilla"></div>
+      <div>escribe <kbd>god</kbd>: recursos infinitos</div>
+  </details>
   <aside id="barra">
     <h1 id="titulo" title="Recargar">rts<span>.</span>warfare<b id="dios" hidden>GOD</b></h1>
     <div id="recursos">
@@ -77,25 +106,11 @@
     <section><h2>Edificios</h2><div id="bEdif"></div><div id="obras" class="tenue"></div></section>
     <section><h2>Unidades</h2><div id="bUnid"></div><div id="ritmo" class="tenue"></div></section>
     <section id="secGrupos" hidden><h2>Grupos</h2><div id="grupos"></div></section>
+    <section id="secFormas" hidden><h2>Formación al llegar</h2><div id="formas">
+      <button type="button" class="grupo on" data-f="grupo">grupo</button><button type="button" class="grupo" data-f="linea">línea</button><button type="button" class="grupo" data-f="columna">columna</button>
+      <button type="button" class="grupo" data-f="cuna">cuña</button><button type="button" class="grupo" data-f="cuadro">cuadro</button></div></section>
     <div id="sel" class="tenue"></div>
-    <div id="ayuda" class="tenue">
-      <div>clic / caja: seleccionar</div>
-      <div>clic derecho: mover, atacar, cosechar</div>
-      <div><kbd>Mayús</kbd>+clic derecho: encadenar órdenes</div>
-      <div><kbd>R</kbd> patrulla · <kbd>E</kbd> explorar sola</div>
-      <div>cuartel o fábrica + clic derecho: punto de reunión</div>
-      <div>la línea punteada es el recorrido de lo seleccionado</div>
-      <div><kbd>A</kbd> atacar al avanzar · <kbd>S</kbd> detener</div>
-      <div>arrastrar con clic derecho, o flechas: cámara</div>
-      <div>trackpad: dos dedos desplazan, pellizco zoom</div>
-      <div>rueda o <kbd>+</kbd> <kbd>−</kbd>: zoom · <kbd>M</kbd> cambia rueda</div>
-      <div><kbd>H</kbd> base · <kbd>espacio</kbd> alerta</div>
-      <div><kbd>Mayús+1…9</kbd> guardar grupo · <kbd>1…9</kbd> elegirlo, dos veces ir</div>
-      <div><kbd>×</kbd> o clic derecho en botón: cancelar</div>
-      <div><kbd>P</kbd> pausa · <kbd>T</kbd> tema · <kbd>N</kbd> silenciar</div>
-      <div id="semilla"></div>
-      <div>escribe <kbd>god</kbd>: recursos infinitos</div>
-    </div>
+    <button type="button" id="vender" class="btn" hidden></button>
   </aside>
 </div>
 <div id="menu"><div class="caja">
@@ -110,9 +125,11 @@
     <button type="button" data-v="normal">normal</button><button type="button" data-v="agresivo">agresivo<small>ataca pronto</small></button></div></div>
   <div><h2>Semilla del mapa</h2><input id="op-s" inputmode="numeric" placeholder="al azar" autocomplete="off"></div>
   <button type="button" id="empezar">Empezar</button>
+  <div id="version">__VERSION__</div>
 </div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><p><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
+globalThis.W = { VERSION: '__VERSION__' };
 /*__CODIGO__*/
 W.iniciar();
 </script>

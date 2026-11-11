@@ -62,6 +62,8 @@
     let tecleado = ''; // últimas letras escritas, para el código "god"
     const sel = new Set(), grupos = {}, teclas = new Set(), marcas = [];
     let modo = null; // null | 'colocar' | 'amover' | 'patrulla'
+    const FORMAS = ['grupo', 'linea', 'columna', 'cuna', 'cuadro'];
+    let forma = 'grupo'; // formación con la que llegan los grupos a su destino
     let tipoColocar = null; // edificio que se está colocando
     const obraLista = (tipo) => J.obras.some((o) => o.listo && o.tipo === tipo);
     let pausa = false, cuadros = 0, nieblaVista = -1;
@@ -434,7 +436,7 @@
       ctx.font = '11px "Fira Code", ui-monospace, monospace';
       if (pausa || modo === 'amover' || modo === 'patrulla') {
         ctx.fillStyle = P.tinta;
-        ctx.fillText(pausa ? 'pausa' : modo === 'amover' ? 'atacar al avanzar: elige destino' : 'patrulla: elige el punto (con Mayús añades más)', 12, 20);
+        ctx.fillText(pausa ? 'pausa' : modo === 'amover' ? 'atacar al avanzar: elige destino' : 'patrulla: elige el punto (con Mayús añades más)', 12, ch - 14);
       }
       // Etiqueta de lo que hay bajo el cursor.
       if (raton.dentro && !raton.izq && !raton.arrastre && !raton.medio) {
@@ -501,12 +503,15 @@
             marcaSuelo('resto', d.x2, d.y2, UNID[d.clase].radio, d.ang, 25000, d.clase);
           }
           son.explosion(Math.max(0.12, cerca(d.x2, d.y2)), paneo(d.x2), d.edif);
+        } else if (d.tipo === 'venta') {
+          for (let k = 0; k < d.tam * 4; k++) parte('polvo', d.x2 + (azar() - 0.5) * d.tam, d.y2 + (azar() - 0.5) * d.tam, (azar() - 0.5) * 0.6, -0.2 - azar() * 0.4, 1 + azar(), 0.4);
+          if (d.j === YO) son.colocar();
         }
       }
       oido.t = m.t;
-      let motores = 0; // rumor de motores según los vehículos que se mueven en pantalla
-      for (const e of m.ents) if (!e.edif && e.tipo !== 'infanteria' && e.v > 0.01 && veo(e)) motores += cerca(e.x, e.y) * 0.3;
-      son.motor(motores);
+      let cercania = 0, cuantos = 0; // rumor de motores: manda el vehículo más cercano; los demás apenas suman
+      for (const e of m.ents) if (!e.edif && UNID[e.tipo].cat === 'veh' && e.v > 0.01 && veo(e)) { const c = cerca(e.x, e.y); if (c > 0) { cuantos++; if (c > cercania) cercania = c; } }
+      son.motor(cuantos ? cercania * (0.6 + 0.4 * (1 - Math.pow(0.6, cuantos - 1))) : 0);
       const listas = J.obras.filter((o) => o.listo).length;
       if (listas > oido.listas) son.obraLista();
       oido.listas = listas;
@@ -518,6 +523,14 @@
       oido.edificios = edificios;
       if (J.alerta && J.alerta.t > oido.alerta + 300) { oido.alerta = J.alerta.t; if (cerca(J.alerta.x, J.alerta.y) === 0) son.alerta(); }
     }
+
+    // ---------- formación y demolición ----------
+    function ponerForma(f) { forma = f; for (const b of $('formas').children) b.classList.toggle('on', b.dataset.f === f); }
+    $('formas').addEventListener('click', (ev) => { const b = ev.target.closest('[data-f]'); if (b) ponerForma(b.dataset.f); });
+    const vendibles = () => [...sel].map((id) => m.porId.get(id)).filter((e) => e && e.edif && e.j === YO && e.tipo !== 'patio');
+    const valorVenta = (e) => Math.floor(EDIF[e.tipo].costo * W.ECON.venta * (e.vida / e.vidaMax));
+    function vender() { for (const e of vendibles()) W.orden(m, { t: 'vender', j: YO, id: e.id }); }
+    $('vender').addEventListener('click', vender);
 
     // ---------- grupos numerados ----------
     const ultimoGrupo = { n: '', t: 0 };
@@ -637,6 +650,11 @@
       if (vivos.length === 1) { const v = vivos[0]; s = (v.edif ? EDIF : UNID)[v.tipo].nombre + ' · ' + Math.ceil(v.vida) + ' / ' + v.vidaMax; }
       else if (vivos.length > 1) s = vivos.length + ' unidades';
       if ($('sel').textContent !== s) $('sel').textContent = s;
+      const tropas = vivos.filter((v) => !v.edif).length;
+      $('secFormas').hidden = tropas < 2;
+      const dem = vendibles(), bv = $('vender');
+      bv.hidden = !dem.length;
+      if (dem.length) { const t = 'Demoler · +' + dem.reduce((a, e) => a + valorVenta(e), 0) + ' minerales'; if (bv.textContent !== t) bv.textContent = t; }
     }
 
     // ---------- entrada ----------
@@ -659,7 +677,7 @@
         }
         if (modo === 'amover' || modo === 'patrulla') {
           const ids = unidadesSel().map((u) => u.id);
-          if (ids.length) { W.orden(m, { t: modo, j: YO, ids, x: wx, y: wy, enc: ev.shiftKey }); marca(wx, wy, P.mal); son.orden(); }
+          if (ids.length) { W.orden(m, { t: modo, j: YO, ids, x: wx, y: wy, enc: ev.shiftKey, forma }); marca(wx, wy, P.mal); son.orden(); }
           if (!(modo === 'patrulla' && ev.shiftKey)) modo = null; // con Mayús se siguen añadiendo puntos de patrulla
           return;
         }
@@ -686,8 +704,8 @@
         if (cos.length && m.mapa.tipoMin[c] >= 1 && m.niebla[YO][c]) {
           W.orden(m, { t: 'cosechar', j: YO, ids: cos, x: wx, y: wy });
           const resto = us.filter((u) => u.tipo !== 'cosechadora').map((u) => u.id);
-          if (resto.length) W.orden(m, { t: 'mover', j: YO, ids: resto, x: wx, y: wy, enc });
-        } else W.orden(m, { t: 'mover', j: YO, ids, x: wx, y: wy, enc });
+          if (resto.length) W.orden(m, { t: 'mover', j: YO, ids: resto, x: wx, y: wy, enc, forma });
+        } else W.orden(m, { t: 'mover', j: YO, ids, x: wx, y: wy, enc, forma });
         marca(wx, wy, P.bien); son.orden();
     }
     window.addEventListener('mousemove', (ev) => {
@@ -771,6 +789,8 @@
       switch (ev.code) {
         case 'KeyA': if (unidadesSel().length) modo = 'amover'; break;
         case 'KeyR': if (unidadesSel().length) modo = 'patrulla'; break;
+        case 'KeyF': ponerForma(FORMAS[(FORMAS.indexOf(forma) + 1) % FORMAS.length]); break;
+        case 'Delete': case 'Backspace': vender(); break;
         case 'KeyE': { const ids = unidadesSel().map((u) => u.id); if (ids.length) { W.orden(m, { t: 'explorar', j: YO, ids }); son.orden(); } break; }
         case 'KeyS': { const ids = unidadesSel().map((u) => u.id); if (ids.length) W.orden(m, { t: 'detener', j: YO, ids }); break; }
         case 'KeyH': cam.x = m.mapa.bases[YO].x; cam.y = m.mapa.bases[YO].y; break;
@@ -789,7 +809,7 @@
     window.addEventListener('resize', ajustar);
 
     $('titulo').addEventListener('click', () => location.reload());
-    $('semilla').textContent = 'semilla ' + semilla;
+    $('semilla').textContent = 'semilla ' + semilla + ' · ' + W.VERSION;
     $('finRep').href = '?' + op.consulta + '&ya=1';
     $('finNueva').href = location.pathname;
 
