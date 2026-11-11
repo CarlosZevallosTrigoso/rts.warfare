@@ -66,7 +66,7 @@
       <div>trackpad: dos dedos desplazan, pellizco zoom</div>
       <div>rueda o <kbd>+</kbd> <kbd>−</kbd>: zoom · <kbd>M</kbd> cambia rueda</div>
       <div><kbd>H</kbd> base · <kbd>espacio</kbd> alerta</div>
-      <div><kbd>Mayús+1…9</kbd> guardar grupo · <kbd>1…9</kbd> llamarlo</div>
+      <div><kbd>Mayús+1…9</kbd> guardar grupo · <kbd>1…9</kbd> ir a él</div>
       <div><kbd>×</kbd> o clic derecho en botón: cancelar</div>
       <div><kbd>P</kbd> pausa · <kbd>T</kbd> tema · <span id="semilla"></span></div>
       <div>escribe <kbd>god</kbd>: recursos infinitos</div>
@@ -1400,7 +1400,16 @@
       const digito = /^Digit([1-9])$/.exec(ev.code);
       if (digito) {
         if (ev.shiftKey) grupos[digito[1]] = [...sel];
-        else if (grupos[digito[1]]) { sel.clear(); for (const id of grupos[digito[1]]) if (m.porId.has(id)) sel.add(id); }
+        else if (grupos[digito[1]]) { // selecciona el grupo y lleva la cámara a su centro
+          sel.clear();
+          let sx = 0, sy = 0, n = 0;
+          for (const id of grupos[digito[1]]) {
+            const e = m.porId.get(id);
+            if (!e) continue;
+            sel.add(id); sx += e.edif ? e.cx : e.x; sy += e.edif ? e.cy : e.y; n++;
+          }
+          if (n) { cam.x = sx / n; cam.y = sy / n; limitarCam(); }
+        }
         return;
       }
       switch (ev.code) {

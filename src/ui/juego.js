@@ -413,7 +413,16 @@
       const digito = /^Digit([1-9])$/.exec(ev.code);
       if (digito) {
         if (ev.shiftKey) grupos[digito[1]] = [...sel];
-        else if (grupos[digito[1]]) { sel.clear(); for (const id of grupos[digito[1]]) if (m.porId.has(id)) sel.add(id); }
+        else if (grupos[digito[1]]) { // selecciona el grupo y lleva la cámara a su centro
+          sel.clear();
+          let sx = 0, sy = 0, n = 0;
+          for (const id of grupos[digito[1]]) {
+            const e = m.porId.get(id);
+            if (!e) continue;
+            sel.add(id); sx += e.edif ? e.cx : e.x; sy += e.edif ? e.cy : e.y; n++;
+          }
+          if (n) { cam.x = sx / n; cam.y = sy / n; limitarCam(); }
+        }
         return;
       }
       switch (ev.code) {
