@@ -239,11 +239,11 @@
   <div><h2>Semilla del mapa</h2><input id="op-s" inputmode="numeric" placeholder="al azar" autocomplete="off"></div>
   <button type="button" id="empezar">Empezar</button>
   <button type="button" id="continuar" hidden>Continuar la partida guardada</button>
-  <div id="version">versión 39</div>
+  <div id="version">versión 40</div>
 </div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 39' };
+globalThis.W = { VERSION: 'versión 40' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -680,7 +680,7 @@ globalThis.W = { VERSION: 'versión 39' };
     const mapa = W.generarMapa(semilla, op.N), N = mapa.N, NN = N * N;
     const m = {
       N, semilla, mapa, t: 0, ents: [], porId: new Map(), sigId: 1,
-      ocup: new Int32Array(NN), paso: new Uint8Array(NN), pasoV: new Uint8Array(NN), hayCaminos: false, terrenoV: 0,
+      ocup: new Int32Array(NN), paso: new Uint8Array(NN), pasoV: new Uint8Array(NN), hayCaminos: false, terrenoV: 0, caminos: [], // caminos: el recorrido de cada trazado [x0, y0, x1, y1…], para dibujarlo como un carril
       jug: [nuevoJugador(op.inicio), nuevoJugador(op.inicio)],
       niebla: [new Uint8Array(NN), new Uint8Array(NN)],
       cola: [], colaRutas: [], efectos: [], proy: [], barridos: [], trincheras: new Map(), focos: [[], []], sigFoco: 1, sigMision: 1, minas: [], raros: [], ganador: -1, embarques: [],
@@ -992,7 +992,7 @@ globalThis.W = { VERSION: 'versión 39' };
         for (const u of propias(m, cmd)) {
           if (!UNID[u.tipo].traza) continue;
           if (cmd.enc && u.orden === 'trazar') { if (u.trazas.length < 12) u.trazas.push({ x: cmd.x, y: cmd.y }); continue; }
-          limpiar(u); u.obj = 0; u.trazas = []; u.orden = 'trazar'; u.dest = { x: cmd.x, y: cmd.y }; u.ruta = null; u.guardia = false;
+          limpiar(u); u.obj = 0; u.trazas = []; u.trazo = m.caminos.push([u.x, u.y]) - 1; u.orden = 'trazar'; u.dest = { x: cmd.x, y: cmd.y }; u.ruta = null; u.guardia = false;
           pedirRuta(m, u, cmd.x, cmd.y, 0);
         }
         return;
@@ -1601,6 +1601,8 @@ globalThis.W = { VERSION: 'versión 39' };
       J.minerales -= precio; terr[c] = T.CAMINO; m.paso[c] = 1; m.pasoV[c] = 1; m.hayCaminos = true; m.terrenoV++;
     }
     if (u.fallo) { u.fallo = false; u.orden = 'nada'; u.trazas = []; m.efectos.push({ tipo: 'sinCamino', x1: u.x, y1: u.y, j: u.j, t: m.t, corte: true }); return; }
+    const tr = m.caminos[u.trazo]; // el carril: se apunta el recorrido cada poco
+    if (tr && Math.hypot(u.x - tr[tr.length - 2], u.y - tr[tr.length - 1]) > 0.35) { tr.push(u.x, u.y); m.terrenoV++; }
     if (avanzar(m, u) || (!u.ruta && !u.pend)) {
       const sig = u.trazas.shift();
       if (sig) { u.dest = sig; pedirRuta(m, u, sig.x, sig.y, 0); } else u.orden = 'nada';
@@ -3208,7 +3210,7 @@ globalThis.W = { VERSION: 'versión 39' };
     const cNie = document.createElement('canvas'); cNie.width = cNie.height = N;
     const xNie = cNie.getContext('2d'), imgNie = xNie.createImageData(N, N);
     function pintarTerreno() {
-      const img = xTerr.createImageData(N, N), cols = [P.llano, P.roca, P.agua, P.bosque, P.camino].map(hex);
+      const img = xTerr.createImageData(N, N), cols = [P.llano, P.roca, P.agua, P.bosque, P.llano].map(hex); // el camino se dibuja aparte, como un carril; debajo queda suelo despejado
       for (let i = 0; i < N * N; i++) { const c = cols[m.mapa.terreno[i]]; img.data[i * 4] = c[0]; img.data[i * 4 + 1] = c[1]; img.data[i * 4 + 2] = c[2]; img.data[i * 4 + 3] = 255; }
       xTerr.putImageData(img, 0, 0);
     }
@@ -3226,6 +3228,7 @@ globalThis.W = { VERSION: 'versión 39' };
       const lado = (c) => ({ base: c, osc: c, luz: c, suelo: c, mineral: c, raro: c, humo: c, fuego: 'rgba(0,0,0,0)', mal: c, agua: c, tinta: c }); // paleta de un solo tono: el canto de las fichas
       COL = { yo: Object.assign({ base: P.yo, osc: P.yoOsc, pared: tono(P.yoOsc, 0.68) }, comun), rival: Object.assign({ base: P.rival, osc: P.rivalOsc, pared: tono(P.rivalOsc, 0.68) }, comun) };
       COL.yoLado = lado(COL.yo.pared); COL.rivalLado = lado(COL.rival.pared);
+      COL.caminoBorde = tono(P.camino, tema === 'clara' ? 0.82 : 1.3);
       COL.rocaCara = tono(P.roca, tema === 'clara' ? 0.62 : 0.55); COL.rocaLuz = tono(P.roca, tema === 'clara' ? 1.35 : 1.3); COL.copa = tono(P.bosque, tema === 'clara' ? 0.74 : 1.5);
       pintarTerreno(); pintarNiebla();
     }
@@ -3371,6 +3374,30 @@ globalThis.W = { VERSION: 'versión 39' };
         ctx.fillStyle = COL.rocaCara; ctx.fill(cara);
         ctx.fillStyle = COL.rocaLuz; ctx.fill(luz);
         ctx.fillStyle = COL.copa; ctx.fill(copas);
+      }
+      if (m.caminos && m.caminos.length) { // caminos: un carril continuo por donde pasó la excavadora, con su borde
+        ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        for (const [ancho, color] of [[1.0, COL.caminoBorde], [0.78, P.camino]]) {
+          ctx.strokeStyle = color; ctx.lineWidth = Math.max(1.5, z * ancho); ctx.beginPath();
+          for (const tr of m.caminos) { if (tr.length < 4) continue; ctx.moveTo(ox + tr[0] * z, oy + tr[1] * z); for (let k = 2; k < tr.length; k += 2) ctx.lineTo(ox + tr[k] * z, oy + tr[k + 1] * z); }
+          ctx.stroke();
+        }
+        if (z >= 16) { // rodadas, como las que dejan los vehículos
+          ctx.strokeStyle = COL.caminoBorde; ctx.lineWidth = Math.max(1, z * 0.05); ctx.globalAlpha = 0.55;
+          for (const lado of [-0.2, 0.2]) {
+            ctx.beginPath();
+            for (const tr of m.caminos) {
+              for (let k = 0; k + 3 < tr.length; k += 2) {
+                const dx = tr[k + 2] - tr[k], dy = tr[k + 3] - tr[k + 1], L = Math.hypot(dx, dy) || 1, nx = (-dy / L) * lado, ny = (dx / L) * lado;
+                if (k === 0) ctx.moveTo(ox + (tr[k] + nx) * z, oy + (tr[k + 1] + ny) * z);
+                ctx.lineTo(ox + (tr[k + 2] + nx) * z, oy + (tr[k + 3] + ny) * z);
+              }
+            }
+            ctx.stroke();
+          }
+          ctx.globalAlpha = 1;
+        }
+        ctx.lineCap = 'butt'; ctx.lineJoin = 'miter';
       }
       const chatarra = [];
       ctx.fillStyle = P.mineral; ctx.beginPath();
@@ -3859,6 +3886,11 @@ globalThis.W = { VERSION: 'versión 39' };
       }
       mctx.imageSmoothingEnabled = true;
       mctx.drawImage(cNie, 0, 0, MS, MS);
+      if (m.caminos && m.caminos.length) { // caminos, en el minimapa: una línea fina
+        mctx.strokeStyle = P.camino; mctx.lineWidth = 1.5; mctx.beginPath();
+        for (const tr of m.caminos) { if (tr.length < 4) continue; mctx.moveTo(tr[0] * k, tr[1] * k); for (let q = 2; q < tr.length; q += 2) mctx.lineTo(tr[q] * k, tr[q + 1] * k); }
+        mctx.stroke();
+      }
       for (const p of m.puestos) { // puestos: rombo del color de su dueño
         if (!m.niebla[YO][Math.floor(p.y) * N + Math.floor(p.x)]) continue;
         mctx.fillStyle = p.dueno === YO ? P.yo : p.dueno >= 0 ? P.rival : P.tinta;

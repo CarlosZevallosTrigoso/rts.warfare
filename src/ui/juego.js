@@ -91,7 +91,7 @@
     const cNie = document.createElement('canvas'); cNie.width = cNie.height = N;
     const xNie = cNie.getContext('2d'), imgNie = xNie.createImageData(N, N);
     function pintarTerreno() {
-      const img = xTerr.createImageData(N, N), cols = [P.llano, P.roca, P.agua, P.bosque, P.camino].map(hex);
+      const img = xTerr.createImageData(N, N), cols = [P.llano, P.roca, P.agua, P.bosque, P.llano].map(hex); // el camino se dibuja aparte, como un carril; debajo queda suelo despejado
       for (let i = 0; i < N * N; i++) { const c = cols[m.mapa.terreno[i]]; img.data[i * 4] = c[0]; img.data[i * 4 + 1] = c[1]; img.data[i * 4 + 2] = c[2]; img.data[i * 4 + 3] = 255; }
       xTerr.putImageData(img, 0, 0);
     }
@@ -109,6 +109,7 @@
       const lado = (c) => ({ base: c, osc: c, luz: c, suelo: c, mineral: c, raro: c, humo: c, fuego: 'rgba(0,0,0,0)', mal: c, agua: c, tinta: c }); // paleta de un solo tono: el canto de las fichas
       COL = { yo: Object.assign({ base: P.yo, osc: P.yoOsc, pared: tono(P.yoOsc, 0.68) }, comun), rival: Object.assign({ base: P.rival, osc: P.rivalOsc, pared: tono(P.rivalOsc, 0.68) }, comun) };
       COL.yoLado = lado(COL.yo.pared); COL.rivalLado = lado(COL.rival.pared);
+      COL.caminoBorde = tono(P.camino, tema === 'clara' ? 0.82 : 1.3);
       COL.rocaCara = tono(P.roca, tema === 'clara' ? 0.62 : 0.55); COL.rocaLuz = tono(P.roca, tema === 'clara' ? 1.35 : 1.3); COL.copa = tono(P.bosque, tema === 'clara' ? 0.74 : 1.5);
       pintarTerreno(); pintarNiebla();
     }
@@ -254,6 +255,30 @@
         ctx.fillStyle = COL.rocaCara; ctx.fill(cara);
         ctx.fillStyle = COL.rocaLuz; ctx.fill(luz);
         ctx.fillStyle = COL.copa; ctx.fill(copas);
+      }
+      if (m.caminos && m.caminos.length) { // caminos: un carril continuo por donde pasó la excavadora, con su borde
+        ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        for (const [ancho, color] of [[1.0, COL.caminoBorde], [0.78, P.camino]]) {
+          ctx.strokeStyle = color; ctx.lineWidth = Math.max(1.5, z * ancho); ctx.beginPath();
+          for (const tr of m.caminos) { if (tr.length < 4) continue; ctx.moveTo(ox + tr[0] * z, oy + tr[1] * z); for (let k = 2; k < tr.length; k += 2) ctx.lineTo(ox + tr[k] * z, oy + tr[k + 1] * z); }
+          ctx.stroke();
+        }
+        if (z >= 16) { // rodadas, como las que dejan los vehículos
+          ctx.strokeStyle = COL.caminoBorde; ctx.lineWidth = Math.max(1, z * 0.05); ctx.globalAlpha = 0.55;
+          for (const lado of [-0.2, 0.2]) {
+            ctx.beginPath();
+            for (const tr of m.caminos) {
+              for (let k = 0; k + 3 < tr.length; k += 2) {
+                const dx = tr[k + 2] - tr[k], dy = tr[k + 3] - tr[k + 1], L = Math.hypot(dx, dy) || 1, nx = (-dy / L) * lado, ny = (dx / L) * lado;
+                if (k === 0) ctx.moveTo(ox + (tr[k] + nx) * z, oy + (tr[k + 1] + ny) * z);
+                ctx.lineTo(ox + (tr[k + 2] + nx) * z, oy + (tr[k + 3] + ny) * z);
+              }
+            }
+            ctx.stroke();
+          }
+          ctx.globalAlpha = 1;
+        }
+        ctx.lineCap = 'butt'; ctx.lineJoin = 'miter';
       }
       const chatarra = [];
       ctx.fillStyle = P.mineral; ctx.beginPath();
@@ -742,6 +767,11 @@
       }
       mctx.imageSmoothingEnabled = true;
       mctx.drawImage(cNie, 0, 0, MS, MS);
+      if (m.caminos && m.caminos.length) { // caminos, en el minimapa: una línea fina
+        mctx.strokeStyle = P.camino; mctx.lineWidth = 1.5; mctx.beginPath();
+        for (const tr of m.caminos) { if (tr.length < 4) continue; mctx.moveTo(tr[0] * k, tr[1] * k); for (let q = 2; q < tr.length; q += 2) mctx.lineTo(tr[q] * k, tr[q + 1] * k); }
+        mctx.stroke();
+      }
       for (const p of m.puestos) { // puestos: rombo del color de su dueño
         if (!m.niebla[YO][Math.floor(p.y) * N + Math.floor(p.x)]) continue;
         mctx.fillStyle = p.dueno === YO ? P.yo : p.dueno >= 0 ? P.rival : P.tinta;

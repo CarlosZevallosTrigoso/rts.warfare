@@ -29,7 +29,7 @@
     const mapa = W.generarMapa(semilla, op.N), N = mapa.N, NN = N * N;
     const m = {
       N, semilla, mapa, t: 0, ents: [], porId: new Map(), sigId: 1,
-      ocup: new Int32Array(NN), paso: new Uint8Array(NN), pasoV: new Uint8Array(NN), hayCaminos: false, terrenoV: 0,
+      ocup: new Int32Array(NN), paso: new Uint8Array(NN), pasoV: new Uint8Array(NN), hayCaminos: false, terrenoV: 0, caminos: [], // caminos: el recorrido de cada trazado [x0, y0, x1, y1…], para dibujarlo como un carril
       jug: [nuevoJugador(op.inicio), nuevoJugador(op.inicio)],
       niebla: [new Uint8Array(NN), new Uint8Array(NN)],
       cola: [], colaRutas: [], efectos: [], proy: [], barridos: [], trincheras: new Map(), focos: [[], []], sigFoco: 1, sigMision: 1, minas: [], raros: [], ganador: -1, embarques: [],
@@ -341,7 +341,7 @@
         for (const u of propias(m, cmd)) {
           if (!UNID[u.tipo].traza) continue;
           if (cmd.enc && u.orden === 'trazar') { if (u.trazas.length < 12) u.trazas.push({ x: cmd.x, y: cmd.y }); continue; }
-          limpiar(u); u.obj = 0; u.trazas = []; u.orden = 'trazar'; u.dest = { x: cmd.x, y: cmd.y }; u.ruta = null; u.guardia = false;
+          limpiar(u); u.obj = 0; u.trazas = []; u.trazo = m.caminos.push([u.x, u.y]) - 1; u.orden = 'trazar'; u.dest = { x: cmd.x, y: cmd.y }; u.ruta = null; u.guardia = false;
           pedirRuta(m, u, cmd.x, cmd.y, 0);
         }
         return;
@@ -950,6 +950,8 @@
       J.minerales -= precio; terr[c] = T.CAMINO; m.paso[c] = 1; m.pasoV[c] = 1; m.hayCaminos = true; m.terrenoV++;
     }
     if (u.fallo) { u.fallo = false; u.orden = 'nada'; u.trazas = []; m.efectos.push({ tipo: 'sinCamino', x1: u.x, y1: u.y, j: u.j, t: m.t, corte: true }); return; }
+    const tr = m.caminos[u.trazo]; // el carril: se apunta el recorrido cada poco
+    if (tr && Math.hypot(u.x - tr[tr.length - 2], u.y - tr[tr.length - 1]) > 0.35) { tr.push(u.x, u.y); m.terrenoV++; }
     if (avanzar(m, u) || (!u.ruta && !u.pend)) {
       const sig = u.trazas.shift();
       if (sig) { u.dest = sig; pedirRuta(m, u, sig.x, sig.y, 0); } else u.orden = 'nada';
