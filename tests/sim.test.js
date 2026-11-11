@@ -1153,6 +1153,43 @@ prueba('repetición: las órdenes apuntadas reproducen la misma partida', () => 
   console.log('      ' + rep.length / 2 + ' órdenes en 5000 ticks · ' + Math.round(txt.length / 1024) + ' KB');
 });
 
+prueba('movimiento: los vehículos toman las curvas rodando y el grupo no arranca ni dispara al unísono', () => {
+  const m = W.crearMundo(4242, { N: 128 }), N = m.N;
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  for (let y = 40; y < 90; y++) for (let x = 20; x < 110; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; } }
+  // un tanque mirando al este recibe la orden de ir al norte: gira rodando, sin pararse a pivotar
+  const tq = W.crearUnidad(m, 0, 'tanque', 70 * N + 40); tq.ang = 0;
+  W.orden(m, { t: 'mover', j: 0, ids: [tq.id], x: 70.5, y: 70.5 });
+  for (let i = 0; i < 150; i++) W.tick(m); // primero coge velocidad hacia el este
+  assert.ok(tq.v > 0.08, 'debía ir lanzado');
+  W.orden(m, { t: 'mover', j: 0, ids: [tq.id], x: tq.x + 0.5, y: 50.5 });
+  let parado = 0, maxX = tq.x, x0 = tq.x, n = 0;
+  for (let i = 0; i < 1200 && (i < 3 || tq.ruta || tq.pend); i++) { W.tick(m); n++; if (i > 3 && tq.v < 0.005 && Math.hypot(tq.x - x0 - 0.5, tq.y - 50.5) > 1.5) parado++; maxX = Math.max(maxX, tq.x); }
+  assert.ok(Math.hypot(tq.x - x0 - 0.5, tq.y - 50.5) < 0.6, 'el tanque debía llegar: ' + tq.x.toFixed(1) + ',' + tq.y.toFixed(1));
+  assert.ok(parado <= 2, 'no debía pararse a pivotar en un giro de 90°: ' + parado + ' ticks parado');
+  assert.ok(maxX - x0 > 0.6, 'la curva debía abrirse hacia donde iba: ' + (maxX - x0).toFixed(2));
+  // casi a la espalda sí pivota, y llega igual
+  W.orden(m, { t: 'mover', j: 0, ids: [tq.id], x: tq.x, y: 62.5 });
+  for (let i = 0; i < 1200 && (i < 3 || tq.ruta || tq.pend); i++) W.tick(m);
+  assert.ok(Math.abs(tq.y - 62.5) < 0.6, 'media vuelta y llega: ' + tq.y.toFixed(1));
+  // un grupo no arranca en el mismo tick
+  const us = []; for (let k = 0; k < 8; k++) us.push(W.crearUnidad(m, 0, 'infanteria', (60 + k) * N + 30));
+  W.orden(m, { t: 'mover', j: 0, ids: us.map((u) => u.id), x: 60.5, y: 64.5 });
+  const arranque = us.map(() => -1);
+  for (let i = 0; i < 40; i++) { W.tick(m); us.forEach((u, k) => { if (arranque[k] < 0 && u.v > 0) arranque[k] = i; }); }
+  assert.ok(arranque.every((t) => t >= 0) && new Set(arranque).size >= 3 && Math.max(...arranque) - Math.min(...arranque) <= 8, 'arranque escalonado, pero dentro de unas décimas: ' + arranque);
+  // una sola unidad obedece al instante
+  const sola = W.crearUnidad(m, 0, 'infanteria', 80 * N + 30);
+  W.orden(m, { t: 'mover', j: 0, ids: [sola.id], x: 40.5, y: 80.5 }); for (let i = 0; i < 4; i++) W.tick(m);
+  assert.ok(sola.v > 0, 'una unidad sola no espera');
+  // la cadencia varía un poco de un disparo a otro
+  const rec = new Set(), t1 = W.crearUnidad(m, 0, 'tanque', 85 * N + 60), blanco = W.crearEdificio(m, 1, 'central', 64, 84); blanco.vida = blanco.vidaMax = 99999;
+  W.orden(m, { t: 'atacar', j: 0, ids: [t1.id], obj: blanco.id });
+  let ult = -1; for (let i = 0; i < 1500; i++) { W.tick(m); if (t1.tDisparo !== ult && t1.tDisparo !== undefined) { ult = t1.tDisparo; rec.add(t1.recarga); } }
+  const base = W.ARMAS.canon.recarga;
+  assert.ok(rec.size >= 3 && [...rec].every((r) => r >= base * 0.89 && r <= base * 1.11), 'recargas variadas, dentro de ±10 %: ' + [...rec].sort((p, q) => p - q) + ' (base ' + base + ')');
+});
+
 prueba('puentes: la excavadora cruza el agua, todos lo usan y al caer se cierra', () => {
   const m = W.crearMundo(31, { N: 128 }), N = m.N, J = m.jug[0], T = W.TERRENO;
   m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);

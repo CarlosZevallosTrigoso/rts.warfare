@@ -257,6 +257,8 @@
     for (let k = 0; k < cmd.ids.length; k++) { const u = m.porId.get(cmd.ids[k]); if (u && !u.edif && u.j === cmd.j) { u.retirando = false; u.volver = null; u.noRetira = true; out.push(u); } } // una orden directa anula la retirada (hasta que se repare)
     return out;
   }
+  // En un grupo, cada unidad tarda unas décimas distintas en reaccionar a la orden: no arrancan todas en el mismo instante.
+  function reaccion(m, us) { if (us.length > 1) for (const u of us) u.espera = m.t + (((u.id * 2654435761) >>> 0) % 7); return us; }
   // Puestos de una formación, en coordenadas locales [avance, lateral] respecto del rumbo del grupo.
   function puestos(forma, n) {
     const s = 0.8, out = []; // separación entre puestos, en celdas
@@ -522,10 +524,10 @@
       }
       // cmd.enc (encadenar): la orden se añade a la cola de la unidad en vez de reemplazar lo que hace.
       case 'mover':
-        destinos(m, propias(m, cmd), cmd.x, cmd.y, (u, x, y, ex) => enFormacion(m, u, 'mover', x, y, ex, cmd.enc && u.tipo !== 'cosechadora'), cmd.forma, cmd.rumbo);
+        destinos(m, reaccion(m, propias(m, cmd)), cmd.x, cmd.y, (u, x, y, ex) => enFormacion(m, u, 'mover', x, y, ex, cmd.enc && u.tipo !== 'cosechadora'), cmd.forma, cmd.rumbo);
         return;
       case 'amover':
-        destinos(m, propias(m, cmd).filter((u) => UNID[u.tipo].arma), cmd.x, cmd.y, (u, x, y, ex) => enFormacion(m, u, 'amover', x, y, ex, cmd.enc), cmd.forma, cmd.rumbo);
+        destinos(m, reaccion(m, propias(m, cmd).filter((u) => UNID[u.tipo].arma)), cmd.x, cmd.y, (u, x, y, ex) => enFormacion(m, u, 'amover', x, y, ex, cmd.enc), cmd.forma, cmd.rumbo);
         return;
       case 'investigar': { // una investigación a la vez por tipo de edificio
         const t = TEC[cmd.clave];
@@ -614,22 +616,32 @@
     const alFinal = u.ri === u.ruta.length - 1 && u.fin;
     const carril = !alFinal && d.cat === 'veh' && u.orden !== 'trazar' && m.carrilX && m.carrilX[c] > 0 && m.mapa.terreno[c] >= T.CAMINO; // por camino, los vehículos van por el carril y no por el centro de cada celda
     const tx = alFinal ? u.fin.x : carril ? m.carrilX[c] : (c % N) + 0.5, ty = alFinal ? u.fin.y : carril ? m.carrilY[c] : ((c / N) | 0) + 0.5, dx = tx - u.x, dy = ty - u.y, dd = Math.hypot(dx, dy);
-    let alin = 1;
+    let alin = 1, dif = 0;
     if (dd > 0.4) { // muy cerca del punto ya no exige alinearse: evita quedarse pivotando si lo empujan
       const meta = Math.atan2(dy, dx);
-      let dif = ((meta - u.ang + Math.PI) % TAU + TAU) % TAU - Math.PI;
+      dif = ((meta - u.ang + Math.PI) % TAU + TAU) % TAU - Math.PI;
       if (Math.abs(dif) <= d.giro) { u.ang = meta; dif = 0; } else { u.ang += Math.sign(dif) * d.giro; dif -= Math.sign(dif) * d.giro; }
       alin = Math.cos(dif);
     }
+    // Los vehículos toman las curvas rodando: avanzan hacia donde miran mientras giran, más despacio cuanto más cerrada la curva,
+    // y solo se paran a pivotar si el punto les queda casi a la espalda.
+    const curva = d.cat === 'veh' && !d.aire && dd > 0.4;
     const ultimo = u.ri === u.ruta.length - 1;
     const planea = d.aire && (!u.obj || d.pasada); // un avión en ruta (o atacando de pasada) no se detiene: vira en marcha y da por alcanzado el punto al pasar cerca
-    let obj = planea ? vmax * Math.max(0.6, alin) : alin > 0.6 ? vmax * alin : 0; // muy desalineado: pivota en el sitio
+    let obj = planea ? vmax * Math.max(0.6, alin) : curva ? (Math.abs(dif) < 1.75 ? vmax * Math.max(0.35, alin) : 0) : alin > 0.6 ? vmax * alin : 0; // muy desalineado: pivota en el sitio
+    if (curva && Math.abs(dif) > 0.05) obj = Math.min(obj, Math.max(0.012, (d.giro * dd) / (2 * Math.abs(Math.sin(dif))))); // nunca tan rápido que la curva no alcance el punto
+    if (u.espera > m.t) obj = 0; // aún no ha reaccionado a la orden: se va encarando, pero no arranca
     if (ultimo && !planea) obj = Math.min(obj, 0.02 + dd * 0.12); // frena al llegar
     if (planea && ultimo && dd <= 1.5) { u.ruta = null; return true; }
     u.v = u.v < obj ? Math.min(obj, u.v + d.acel) : Math.max(obj, u.v - d.acel * 2);
     if (ultimo && dd <= 0.25) { u.ruta = null; u.v = 0; return true; } // en el destino basta con quedar cerca
+    if (curva && !ultimo && dd <= Math.max(u.v, 0.3)) { u.ri++; return false; } // rodando no hace falta clavar cada punto intermedio
     if (dd <= Math.max(u.v, 0.02)) { u.x = tx; u.y = ty; u.ri++; return false; }
-    const nx = u.x + (dx / dd) * u.v, ny = u.y + (dy / dd) * u.v;
+    let nx = u.x + (dx / dd) * u.v, ny = u.y + (dy / dd) * u.v;
+    if (curva) { // hacia donde mira; si eso lo saca de lo transitable, recto al punto como antes
+      const hx = u.x + Math.cos(u.ang) * u.v, hy = u.y + Math.sin(u.ang) * u.v;
+      if (hx >= 0 && hy >= 0 && hx < N && hy < N && pisa(Math.floor(hy) * N + Math.floor(hx))) { nx = hx; ny = hy; }
+    }
     if (!d.aire && m.ocup[Math.floor(ny) * N + Math.floor(nx)] && m.t - u.tReplan > 10) { replantear(); return false; } // edificio nuevo en medio del tramo
     u.x = nx; u.y = ny;
     return false;
@@ -909,7 +921,7 @@
   function disparar(m, a, b, arma) {
     const clave = a.edif ? EDIF[a.tipo].arma : UNID[a.tipo].arma, ax = posX(a), ay = posY(a), bx = posX(b), by = posY(b);
     const mult = (!a.edif && UNID[a.tipo].cat === 'inf' && m.jug[a.j].mejoras.perforante ? 1.25 : 1) * (a.edif ? 1 : 1 + ECON.rangoDano * a.rango);
-    a.recarga = arma.recarga; a.tDisparo = m.t;
+    a.recarga = arma.recarga >= 8 ? Math.round(arma.recarga * (0.9 + ((a.id * 31 + m.t * 17) % 21) / 100)) : arma.recarga; a.tDisparo = m.t; // cada arma lleva su compás, ±10 %: un grupo no dispara como un metrónomo
     if (arma.vuelo) { // obús: vuela hasta donde estaba el blanco al disparar
       m.proy.push({ ox: ax, oy: ay, x: ax, y: ay, px: ax, py: ay, tx: bx, ty: by, obj: b.id, j: a.j, arma: clave, mult, de: a.id });
       for (let k = 1; k < (arma.rafaga || 1); k++) { // el resto de la salva cae repartido alrededor, un poco más tarde cada cohete
