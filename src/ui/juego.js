@@ -111,7 +111,7 @@
       COL.yoLado = lado(COL.yo.pared); COL.rivalLado = lado(COL.rival.pared);
       COL.caminoBorde = tono(P.camino, tema === 'clara' ? 0.82 : 1.3);
       COL.rocaCara = tono(P.roca, tema === 'clara' ? 0.62 : 0.55); COL.rocaLuz = tono(P.roca, tema === 'clara' ? 1.35 : 1.3); COL.copa = tono(P.bosque, tema === 'clara' ? 0.74 : 1.5);
-      pintarTerreno(); pintarNiebla();
+      pintarTerreno(); pintarNiebla(); hacerIconos();
     }
 
     function ajustar() {
@@ -884,15 +884,40 @@
     const avisos = [];
     function aviso(txt) { avisos.push({ txt, t0: performance.now() }); if (avisos.length > 4) avisos.shift(); }
 
+    // ---------- dibujos de las casillas ----------
+    // Cada unidad y edificio se dibuja una vez por tema, con la misma ficha que en el mapa, y queda como fondo de su casilla (.i-tipo).
+    function hacerIconos() {
+      try {
+        const lz = document.createElement('canvas'), c = lz.getContext('2d'); lz.width = 120; lz.height = 52;
+        let css = '';
+        for (const tipo in UNID) {
+          const d = UNID[tipo], r = Math.max(14, Math.min(d.aire ? 19 : 22, d.radio * (d.cat === 'inf' ? 125 : 100))); // en píxeles del lienzo, al doble de la casilla
+          c.clearRect(0, 0, 120, 52); c.save(); c.translate(60, 26);
+          W.fichaUnidad(c, { tipo, id: 1, j: YO }, r, 2, COL.yo, { ang: d.aire ? -0.5 : -0.3, angT: -0.3, retro: 0, anda: false, tiempo: 0, carga: 0, cosecha: false, raro: false });
+          c.restore(); css += '.i-' + tipo + '{background-image:url(' + lz.toDataURL() + ')}';
+        }
+        for (const tipo in EDIF) {
+          c.clearRect(0, 0, 120, 52); c.save();
+          W.fichaEdificio(c, { tipo, id: 1, j: YO }, 38, 4, 44, 2, COL.yo, { tiempo: 0, id: 1, vida: 1, deficit: false, activo: true, descarga: 0, ang: -0.6, retro: 0 });
+          c.restore(); css += '.i-' + tipo + '{background-image:url(' + lz.toDataURL() + ')}';
+        }
+        let st = document.getElementById('icoCss');
+        if (!st) { st = document.createElement('style'); st.id = 'icoCss'; document.head.appendChild(st); }
+        st.textContent = css;
+      } catch (e) { console.error('iconos', e); }
+    }
+
     // ---------- tecnología e inteligencia ----------
+    const precioCorto = (d) => { const p = [d.costo ? String(d.costo) : '', d.pet ? d.pet + 'p' : '', d.raros ? d.raros + 'r' : '', d.info ? d.info + 'i' : ''].filter(Boolean); return p.length > 1 ? p.join('+') : precio(d); }; // en la casilla: 1400+100p
+    let hayTecG = false; // hay mejoras que mostrar para lo seleccionado
     const precio = (d) => [d.costo ? String(d.costo) : '', d.pet ? d.pet + ' pet' : '', d.raros ? d.raros + ' rar' : '', d.info ? d.info + ' inf' : ''].filter(Boolean).join(' + ');
     let tiposSel = new Set(); // tipos de edificio propios seleccionados: deciden qué muestra la barra
     const botonesTec = [];
     for (const clave in W.TEC) {
       const t = W.TEC[clave], b = document.createElement('button');
-      b.className = 'btn'; b.type = 'button';
-      b.innerHTML = '<span class="n"></span><span class="d"><span class="c"></span><span class="x" title="Cancelar">×</span></span>';
-      b.title = t.que + ' Se investiga en: ' + EDIF[t.lugar].nombre + '.';
+      b.className = 'cas txt'; b.type = 'button';
+      b.innerHTML = '<span class="n"></span><span class="c"></span><span class="x" title="Cancelar">×</span>';
+      b.title = t.nombre + ' · ' + precio(t) + '. ' + t.que + ' Se investiga en: ' + EDIF[t.lugar].nombre + '.';
       b.addEventListener('click', () => { son.activar(); W.orden(m, { t: 'investigar', j: YO, clave }); });
       const cancelar = (ev) => { ev.preventDefault(); ev.stopPropagation(); W.orden(m, { t: 'cancelarInv', j: YO, clave }); };
       b.addEventListener('contextmenu', cancelar); b.querySelector('.x').addEventListener('click', cancelar);
@@ -902,9 +927,9 @@
     const botonesIntel = [];
     for (const clave in W.INTEL) {
       const it = W.INTEL[clave], b = document.createElement('button');
-      b.className = 'btn'; b.type = 'button';
+      b.className = 'cas txt'; b.type = 'button';
       b.innerHTML = '<span class="n"></span><span class="c"></span>';
-      b.firstChild.textContent = it.nombre; b.title = it.que;
+      b.firstChild.textContent = it.nombre; b.title = it.nombre + '. ' + it.que;
       b.addEventListener('click', () => {
         if (J.nivel < it.nivel || J.info < it.info) return;
         if (clave === 'barrido') modo = 'barrido'; else { W.orden(m, { t: 'intel', j: YO, clave }); son.orden(); }
@@ -923,8 +948,8 @@
         o.b.hidden = !visible;
         if (!visible) continue;
         hayTec = true;
-        let clase = 'btn', txt = precio(t), p = 0;
-        if (enCurso) { clase += ' con-x'; p = enCurso.prog / t.tiempo; txt = Math.floor(p * 100) + '%'; }
+        let clase = 'cas txt', txt = precioCorto(t), p = 0;
+        if (enCurso) { clase += ' hay'; p = enCurso.prog / t.tiempo; txt = Math.floor(p * 100) + '%'; }
         else if (J.inv.some((i) => W.TEC[i.clave].lugar === t.lugar)) clase += ' no';
         else if (!W.puedePagar(J, t)) clase += ' caro';
         if (o.b.className !== clase) o.b.className = clase;
@@ -935,10 +960,9 @@
       const hechas = Object.keys(J.mejoras).length;
       const th = hechas ? '· ' + hechas + (hechas === 1 ? ' mejora' : ' mejoras') : '';
       if ($('hechas').textContent !== th) $('hechas').textContent = th;
-      $('secTec').hidden = !hayTec;
-      $('secIntel').hidden = !tiposSel.has('estacion');
+      hayTecG = hayTec;
       for (const o of botonesIntel) {
-        const falta = J.nivel < o.it.nivel, clase = 'btn' + (falta ? ' no' : J.info < o.it.info ? ' caro' : ''), txt = falta ? 'nivel ' + o.it.nivel : o.it.info + ' inf';
+        const falta = J.nivel < o.it.nivel, clase = 'cas txt' + (falta ? ' no' : J.info < o.it.info ? ' caro' : ''), txt = falta ? 'nivel ' + o.it.nivel : o.it.info + ' inf';
         if (o.b.className !== clase) o.b.className = clase;
         if (o.c.textContent !== txt) o.c.textContent = txt;
       }
@@ -1142,23 +1166,25 @@
       if (prod.length) W.orden(m, { t: 'bucle', j: YO, ids: prod.map((e) => e.id), on: !prod.every((e) => e.bucle) });
     });
     function actualizarCola(eds) {
-      const prod = eds.filter((e) => e.tipo === 'cuartel' || e.tipo === 'fabrica' || e.tipo === 'aerodromo').slice(0, 8);
+      const todos = eds.filter((e) => e.tipo === 'cuartel' || e.tipo === 'fabrica' || e.tipo === 'aerodromo'), prod = todos.slice(0, 4);
       $('secCola').hidden = !prod.length;
       if (!prod.length) { firmaCola = ''; return; }
       const rep = prod.every((e) => e.bucle), tb = 'repetir: ' + (rep ? 'sí' : prod.some((e) => e.bucle) ? 'algunos' : 'no');
       if ($('bucle').textContent !== tb) { $('bucle').textContent = tb; $('bucle').classList.toggle('on', rep); }
-      const firma = prod.map((e) => e.id + ':' + e.cola.join(',') + e.pago.map((p) => (p ? 1 : 0)).join('') + (e.sinAgua ? '!' : '') + (e.sinFondos ? '$' : '')).join('|');
+      const firma = todos.length + '#' + prod.map((e) => e.id + ':' + e.cola.join(',') + e.pago.map((p) => (p ? 1 : 0)).join('') + (e.sinAgua ? '!' : '') + (e.sinFondos ? '$' : '')).join('|');
       if (firma !== firmaCola) {
         firmaCola = firma;
         const num = {};
         $('cola').innerHTML = prod.map((e) => {
           num[e.tipo] = (num[e.tipo] || 0) + 1;
-          const quien = '<span class="quien">' + EDIF[e.tipo].nombre + (prod.length > 1 ? ' ' + num[e.tipo] : '') + (e.tipo === 'aerodromo' ? ' · aviones ' + m.ents.filter((u) => !u.edif && u.casa === e.id).length + '/' + W.ECON.cupoAviones : '') + '</span>';
-          const chips = e.cola.length ? e.cola.map((t, i) => '<button type="button" class="chip' + (i === 0 && (e.sinAgua || e.sinFondos) ? ' espera' : !e.pago[i] ? ' debe' : '') + '" data-id="' + e.id + '" data-i="' + i + '" title="' + (e.pago[i] ? 'Cancelar' : 'Repetido: se pagará al empezarlo. Clic para quitarlo') + '">' + UNID[t].nombre + (i === 0 && e.sinAgua ? ' · falta agua' : i === 0 && e.sinFondos ? ' · faltan recursos' : '') + '</button>').join('') : '<span class="tenue">sin encargos</span>';
+          const estado = e.cola.length && e.sinAgua ? '<span class="mal">falta agua</span>' : e.cola.length && e.sinFondos ? '<span class="mal">sin recursos</span>' : e.tipo === 'aerodromo' ? '<span>aviones ' + m.ents.filter((u) => !u.edif && u.casa === e.id).length + '/' + W.ECON.cupoAviones + '</span>' : '';
+          const quien = '<span class="quien"><span>' + EDIF[e.tipo].nombre + (todos.length > 1 ? ' ' + num[e.tipo] : '') + '</span>' + estado + '</span>';
+          const chips = e.cola.length ? e.cola.slice(0, 5).map((t, i) => '<button type="button" class="chip' + (i === 0 && (e.sinAgua || e.sinFondos) ? ' espera' : !e.pago[i] ? ' debe' : '') + '" data-id="' + e.id + '" data-i="' + i + '" title="' + UNID[t].nombre + ' · ' + (e.pago[i] ? 'clic para cancelar' : 'repetido: se pagará al empezarlo; clic para quitarlo') + '"><i class="ico i-' + t + '"></i></button>').join('') + (e.cola.length > 5 ? '<span class="mas">+' + (e.cola.length - 5) + '</span>' : '') : '<span class="tenue">sin encargos</span>';
           return '<div class="cola-fila" data-id="' + e.id + '">' + quien + chips + '</div>';
-        }).join('');
+        }).join('') + (todos.length > prod.length ? '<div class="tenue">y ' + (todos.length - prod.length) + ' más</div>' : '');
       }
       for (const fila of $('cola').children) { // el primero de cada cola lleva el avance
+        if (!fila.dataset.id) continue;
         const e = m.porId.get(+fila.dataset.id), c = fila.querySelector('.chip');
         if (e && c && e.cola.length) c.style.setProperty('--p', ((e.prog / UNID[e.cola[0]].tiempo) * 100).toFixed(1) + '%');
       }
@@ -1174,13 +1200,15 @@
       for (const e of eds) sel.add(e.id);
       if (ir) { cam.x = eds[0].cx; cam.y = eds[0].cy; limitarCam(); }
     }
+    let pestQuiero = '', pestFirma = '';
+    $('pest').addEventListener('click', (ev) => { const b = ev.target.closest('button'); if (b) pestQuiero = b.dataset.p; });
     const botones = [];
     function boton(cont, tipo, d, esEdif) {
       const b = document.createElement('button');
-      b.className = 'btn'; b.type = 'button';
-      b.innerHTML = '<span class="n"></span><span class="d"><span class="c"></span><span class="x" title="Cancelar">×</span></span>';
+      b.className = 'cas'; b.type = 'button';
+      b.innerHTML = '<i class="ico i-' + tipo + '"></i><span class="n"></span><span class="c"></span><b class="k"></b><span class="x" title="Cancelar uno">×</span>';
       b.querySelector('.n').textContent = d.nombre;
-      b.title = 'Requiere: ' + d.req.map((r) => EDIF[r].nombre).join(', ')
+      b.title = d.nombre + ' · ' + precio(d) + '. Requiere: ' + d.req.map((r) => EDIF[r].nombre).join(', ')
         + (d.sobre ? '. Se coloca sobre un ' + (d.sobre === 'petroleo' ? 'yacimiento de petróleo' : 'campo de conocimiento') + ' explorado, en cualquier parte del mapa.' : '')
         + (d.juntoA ? '. Se coloca junto al agua, en cualquier parte explorada.' : '')
         + (d.agua && d.juntoA ? ' Da ' + d.agua + ' de agua.' : '') + (d.agua && !esEdif ? '. Consume ' + d.agua + ' de agua.' : '');
@@ -1199,7 +1227,7 @@
       b.addEventListener('contextmenu', cancelar);
       b.querySelector('.x').addEventListener('click', cancelar);
       cont.appendChild(b);
-      botones.push({ b, tipo, d, esEdif, c: b.querySelector('.c'), n: b.querySelector('.n') });
+      botones.push({ b, tipo, d, esEdif, c: b.querySelector('.c'), k: b.querySelector('.k') });
     }
     for (const tipo in EDIF) if (tipo !== 'patio') boton($('bEdif'), tipo, EDIF[tipo], true);
     for (const tipo in UNID) boton($('bUnid'), tipo, UNID[tipo], false);
@@ -1214,7 +1242,6 @@
       const eds = edificiosSel(), tipos = new Set(eds.map((e) => e.tipo)), patiosSel = new Set(eds.filter((e) => e.tipo === 'patio').map((e) => e.id));
       tiposSel = tipos;
       let hayUnid = false;
-      $('secEdif').hidden = !tipos.has('patio');
       $('vacio').hidden = eds.length > 0 || sel.size > 0;
       actualizarCola(eds);
       for (const o of botones) {
@@ -1223,14 +1250,14 @@
         if (!visible) continue;
         if (!o.esEdif) hayUnid = true;
         const d = o.d, sinNivel = (d.nivel || 1) > J.nivel, req = W.tieneReq(m, YO, d.req) && !sinNivel;
-        let clase = 'btn', txt = sinNivel ? 'nivel ' + d.nivel : precio(d), p = 0, nombre = d.nombre;
+        let clase = 'cas', txt = sinNivel ? 'nivel ' + d.nivel : precioCorto(d), p = 0, cuenta = '';
         const caro = !W.puedePagar(J, d);
         if (o.esEdif) {
           let n = 0, listas = 0, activa = null; // cada tipo tiene su cola: avanza la primera sin terminar
           for (const a of J.obras) if (a.tipo === o.tipo && (a.listo || patiosSel.has(a.patio))) { n++; if (a.listo) listas++; else if (!activa) activa = a; } // lo de los patios elegidos, y lo ya listo de cualquiera
-          if (n > 1) nombre += ' ×' + n;
-          if (n) clase += ' con-x';
-          if (listas) { clase += ' listo'; txt = 'colocar' + (activa ? ' · ' + Math.floor((activa.prog / d.tiempo) * 100) + '%' : ''); }
+          if (n > 1) cuenta = '×' + n;
+          if (n) clase += ' hay';
+          if (listas) { clase += ' listo'; txt = 'colocar' + (activa ? '·' + Math.floor((activa.prog / d.tiempo) * 100) + '%' : ''); }
           else if (activa) { p = activa.prog / d.tiempo; txt = Math.floor(p * 100) + '%'; }
           else if (!req) clase += ' no';
           else if (caro) clase += ' caro';
@@ -1238,18 +1265,26 @@
           let n = 0, enCurso = null; // lo encargado de este tipo en los edificios seleccionados
           for (const e of eds) if (e.tipo === LUGAR[d.cat]) { for (const t of e.cola) if (t === o.tipo) n++; if (!enCurso && e.cola[0] === o.tipo) enCurso = e; }
           const q = { sinAgua: !!enCurso && enCurso.sinAgua };
-          if (n) { nombre += ' ×' + n; clase += ' con-x'; }
+          if (n) { cuenta = '×' + n; clase += ' hay'; }
           if (enCurso) { p = enCurso.prog / d.tiempo; if (q.sinAgua) txt = 'falta agua'; }
           if (d.aire && J.cuenta.aerodromo) { const c = W.cupoAire(m, YO); if (c.hay >= c.cupo) { txt = 'cupo ' + c.hay + '/' + c.cupo; clase += ' caro'; } }
           if (!req) clase += ' no'; else if (caro || (n && q.sinAgua)) clase += ' caro';
         }
         if (o.b.className !== clase) o.b.className = clase;
         if (o.c.textContent !== txt) o.c.textContent = txt;
-        if (o.n.textContent !== nombre) o.n.textContent = nombre;
+        if (o.k.textContent !== cuenta) o.k.textContent = cuenta;
+        if (o.c.classList.contains('lg') !== txt.length > 11) o.c.classList.toggle('lg', txt.length > 11);
         o.b.style.setProperty('--p', (p * 100).toFixed(1) + '%');
       }
-      $('secUnid').hidden = !hayUnid;
       listarGrupos(); actualizarTec(); actualizarTactil();
+      { // pestañas: una sola rejilla a la vista, la que toca según lo seleccionado (o la que elija el jugador)
+        const disp = { edif: tipos.has('patio'), unid: hayUnid, tec: hayTecG, intel: tipos.has('estacion') }, firma = [...tipos].sort().join(',');
+        if (firma !== pestFirma) { pestFirma = firma; pestQuiero = ''; }
+        const lista = Object.keys(disp).filter((k) => disp[k]), ver = disp[pestQuiero] ? pestQuiero : lista[0] || '';
+        $('pest').hidden = lista.length < 2;
+        for (const b of $('pest').children) { const k = b.dataset.p; if (b.hidden === disp[k]) b.hidden = !disp[k]; b.classList.toggle('on', k === ver); }
+        $('secEdif').hidden = ver !== 'edif'; $('secUnid').hidden = ver !== 'unid'; $('secTec').hidden = ver !== 'tec'; $('secIntel').hidden = ver !== 'intel';
+      }
       let enCurso = 0; // en el patio más cargado de los elegidos
       for (const id of patiosSel) enCurso = Math.max(enCurso, new Set(J.obras.filter((a) => !a.listo && a.patio === id).map((a) => a.tipo)).size);
       const reparto = (enCurso > 1 ? enCurso + ' tipos a la vez en un patio: cada uno a 1/' + enCurso + ' de velocidad' : '') + ((J.cuenta.patio || 0) > 1 ? (enCurso > 1 ? ' · ' : '') + J.cuenta.patio + ' patios: cada uno lleva sus obras' : '');
