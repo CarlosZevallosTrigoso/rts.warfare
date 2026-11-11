@@ -76,24 +76,74 @@ prueba('economía: construir, colocar, cosechar', () => {
   assert.ok(m.jug[0].cosechado > antes + 1000, 'no cosechó: ' + m.jug[0].cosechado);
 });
 
-prueba('obras en paralelo: se reparten la velocidad y se cancelan con reembolso', () => {
-  const m = W.crearMundo(4242), J = m.jug[0], T = W.EDIF.central.tiempo;
+prueba('obras en cola: una tras otra, y se cancelan con reembolso', () => {
+  const m = W.crearMundo(4242), J = m.jug[0], T = W.EDIF.central.tiempo, T2 = W.EDIF.cuartel.tiempo;
   const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
   J.minerales = 5000;
   W.orden(m, { t: 'construir', j: 0, tipo: 'central' }); avanza(T + 2);
-  assert.ok(J.obras[0].listo, 'una sola obra debe ir a ritmo pleno');
+  assert.ok(J.obras[0].listo);
   W.orden(m, { t: 'colocar', j: 0, tipo: 'central', x: m.mapa.bases[0].x + 3, y: m.mapa.bases[0].y - 1 }); avanza(1);
   assert.strictEqual(J.cuenta.central, 1);
   W.orden(m, { t: 'construir', j: 0, tipo: 'central' }); W.orden(m, { t: 'construir', j: 0, tipo: 'cuartel' }); avanza(T + 2);
   assert.strictEqual(J.obras.length, 2);
-  assert.ok(!J.obras[0].listo, 'dos obras a la vez no pueden tardar lo mismo que una');
-  assert.ok(Math.abs(J.obras[0].prog - (T + 1) / 2) <= 1, 'cada obra debe ir a la mitad: ' + J.obras[0].prog);
+  assert.ok(J.obras[0].listo, 'la primera de la cola va a ritmo pleno');
+  assert.ok(J.obras[1].prog <= 2, 'la segunda debía esperar su turno: ' + J.obras[1].prog);
+  avanza(T2);
+  assert.ok(J.obras[1].listo, 'al terminar la primera, sigue la segunda');
+  W.orden(m, { t: 'construir', j: 0, tipo: 'cuartel' }); avanza(5);
   const antes = J.minerales;
   W.orden(m, { t: 'cancelarEdif', j: 0, tipo: 'cuartel' }); avanza(1);
-  assert.strictEqual(J.obras.length, 1);
+  assert.strictEqual(J.obras.length, 2);
+  assert.ok(J.obras.every((o) => o.listo), 'debía cancelarse la que seguía en curso');
   assert.ok(J.minerales >= antes + W.EDIF.cuartel.costo, 'cancelar no devolvió el costo');
-  const p = J.obras[0].prog; avanza(10);
-  assert.ok(Math.abs(J.obras[0].prog - p - 10) < 0.01, 'al quedar una sola obra debe volver al ritmo pleno');
+});
+
+prueba('contraataque, disparo en marcha, curación y atropello', () => {
+  const nuevo = () => { const m = W.crearMundo(4242, { N: 128 }); m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m); return m; };
+  const avanza = (m, n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  // Campo abierto para las pruebas: se limpia una franja del mapa.
+  const franja = (m) => { const N = m.N; for (let y = 56; y < 72; y++) for (let x = 30; x < 100; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; } } };
+  const en = (m, x, y) => y * m.N + x;
+
+  // disparo en marcha: un tanque que solo se mueve hiere al enemigo que le queda a tiro
+  let m = nuevo(); franja(m);
+  let t = W.crearUnidad(m, 0, 'tanque', en(m, 40, 64)), r = W.crearUnidad(m, 1, 'tanque', en(m, 50, 67));
+  r.orden = 'mover'; r.ruta = null; // rival pasivo para aislar el efecto
+  W.orden(m, { t: 'mover', j: 0, ids: [t.id], x: 56.5, y: 64.5 }); avanza(m, 260);
+  assert.ok(r.vida < r.vidaMax, 'el tanque en marcha no disparó');
+  assert.ok(Math.hypot(t.x - 56.5, t.y - 64.5) < 2, 'el tanque debía cumplir su orden de mover');
+
+  // contraataque en grupo: hieren a uno y el compañero ocioso cercano también va por el agresor
+  m = nuevo(); franja(m);
+  const a = W.crearUnidad(m, 0, 'tanque', en(m, 40, 62)), b = W.crearUnidad(m, 0, 'tanque', en(m, 40, 66));
+  const lejos = W.crearUnidad(m, 0, 'tanque', en(m, 34, 70));
+  const torre = W.crearEdificio(m, 1, 'torreta', 46, 61); m.jug[1].dios = true; // a 6: alcanza a "a" pero no a "b"
+  a.obj = 0; avanza(m, 40);
+  assert.ok(a.vida < a.vidaMax, 'la torreta debía herir al primero');
+  assert.strictEqual(b.obj, torre.id, 'el compañero cercano no acudió');
+  avanza(m, 800);
+  assert.ok(!m.porId.has(torre.id), 'entre todos debían destruir al agresor');
+  assert.ok(lejos.vida === lejos.vidaMax);
+
+  // curación: cerca del cuartel la infantería herida se recupera; lejos, no
+  m = nuevo(); franja(m);
+  W.crearEdificio(m, 0, 'cuartel', 40, 62);
+  const cerca = W.crearUnidad(m, 0, 'infanteria', en(m, 43, 63)), aparte = W.crearUnidad(m, 0, 'infanteria', en(m, 70, 63));
+  cerca.vida = 20; aparte.vida = 20; avanza(m, 400);
+  assert.ok(cerca.vida > 40, 'no se curó junto al cuartel: ' + cerca.vida);
+  assert.strictEqual(aparte.vida, 20, 'se curó lejos de todo edificio');
+  // los edificios se reparan solos tras un rato sin recibir daño
+  const cu = m.ents.find((e) => e.tipo === 'cuartel'); cu.vida = 300; cu.tDano = m.t; avanza(m, 250);
+  assert.strictEqual(cu.vida, 300, 'se reparó sin esperar'); avanza(m, 400);
+  assert.ok(cu.vida > 300, 'el edificio no se reparó');
+
+  // atropello: un tanque en marcha aplasta a la infantería enemiga
+  m = nuevo(); franja(m);
+  t = W.crearUnidad(m, 0, 'tanque', en(m, 40, 64));
+  const victima = W.crearUnidad(m, 1, 'infanteria', en(m, 46, 64)), amigo = W.crearUnidad(m, 0, 'infanteria', en(m, 44, 64));
+  W.orden(m, { t: 'mover', j: 0, ids: [t.id], x: 52.5, y: 64.5 }); avanza(m, 110);
+  assert.ok(!m.porId.has(victima.id) && m.jug[0].aplastados === 1, 'el tanque no aplastó a la infantería enemiga');
+  assert.ok(m.porId.has(amigo.id), 'aplastó a su propia infantería');
 });
 
 prueba('varios edificios productivos aceleran la cola, con tope', () => {

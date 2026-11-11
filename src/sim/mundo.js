@@ -58,7 +58,7 @@
     const u = {
       id: m.sigId++, j, tipo, edif: false, x, y, px: x, py: y, vida: d.vida, vidaMax: d.vida,
       orden: 'nada', ruta: null, ri: 0, dest: null, meta: null, pend: null, fallo: false, obj: 0, recarga: 0, fijo: false,
-      ang: Math.atan2(N / 2 - y, N / 2 - x), v: 0, tReplan: -99, // rumbo, velocidad actual
+      ang: Math.atan2(N / 2 - y, N / 2 - x), v: 0, tReplan: -99, tRep: -999, // rumbo, velocidad actual
       carga: 0, est: tipo === 'cosechadora' ? 'buscar' : '', celda: -1, ref: 0, espera: 0, pref: null,
       quiere: 1, cargaTipo: 1, // cosechadora: qué busca y qué lleva (1 minerales, 2 raros)
       cola: [], patrulla: null, explora: false, // órdenes encadenadas, ruta de patrulla, exploración automática
@@ -373,6 +373,7 @@
         const B = us[b];
         let dx = B.x - A.x; if (dx > 1 || dx < -1) continue;
         let dy = B.y - A.y; if (dy > 1 || dy < -1) continue;
+        if (A.j !== B.j && (A.tipo === 'infanteria') !== (B.tipo === 'infanteria')) continue; // un vehículo no esquiva a la infantería enemiga: la arrolla
         const min = ra + UNID[B.tipo].radio;
         let d = Math.hypot(dx, dy);
         if (d >= min) continue;
@@ -405,7 +406,18 @@
     return mejor;
   }
 
-  function herir(b, arma) { b.vida -= arma.dano * arma.vs[b.edif ? 'edificio' : UNID[b.tipo].blindaje]; }
+  function herir(m, b, arma) { b.vida -= arma.dano * arma.vs[b.edif ? 'edificio' : UNID[b.tipo].blindaje]; b.tDano = m.t; }
+  // Contraataque: el atacado y sus compañeros cercanos sin otra tarea van por el agresor.
+  function alertar(m, a, b) {
+    const bx = posX(b), by = posY(b);
+    m.jug[b.j].alerta = { x: bx, y: by, t: m.t };
+    for (let k = 0; k < m.ents.length; k++) {
+      const e = m.ents[k];
+      if (e.j !== b.j || e.edif || e.obj || !UNID[e.tipo].arma || (e.orden !== 'nada' && e.orden !== 'amover')) continue;
+      if (e !== b && Math.hypot(e.x - bx, e.y - by) > 7) continue;
+      e.obj = a.id; e.tRep = m.t; e.ruta = null; e.pend = null;
+    }
+  }
   // Los efectos son avisos para la interfaz (dibujo y sonido); la simulación no los lee.
   function disparar(m, a, b, arma) {
     const clave = a.edif ? EDIF[a.tipo].arma : UNID[a.tipo].arma, ax = posX(a), ay = posY(a), bx = posX(b), by = posY(b);
@@ -414,11 +426,10 @@
       m.proy.push({ x: ax, y: ay, px: ax, py: ay, tx: bx, ty: by, obj: b.id, j: a.j, arma: clave });
       m.efectos.push({ tipo: 'boca', x1: ax, y1: ay, x2: bx, y2: by, j: a.j, t: m.t, arma: clave });
     } else {
-      herir(b, arma);
+      herir(m, b, arma);
       m.efectos.push({ tipo: 'traza', x1: ax, y1: ay, x2: bx, y2: by, j: a.j, t: m.t, arma: clave });
     }
-    m.jug[b.j].alerta = { x: bx, y: by, t: m.t };
-    if (!b.edif && b.orden === 'nada' && !b.obj && UNID[b.tipo].arma) b.obj = a.id;
+    alertar(m, a, b);
   }
   function tickProyectiles(m) {
     for (let k = m.proy.length - 1; k >= 0; k--) {
@@ -426,7 +437,7 @@
       p.px = p.x; p.py = p.y;
       if (dd > arma.vuelo) { p.x += (dx / dd) * arma.vuelo; p.y += (dy / dd) * arma.vuelo; continue; }
       const o = m.porId.get(p.obj), acierto = !!o && o.vida > 0 && dist(p.tx, p.ty, o) <= 0.9; // si el blanco se apartó, falla
-      if (acierto) herir(o, arma);
+      if (acierto) herir(m, o, arma);
       m.efectos.push({ tipo: 'impacto', x1: p.x, y1: p.y, x2: p.tx, y2: p.ty, j: p.j, t: m.t, arma: p.arma, acierto });
       m.proy[k] = m.proy[m.proy.length - 1]; m.proy.pop();
     }
@@ -450,7 +461,8 @@
     if (u.fallo) { u.fallo = false; u.orden = 'nada'; u.obj = 0; limpiar(u); }
     if (u.orden === 'nada' && !u.obj && (u.cola.length || u.patrulla || u.explora)) siguienteOrden(m, u);
     const arma = ARMAS[d.arma];
-    if (u.orden === 'mover') {
+    if (u.orden === 'mover') { // cumple la orden sin desviarse, pero dispara a lo que tenga a tiro
+      if (u.recarga <= 0 && (m.t + u.id) % 4 === 0) { const e = buscarEnemigo(m, u, u.x, u.y, arma.alcance); if (e) disparar(m, u, e, arma); }
       if (avanzar(m, u) || (!u.ruta && !u.pend)) u.orden = 'nada';
       return;
     }
@@ -464,7 +476,7 @@
       const dd = dist(u.x, u.y, o);
       if (dd <= arma.alcance) {
         if (u.recarga <= 0) disparar(m, u, o, arma);
-      } else if (u.orden !== 'atacar' && dd > arma.alcance + 4) {
+      } else if (u.orden !== 'atacar' && dd > arma.alcance + (m.t - u.tRep < 240 ? 14 : 4)) { // al agresor lo persigue más lejos
         u.obj = 0; u.ruta = null; // se alejó demasiado: lo suelta
       } else {
         if (!u.pend && (!u.ruta || (!o.edif && (m.t + u.id) % 20 === 0))) pedirRuta(m, u, posX(o), posY(o), o.edif ? o.tam / 2 + 1 : 1);
@@ -590,11 +602,9 @@
     if (!J.vivo) return;
     const factor = J.uso > J.prod ? 0.5 : 1; // déficit de energía: todo a media velocidad
     if (m.t % ECON.goteoCada === 0) J.minerales += 1; // ingreso mínimo del patio: evita el bloqueo total
-    // Las obras en curso se reparten la velocidad: una sola va a ritmo pleno, dos a la mitad cada una.
-    let activas = 0;
-    for (const o of J.obras) if (!o.listo) activas++;
-    const ritmoObras = factor * W.ritmo(J.cuenta.patio || 0);
-    for (const o of J.obras) if (!o.listo) { o.prog += ritmoObras / activas; if (o.prog >= EDIF[o.tipo].tiempo) o.listo = true; }
+    // Las obras forman una cola: solo avanza la primera sin terminar; las demás esperan su turno.
+    const obra = J.obras.find((o) => !o.listo);
+    if (obra) { obra.prog += factor * W.ritmo(J.cuenta.patio || 0); if (obra.prog >= EDIF[obra.tipo].tiempo) obra.listo = true; }
     for (const cat of ['inf', 'veh']) {
       const q = J.colas[cat];
       if (!q.lista.length) continue;
@@ -616,6 +626,38 @@
         const c = W.cercaLibre(m, fab.cx + (cx / cd) * (fab.tam + 2), fab.cy + (cy / cd) * (fab.tam + 2));
         u.orden = 'mover'; u.dest = { x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 };
         pedirRuta(m, u, u.dest.x, u.dest.y, 0);
+      }
+    }
+  }
+
+  // ---------- curación y atropello ----------
+  // Fuera de combate, las unidades se reparan cerca de su edificio (infantería: cuartel; vehículos: fábrica;
+  // todos: patio) y los edificios se reparan solos, más despacio.
+  function curar(m) {
+    const talleres = [[], []];
+    for (const e of m.ents) if (e.edif && (e.tipo === 'patio' || e.tipo === 'cuartel' || e.tipo === 'fabrica')) talleres[e.j].push(e);
+    for (const e of m.ents) {
+      if (e.vida >= e.vidaMax) continue;
+      const calma = m.t - (e.tDano === undefined ? -999 : e.tDano);
+      if (e.edif) { if (calma > 300) { e.vida = Math.min(e.vidaMax, e.vida + e.vidaMax * ECON.curaEdificio); e.curando = m.t; } continue; }
+      if (calma < 100) continue;
+      const quiere = UNID[e.tipo].cat === 'inf' ? 'cuartel' : 'fabrica';
+      for (const b of talleres[e.j]) {
+        if ((b.tipo !== 'patio' && b.tipo !== quiere) || dist(e.x, e.y, b) > 5) continue;
+        e.vida = Math.min(e.vidaMax, e.vida + e.vidaMax * ECON.curaUnidad); e.curando = m.t;
+        break;
+      }
+    }
+  }
+  // Los vehículos en marcha aplastan a la infantería enemiga que pisan.
+  function aplastar(m) {
+    for (const a of m.ents) {
+      if (a.edif || a.tipo === 'infanteria' || a.v < 0.03) continue;
+      for (const b of m.ents) {
+        if (b.edif || b.tipo !== 'infanteria' || b.j === a.j || b.vida <= 0) continue;
+        const dx = b.x - a.x; if (dx > 0.5 || dx < -0.5) continue;
+        const dy = b.y - a.y; if (dy > 0.5 || dy < -0.5) continue;
+        if (dx * dx + dy * dy < 0.2) { b.vida = 0; m.jug[a.j].aplastados = (m.jug[a.j].aplastados || 0) + 1; }
       }
     }
   }
@@ -658,7 +700,9 @@
       }
     }
     separar(m);
+    aplastar(m);
     tickProyectiles(m);
+    if (m.t % 10 === 0) curar(m);
 
     let muertos = false;
     for (let k = 0; k < m.ents.length; k++) {

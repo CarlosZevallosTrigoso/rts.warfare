@@ -276,7 +276,7 @@
           ctx.beginPath(); ctx.moveTo(rx, ry); ctx.lineTo(rx, ry - 14); ctx.stroke();
           ctx.beginPath(); ctx.moveTo(rx, ry - 14); ctx.lineTo(rx + 9, ry - 10.5); ctx.lineTo(rx, ry - 7); ctx.closePath(); ctx.fill();
         }
-        if (sel.has(e.id) || e.vida < e.vidaMax) barras.push([px, py - 6, t, e.vida / e.vidaMax]);
+        if (sel.has(e.id) || e.vida < e.vidaMax) barras.push([px, py - 6, t, e.vida / e.vidaMax, m.t - e.curando < 12]);
       }
 
       // Líneas de recorrido de las unidades seleccionadas: ruta pendiente, destino y objetivo.
@@ -344,7 +344,7 @@
         });
         ctx.restore();
         if (sel.has(e.id)) { ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(px, py, r * 1.9 + 2, 0, TAU); ctx.stroke(); }
-        if (sel.has(e.id) || e.vida < e.vidaMax) barras.push([px - r * 1.3, py - r * 1.9 - 8, r * 2.6, e.vida / e.vidaMax]);
+        if (sel.has(e.id) || e.vida < e.vidaMax) barras.push([px - r * 1.3, py - r * 1.9 - 8, r * 2.6, e.vida / e.vidaMax, m.t - e.curando < 12]);
       }
 
       // Obuses en vuelo, con estela.
@@ -393,6 +393,10 @@
       for (const b of barras) {
         ctx.fillStyle = P.fondo; ctx.fillRect(b[0], b[1], b[2], 3);
         ctx.fillStyle = b[3] > 0.5 ? P.bien : b[3] > 0.25 ? P.rival : P.mal; ctx.fillRect(b[0], b[1], b[2] * Math.max(0, b[3]), 3);
+        if (b[4]) { // se está curando: una cruz que late junto a la barra
+          const cx = b[0] + b[2] + 6, cy = b[1] + 1.5, k = 3 + Math.sin(performance.now() * 0.008);
+          ctx.strokeStyle = P.bien; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(cx - k, cy); ctx.lineTo(cx + k, cy); ctx.moveTo(cx, cy - k); ctx.lineTo(cx, cy + k); ctx.stroke();
+        }
       }
       const ahora = performance.now();
       for (let k = marcas.length - 1; k >= 0; k--) {
@@ -598,12 +602,20 @@
         let clase = 'btn', txt = d.costo + (d.pet ? ' + ' + d.pet + ' pet' : ''), p = 0, nombre = d.nombre;
         const caro = !W.puedePagar(J, d);
         if (o.esEdif) {
-          let n = 0, listas = 0, avance = 0;
-          for (const a of J.obras) if (a.tipo === o.tipo) { n++; if (a.listo) listas++; else avance = Math.max(avance, a.prog / d.tiempo); }
+          const activa = J.obras.find((a) => !a.listo); // la cola avanza de una en una
+          let n = 0, listas = 0, turno = 0;
+          for (let k = 0, pos = 0; k < J.obras.length; k++) {
+            const a = J.obras[k];
+            if (!a.listo) pos++;
+            if (a.tipo !== o.tipo) continue;
+            n++;
+            if (a.listo) listas++; else if (!turno) turno = pos;
+          }
           if (n > 1) nombre += ' ×' + n;
           if (n) clase += ' con-x';
           if (listas) { clase += ' listo'; txt = 'colocar'; }
-          else if (n) { p = avance; txt = Math.floor(p * 100) + '%'; }
+          else if (n && activa.tipo === o.tipo) { p = activa.prog / d.tiempo; txt = Math.floor(p * 100) + '%'; }
+          else if (n) txt = 'en cola · ' + turno + 'º';
           else if (!req) clase += ' no';
           else if (caro) clase += ' caro';
         } else {
@@ -619,7 +631,7 @@
       }
       listarGrupos();
       const enCurso = J.obras.filter((a) => !a.listo).length;
-      const reparto = enCurso > 1 ? enCurso + ' obras a la vez: cada una a 1/' + enCurso + ' de velocidad' : '';
+      const reparto = enCurso > 1 ? enCurso + ' obras en cola: se construyen de una en una' : '';
       if ($('obras').textContent !== reparto) $('obras').textContent = reparto;
       const nc = J.cuenta.cuartel || 0, nf = J.cuenta.fabrica || 0;
       const bono = (n, uno, varios) => n + ' ' + (n > 1 ? varios : uno) + ' ×' + W.ritmo(n);
