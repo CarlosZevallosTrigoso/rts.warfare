@@ -50,7 +50,10 @@
   #ayuda kbd { font: inherit; color: var(--tinta); }
   #formas { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; }
   #formas .grupo { justify-content: center; }
-  #vender { justify-content: center; margin-top: 4px; }
+  #vender, #trinchera { justify-content: center; margin-top: 4px; }
+  #contexto { position: fixed; left: 8px; bottom: 8px; z-index: 3; background: var(--panel); border: 1px solid var(--linea); border-radius: 2px; padding: 4px 8px; max-width: 340px; font-size: 11px; line-height: 1.5; pointer-events: none; opacity: 0.92; }
+  #contexto kbd { font: inherit; color: var(--tinta); }
+  #contexto b { color: var(--tinta); font-weight: 600; }
   #vender:hover { background: var(--mal); color: #fff; border-color: var(--mal); }
   #version { color: var(--suave); font-size: 10px; text-align: center; }
   #fin { position: fixed; inset: 0 236px 0 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
@@ -83,6 +86,9 @@
       <div><kbd>R</kbd> patrulla · <kbd>E</kbd> explorar sola · <kbd>F</kbd> formación</div>
       <div><kbd>Supr</kbd> demoler el edificio seleccionado</div>
       <div><kbd>G</kbd> guardia: la unidad queda fija · <kbd>C</kbd> colmena sí/no</div>
+      <div><kbd>Z</kbd> atrincherarse (infantería quieta): recibe menos daño</div>
+      <div>tras mover, otro clic derecho cerca: hacia dónde mirar</div>
+      <div>bosque: cubre a la infantería y frena a los vehículos</div>
       <div><b>!</b> pide apoyo · <b>✓</b> acude a la llamada</div>
       <div>la información paga niveles, mejoras e inteligencia</div>
       <div>cuartel o fábrica + clic derecho: punto de reunión</div>
@@ -98,6 +104,7 @@
       <div id="semilla"></div>
       <div>escribe <kbd>god</kbd>: recursos infinitos</div>
   </details>
+  <div id="contexto" class="tenue" hidden></div>
   <aside id="barra">
     <h1 id="titulo" title="Recargar">rts<span>.</span>warfare<b id="dios" hidden>GOD</b><b id="sinColmena" hidden>SIN COLMENA</b></h1>
     <div id="recursos">
@@ -120,6 +127,7 @@
       <button type="button" class="grupo on" data-f="grupo">grupo</button><button type="button" class="grupo" data-f="linea">línea</button><button type="button" class="grupo" data-f="columna">columna</button>
       <button type="button" class="grupo" data-f="cuna">cuña</button><button type="button" class="grupo" data-f="cuadro">cuadro</button></div></section>
     <div id="sel" class="tenue"></div>
+    <button type="button" id="trinchera" class="btn" hidden></button>
     <button type="button" id="vender" class="btn" hidden></button>
     </div>
   </aside>

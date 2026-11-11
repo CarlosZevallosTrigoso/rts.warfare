@@ -450,6 +450,44 @@ prueba('colmena: llamada, red, necesidad, modo fijo y misiones', () => {
   assert.ok(s1.vida < s1.vidaMax);
 });
 
+prueba('trincheras y orientación al llegar', () => {
+  const m = W.crearMundo(4242, { N: 128 }), N = m.N;
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  for (let y = 50; y < 80; y++) for (let x = 30; x < 100; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; } }
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  const cel = (x, y) => y * N + x;
+  // dos soldados iguales bajo el mismo fuego: el atrincherado aguanta bastante más
+  const dentro = W.crearUnidad(m, 0, 'infanteria', cel(50, 60)), fuera = W.crearUnidad(m, 0, 'infanteria', cel(50, 70)), andando = W.crearUnidad(m, 0, 'infanteria', cel(40, 75));
+  W.orden(m, { t: 'mover', j: 0, ids: [andando.id], x: 60.5, y: 76.5 });
+  W.orden(m, { t: 'trinchera', j: 0, ids: [dentro.id, andando.id] }); avanza(W.ECON.cavar - 5);
+  assert.strictEqual(m.trincheras.size, 0, 'cavar lleva su tiempo');
+  avanza(10);
+  assert.ok(m.trincheras.has(cel(50, 60)) && m.trincheras.size === 1, 'solo cava quien estaba quieta');
+  assert.ok(W.enTrinchera(m, dentro) && dentro.guardia && !W.enTrinchera(m, fuera));
+  const t1 = W.crearUnidad(m, 1, 'infanteria', cel(53, 60)), t2 = W.crearUnidad(m, 1, 'infanteria', cel(53, 70));
+  t1.orden = 'atacar'; t1.obj = dentro.id; t2.orden = 'atacar'; t2.obj = fuera.id;
+  for (const u of [dentro, fuera]) u.recarga = 99999; // sin responder, para comparar solo el daño recibido
+  avanza(60);
+  const d1 = 60 - dentro.vida, d2 = 60 - fuera.vida;
+  assert.ok(d2 > 0 && Math.abs(d1 / d2 - W.ECON.trinchera) < 0.05, 'la trinchera debía reducir el daño a ' + W.ECON.trinchera + ': ' + d1 + ' frente a ' + d2);
+  // un tanque no aplasta a quien está en la trinchera, pero sí a quien sale de ella
+  for (const u of [t1, t2]) u.vida = 0;
+  avanza(2); dentro.vida = 60;
+  const tq = W.crearUnidad(m, 1, 'tanque', cel(44, 60)); tq.recarga = 99999;
+  W.orden(m, { t: 'mover', j: 1, ids: [tq.id], x: 56.5, y: 60.5 }); avanza(160);
+  assert.ok(m.porId.has(dentro.id) && !m.jug[1].aplastados, 'la trinchera protege del atropello');
+  tq.vida = 0; avanza(2);
+  // orientación: al llegar, la unidad queda mirando hacia donde se pidió
+  const t = W.crearUnidad(m, 0, 'tanque', cel(40, 55));
+  W.orden(m, { t: 'mover', j: 0, ids: [t.id], x: 60.5, y: 55.5, rumbo: Math.PI / 2 }); avanza(400);
+  assert.ok(Math.hypot(t.x - 60.5, t.y - 55.5) < 0.6 && Math.abs(t.ang - Math.PI / 2) < 0.05, 'debía quedar mirando hacia abajo: ' + t.ang.toFixed(2));
+  const g = [0, 1, 2].map((k) => W.crearUnidad(m, 0, 'tanque', cel(40, 64 + k * 2)));
+  W.orden(m, { t: 'mover', j: 0, ids: g.map((u) => u.id), x: 80.5, y: 66.5, forma: 'linea', rumbo: -Math.PI / 2 }); avanza(700);
+  const ys = g.map((u) => u.y), xs = g.map((u) => u.x);
+  assert.ok(Math.max(...ys) - Math.min(...ys) < 1 && Math.max(...xs) - Math.min(...xs) > 2, 'la línea debía orientarse según el rumbo pedido');
+  assert.ok(g.every((u) => Math.abs(u.ang + Math.PI / 2) < 0.05), 'y todas mirar hacia arriba');
+});
+
 prueba('determinismo: misma semilla, misma partida', () => {
   const corre = () => {
     const m = W.crearMundo(777), a = W.iaCrear(0), b = W.iaCrear(1);

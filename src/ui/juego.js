@@ -122,8 +122,17 @@
     const unidadesSel = () => { const out = []; for (const id of sel) { const e = m.porId.get(id); if (e && !e.edif) out.push(e); } return out; };
     const esquinaColocar = (tipo) => { const t = EDIF[tipo].tam; return { x: Math.round(aMundoX(raton.x) - t / 2), y: Math.round(aMundoY(raton.y) - t / 2) }; };
 
-    const NOMBRE_TERRENO = ['Llano', 'Roca · no se puede pasar', 'Agua · no se puede pasar', 'Bosque · paso lento'];
+    const NOMBRE_TERRENO = ['Llano', 'Roca · no se puede pasar', 'Agua · no se puede pasar', 'Bosque · cubre a la infantería, frena a los vehículos'];
     const sitioPorCelda = new Map(m.mapa.sitios.map((s) => [s.y * N + s.x, s.tipo]));
+    // Lo que el terreno (o la trinchera) le da o le quita a una unidad, en texto.
+    const pct = (k) => Math.round(Math.abs(1 - k) * 100) + ' %';
+    function efectos(e) {
+      if (e.edif) return '';
+      const inf = UNID[e.tipo].cat === 'inf', out = [];
+      if (W.enTrinchera(m, e)) out.push('trinchera: −' + pct(W.ECON.trinchera) + ' daño, no la atropellan');
+      if (W.enBosque(m, e)) out.push(inf ? 'bosque: −' + pct(W.ECON.bosqueCubre) + ' daño' : 'bosque: −' + pct(W.ECON.bosqueVeh) + ' velocidad');
+      return out.join(' · ');
+    }
     function bajoCursor() {
       const wx = aMundoX(raton.x), wy = aMundoY(raton.y);
       if (wx < 0 || wy < 0 || wx >= N || wy >= N) return '';
@@ -133,7 +142,8 @@
       if (e) {
         let t = (e.edif ? EDIF : UNID)[e.tipo].nombre + (e.j === YO ? '' : ' rival') + ' · ' + Math.ceil(e.vida) + '/' + e.vidaMax;
         if (e.tipo === 'cosechadora' && e.j === YO) t += ' · carga ' + e.carga;
-        if (e.guardia && e.j === YO) t += ' · en guardia';
+        if (e.cava > 0) t += ' · cavando'; else if (e.guardia && e.j === YO && !W.enTrinchera(m, e)) t += ' · en guardia';
+        const ef = efectos(e); if (ef) t += ' · ' + ef;
         return t;
       }
       const sitio = sitioPorCelda.get(c);
@@ -246,6 +256,15 @@
         }
       }
       ctx.globalAlpha = 1;
+      // Trincheras: un parapeto de tierra en herradura, abierto por detrás.
+      for (const q of m.trincheras.values()) {
+        if (fuera(q.x, q.y) || !m.niebla[YO][Math.floor(q.y) * N + Math.floor(q.x)]) continue;
+        const sx = ox + q.x * z, sy = oy + q.y * z;
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = '#5f5140'; ctx.lineWidth = Math.max(2, z * 0.2); ctx.beginPath(); ctx.arc(sx, sy, z * 0.44, q.ang - 2.1, q.ang + 2.1); ctx.stroke();
+        if (lod) { ctx.strokeStyle = '#a8977c'; ctx.lineWidth = Math.max(1, z * 0.06); ctx.beginPath(); ctx.arc(sx, sy, z * 0.56, q.ang - 1.9, q.ang + 1.9); ctx.stroke(); }
+        ctx.lineCap = 'butt';
+      }
       const descargando = new Set();
       for (const e of m.ents) if (!e.edif && e.est === 'descargar') descargando.add(e.ref);
       for (const e of m.ents) {
@@ -351,7 +370,10 @@
         });
         ctx.restore();
         if (sel.has(e.id)) { ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(px, py, r * 1.9 + 2, 0, TAU); ctx.stroke(); }
-        if (e.guardia && lod) { // en guardia: una base fija bajo la unidad
+        if (e.cava > 0) { // cavando: el parapeto se va cerrando
+          const fr = 1 - e.cava / W.ECON.cavar;
+          ctx.strokeStyle = '#5f5140'; ctx.lineWidth = Math.max(2, z * 0.16); ctx.beginPath(); ctx.arc(px, py, z * 0.44, e.ang - 2.1 * fr, e.ang + 2.1 * fr); ctx.stroke();
+        } else if (e.guardia && lod && !W.enTrinchera(m, e)) { // en guardia: una base fija bajo la unidad
           ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(px - r * 1.3, py + r * 1.9); ctx.lineTo(px + r * 1.3, py + r * 1.9); ctx.moveTo(px - r * 0.7, py + r * 1.9 + 3); ctx.lineTo(px + r * 0.7, py + r * 1.9 + 3); ctx.stroke();
         }
         if (e.j === YO) { if (m.t - e.llama < 14) signos.push([px, py - r * 1.9 - 20, '!']); else if (m.t - e.oyo < 36) signos.push([px, py - r * 1.9 - 20, '✓']); }
@@ -406,10 +428,19 @@
         const q = senales[i], fr = (performance.now() - q.t0) / q.dur;
         if (fr >= 1) { senales.splice(i, 1); continue; }
         ctx.strokeStyle = q.k === 'onda' ? P.mal : P.bien; ctx.lineWidth = 1.2;
-        if (q.k === 'onda') { ctx.globalAlpha = 0.55 * (1 - fr) * (1 - fr); ctx.beginPath(); ctx.arc(ox + q.x * z, oy + q.y * z, q.r * z * fr, 0, TAU); ctx.stroke(); }
+        if (q.k === 'flecha') { ctx.globalAlpha = 1 - fr; flecha(ox + q.x * z, oy + q.y * z, ox + q.x2 * z, oy + q.y2 * z, P.bien); }
+        else if (q.k === 'onda') { ctx.globalAlpha = 0.55 * (1 - fr) * (1 - fr); ctx.beginPath(); ctx.arc(ox + q.x * z, oy + q.y * z, q.r * z * fr, 0, TAU); ctx.stroke(); }
         else { ctx.globalAlpha = 0.7 * (1 - fr); ctx.setLineDash([2, 4]); ctx.beginPath(); ctx.moveTo(ox + q.x * z, oy + q.y * z); ctx.lineTo(ox + q.x2 * z, oy + q.y2 * z); ctx.stroke(); ctx.setLineDash([]); }
       }
       ctx.globalAlpha = 1;
+      if (giroPend) { // tras ordenar mover: la flecha sigue al cursor y un segundo clic derecho fija la orientación
+        const g = giroPend, wx = aMundoX(raton.x), wy = aMundoY(raton.y), d = Math.hypot(wx - g.x, wy - g.y);
+        if (performance.now() - g.t0 > 3000 || !mismaSel(g.ids)) giroPend = null;
+        else if (raton.dentro && d > 0.4 && d < 9) {
+          ctx.globalAlpha = 0.8; flecha(ox + g.x * z, oy + g.y * z, raton.x, raton.y, P.tinta); ctx.globalAlpha = 1;
+          ctx.fillStyle = P.tinta; ctx.fillText('clic derecho: mirar hacia aquí', raton.x + 14, raton.y - 8);
+        }
+      }
       for (const s of signos) { // ! pide apoyo, ✓ acude
         const k = 6 + (s[2] === '!' ? Math.sin(performance.now() * 0.012) * 1.5 : 0);
         ctx.fillStyle = s[2] === '!' ? P.mal : P.bien; ctx.beginPath(); ctx.arc(s[0], s[1], k + 2, 0, TAU); ctx.fill();
@@ -474,7 +505,7 @@
         ctx.globalAlpha = 1;
       }
       // Etiqueta de lo que hay bajo el cursor.
-      if (raton.dentro && !raton.izq && !raton.arrastre && !raton.medio) {
+      if (raton.dentro && !raton.izq && !raton.arrastre && !raton.medio && !giroPend) {
         const txt = bajoCursor();
         if (txt) {
           const w = ctx.measureText(txt).width + 12, x = Math.min(raton.x + 14, cw - w - 4), y = Math.min(raton.y + 18, ch - 22);
@@ -649,6 +680,40 @@
     const valorVenta = (e) => Math.floor(EDIF[e.tipo].costo * W.ECON.venta * (e.vida / e.vidaMax));
     function vender() { for (const e of vendibles()) W.orden(m, { t: 'vender', j: YO, id: e.id }); }
     $('vender').addEventListener('click', vender);
+    const paraCavar = () => unidadesSel().filter((u) => u.j === YO && UNID[u.tipo].cat === 'inf' && u.orden === 'nada' && !(u.cava > 0) && !W.enTrinchera(m, u));
+    function atrincherar() { const ids = paraCavar().map((u) => u.id); if (ids.length) { W.orden(m, { t: 'trinchera', j: YO, ids }); son.colocar(); } }
+    $('trinchera').addEventListener('click', atrincherar);
+    // Segundo clic derecho tras ordenar mover: fija hacia dónde queda mirando la unidad (o el frente de la formación).
+    let giroPend = null;
+    const mismaSel = (ids) => { const a = unidadesSel(); return a.length === ids.length && a.every((u) => ids.includes(u.id)); };
+    function flecha(x1, y1, x2, y2, color) {
+      const a = Math.atan2(y2 - y1, x2 - x1), k = 9;
+      ctx.strokeStyle = color; ctx.lineWidth = 1.6; ctx.beginPath();
+      ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+      ctx.moveTo(x2 - Math.cos(a - 0.45) * k, y2 - Math.sin(a - 0.45) * k); ctx.lineTo(x2, y2); ctx.lineTo(x2 - Math.cos(a + 0.45) * k, y2 - Math.sin(a + 0.45) * k);
+      ctx.stroke();
+    }
+    // Leyenda de abajo a la izquierda: solo lo que puede hacer lo seleccionado, y lo que el terreno le aporta.
+    function contexto(vivos) {
+      const us = vivos.filter((v) => !v.edif && v.j === YO), eds = vivos.filter((v) => v.edif && v.j === YO), L = [];
+      const k = (t) => '<kbd>' + t + '</kbd>';
+      if (us.length) {
+        const armadas = us.some((u) => UNID[u.tipo].arma);
+        L.push('clic derecho: mover' + (armadas ? ' o atacar' : '') + ' · otro clic cerca: orientar');
+        if (us.some((u) => u.tipo === 'cosechadora')) L.push('clic derecho en una veta: cosechar');
+        L.push((armadas ? k('A') + ' atacar al avanzar · ' : '') + k('R') + ' patrulla · ' + k('E') + ' explorar');
+        L.push(k('S') + ' detener · ' + k('G') + ' guardia · ' + k('Mayús') + ' encadenar');
+        if (us.length > 1) L.push(k('F') + ' formación: ' + forma);
+        if (paraCavar().length) L.push(k('Z') + ' atrincherarse');
+        const n = {}; for (const u of us) { const ef = efectos(u); if (ef) n[ef] = (n[ef] || 0) + 1; }
+        for (const ef in n) L.push('<b>' + (us.length > 1 ? n[ef] + ' en ' : 'en ') + ef + '</b>');
+      }
+      if (eds.some((e) => e.tipo === 'cuartel' || e.tipo === 'fabrica') && !us.length) L.push('clic derecho: punto de reunión');
+      if (vendibles().length) L.push(k('Supr') + ' demoler y recuperar la mitad');
+      if (L.length) L.push(k('Mayús+1…9') + ' guardar grupo · ' + k('Esc') + ' soltar');
+      return L.map((t) => '<div>' + t + '</div>').join('');
+    }
+    let ctxHtml = '';
 
     // ---------- grupos numerados ----------
     const ultimoGrupo = { n: '', t: 0 };
@@ -771,6 +836,11 @@
       const tropas = vivos.filter((v) => !v.edif).length;
       $('secFormas').hidden = tropas < 2;
       const dem = vendibles(), bv = $('vender');
+      const cav = paraCavar().length, bt = $('trinchera');
+      bt.hidden = !cav;
+      if (cav) { const t = 'Atrincherarse · ' + cav + (cav === 1 ? ' soldado' : ' soldados'); if (bt.textContent !== t) bt.textContent = t; }
+      const h = contexto(vivos);
+      if (h !== ctxHtml) { ctxHtml = h; $('contexto').innerHTML = h; $('contexto').hidden = !h; }
       bv.hidden = !dem.length;
       if (dem.length) { const t = 'Demoler · +' + dem.reduce((a, e) => a + valorVenta(e), 0) + ' minerales'; if (bv.textContent !== t) bv.textContent = t; }
     }
@@ -796,11 +866,14 @@
         if (modo === 'barrido') { W.orden(m, { t: 'intel', j: YO, clave: 'barrido', x: wx, y: wy }); son.orden(); modo = null; return; }
         if (modo === 'amover' || modo === 'patrulla') {
           const ids = unidadesSel().map((u) => u.id);
-          if (ids.length) { W.orden(m, { t: modo, j: YO, ids, x: wx, y: wy, enc: ev.shiftKey, forma }); marca(wx, wy, P.mal); son.orden(); }
+          if (ids.length) {
+            W.orden(m, { t: modo, j: YO, ids, x: wx, y: wy, enc: ev.shiftKey, forma }); marca(wx, wy, P.mal); son.orden();
+            if (modo === 'amover' && !ev.shiftKey) giroPend = { tipo: 'amover', ids, x: wx, y: wy, forma, t0: performance.now() };
+          }
           if (!(modo === 'patrulla' && ev.shiftKey)) modo = null; // con Mayús se siguen añadiendo puntos de patrulla
           return;
         }
-        raton.izq = true; raton.x0 = raton.x; raton.y0 = raton.y;
+        raton.izq = true; raton.x0 = raton.x; raton.y0 = raton.y; giroPend = null;
         return;
       }
       if (ev.button === 2) { raton.der = true; raton.arrastre = false; raton.xd = raton.x; raton.yd = raton.y; }
@@ -810,6 +883,17 @@
     function ordenar(wx, wy, enc) {
         if (modo) { modo = null; return; }
         if (wx < 0 || wy < 0 || wx >= N || wy >= N) return;
+        if (giroPend && !enc && performance.now() - giroPend.t0 < 3000 && mismaSel(giroPend.ids)) {
+          const g = giroPend, d = Math.hypot(wx - g.x, wy - g.y), en = entEn(wx, wy);
+          if (d > 0.4 && d < 9 && !(en && en.j !== YO)) { // clic cerca del destino: es la orientación, no otra orden
+            const rumbo = Math.atan2(wy - g.y, wx - g.x);
+            W.orden(m, { t: g.tipo, j: YO, ids: g.ids, x: g.x, y: g.y, forma: g.forma, rumbo });
+            senales.push({ k: 'flecha', x: g.x, y: g.y, x2: g.x + Math.cos(rumbo) * 2.4, y2: g.y + Math.sin(rumbo) * 2.4, t0: performance.now(), dur: 1400 });
+            giroPend = null; son.orden();
+            return;
+          }
+        }
+        giroPend = null;
         const us = unidadesSel();
         if (!us.length) { // con un cuartel o una fábrica seleccionados: punto de reunión
           let puesto = false;
@@ -824,7 +908,10 @@
           W.orden(m, { t: 'cosechar', j: YO, ids: cos, x: wx, y: wy });
           const resto = us.filter((u) => u.tipo !== 'cosechadora').map((u) => u.id);
           if (resto.length) W.orden(m, { t: 'mover', j: YO, ids: resto, x: wx, y: wy, enc, forma });
-        } else W.orden(m, { t: 'mover', j: YO, ids, x: wx, y: wy, enc, forma });
+        } else {
+          W.orden(m, { t: 'mover', j: YO, ids, x: wx, y: wy, enc, forma });
+          if (!enc) giroPend = { tipo: 'mover', ids, x: wx, y: wy, forma, t0: performance.now() };
+        }
         marca(wx, wy, P.bien); son.orden();
     }
     window.addEventListener('mousemove', (ev) => {
@@ -908,6 +995,7 @@
       switch (ev.code) {
         case 'KeyA': if (unidadesSel().length) modo = 'amover'; break;
         case 'KeyR': if (unidadesSel().length) modo = 'patrulla'; break;
+        case 'KeyZ': atrincherar(); break;
         case 'KeyG': { const ids = unidadesSel().map((u) => u.id); if (ids.length) { W.orden(m, { t: 'guardia', j: YO, ids }); son.orden(); } break; }
         case 'KeyC': W.orden(m, { t: 'colmena', j: YO }); aviso(J.colmena ? 'Colmena desactivada: nadie acude solo' : 'Colmena activada'); break;
         case 'KeyF': ponerForma(FORMAS[(FORMAS.indexOf(forma) + 1) % FORMAS.length]); break;

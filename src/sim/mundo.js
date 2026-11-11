@@ -29,7 +29,7 @@
       ocup: new Int32Array(NN), paso: new Uint8Array(NN),
       jug: [nuevoJugador(op.inicio), nuevoJugador(op.inicio)],
       niebla: [new Uint8Array(NN), new Uint8Array(NN)],
-      cola: [], colaRutas: [], efectos: [], proy: [], barridos: [], focos: [[], []], sigFoco: 1, sigMision: 1, minas: [], raros: [], ganador: -1,
+      cola: [], colaRutas: [], efectos: [], proy: [], barridos: [], trincheras: new Map(), focos: [[], []], sigFoco: 1, sigMision: 1, minas: [], raros: [], ganador: -1,
       ruta: W.crearRuta(N),
     };
     for (let i = 0; i < NN; i++) {
@@ -198,11 +198,11 @@
   }
   // Reparte destinos. Sin formación (o 'grupo'): racimo alrededor del punto. Con formación: cada unidad a su
   // puesto, orientada según el rumbo del grupo, y todas al paso de la más lenta para llegar juntas.
-  function destinos(m, us, x, y, fn, forma) {
+  function destinos(m, us, x, y, fn, forma, rumboPedido) {
     if (forma && forma !== 'grupo' && us.length > 1) {
       let sx = 0, sy = 0, tope = Infinity;
       for (const u of us) { sx += u.x; sy += u.y; tope = Math.min(tope, UNID[u.tipo].vel); }
-      const rumbo = Math.atan2(y - sy / us.length, x - sx / us.length), c = Math.cos(rumbo), s = Math.sin(rumbo);
+      const rumbo = rumboPedido === undefined ? Math.atan2(y - sy / us.length, x - sx / us.length) : rumboPedido, c = Math.cos(rumbo), s = Math.sin(rumbo);
       const orden = us.slice().sort((a, b) => (UNID[a.tipo].cat === 'veh' ? 0 : 1) - (UNID[b.tipo].cat === 'veh' ? 0 : 1) || a.id - b.id); // vehículos delante
       const ps = puestos(forma, orden.length);
       for (let i = 0; i < orden.length; i++) {
@@ -223,6 +223,7 @@
       }
       if (c < 0) c = W.cercaLibre(m, x, y);
       fn(us[i], (c % N) + 0.5, ((c / N) | 0) + 0.5);
+      if (rumboPedido !== undefined) us[i].angFin = rumboPedido; // al llegar queda encarada hacia donde se pidió
     }
   }
 
@@ -317,10 +318,10 @@
       }
       // cmd.enc (encadenar): la orden se añade a la cola de la unidad en vez de reemplazar lo que hace.
       case 'mover':
-        destinos(m, propias(m, cmd), cmd.x, cmd.y, (u, x, y) => encargar(m, u, { t: 'mover', x, y }, cmd.enc && u.tipo !== 'cosechadora'), cmd.forma);
+        destinos(m, propias(m, cmd), cmd.x, cmd.y, (u, x, y) => encargar(m, u, { t: 'mover', x, y }, cmd.enc && u.tipo !== 'cosechadora'), cmd.forma, cmd.rumbo);
         return;
       case 'amover':
-        destinos(m, propias(m, cmd).filter((u) => UNID[u.tipo].arma), cmd.x, cmd.y, (u, x, y) => encargar(m, u, { t: 'amover', x, y }, cmd.enc), cmd.forma);
+        destinos(m, propias(m, cmd).filter((u) => UNID[u.tipo].arma), cmd.x, cmd.y, (u, x, y) => encargar(m, u, { t: 'amover', x, y }, cmd.enc), cmd.forma, cmd.rumbo);
         return;
       case 'investigar': { // una investigación a la vez por tipo de edificio
         const t = TEC[cmd.clave];
@@ -347,6 +348,12 @@
       }
       case 'guardia': // modo fijo: no se mueve ni para perseguir ni para acudir; dispara a lo que entre en su alcance
         for (const u of propias(m, cmd)) if (UNID[u.tipo].arma) { limpiar(u); u.orden = 'nada'; u.obj = 0; u.ruta = null; u.pend = null; u.guardia = true; }
+        return;
+      case 'trinchera': // la infantería quieta cava una trinchera en su sitio y se queda en ella
+        for (const u of propias(m, cmd)) if (UNID[u.tipo].cat === 'inf' && u.orden === 'nada') {
+          limpiar(u); u.obj = 0; u.ruta = null; u.pend = null; u.guardia = true;
+          if (!m.trincheras.has(Math.floor(u.y) * m.N + Math.floor(u.x))) u.cava = ECON.cavar;
+        }
         return;
       case 'colmena': J.colmena = !J.colmena; return;
       case 'vender': { // demoler un edificio propio: devuelve parte de su costo, según la vida que le quede
@@ -397,7 +404,7 @@
     const replantear = () => { u.ruta = null; u.v = 0; u.tReplan = m.t; if (u.meta) pedirRuta(m, u, u.meta.x, u.meta.y, u.meta.radio); };
     if (!m.paso[c]) { replantear(); return false; } // alguien construyó en el punto de paso
     const vel = d.vel * (d.cat === 'veh' && m.jug[u.j].mejoras.motores ? 1.15 : 1);
-    const vmax = (u.tope && u.tope < vel ? u.tope : vel) * (m.mapa.terreno[Math.floor(u.y) * N + Math.floor(u.x)] === T.BOSQUE ? 0.6 : 1);
+    const vmax = (u.tope && u.tope < vel ? u.tope : vel) * (UNID[u.tipo].cat !== 'inf' && m.mapa.terreno[Math.floor(u.y) * N + Math.floor(u.x)] === T.BOSQUE ? ECON.bosqueVeh : 1); // el bosque frena a los vehículos, no a la tropa a pie
     const alFinal = u.ri === u.ruta.length - 1 && u.fin;
     const tx = alFinal ? u.fin.x : (c % N) + 0.5, ty = alFinal ? u.fin.y : ((c / N) | 0) + 0.5, dx = tx - u.x, dy = ty - u.y, dd = Math.hypot(dx, dy);
     let alin = 1;
@@ -507,7 +514,16 @@
     return mejor;
   }
 
-  function herir(m, b, arma, mult, de) { b.vida -= arma.dano * (mult || 1) * arma.vs[b.edif ? 'edificio' : UNID[b.tipo].blindaje]; b.tDano = m.t; b.agresor = de; }
+  // Atrincherada: infantería quieta sobre una trinchera. Recibe menos daño y no puede ser atropellada.
+  function enTrinchera(m, b) { return !b.edif && b.orden === 'nada' && UNID[b.tipo].cat === 'inf' && m.trincheras.has(Math.floor(b.y) * m.N + Math.floor(b.x)); }
+  W.enTrinchera = enTrinchera;
+  // El bosque cubre a la infantería (recibe menos daño) y frena a los vehículos.
+  function enBosque(m, b) { return !b.edif && m.mapa.terreno[Math.floor(b.y) * m.N + Math.floor(b.x)] === T.BOSQUE; }
+  W.enBosque = enBosque;
+  function herir(m, b, arma, mult, de) {
+    b.vida -= arma.dano * (mult || 1) * arma.vs[b.edif ? 'edificio' : UNID[b.tipo].blindaje] * (enTrinchera(m, b) ? ECON.trinchera : 1) * (enBosque(m, b) && UNID[b.tipo].cat === 'inf' ? ECON.bosqueCubre : 1);
+    b.tDano = m.t; b.agresor = de;
+  }
   // Contraataque: el atacado va por su agresor. Los compañeros llegan por la colmena (ver más abajo).
   function alertar(m, a, b) {
     m.jug[b.j].alerta = { x: posX(b), y: posY(b), t: m.t };
@@ -649,6 +665,10 @@
     if (u.orden === 'nada' && !u.obj && u.angFin != null) { // en su puesto, se encara como el resto de la formación
       const dif = ((u.angFin - u.ang + Math.PI) % TAU + TAU) % TAU - Math.PI;
       if (Math.abs(dif) <= d.giro) { u.ang = u.angFin; u.angFin = null; } else u.ang += Math.sign(dif) * d.giro;
+    }
+    if (u.cava > 0) { // cavando: al terminar queda la trinchera en esa celda, para quien la ocupe
+      if (u.orden !== 'nada') u.cava = 0;
+      else if (--u.cava <= 0) m.trincheras.set(Math.floor(u.y) * m.N + Math.floor(u.x), { x: Math.floor(u.x) + 0.5, y: Math.floor(u.y) + 0.5, ang: u.ang });
     }
     const arma = ARMAS[d.arma], alc = alcance(m, u, arma);
     if (u.orden === 'mover') { // cumple la orden sin desviarse, pero dispara a lo que tenga a tiro
@@ -875,7 +895,7 @@
     for (const a of m.ents) {
       if (a.edif || UNID[a.tipo].cat === 'inf' || a.v < 0.03) continue;
       for (const b of m.ents) {
-        if (b.edif || UNID[b.tipo].cat !== 'inf' || b.j === a.j || b.vida <= 0) continue;
+        if (b.edif || UNID[b.tipo].cat !== 'inf' || b.j === a.j || b.vida <= 0 || enTrinchera(m, b)) continue;
         const dx = b.x - a.x; if (dx > 0.5 || dx < -0.5) continue;
         const dy = b.y - a.y; if (dy > 0.5 || dy < -0.5) continue;
         if (dx * dx + dy * dy >= 0.2) continue;
