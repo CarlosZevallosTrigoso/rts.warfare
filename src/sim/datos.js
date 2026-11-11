@@ -36,9 +36,13 @@
     aerodromo: { nombre: 'Aeródromo', tam: 3, vida: 900,  costo: 1600, pet: 150, tiempo: 500, energia: -40, vision: 6, req: ['fabrica'], nivel: 2 },
     antiaerea: { nombre: 'Antiaérea', tam: 1, vida: 500,  costo: 600,  tiempo: 300, energia: -20, vision: 9, req: ['cuartel'], arma: 'flak', nivel: 2, giroT: 0.28 },
     estacion:  { nombre: 'Estación',  tam: 2, vida: 500,  costo: 900,  tiempo: 400, energia: -30, vision: 7, req: ['cuartel'], sobre: 'conocimiento', libre: true, da: { rec: 'info', cada: 20 } },
+    // Obras civiles: produce las unidades civiles (el ingeniero civil, que conecta edificios con líneas de servicio, y la excavadora).
+    obras:     { nombre: 'Obras civiles', tam: 2, vida: 600, costo: 500, tiempo: 240, energia: -15, vision: 5, req: ['central'] },
     // Depósito: nodo de la red. Conectado por camino (o por cercanía) a un patio, extiende la cobertura: suministro, energía y dónde se puede construir.
     deposito:  { nombre: 'Depósito',  tam: 2, vida: 600,  costo: 500,  tiempo: 240, energia: -10, vision: 6, req: ['cuartel'], libre: true },
     // Infraestructura: cada tramo de camino. No se construye desde el patio (lo deja la excavadora), no ocupa celdas y no se ataca solo: hay que ordenarlo.
+    // Línea de servicio: cable, tubería y pista de servicio en una pieza. Une edificios a la red; cruza cualquier terreno; no acelera a nadie.
+    linea:     { nombre: 'Línea de servicio', infra: true, linea: true, tam: 1, vida: 180, costo: 16, tiempo: 1, energia: 0, vision: 0, req: [] },
     camino:    { nombre: 'Camino', infra: true, tam: 1, vida: 320, costo: 24, tiempo: 1, energia: 0, vision: 0, req: [] },
   };
 
@@ -74,7 +78,9 @@
     antiaereoMovil: { nombre: 'Antiaéreo móvil', cat: 'veh', vida: 220, vel: 0.09, costo: 700, pet: 40, tiempo: 300, blindaje: 'pesado', arma: 'flakMovil', vision: 8, radio: 0.20, req: ['fabrica'], agua: 2, giro: 0.12, acel: 0.006, giroT: 0.28, nivel: 2, cono: 1.25 },
     // Fase 2a. despliega: se convierte en un patio donde está (orden 'desplegar'); no hay vuelta atrás.
     // traza: con la orden 'trazar' deja camino a su paso (y solo entonces entra al bosque, talándolo).
-    excavadora:  { nombre: 'Excavadora', cat: 'veh', vida: 300, vel: 0.07, costo: 500, pet: 20, tiempo: 240, blindaje: 'pesado', arma: null, vision: 6, radio: 0.24, req: ['fabrica'], agua: 1, giro: 0.12, acel: 0.006, traza: true },
+    excavadora:  { nombre: 'Excavadora', cat: 'veh', vida: 300, vel: 0.07, costo: 500, pet: 20, tiempo: 240, blindaje: 'pesado', arma: null, vision: 6, radio: 0.24, req: ['obras'], lugar: 'obras', agua: 1, giro: 0.12, acel: 0.006, traza: true },
+    // Ingeniero civil: no combate. Con la orden «conectar» va al primer edificio y tiende desde él una línea de servicio hasta el siguiente.
+    civil:       { nombre: 'Ingeniero civil', cat: 'inf', vida: 60, vel: 0.065, costo: 200, tiempo: 160, blindaje: 'ligero', arma: null, vision: 6, radio: 0.11, req: ['obras'], lugar: 'obras', agua: 1, giro: 0.5, acel: 0.02, tiende: true },
     patioMovil:  { nombre: 'Patio móvil', cat: 'veh', vida: 600, vel: 0.05, costo: 2500, pet: 100, tiempo: 600, blindaje: 'pesado', arma: null, vision: 6, radio: 0.30, req: ['fabrica'], agua: 2, giro: 0.07, acel: 0.003, nivel: 2, despliega: true },
     // Fase 2b. sigilo: quieto, no se le ve hasta tenerlo muy cerca. plazas: lleva infantería dentro (órdenes 'cargar' y 'descargar').
     // mando: radio en el que los suyos ven en redondo y giran más rápido; gasta información mientras funciona.
@@ -136,5 +142,5 @@
     cartografia: { nombre: 'Cartografía', info: 200, nivel: 3, que: 'Revela el terreno de todo el mapa.' },
   };
 
-  W.ECON = { inicio: 2500, petInicio: 150, cosecha: 5, descarga: 25, colaMax: 9, separacionColocar: 3, goteoCada: 5, vistaInicial: 22, obrasMax: 8, curaUnidad: 0.01, curaEdificio: 0.0025, curaCosto: 0.15, venta: 0.5, trinchera: 0.45, arco: 0.14, arcoTrinchera: 1.05, visAd: 1.3, visLado: 0.75, visAt: 0.3, cono: 1.05, periferia: 1.83, flanco: 1.25, espalda: 1.5, bosqueVeh: 0.6, bosqueCubre: 0.7, reposta: 12, retiroBajo: 0.3, retiroAlto: 0.9, huida: 300, dia: 9600, diaLuz: 6000, nocheVis: 0.7, caminoVel: 1.6, tramoLargo: 4, enlace: 5, cobNodo: 14, cobEdif: 6, cobCamino: 5, sinSum: 400, sinSumRecarga: 1.5, trazaVel: 0.45, caminoLlano: 4, caminoBosque: 12, caminoAgua: 30, mandoCada: 40, mandoGiro: 1.5, captura: 600, capturaRadio: 2, antenaRadio: 12, depositoCada: 8, tallerRadio: 4, ocultaVe: 2.5, chatarra: 0.25, reparaRadio: 8, reparaVeh: 0.5, curaMedico: 0.35, reparaEdif: 0.8, rangos: [2, 5, 10], rangoDano: 0.1, rangoVida: 0.1, cupoAviones: 5, pasada: 7, orbita: 3.5, fuelCae: 80, cavar: 80, aplasta: 10, bonoProd: 0.5, bonoMax: 2.5 };
+  W.ECON = { inicio: 2500, petInicio: 150, cosecha: 5, descarga: 25, colaMax: 9, separacionColocar: 3, goteoCada: 5, vistaInicial: 22, obrasMax: 8, curaUnidad: 0.01, curaEdificio: 0.0025, curaCosto: 0.15, venta: 0.5, trinchera: 0.45, arco: 0.14, arcoTrinchera: 1.05, visAd: 1.3, visLado: 0.75, visAt: 0.3, cono: 1.05, periferia: 1.83, flanco: 1.25, espalda: 1.5, bosqueVeh: 0.6, bosqueCubre: 0.7, reposta: 12, retiroBajo: 0.3, retiroAlto: 0.9, huida: 300, dia: 9600, diaLuz: 6000, nocheVis: 0.7, caminoVel: 1.6, tramoLargo: 4, enlace: 5, cobNodo: 14, cobEdif: 6, lineaVel: 0.12, lineaCelda: 3, sinSum: 400, sinSumRecarga: 1.5, trazaVel: 0.45, caminoLlano: 4, caminoBosque: 12, caminoAgua: 30, mandoCada: 40, mandoGiro: 1.5, captura: 600, capturaRadio: 2, antenaRadio: 12, depositoCada: 8, tallerRadio: 4, ocultaVe: 2.5, chatarra: 0.25, reparaRadio: 8, reparaVeh: 0.5, curaMedico: 0.35, reparaEdif: 0.8, rangos: [2, 5, 10], rangoDano: 0.1, rangoVida: 0.1, cupoAviones: 5, pasada: 7, orbita: 3.5, fuelCae: 80, cavar: 80, aplasta: 10, bonoProd: 0.5, bonoMax: 2.5 };
 })();

@@ -8,7 +8,7 @@
   // El contexto llega trasladado al centro de la unidad. r = radio en píxeles.
   // e = { ang, angT, retro (0..1), anda, tiempo, carga (0..1), cosecha }
   W.fichaUnidad = function (c, u, r, lod, col, e) {
-    const inf = W.UNID[u.tipo].cat === 'inf', at = u.tipo === 'antitanque', pesado = u.tipo === 'pesado', expl = u.tipo === 'explorador', ing = u.tipo === 'ingeniero', med = u.tipo === 'medico', franco = u.tipo === 'francotirador';
+    const inf = W.UNID[u.tipo].cat === 'inf', at = u.tipo === 'antitanque', pesado = u.tipo === 'pesado', expl = u.tipo === 'explorador', ing = u.tipo === 'ingeniero', med = u.tipo === 'medico', civ = u.tipo === 'civil', franco = u.tipo === 'francotirador';
     if (lod === 0) {
       c.fillStyle = col.base; c.beginPath();
       if (inf) c.arc(0, 0, r, 0, TAU);
@@ -23,6 +23,8 @@
       c.strokeStyle = col.osc; c.lineCap = at ? 'butt' : 'round'; c.lineWidth = Math.max(1.4, R * (at ? 0.55 : 0.3)); // fusil, o tubo lanzacohetes al hombro
       if (ing) { // sin arma: lleva una llave inglesa por delante
         c.lineWidth = Math.max(1.2, R * 0.26); c.beginPath(); c.moveTo(R * 0.3, R * 0.45); c.lineTo(R * 1.25, R * 0.45); c.moveTo(R * 1.25, R * 0.15); c.lineTo(R * 1.25, R * 0.75); c.stroke();
+      } else if (civ) { // sin arma: un rollo de cable al costado
+        c.lineWidth = Math.max(1, R * 0.16); c.beginPath(); c.arc(R * 0.75, R * 0.55, R * 0.32, 0, TAU); c.stroke();
       } else if (med) { // sin arma: un maletín por delante
         c.fillStyle = col.luz; c.fillRect(R * 0.75, R * 0.2, R * 0.6, R * 0.5); c.lineWidth = 1; c.strokeRect(R * 0.75, R * 0.2, R * 0.6, R * 0.5);
       } else if (expl) { // pistola corta
@@ -37,6 +39,7 @@
       c.strokeStyle = col.osc; c.lineWidth = 1; c.stroke();
       c.fillStyle = at ? col.osc : col.luz; c.strokeStyle = at ? col.luz : col.osc; c.beginPath(); c.arc(R * 0.08, 0, R * 0.42, 0, TAU); c.fill(); c.stroke(); // casco
       if (franco) { c.fillStyle = col.osc; c.beginPath(); c.arc(R * 0.08, 0, R * 0.42, Math.PI * 0.5, Math.PI * 1.5); c.fill(); } // capucha
+      if (civ) { c.fillStyle = '#e0b83a'; c.beginPath(); c.arc(R * 0.08, 0, R * 0.42, 0, TAU); c.fill(); c.strokeStyle = col.osc; c.lineWidth = 1; c.stroke(); c.beginPath(); c.moveTo(R * 0.08, -R * 0.42); c.lineTo(R * 0.08, R * 0.42); c.stroke(); } // casco de obra
       if (med) { c.strokeStyle = col.mal; c.lineWidth = Math.max(1.2, R * 0.2); c.beginPath(); c.moveTo(R * 0.08 - R * 0.28, 0); c.lineTo(R * 0.08 + R * 0.28, 0); c.moveTo(R * 0.08, -R * 0.28); c.lineTo(R * 0.08, R * 0.28); c.stroke(); } // cruz en el casco
       if (ing) { c.strokeStyle = col.osc; c.lineWidth = Math.max(1, R * 0.2); c.beginPath(); c.moveTo(R * 0.08 - R * 0.42, 0); c.lineTo(R * 0.08 + R * 0.42, 0); c.stroke(); } // franja del casco
       if (expl) { c.fillStyle = col.osc; c.fillRect(R * 0.3, -R * 0.3, R * 0.35, R * 0.6); } // prismáticos
@@ -391,6 +394,11 @@
       }
       c.fillStyle = tinta; c.beginPath(); c.arc(cx, cy, t * 0.05, 0, TAU); c.fill();
       if (lod === 2) { c.fillStyle = col.osc; c.fillRect(X(0.1), Y(0.76), t * 0.2, t * 0.12); c.fillRect(X(0.74), Y(0.1), t * 0.14, t * 0.14); }
+    } else if (e.tipo === 'obras') { // una grúa: mástil, pluma y contrapeso; y un rollo de cable
+      c.strokeStyle = col.luz; c.lineWidth = lw * 1.6; c.beginPath(); c.moveTo(X(0.3), Y(0.84)); c.lineTo(X(0.3), Y(0.2)); c.lineTo(X(0.84), Y(0.2)); c.stroke();
+      c.lineWidth = lw; c.beginPath(); c.moveTo(X(0.3), Y(0.36)); c.lineTo(X(0.46), Y(0.2)); c.moveTo(X(0.7), Y(0.2)); c.lineTo(X(0.7), Y(0.46)); c.stroke();
+      c.fillStyle = col.osc; c.fillRect(X(0.14), Y(0.16), t * 0.14, t * 0.12); c.fillRect(X(0.64), Y(0.46), t * 0.12, t * 0.1);
+      c.fillStyle = '#e0b83a'; c.beginPath(); c.arc(X(0.66), Y(0.74), t * 0.1, 0, TAU); c.fill(); c.strokeStyle = col.osc; c.stroke();
     } else if (e.tipo === 'deposito') { // cajas apiladas y, si está conectado, el rombo de la red encendido
       c.lineWidth = lw; c.strokeStyle = col.luz; c.fillStyle = col.osc;
       for (const [fx, fy] of [[0.14, 0.16], [0.52, 0.16], [0.14, 0.54]]) { c.fillRect(X(fx), Y(fy), t * 0.32, t * 0.3); c.strokeRect(X(fx), Y(fy), t * 0.32, t * 0.3); if (lod === 2) { c.beginPath(); c.moveTo(X(fx), Y(fy + 0.15)); c.lineTo(X(fx + 0.32), Y(fy + 0.15)); c.stroke(); } }

@@ -83,6 +83,37 @@
     m.ents.push(e); m.porId.set(e.id, e);
     return e;
   }
+  // Un tramo de línea de servicio: va de (x0,y0) a (x1,y1) por encima de lo que haya; no toca el terreno. de / a: lo que tiene en cada extremo.
+  function crearLinea(m, j, x0, y0, x1, y1, de) {
+    const d = EDIF.linea;
+    const e = { id: m.sigId++, j, tipo: 'linea', edif: true, infra: true, linea: true, x: (x0 + x1) / 2 - 0.5, y: (y0 + y1) / 2 - 0.5, tam: 1, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, vida: d.vida, vidaMax: d.vida, recarga: 0, obj: 0, reunion: null, acum: 0, nace: m.t, cola: [], pago: [], prog: 0, sinAgua: false, sinFondos: false, bucle: false, angT: 0, pts: [x0, y0, x1, y1], largo: Math.hypot(x1 - x0, y1 - y0), celdas: [], antes: [], de, a: 0 };
+    m.ents.push(e); m.porId.set(e.id, e); m.redSucia = true;
+    return e;
+  }
+  // El ingeniero civil conectando: va al primer edificio del par y, desde ahí, la línea avanza sola hasta el segundo, tramo a tramo y pagando cada uno.
+  function tickConectar(m, u) {
+    const ob = u.obra, J = m.jug[u.j];
+    const fin = () => { u.orden = 'nada'; u.obra = null; u.ruta = null; };
+    if (!ob) { fin(); return; }
+    while (ob.pares.length) { const a = m.porId.get(ob.pares[0][0]), b = m.porId.get(ob.pares[0][1]); if (a && b && a.vida > 0 && b.vida > 0) break; ob.pares.shift(); ob.prog = 0; ob.ult = 0; }
+    if (!ob.pares.length) { fin(); return; }
+    const a = m.porId.get(ob.pares[0][0]), b = m.porId.get(ob.pares[0][1]);
+    if (dist(u.x, u.y, a) > 2.2) { // aún no ha llegado al edificio de partida
+      if (u.fallo) { u.fallo = false; m.efectos.push({ tipo: 'sinLinea', x1: u.x, y1: u.y, j: u.j, t: m.t, llegar: true }); fin(); return; }
+      if (!u.pend && !u.ruta) pedirRuta(m, u, a.cx, a.cy, a.tam / 2 + 1.2);
+      avanzar(m, u); return;
+    }
+    u.ruta = null; u.v = 0; u.ang = Math.atan2(b.cy - u.y, b.cx - u.x);
+    const L = Math.hypot(b.cx - a.cx, b.cy - a.cy) || 1, ux = (b.cx - a.cx) / L, uy = (b.cy - a.cy) / L;
+    const sig = Math.min(L, (ob.hecho || 0) + 5), precio = Math.ceil((sig - (ob.hecho || 0)) * ECON.lineaCelda); // el siguiente tramo, de hasta 5 celdas
+    if ((ob.prog || 0) < sig) { ob.prog = Math.min(sig, (ob.prog || 0) + ECON.lineaVel); return; }
+    if (J.minerales < precio) { if (!ob.avisado) { ob.avisado = true; m.efectos.push({ tipo: 'sinLinea', x1: u.x, y1: u.y, j: u.j, t: m.t }); } return; } // espera a tener con qué
+    J.minerales -= precio; ob.avisado = false;
+    const h0 = ob.hecho || 0, tr = crearLinea(m, u.j, a.cx + ux * h0, a.cy + uy * h0, a.cx + ux * sig, a.cy + uy * sig, ob.ult || a.id);
+    const prev = ob.ult ? m.porId.get(ob.ult) : null; if (prev) prev.a = tr.id;
+    ob.ult = tr.id; ob.hecho = sig;
+    if (sig >= L) { tr.a = b.id; m.redSucia = true; ob.pares.shift(); ob.prog = 0; ob.hecho = 0; ob.ult = 0; }
+  }
   // Tramo destruido o demolido: sus celdas vuelven a ser lo que eran (el bosque se cierra otra vez a los vehículos).
   function quitarTramo(m, e) {
     const terr = m.mapa.terreno; let cerrado = false;
@@ -209,12 +240,12 @@
     const clasica = m.logistica === false, primero = [-1, -1]; // partida clásica: todo lo de un jugador es una sola red, como antes
     const pad = its.map((e, i) => i), raiz = (i) => { while (pad[i] !== i) { pad[i] = pad[pad[i]]; i = pad[i]; } return i; }, une = (a, b) => { a = raiz(a); b = raiz(b); if (a !== b) pad[Math.max(a, b)] = Math.min(a, b); };
     const cel = m.redCel, puestas = [];
-    for (let i = 0; i < its.length; i++) { const e = its[i]; if (e.infra) for (const c of e.celdas) if (m.tramoEn[c] === e.id) { cel[c] = i + 1; puestas.push(c); } }
-    for (const c of puestas) { // tramos que se tocan
-      const i = cel[c] - 1, x = c % N;
-      for (const d of [1, N, N + 1, N - 1]) { const n = c + d; if (n >= NN || (d !== N && Math.abs((n % N) - x) > 1)) continue; const k = cel[n] - 1; if (k >= 0 && k !== i && its[k].j === its[i].j) une(i, k); }
+    const idx = new Map(); for (let i = 0; i < its.length; i++) idx.set(its[i].id, i);
+    for (let i = 0; i < its.length; i++) { // líneas de servicio: cada tramo se une con lo que tiene a cada extremo (otro tramo o un edificio)
+      const e = its[i]; if (!e.linea) continue;
+      for (const id of [e.de, e.a]) { const k = idx.get(id); if (k !== undefined && its[k].j === e.j) une(i, k); }
     }
-    for (let i = 0; i < its.length; i++) { // edificios: con los caminos que les pasan cerca, y entre sí
+    for (let i = 0; i < its.length; i++) { // edificios cercanos entre sí
       const e = its[i]; if (clasica) { if (primero[e.j] < 0) primero[e.j] = i; else une(i, primero[e.j]); continue; }
       if (e.infra) continue;
       for (let y = Math.max(0, e.y - ECON.enlace); y < Math.min(N, e.y + e.tam + ECON.enlace); y++) for (let x = Math.max(0, e.x - ECON.enlace); x < Math.min(N, e.x + e.tam + ECON.enlace); x++) { const k = cel[y * N + x] - 1; if (k >= 0 && its[k].j === e.j) une(i, k); }
@@ -235,11 +266,10 @@
     for (let i = 0; i < its.length; i++) {
       const e = its[i], g = red.get(raiz(i)), f = m.cob[e.j];
       e.conRed = g.patio; e.red = its[raiz(i)].id;
-      if (e.infra) { if (g.patio) for (const c of e.celdas) if (m.tramoEn[c] === e.id) sella(f, c % N, (c / N) | 0, ECON.cobCamino); continue; }
+      if (e.infra) continue; // ni los caminos ni las líneas dan cobertura: la dan los nodos y los edificios conectados
       e.deficit = g.uso > g.prod && !m.jug[e.j].dios; e.sinLuz = e.deficit && EDIF[e.tipo].energia < 0; // su red no da para todos: a media marcha
       if (g.patio) sella(f, Math.floor(e.cx), Math.floor(e.cy), (e.tipo === 'patio' || e.tipo === 'deposito' ? ECON.cobNodo : ECON.cobEdif) + e.tam / 2);
     }
-    for (const c of puestas) cel[c] = 0;
   }
   W.calcularRed = calcularRed;
   W.cobertura = (m, j) => { if (!m.cob || m.redSucia) calcularRed(m); return m.cob[j]; };
@@ -471,6 +501,14 @@
       case 'trampa': // un interruptor del panel ADMIN
         trampa(m, cmd.j, cmd.clave, cmd.valor);
         return;
+      case 'conectar': { // el ingeniero civil une edificios propios con líneas de servicio: cmd.edifs en orden; con enc, se añade a lo que ya tiene encargado
+        const u = propias(m, cmd).find((q) => UNID[q.tipo].tiende), es = (cmd.edifs || []).map((id) => m.porId.get(id)).filter((e) => e && e.edif && !e.infra && e.j === cmd.j && e.vida > 0);
+        if (!u || es.length < 2) return;
+        const pares = []; for (let k = 0; k + 1 < es.length; k++) if (es[k] !== es[k + 1]) pares.push([es[k].id, es[k + 1].id]);
+        if (cmd.enc && u.orden === 'conectar' && u.obra) { for (const p of pares) if (u.obra.pares.length < 12) u.obra.pares.push(p); return; }
+        limpiar(u); u.obj = 0; u.ruta = null; u.pend = null; u.guardia = false; u.orden = 'conectar'; u.obra = { pares, prog: 0, hecho: 0, ult: 0 };
+        return;
+      }
       case 'trazar': { // la excavadora va hasta el punto dejando camino (con enc, se añade otro tramo)
         for (const u of propias(m, cmd)) {
           if (!UNID[u.tipo].traza) continue;
@@ -542,7 +580,7 @@
         // Va a la cola de un edificio: de los indicados (cmd.ids) o de todos los del tipo, el que la tenga más corta.
         let fab = null;
         for (const e of m.ents) {
-          if (!e.edif || e.j !== cmd.j || e.tipo !== LUGAR[d.cat] || e.vida <= 0 || e.cola.length >= ECON.colaMax) continue;
+          if (!e.edif || e.j !== cmd.j || e.tipo !== W.lugarDe(d) || e.vida <= 0 || e.cola.length >= ECON.colaMax) continue;
           if (cmd.ids && !cmd.ids.includes(e.id)) continue;
           if (!fab || e.cola.length < fab.cola.length) fab = e;
         }
@@ -645,7 +683,7 @@
         return;
       case 'reunion': { // punto de reunión de un cuartel o una fábrica
         const e = m.porId.get(cmd.id);
-        if (e && e.edif && e.j === cmd.j && (e.tipo === 'cuartel' || e.tipo === 'fabrica' || e.tipo === 'aerodromo')) e.reunion = { x: cmd.x, y: cmd.y };
+        if (e && e.edif && e.j === cmd.j && W.PRODUCE[e.tipo]) e.reunion = { x: cmd.x, y: cmd.y };
         return;
       }
       case 'detener':
@@ -1213,6 +1251,7 @@
     if (!d.arma) { // sin arma: solo se mueve; el ingeniero, además, repara lo que tenga cerca
       if (u.orden === 'atacar') { u.orden = 'nada'; u.obj = 0; }
       if (u.orden === 'trazar') { tickTraza(m, u); return; }
+      if (u.orden === 'conectar') { tickConectar(m, u); return; }
       if (u.orden !== 'nada') { u.arregla = 0; if (avanzar(m, u) || (!u.ruta && !u.pend)) u.orden = 'nada'; return; }
       if (d.repara || d.cura) tickIngeniero(m, u);
       return;
@@ -1449,6 +1488,8 @@
   // Fuera de combate, las unidades se reparan cerca de su edificio (infantería: cuartel; vehículos: fábrica;
   // todos: patio) y los edificios se reparan solos, más despacio.
   const LUGAR = { inf: 'cuartel', veh: 'fabrica', aire: 'aerodromo' }; // dónde se produce y se repara cada categoría
+  W.lugarDe = (d) => d.lugar || LUGAR[d.cat]; // las unidades civiles salen de Obras civiles
+  W.PRODUCE = { cuartel: true, fabrica: true, aerodromo: true, obras: true };
   function curar(m) {
     const talleres = [[], []];
     for (const e of m.ents) if (e.edif && (e.tipo === 'patio' || e.tipo === 'cuartel' || e.tipo === 'fabrica' || e.tipo === 'aerodromo')) talleres[e.j].push(e);

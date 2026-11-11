@@ -94,7 +94,7 @@
   #ayuda kbd { font: inherit; color: var(--tinta); }
   #formas { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; }
   #formas .grupo { justify-content: center; }
-  #vender, #trinchera, #retiro, #desplegar, #descargar, #trazar { justify-content: center; margin-top: 4px; }
+  #vender, #trinchera, #retiro, #desplegar, #descargar, #trazar, #conectar { justify-content: center; margin-top: 4px; }
   .chip.debe { border-style: dashed; opacity: .6; }
   /* Táctil: botonera sobre el mapa para lo que con teclado son teclas, y controles más grandes. */
   #tactil { position: fixed; left: 150px; right: 244px; bottom: 8px; z-index: 3; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; align-items: flex-end; pointer-events: none; }
@@ -162,6 +162,7 @@
       <div><kbd>Mayús</kbd>+clic derecho: encadenar órdenes</div>
       <div><kbd>R</kbd> patrulla · <kbd>E</kbd> explorar sola · <kbd>F</kbd> formación</div>
       <div><kbd>L</kbd> vista de la red: cobertura (suministro y dónde construir) y qué está conectado</div>
+      <div><kbd>J</kbd> con un ingeniero civil: conectar edificios con líneas de servicio · <kbd>K</kbd> con la excavadora: camino militar</div>
       <div><kbd>Supr</kbd> demoler el edificio seleccionado</div>
       <div><kbd>G</kbd> guardia: la unidad queda fija · <kbd>C</kbd> colmena sí/no</div>
       <div><kbd>Z</kbd> atrincherarse (infantería quieta): recibe menos daño</div>
@@ -225,7 +226,7 @@
     <div class="fila2"><span>de un solo uso</span><button type="button" class="grupo" data-t="nivel3">nivel 3</button><button type="button" class="grupo" data-t="mejoras">todas las mejoras</button></div>
   </div>
   <div id="tactil" hidden>
-    <button type="button" data-c="KeyA" data-u>atacar al avanzar</button><button type="button" data-c="KeyR" data-u>patrulla</button><button type="button" data-c="KeyS" data-u>detener</button><button type="button" data-c="KeyG" data-u>guardia</button><button type="button" data-c="KeyF" data-u>formación</button><button type="button" data-c="KeyE" data-u>explorar</button><button type="button" data-c="KeyK" hidden>trazar camino</button>
+    <button type="button" data-c="KeyA" data-u>atacar al avanzar</button><button type="button" data-c="KeyR" data-u>patrulla</button><button type="button" data-c="KeyS" data-u>detener</button><button type="button" data-c="KeyG" data-u>guardia</button><button type="button" data-c="KeyF" data-u>formación</button><button type="button" data-c="KeyE" data-u>explorar</button><button type="button" data-c="KeyK" hidden>trazar camino</button><button type="button" data-c="KeyJ" hidden>conectar</button>
     <span class="sep"></span>
     <button type="button" data-c="Escape">soltar</button><button type="button" data-c="KeyB">patio</button><button type="button" data-c="KeyQ">cuarteles</button><button type="button" data-c="KeyV">fábricas</button><button type="button" data-c="KeyX">aeródromos</button><button type="button" data-c="Space">alerta</button><button type="button" data-c="KeyL">red</button><button type="button" data-c="KeyP">pausa</button>
   </div>
@@ -258,7 +259,8 @@
       <button type="button" class="grupo on" data-f="grupo">grupo</button><button type="button" class="grupo" data-f="linea">línea</button><button type="button" class="grupo" data-f="columna">columna</button>
       <button type="button" class="grupo" data-f="cuna">cuña</button><button type="button" class="grupo" data-f="cuadro">cuadro</button></div></section>
     <div id="sel" class="tenue"></div>
-    <button type="button" id="trazar" class="btn" hidden title="La excavadora va hasta el punto que marques dejando camino. Abre el bosque y tiende puentes sobre el agua (más caros); por camino los vehículos van mucho más rápido. Cada tramo se puede seleccionar, demoler, reparar con un ingeniero, y el enemigo puede destruirlo.">Trazar camino</button>
+    <button type="button" id="conectar" class="btn" hidden title="El ingeniero civil une edificios tuyos con una línea de servicio: lleva la energía y los mete en tu red. Cruza cualquier terreno.">Conectar edificios</button>
+    <button type="button" id="trazar" class="btn" hidden title="La excavadora va hasta el punto que marques dejando camino. Camino militar: abre el bosque y tiende puentes sobre el agua (más caros). Solo tus vehículos corren por él. No lleva energía ni red: para eso está el ingeniero civil.">Trazar camino</button>
     <button type="button" id="descargar" class="btn" hidden></button>
     <button type="button" id="desplegar" class="btn" hidden title="Convierte el patio móvil en un patio, donde está. No se puede replegar.">Desplegar patio</button>
     <button type="button" id="retiro" class="btn" hidden title="Con poca vida, la unidad se va sola a reparar y luego vuelve a su puesto."></button>

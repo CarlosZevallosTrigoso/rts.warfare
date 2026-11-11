@@ -1219,13 +1219,23 @@ prueba('la red: cobertura, territorio, energía por red, depósito y suministro'
   const dep = W.crearEdificio(m, 0, 'deposito', lejos - dir * 4, py + 2); avanza(2);
   assert.ok(!dep.conRed && !cob()[cel(lejos, py)], 'el depósito sin conexión no sirve');
   // …hasta que un camino lo une a la base: entonces da cobertura, y la torreta de al lado recibe energía
-  const ex = W.crearUnidad(m, 0, 'excavadora', cel(px + dir * 7, py));
-  W.orden(m, { t: 'trazar', j: 0, ids: [ex.id], x: lejos - dir * 5 + 0.5, y: py + 0.5 }); avanza(2);
+  // (un camino militar no conecta nada: solo sirve para moverse)
+  const ex = W.crearUnidad(m, 0, 'excavadora', cel(px + dir * 7, py - 1));
+  W.orden(m, { t: 'trazar', j: 0, ids: [ex.id], x: lejos - dir * 5 + 0.5, y: py - 0.5 }); avanza(2);
   for (let i = 0; i < 8000 && ex.orden === 'trazar'; i++) W.tick(m);
   avanza(3);
-  assert.ok(dep.conRed && tLejos.conRed && !tLejos.sinLuz, 'con el camino, depósito y torreta entran en la red y hay energía');
-  assert.ok(cob()[cel(lejos, py)] && cob()[cel(medio, py + 3)] && !cob()[cel(px + dir * 17, py + 10)], 'cobertura alrededor del depósito y a lo largo del camino, pero no lejos de él');
-  assert.ok(W.puedeColocar(m, 0, 'central', medio, py + 3), 'junto al camino conectado ya se puede construir');
+  assert.ok(!dep.conRed && tLejos.sinLuz, 'el camino militar no lleva la red');
+  // el ingeniero civil tiende una línea de servicio de la central al depósito
+  const min0 = J.minerales, civil = W.crearUnidad(m, 0, 'civil', cel(px + dir * 7, py + 2));
+  W.orden(m, { t: 'conectar', j: 0, ids: [civil.id], edifs: [central.id, dep.id] }); avanza(2);
+  for (let i = 0; i < 4000 && civil.orden === 'conectar'; i++) W.tick(m);
+  avanza(3);
+  const lineas = m.ents.filter((e) => e.linea);
+  assert.ok(lineas.length >= 4 && lineas.every((e) => e.conRed), 'la línea queda tendida en tramos: ' + lineas.length);
+  assert.ok(min0 - J.minerales >= 20 && min0 - J.minerales < 400, 'y se paga (descontado lo que entra mientras tanto): ' + (min0 - J.minerales));
+  assert.ok(dep.conRed && tLejos.conRed && !tLejos.sinLuz, 'con la línea, depósito y torreta entran en la red y hay energía');
+  assert.ok(cob()[cel(lejos, py)] && cob()[cel(medio, py + 3)] && !cob()[cel(px + dir * 17, py + 10)], 'cobertura alrededor del depósito, pero no lejos de él');
+  assert.ok(W.puedeColocar(m, 0, 'central', medio, py + 3), 'en la cobertura del depósito ya se puede construir');
   // suministro: una unidad fuera de la cobertura acaba disparando más lento y no acude; dentro se recupera
   const fuera = W.crearUnidad(m, 0, 'tanque', cel(px + dir * 17, py + 10)), dentro = W.crearUnidad(m, 0, 'tanque', cel(medio, py + 2));
   avanza(450);
@@ -1238,9 +1248,9 @@ prueba('la red: cobertura, territorio, energía por red, depósito y suministro'
   W.orden(m, { t: 'mover', j: 0, ids: [fuera.id], x: medio + 0.5, y: py + 1.5 }); avanza(500);
   assert.ok(!(fuera.sinSum >= W.ECON.sinSum), 'de vuelta en la red, se recupera: ' + fuera.sinSum);
   // cortar el camino deja otra vez aislado el extremo
-  const tramos = m.ents.filter((e) => e.infra).sort((a, b) => Math.abs(a.cx - medio) - Math.abs(b.cx - medio));
+  const tramos = m.ents.filter((e) => e.linea).sort((a, b) => Math.abs(a.cx - medio) - Math.abs(b.cx - medio));
   tramos.slice(0, 2).forEach((e) => { e.vida = 0; }); avanza(3);
-  assert.ok(!dep.conRed && tLejos.sinLuz && !cob()[cel(lejos, py)], 'cortado el camino, el depósito y su zona quedan fuera de la red');
+  assert.ok(!dep.conRed && tLejos.sinLuz && !cob()[cel(lejos, py)], 'cortada la línea, el depósito y su zona quedan fuera de la red');
   // en partida clásica nada de esto aplica
   const c = W.crearMundo(31, { N: 128 }), pc = c.ents.find((e) => e.j === 0 && e.tipo === 'patio'), suelta = W.crearEdificio(c, 0, 'torreta', Math.floor(pc.cx) + (pc.cx < 64 ? 30 : -30), Math.floor(pc.cy));
   W.crearEdificio(c, 0, 'central', Math.floor(pc.cx) + 4, Math.floor(pc.cy) + 4); for (let i = 0; i < 3; i++) W.tick(c);
@@ -1460,7 +1470,7 @@ if (!process.env.RAPIDO) prueba('fase 2c: los cinco estilos de rival juegan medi
     res[estilo] = { aviones, torres, patios, puestos, primera: +(primera / 1200).toFixed(1), fin: +(m.t / 1200).toFixed(1), ganador: m.ganador };
     console.log('      ' + estilo + ': ' + JSON.stringify(res[estilo]));
   }
-  assert.ok(res.aereo.aviones >= 1 && res.aereo.aviones > res.asalto.aviones, 'el aéreo debía apostar por la aviación'); // con la red el nivel 2 llega más tarde (hay que conectar la estación): en media hora caben menos aviones que antes
+  assert.ok(res.aereo.aviones >= 3 && res.aereo.aviones > res.asalto.aviones, 'el aéreo debía apostar por la aviación');
   assert.ok(res.defensivo.torres > res.asalto.torres, 'el defensivo debía levantar más torres que el de asalto');
   assert.ok(res.asalto.primera > 0 && res.asalto.primera < res.defensivo.primera, 'el de asalto debía atacar antes que el defensivo');
   assert.ok(Object.values(res).some((r) => r.patios > 1), 'algún estilo debía fundar una segunda base');

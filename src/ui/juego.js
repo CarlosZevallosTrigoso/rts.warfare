@@ -145,7 +145,7 @@
 
     // Volumen: la vista sigue siendo cenital, pero cada cosa tiene altura. Los edificios muestran su pared sur y el tejado
     // se dibuja desplazado hacia arriba; las unidades llevan un canto; la roca y el agua, un escalón.
-    const ALTO = { patio: 0.3, central: 0.36, refineria: 0.32, bomba: 0.2, cuartel: 0.26, extractor: 0.3, fabrica: 0.34, torreta: 0.22, torreCanon: 0.36, aerodromo: 0.08, antiaerea: 0.22, estacion: 0.26, deposito: 0.22 };
+    const ALTO = { patio: 0.3, central: 0.36, refineria: 0.32, bomba: 0.2, cuartel: 0.26, extractor: 0.3, fabrica: 0.34, torreta: 0.22, torreCanon: 0.36, aerodromo: 0.08, antiaerea: 0.22, estacion: 0.26, deposito: 0.22, obras: 0.28 };
     function entEn(wx, wy, holgura) { // holgura: margen extra (en celdas) para acertar con el dedo
       let mejor = null, md = Infinity;
       for (const e of m.ents) {
@@ -196,7 +196,7 @@
         if (!e.edif && UNID[e.tipo].mando && e.j === YO) t += e.sinInfo ? ' · sin información: apagado' : ' · mando activo';
         if (!e.edif && e.j === YO && W.oculta(m, e)) t += ' · oculta';
         if (e.retirando) t += ' · se retira a reparar'; else if (e.huye > m.t) t += ' · huye';
-        if (e.j === YO && conRed) { if (e.edif && !e.infra && !e.conRed) t += e.tipo === 'deposito' ? ' · sin conexión: llévale un camino desde tu base' : ' · fuera de la red'; if (e.infra && !e.conRed) t += ' · no llega a tu base'; if (e.sinLuz) t += ' · sin energía: a media marcha'; if (!e.edif && e.sinSum >= W.ECON.sinSum) t += ' · sin suministro: dispara más lento y no se repara'; }
+        if (e.j === YO && conRed) { if (e.edif && !e.infra && !e.conRed) t += e.tipo === 'deposito' ? ' · sin conexión: únelo a tu base con un ingeniero civil' : ' · fuera de la red'; if (e.linea && !e.conRed) t += ' · no llega a tu red'; if (e.sinLuz) t += ' · sin energía: a media marcha'; if (!e.edif && e.sinSum >= W.ECON.sinSum) t += ' · sin suministro: dispara más lento y no se repara'; }
         if (e.tipo === 'aerodromo' && e.j === YO) t += ' · aviones ' + m.ents.filter((u) => !u.edif && u.casa === e.id).length + '/' + W.ECON.cupoAviones;
         const ef = efectos(e); if (ef) t += ' · ' + ef;
         return t;
@@ -295,7 +295,7 @@
         ctx.fillStyle = COL.copa; ctx.fill(copas);
       }
       if (conRed && (verRed || modo === 'colocar')) { if (redVista !== m.redV) pintarRed(); ctx.drawImage(cRed, ox, oy, N * z, N * z); } // la cobertura: dónde hay suministro y dónde se puede construir
-      const tramos = m.ents.filter((e) => e.infra); // caminos: cada tramo es una pieza de infraestructura, dibujada como un carril continuo con su borde
+      const infra = m.ents.filter((e) => e.infra), tramos = infra.filter((e) => !e.linea), lineas = infra.filter((e) => e.linea); // caminos: cada tramo es una pieza de infraestructura, dibujada como un carril continuo con su borde
       if (tramos.length) {
         const linea = (p) => { ctx.moveTo(ox + p[0] * z, oy + p[1] * z); if (p.length < 4) ctx.lineTo(ox + p[0] * z + 0.01, oy + p[1] * z); for (let k = 2; k < p.length; k += 2) ctx.lineTo(ox + p[k] * z, oy + p[k + 1] * z); };
         ctx.lineJoin = 'round'; ctx.lineCap = 'butt'; // los puentes: un tablero más ancho y oscuro debajo del carril
@@ -324,11 +324,6 @@
           }
           ctx.globalAlpha = 1;
         }
-        if (conRed && verRed) { // en la vista de la red, los caminos propios que no llegan a la base se marcan en rojo
-          ctx.strokeStyle = P.mal; ctx.lineWidth = Math.max(1.5, z * 0.12); ctx.setLineDash([6, 5]); ctx.beginPath();
-          for (const e of tramos) if (e.j === YO && !e.conRed) linea(e.pts);
-          ctx.stroke(); ctx.setLineDash([]);
-        }
         for (const e of tramos) { // el tramo dañado se oscurece; el seleccionado se marca, con su barra de vida
           const dano = 1 - e.vida / e.vidaMax, elegido = sel.has(e.id);
           if (dano > 0.02) { ctx.strokeStyle = 'rgba(40,30,20,' + (0.15 + dano * 0.5).toFixed(2) + ')'; ctx.lineWidth = Math.max(1.5, z * 0.78); ctx.lineCap = 'butt'; ctx.beginPath(); linea(e.pts); ctx.stroke(); ctx.lineCap = 'round'; }
@@ -340,6 +335,25 @@
           }
         }
         ctx.lineCap = 'butt'; ctx.lineJoin = 'miter';
+      }
+      if (lineas.length) { // líneas de servicio: un trazo fino con sus postes; en rojo las propias que no llegan a la red
+        const ancho = Math.max(1, z * (verRed ? 0.14 : 0.08));
+        for (const pasada of [0, 1]) {
+          ctx.strokeStyle = pasada ? P.mal : P.tinta; ctx.globalAlpha = pasada ? 0.9 : verRed ? 0.85 : 0.5; ctx.lineWidth = ancho; ctx.beginPath();
+          for (const e of lineas) { if ((e.j === YO && conRed && !e.conRed) !== !!pasada) continue; const p = e.pts; ctx.moveTo(ox + p[0] * z, oy + p[1] * z); ctx.lineTo(ox + p[2] * z, oy + p[3] * z); }
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+        if (z >= 9) { // postes: uno por celda, más o menos
+          ctx.fillStyle = P.tinta; ctx.beginPath();
+          for (const e of lineas) { const p = e.pts, n = Math.max(1, Math.round(e.largo)); for (let k = 0; k <= n; k += 2) { const x = ox + (p[0] + ((p[2] - p[0]) * k) / n) * z, y = oy + (p[1] + ((p[3] - p[1]) * k) / n) * z; ctx.moveTo(x + z * 0.09, y); ctx.arc(x, y, Math.max(1.2, z * 0.09), 0, TAU); } }
+          ctx.fill();
+        }
+        for (const e of lineas) { // la seleccionada o dañada, con su barra de vida
+          const dano = 1 - e.vida / e.vidaMax, elegido = sel.has(e.id);
+          if (elegido) { const p = e.pts; ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.moveTo(ox + p[0] * z, oy + p[1] * z - 4); ctx.lineTo(ox + p[2] * z, oy + p[3] * z - 4); ctx.stroke(); ctx.setLineDash([]); }
+          if (elegido || dano > 0.02) { const bx = ox + e.cx * z, by = oy + e.cy * z - z * 0.5, w = Math.max(14, z); ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(bx - w / 2, by, w, 3); ctx.fillStyle = dano > 0.6 ? P.mal : e.j === YO ? P.yo : P.rival; ctx.fillRect(bx - w / 2, by, w * (1 - dano), 3); }
+        }
       }
       const chatarra = [];
       ctx.fillStyle = P.mineral; ctx.beginPath();
@@ -802,6 +816,15 @@
         ctx.fillStyle = P.tinta;
         ctx.fillText(pausa ? 'pausa' : modo === 'amover' ? 'atacar al avanzar: elige destino' : modo === 'barrido' ? 'barrido: elige la zona a revelar' : 'patrulla: elige el punto (con Mayús añades más)', 12, ch - 14);
       }
+      if (modo === 'conectar' && raton.dentro) { // la línea que saldría del último edificio marcado, y lo que costaría
+        const a = conectaDesde ? m.porId.get(conectaDesde) : null, wx = aMundoX(raton.x), wy = aMundoY(raton.y), e = entEn(wx, wy), vale = e && e.edif && !e.infra && e.j === YO;
+        if (a) {
+          const bx = vale ? e.cx : wx, by = vale ? e.cy : wy;
+          ctx.strokeStyle = vale && e !== a ? P.bien : P.tinta; ctx.lineWidth = 2; ctx.globalAlpha = 0.6; ctx.setLineDash([6, 4]);
+          ctx.beginPath(); ctx.moveTo(ox + a.cx * z, oy + a.cy * z); ctx.lineTo(ox + bx * z, oy + by * z); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+          ctx.fillStyle = P.tinta; ctx.fillText(vale && e !== a ? 'línea de servicio: ' + Math.ceil(Math.hypot(bx - a.cx, by - a.cy) * W.ECON.lineaCelda) + ' minerales' : 'toca el edificio que quieres unir', raton.x + 14, raton.y - 8);
+        } else { ctx.fillStyle = P.tinta; ctx.fillText('conectar: toca el edificio de partida', raton.x + 14, raton.y - 8); }
+      }
       if (modo === 'trazar' && raton.dentro) { // por dónde irá el camino y cuánto costará, a ojo: en rojo si el destino no vale
         const ex = unidadesSel().find((u) => UNID[u.tipo].traza);
         if (ex) {
@@ -859,7 +882,7 @@
       mctx.drawImage(cNie, 0, 0, MS, MS);
       { // caminos, en el minimapa: una línea fina
         mctx.strokeStyle = P.camino; mctx.lineWidth = 1.5; mctx.beginPath();
-        for (const e of m.ents) { if (!e.infra) continue; const tr = e.pts; mctx.moveTo(tr[0] * k, tr[1] * k); for (let q = 2; q < tr.length; q += 2) mctx.lineTo(tr[q] * k, tr[q + 1] * k); }
+        for (const e of m.ents) { if (!e.infra || e.linea) continue; const tr = e.pts; mctx.moveTo(tr[0] * k, tr[1] * k); for (let q = 2; q < tr.length; q += 2) mctx.lineTo(tr[q] * k, tr[q + 1] * k); }
         mctx.stroke();
       }
       for (const p of m.puestos) { // puestos: rombo del color de su dueño
@@ -910,6 +933,8 @@
           if (n++ < 6) son.impacto(cerca(d.x2, d.y2), paneo(d.x2));
         } else if (d.tipo === 'explorado') {
           if (d.j === YO && performance.now() - (avisoExpl || 0) > 3000) { avisoExpl = performance.now(); aviso(J.tr.mapa ? 'Nada que explorar: el mapa está revelado desde ADMIN' : 'No queda nada por explorar'); }
+        } else if (d.tipo === 'sinLinea') {
+          if (d.j === YO) aviso(d.llegar ? 'El ingeniero civil no puede llegar a ese edificio' : 'Sin minerales: la línea de servicio espera');
         } else if (d.tipo === 'sinCamino') {
           if (d.j === YO) aviso(d.corte ? 'La excavadora no encuentra por dónde seguir' : 'Sin minerales: la excavadora se detiene');
         } else if (d.tipo === 'captura') {
@@ -921,6 +946,7 @@
           if (d.edif && d.clase === 'patio' && d.j === YO && m.ganador < 0) aviso('¡Has perdido un patio!');
           else if (d.edif && d.clase === 'patio' && m.ganador < 0) aviso('Patio enemigo destruido');
           else if (d.clase === 'camino' && d.j === YO) aviso('Te han cortado un camino');
+          else if (d.clase === 'linea' && d.j === YO) aviso('Te han cortado una línea de servicio');
           if (!enVista) continue;
           if (d.edif) {
             for (let k = 0; k < d.tam * 2; k++) estallido(d.x2 + (azar() - 0.5) * d.tam * 0.8, d.y2 + (azar() - 0.5) * d.tam * 0.8, 2);
@@ -1142,6 +1168,9 @@
     const conCarga = () => unidadesSel().filter((u) => UNID[u.tipo].plazas && u.pasajeros.length);
     function descargar() { const us = conCarga(); if (us.length) { W.orden(m, { t: 'descargar', j: YO, ids: us.map((u) => u.id) }); son.orden(); } }
     $('descargar').addEventListener('click', descargar);
+    let conectaDesde = 0, conectaN = 0; // conectar: el último edificio marcado y cuántos tramos van
+    function conectar() { if (unidadesSel().some((u) => UNID[u.tipo].tiende)) { modo = 'conectar'; conectaDesde = 0; conectaN = 0; aviso('Conectar: toca el edificio de partida y luego los que quieras unir · Esc termina'); } }
+    $('conectar').addEventListener('click', conectar);
     function trazar() { if (unidadesSel().some((u) => UNID[u.tipo].traza)) { modo = 'trazar'; trazaDesde = null; if (tactil) aviso('Arrastra hasta donde debe llegar el camino y suelta'); } }
     $('trazar').addEventListener('click', trazar);
     const paraDesplegar = () => unidadesSel().filter((u) => UNID[u.tipo].despliega);
@@ -1178,6 +1207,7 @@
         if (us.some((u) => UNID[u.tipo].plazas)) L.push('<b>transporte: la infantería sube con clic derecho sobre él · ' + k('U') + ' descargar</b>');
         if (us.some((u) => UNID[u.tipo].mando)) L.push('<b>mando: los tuyos en su radio ven en redondo y giran más rápido; gasta información</b>');
         if (us.some((u) => UNID[u.tipo].despliega)) L.push('<b>patio móvil: ' + k('D') + ' lo despliega aquí como patio nuevo (no se repliega)</b>');
+        if (us.some((u) => UNID[u.tipo].tiende)) L.push('<b>ingeniero civil: ' + k('J') + ' conectar edificios con una línea de servicio (energía y red)</b>');
         if (us.some((u) => UNID[u.tipo].cura)) L.push('<b>médico: cura solo a la infantería herida que tenga cerca</b>');
         if (us.some((u) => UNID[u.tipo].repara)) L.push('<b>ingeniero: repara solo los vehículos y edificios cercanos</b>');
         if (soloAire) L.push('clic derecho: ir y volver, o atacar · ' + k('S') + ' volver ya');
@@ -1197,7 +1227,7 @@
         L.push(k('R') + ' patrulla aérea: da vueltas sobre el punto; con ' + k('Mayús') + ', más puntos');
         L.push('repostan solos y retoman la patrulla · círculo: radio de vuelo');
       }
-      if (eds.some((e) => e.tipo === 'cuartel' || e.tipo === 'fabrica' || e.tipo === 'aerodromo') && !us.length) L.push('barra: encargar · clic en la cola: cancelar' + (eds.length > 1 ? ' · el encargo va a la cola más corta' : ''));
+      if (eds.some((e) => W.PRODUCE[e.tipo]) && !us.length) L.push('barra: encargar · clic en la cola: cancelar' + (eds.length > 1 ? ' · el encargo va a la cola más corta' : ''));
       if (eds.some((e) => e.tipo === 'cuartel' || e.tipo === 'fabrica') && !us.length) L.push('clic derecho: punto de reunión');
       if (eds.some((e) => e.tipo === 'aerodromo') && !us.length) L.push('clic derecho: punto que patrullarán los aviones nuevos · ' + W.ECON.cupoAviones + ' aviones por aeródromo');
       if (vendibles().length) L.push(k('Supr') + ' demoler y recuperar la mitad');
@@ -1261,11 +1291,11 @@
       if (c) W.orden(m, { t: 'cancelarUnidad', j: YO, id: +c.dataset.id, i: +c.dataset.i });
     });
     $('bucle').addEventListener('click', () => {
-      const prod = edificiosSel().filter((e) => e.tipo === 'cuartel' || e.tipo === 'fabrica' || e.tipo === 'aerodromo');
+      const prod = edificiosSel().filter((e) => W.PRODUCE[e.tipo]);
       if (prod.length) W.orden(m, { t: 'bucle', j: YO, ids: prod.map((e) => e.id), on: !prod.every((e) => e.bucle) });
     });
     function actualizarCola(eds) {
-      const todos = eds.filter((e) => e.tipo === 'cuartel' || e.tipo === 'fabrica' || e.tipo === 'aerodromo'), prod = todos.slice(0, 4);
+      const todos = eds.filter((e) => W.PRODUCE[e.tipo]), prod = todos.slice(0, 4);
       $('secCola').hidden = !prod.length;
       if (!prod.length) { firmaCola = ''; return; }
       const rep = prod.every((e) => e.bucle), tb = 'repetir: ' + (rep ? 'sí' : prod.some((e) => e.bucle) ? 'algunos' : 'no');
@@ -1316,12 +1346,12 @@
         if (esEdif) {
           if (obraLista(tipo)) { modo = 'colocar'; tipoColocar = tipo; if (tactil) aviso('Arrastra sobre el mapa y suelta para colocar'); }
           else W.orden(m, { t: 'construir', j: YO, tipo, ids: edificiosSel('patio').map((e) => e.id) });
-        } else W.orden(m, { t: 'entrenar', j: YO, tipo, ids: edificiosSel(LUGAR[d.cat]).map((e) => e.id) });
+        } else W.orden(m, { t: 'entrenar', j: YO, tipo, ids: edificiosSel(W.lugarDe(d)).map((e) => e.id) });
       });
       const cancelar = (ev) => {
         ev.preventDefault(); ev.stopPropagation();
         if (esEdif) { W.orden(m, { t: 'cancelarEdif', j: YO, tipo, ids: edificiosSel('patio').map((e) => e.id) }); if (tipoColocar === tipo) modo = null; }
-        else W.orden(m, { t: 'cancelarUnidad', j: YO, tipo, ids: edificiosSel(LUGAR[d.cat]).map((e) => e.id) });
+        else W.orden(m, { t: 'cancelarUnidad', j: YO, tipo, ids: edificiosSel(W.lugarDe(d)).map((e) => e.id) });
       };
       b.addEventListener('contextmenu', cancelar);
       b.querySelector('.x').addEventListener('click', cancelar);
@@ -1344,7 +1374,7 @@
       $('vacio').hidden = eds.length > 0 || sel.size > 0;
       actualizarCola(eds);
       for (const o of botones) {
-        const visible = o.esEdif ? tipos.has('patio') : tipos.has(LUGAR[o.d.cat]);
+        const visible = o.esEdif ? tipos.has('patio') : tipos.has(W.lugarDe(o.d));
         if (o.b.hidden === visible) o.b.hidden = !visible;
         if (!visible) continue;
         if (!o.esEdif) hayUnid = true;
@@ -1362,7 +1392,7 @@
           else if (caro) clase += ' caro';
         } else {
           let n = 0, enCurso = null; // lo encargado de este tipo en los edificios seleccionados
-          for (const e of eds) if (e.tipo === LUGAR[d.cat]) { for (const t of e.cola) if (t === o.tipo) n++; if (!enCurso && e.cola[0] === o.tipo) enCurso = e; }
+          for (const e of eds) if (e.tipo === W.lugarDe(d)) { for (const t of e.cola) if (t === o.tipo) n++; if (!enCurso && e.cola[0] === o.tipo) enCurso = e; }
           const q = { sinAgua: !!enCurso && enCurso.sinAgua };
           if (n) { cuenta = '×' + n; clase += ' hay'; }
           if (enCurso) { p = enCurso.prog / d.tiempo; if (q.sinAgua) txt = 'falta agua'; }
@@ -1399,6 +1429,7 @@
       const cav = paraCavar().length, bt = $('trinchera');
       bt.hidden = !cav;
       $('desplegar').hidden = !paraDesplegar().length;
+      { const hay = unidadesSel().some((u) => UNID[u.tipo].tiende), bc = $('conectar'); bc.hidden = !hay; bc.classList.toggle('listo', modo === 'conectar'); if (!hay && modo === 'conectar') modo = null; }
       { const hay = unidadesSel().some((u) => UNID[u.tipo].traza), bz = $('trazar'); bz.hidden = !hay; bz.classList.toggle('listo', modo === 'trazar'); }
       { const us = conCarga(), bd = $('descargar'); bd.hidden = !us.length; if (us.length) { const t = 'Descargar · ' + us.reduce((a, u) => a + u.pasajeros.length, 0) + ' dentro'; if (bd.textContent !== t) bd.textContent = t; } }
       { const us = paraRetiro(), br = $('retiro'); br.hidden = !us.length;
@@ -1429,6 +1460,13 @@
           return;
         }
         if (modo === 'barrido') { W.orden(m, { t: 'intel', j: YO, clave: 'barrido', x: wx, y: wy }); son.orden(); modo = null; return; }
+        if (modo === 'conectar') { // cada clic en un edificio propio lo une con el anterior
+          const e = entEn(wx, wy), ids = unidadesSel().filter((u) => UNID[u.tipo].tiende).map((u) => u.id);
+          if (!e || !e.edif || e.infra || e.j !== YO) { aviso('Toca un edificio tuyo'); return; }
+          if (conectaDesde && conectaDesde !== e.id && ids.length) { W.orden(m, { t: 'conectar', j: YO, ids, edifs: [conectaDesde, e.id], enc: conectaN > 0 }); conectaN++; son.orden(); }
+          conectaDesde = e.id; marca(e.cx, e.cy, P.bien);
+          return;
+        }
         if (modo === 'trazar') { // destino del camino; con Mayús se siguen añadiendo tramos
           const ids = unidadesSel().filter((u) => UNID[u.tipo].traza).map((u) => u.id), t = m.mapa.terreno[Math.floor(wy) * N + Math.floor(wx)];
           if (t === 1 || wx < 0 || wy < 0 || wx >= N || wy >= N) { aviso('Ahí no se puede llevar un camino'); return; }
@@ -1471,7 +1509,7 @@
         const us = unidadesSel();
         if (!us.length) { // con un cuartel o una fábrica seleccionados: punto de reunión
           let puesto = false;
-          for (const id of sel) { const e = m.porId.get(id); if (e && e.edif && (e.tipo === 'cuartel' || e.tipo === 'fabrica' || e.tipo === 'aerodromo')) { W.orden(m, { t: 'reunion', j: YO, id, x: wx, y: wy }); puesto = true; } }
+          for (const id of sel) { const e = m.porId.get(id); if (e && e.edif && W.PRODUCE[e.tipo]) { W.orden(m, { t: 'reunion', j: YO, id, x: wx, y: wy }); puesto = true; } }
           if (puesto) { marca(wx, wy, P.bien); son.orden(); }
           return;
         }
@@ -1573,7 +1611,7 @@
     function tocar(x, y) {
       posRaton({ clientX: x, clientY: y });
       const wx = aMundoX(raton.x), wy = aMundoY(raton.y), e = entEn(wx, wy, 14 / cam.z);
-      const hayTropa = unidadesSel().length > 0, hayFabrica = edificiosSel().some((b) => b.tipo === 'cuartel' || b.tipo === 'fabrica' || b.tipo === 'aerodromo');
+      const hayTropa = unidadesSel().length > 0, hayFabrica = edificiosSel().some((b) => W.PRODUCE[b.tipo]);
       if (e && !e.edif) { const r = lienzo.getBoundingClientRect(); x = r.left + cw / 2 + (e.x - cam.x) * cam.z; y = r.top + ch / 2 + (e.y - cam.y) * cam.z; } // el toque se centra en la unidad
       const sube = e && e.j === YO && !e.edif && UNID[e.tipo].plazas && unidadesSel().some((u) => UNID[u.tipo].cat === 'inf'); // toque en un transporte con infantería elegida: suben
       const boton = sube ? 2 : e && e.j === YO ? 0 : hayTropa || (hayFabrica && !e) ? 2 : 0;
@@ -1632,6 +1670,7 @@
       for (const b of $('tactil').children) {
         if (b.dataset.u !== undefined && b.hidden === hay) b.hidden = !hay;
         if (b.dataset.c === 'KeyK') b.hidden = !unidadesSel().some((u) => UNID[u.tipo].traza);
+        if (b.dataset.c === 'KeyJ') b.hidden = !unidadesSel().some((u) => UNID[u.tipo].tiende);
         const on = (b.dataset.c === 'KeyK' && modo === 'trazar') || (b.dataset.c === 'KeyA' && modo === 'amover') || (b.dataset.c === 'KeyR' && modo === 'patrulla') || (b.dataset.c === 'KeyP' && pausa);
         if (b.classList.contains('on') !== on) b.classList.toggle('on', on);
       }
@@ -1675,6 +1714,7 @@
         case 'KeyD': desplegar(); break;
         case 'F6': ev.preventDefault(); guardar(); break;
         case 'KeyK': trazar(); break;
+        case 'KeyJ': conectar(); break;
         case 'KeyU': descargar(); break;
         case 'KeyB': elegirEdificios('patio'); break;
         case 'KeyQ': elegirEdificios('cuartel'); break;
@@ -1688,7 +1728,7 @@
         case 'KeyS': { const ids = unidadesSel().map((u) => u.id); if (ids.length) W.orden(m, { t: 'detener', j: YO, ids }); break; }
         case 'KeyH': cam.x = m.mapa.bases[YO].x; cam.y = m.mapa.bases[YO].y; break;
         case 'Space': if (J.alerta) { cam.x = J.alerta.x; cam.y = J.alerta.y; } break;
-        case 'KeyL': if (conRed) { verRed = !verRed; aviso(verRed ? 'Vista de la red: lo sombreado es tu cobertura (suministro y dónde construir)' : 'Vista de la red apagada'); } else aviso('Partida clásica: sin red'); break;
+        case 'KeyL': if (conRed) { verRed = !verRed; aviso(verRed ? 'Vista de la red: lo sombreado es tu cobertura; en rojo, las líneas que no llegan a tu red' : 'Vista de la red apagada'); } else aviso('Partida clásica: sin red'); break;
         case 'KeyP': pausa = !pausa; if (pausa) son.motor(0); break;
         case 'KeyM': deslizar = !deslizar; break;
         case 'KeyN': son.alternar(); break;
