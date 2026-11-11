@@ -59,7 +59,9 @@
       <div>clic derecho: mover, atacar, cosechar</div>
       <div><kbd>A</kbd> atacar al avanzar · <kbd>S</kbd> detener</div>
       <div>arrastrar con clic derecho, o flechas: cámara</div>
-      <div>rueda: zoom · <kbd>H</kbd> base · <kbd>espacio</kbd> alerta</div>
+      <div>trackpad: dos dedos desplazan, pellizco zoom</div>
+      <div>rueda o <kbd>+</kbd> <kbd>−</kbd>: zoom · <kbd>M</kbd> cambia rueda</div>
+      <div><kbd>H</kbd> base · <kbd>espacio</kbd> alerta</div>
       <div><kbd>Mayús+1…9</kbd> guardar grupo · <kbd>1…9</kbd> llamarlo</div>
       <div>clic derecho en botón: cancelar</div>
       <div><kbd>P</kbd> pausa · <kbd>T</kbd> tema · <span id="semilla"></span></div>
@@ -1326,12 +1328,28 @@
       const hayTropa = cosas.some((e) => !e.edif && UNID[e.tipo].arma);
       for (const e of cosas) if ((e.edif && sel.size > 1) || (hayTropa && e.tipo === 'cosechadora')) sel.delete(e.id);
     });
+    // Zoom que mantiene fijo el punto bajo el cursor.
+    function zoom(factor) {
+      const wx = aMundoX(raton.x), wy = aMundoY(raton.y);
+      cam.z *= factor; limitarCam();
+      cam.x = wx - (raton.x - cw / 2) / cam.z; cam.y = wy - (raton.y - ch / 2) / cam.z; limitarCam();
+    }
+    // Rueda de ratón: zoom. Trackpad: dos dedos desplazan y el pellizco hace zoom.
+    // Un trackpad se reconoce porque también desliza en horizontal; la tecla M cambia el modo a mano.
+    let deslizar = false;
     lienzo.addEventListener('wheel', (ev) => {
       ev.preventDefault(); posRaton(ev);
-      const wx = aMundoX(raton.x), wy = aMundoY(raton.y);
-      cam.z *= Math.exp(-ev.deltaY * 0.0015); limitarCam();
-      cam.x = wx - (raton.x - cw / 2) / cam.z; cam.y = wy - (raton.y - ch / 2) / cam.z; limitarCam();
+      const u = ev.deltaMode === 1 ? 16 : 1;
+      if (ev.ctrlKey || ev.metaKey) { zoom(Math.exp(-Math.max(-30, Math.min(30, ev.deltaY * u)) * 0.01)); return; } // pellizco (Chrome, Firefox)
+      if (ev.deltaX !== 0) deslizar = true;
+      if (deslizar) { cam.x += (ev.deltaX * u) / cam.z; cam.y += (ev.deltaY * u) / cam.z; limitarCam(); }
+      else zoom(Math.exp(-ev.deltaY * u * 0.0015));
     }, { passive: false });
+    // Pellizco en Safari: usa sus propios eventos de gesto.
+    let escalaGesto = 1;
+    lienzo.addEventListener('gesturestart', (ev) => { ev.preventDefault(); escalaGesto = 1; });
+    lienzo.addEventListener('gesturechange', (ev) => { ev.preventDefault(); if (ev.scale > 0) { zoom(ev.scale / escalaGesto); escalaGesto = ev.scale; } });
+    lienzo.addEventListener('gestureend', (ev) => ev.preventDefault());
 
     let miniAbajo = false;
     function irMini(ev) { const r = mini.getBoundingClientRect(); cam.x = ((ev.clientX - r.left) / r.width) * N; cam.y = ((ev.clientY - r.top) / r.height) * N; limitarCam(); }
@@ -1359,6 +1377,9 @@
         case 'KeyH': cam.x = m.mapa.bases[YO].x; cam.y = m.mapa.bases[YO].y; break;
         case 'Space': if (J.alerta) { cam.x = J.alerta.x; cam.y = J.alerta.y; } break;
         case 'KeyP': pausa = !pausa; break;
+        case 'KeyM': deslizar = !deslizar; break;
+        case 'Equal': case 'NumpadAdd': raton.x = cw / 2; raton.y = ch / 2; zoom(1.25); break;
+        case 'Minus': case 'NumpadSubtract': raton.x = cw / 2; raton.y = ch / 2; zoom(0.8); break;
         case 'KeyT': ponerTema(tema === 'clara' ? 'oscura' : 'clara'); break;
         case 'Escape': modo = null; sel.clear(); break;
       }
