@@ -89,7 +89,11 @@
       tema = t; P = PALETAS[t]; document.body.dataset.tema = t;
       try { localStorage.setItem('rts.tema', t); } catch (e) { /* no pasa nada */ }
       const comun = { luz: P.llano, suelo: P.llano, mineral: P.mineral, raro: P.raro, humo: P.roca, fuego: '#e8912d', mal: P.mal, agua: '#4f86b0', tinta: P.tinta };
-      COL = { yo: Object.assign({ base: P.yo, osc: P.yoOsc }, comun), rival: Object.assign({ base: P.rival, osc: P.rivalOsc }, comun) };
+      const tono = (h, f) => { const c = hex(h); return 'rgb(' + Math.round(c[0] * f) + ',' + Math.round(c[1] * f) + ',' + Math.round(c[2] * f) + ')'; };
+      const lado = (c) => ({ base: c, osc: c, luz: c, suelo: c, mineral: c, raro: c, humo: c, fuego: 'rgba(0,0,0,0)', mal: c, agua: c, tinta: c }); // paleta de un solo tono: el canto de las fichas
+      COL = { yo: Object.assign({ base: P.yo, osc: P.yoOsc, pared: tono(P.yoOsc, 0.68) }, comun), rival: Object.assign({ base: P.rival, osc: P.rivalOsc, pared: tono(P.rivalOsc, 0.68) }, comun) };
+      COL.yoLado = lado(COL.yo.pared); COL.rivalLado = lado(COL.rival.pared);
+      COL.rocaCara = tono(P.roca, tema === 'clara' ? 0.62 : 0.55); COL.rocaLuz = tono(P.roca, tema === 'clara' ? 1.35 : 1.3); COL.copa = tono(P.bosque, tema === 'clara' ? 0.74 : 1.5);
       pintarTerreno(); pintarNiebla();
     }
 
@@ -110,11 +114,14 @@
     const visible = (x, y) => x >= 0 && y >= 0 && x < N && y < N && m.niebla[YO][Math.floor(y) * N + Math.floor(x)] === 2;
     const veo = (e) => e.j === YO || visible(e.edif ? e.cx : e.x, e.edif ? e.cy : e.y);
 
+    // Volumen: la vista sigue siendo cenital, pero cada cosa tiene altura. Los edificios muestran su pared sur y el tejado
+    // se dibuja desplazado hacia arriba; las unidades llevan un canto; la roca y el agua, un escalón.
+    const ALTO = { patio: 0.3, central: 0.36, refineria: 0.32, bomba: 0.2, cuartel: 0.26, extractor: 0.3, fabrica: 0.34, torreta: 0.22, torreCanon: 0.36, aerodromo: 0.08, antiaerea: 0.22, estacion: 0.26 };
     function entEn(wx, wy, holgura) { // holgura: margen extra (en celdas) para acertar con el dedo
       let mejor = null, md = Infinity;
       for (const e of m.ents) {
         if (!veo(e)) continue;
-        if (e.edif) { if (wx >= e.x && wx < e.x + e.tam && wy >= e.y && wy < e.y + e.tam && md > 50) { mejor = e; md = 50; } }
+        if (e.edif) { if (wx >= e.x && wx < e.x + e.tam && wy >= e.y - (cam.z >= 8 ? ALTO[e.tipo] : 0) && wy < e.y + e.tam && md > 50) { mejor = e; md = 50; } } // el tejado sobresale por arriba
         else { const d = Math.hypot(e.x - wx, e.y - wy); if (d < UNID[e.tipo].radio + 0.3 + (holgura || 0) && d < md) { mejor = e; md = d; } }
       }
       return mejor;
@@ -194,6 +201,36 @@
       const x0 = Math.floor(-ox / z) - 1, x1 = Math.floor((cw - ox) / z) + 1, y0 = Math.floor(-oy / z) - 1, y1 = Math.floor((ch - oy) / z) + 1;
       const fuera = (x, y) => x < x0 || x > x1 || y < y0 || y > y1;
 
+      const lod = z >= 16 ? 2 : z >= 8 ? 1 : 0; // nivel de detalle según el zoom
+      if (lod) { // relieve: la roca es una meseta con su cara sur a la vista y sombra al sur y al este; el agua queda hundida
+        const T = mp.terreno, ax = Math.max(0, x0), bx = Math.min(N - 1, x1), ay = Math.max(0, y0), by = Math.min(N - 1, y1);
+        const cara = new Path2D(), luz = new Path2D(), sombra = new Path2D(), orilla = new Path2D(), copas = new Path2D(), sCopas = new Path2D();
+        const hr = z * 0.3;
+        for (let y = ay; y <= by; y++) for (let x = ax; x <= bx; x++) {
+          const i = y * N + x, t = T[i];
+          if (!f[i] || t === 0) continue;
+          const sx = ox + x * z, sy = oy + y * z;
+          if (t === 1) {
+            if (y + 1 < N && T[i + N] !== 1) { cara.rect(sx, sy + z - hr, z, hr); if (T[i + N] !== 2) sombra.rect(sx + z * 0.12, sy + z, z, z * 0.26); }
+            if (x + 1 < N && T[i + 1] !== 1) sombra.rect(sx + z, sy + z * 0.12, z * 0.2, z);
+            if (y > 0 && T[i - N] !== 1) luz.rect(sx, sy, z, Math.max(1, z * 0.06));
+          } else if (t === 2) {
+            if (y > 0 && T[i - N] !== 2) orilla.rect(sx, sy, z, z * 0.2);
+            if (x > 0 && T[i - 1] !== 2) orilla.rect(sx, sy, z * 0.1, z);
+          } else if (lod === 2) { // bosque: un par de copas por celda, siempre en el mismo sitio
+            for (let k = 0; k < 2; k++) {
+              const a = i * 2.39996 + k * 3.1, qx = sx + z * (0.5 + Math.cos(a) * 0.27), qy = sy + z * (0.5 + Math.sin(a * 1.3) * 0.27), rr = z * (0.2 + ((i * 7 + k * 3) % 5) * 0.022);
+              sCopas.moveTo(qx + z * 0.1 + rr, qy + z * 0.12); sCopas.arc(qx + z * 0.1, qy + z * 0.12, rr, 0, TAU);
+              copas.moveTo(qx + rr, qy - z * 0.08); copas.arc(qx, qy - z * 0.08, rr, 0, TAU);
+            }
+          }
+        }
+        ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.fill(sombra); ctx.fill(sCopas);
+        ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.fill(orilla);
+        ctx.fillStyle = COL.rocaCara; ctx.fill(cara);
+        ctx.fillStyle = COL.rocaLuz; ctx.fill(luz);
+        ctx.fillStyle = COL.copa; ctx.fill(copas);
+      }
       ctx.fillStyle = P.mineral; ctx.beginPath();
       for (const c of m.minas) {
         const x = c % N, y = (c / N) | 0;
@@ -231,7 +268,6 @@
       }
 
       const barras = [], signos = [], tiempo = performance.now();
-      const lod = z >= 16 ? 2 : z >= 8 ? 1 : 0; // nivel de detalle según el zoom
       const so = z * 0.13; // desplazamiento de las sombras
 
       // Marcas en el suelo: quemaduras, huellas de oruga, restos y ruinas, que se van borrando.
@@ -270,6 +306,28 @@
         if (lod) { ctx.strokeStyle = '#a8977c'; ctx.lineWidth = Math.max(1, z * 0.06); ctx.beginPath(); ctx.arc(sx, sy, z * 0.39, q.ang - 1.9, q.ang + 1.9); ctx.stroke(); }
         ctx.lineCap = 'butt';
       }
+      // Cuerpo de un edificio: la pared sur y, encima y desplazado hacia arriba, el tejado (la ficha de siempre).
+      const cuerpos = new Map(), tapan = new Set();
+      const cuerpo = (e, px, py, t, est, h, redondo, edadObra) => {
+        const col = e.j === YO ? COL.yo : COL.rival;
+        if (edadObra < 1) { ctx.save(); ctx.beginPath(); ctx.rect(px - 2, py - h + (t + h) * (1 - edadObra), t + 4, (t + h) * edadObra + 2); ctx.clip(); }
+        if (h > 0) {
+          ctx.fillStyle = col.pared;
+          if (redondo) { const R = t * 0.47, cx = px + t / 2, cy = py + t / 2; ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI); ctx.lineTo(cx - R, cy - h); ctx.lineTo(cx + R, cy - h); ctx.closePath(); ctx.fill(); }
+          else {
+            ctx.fillRect(px, py + t - h, t, h);
+            if (lod === 2 && h >= 6 && e.tipo !== 'aerodromo') { // ventanas, y un zócalo en la base
+              ctx.fillStyle = col.base; ctx.globalAlpha = 0.6;
+              const n = e.tam * 2, w = t / n;
+              for (let k = 0; k < n; k++) ctx.fillRect(px + k * w + w * 0.3, py + t - h * 0.74, w * 0.4, h * 0.4);
+              ctx.globalAlpha = 1;
+            }
+            ctx.fillStyle = 'rgba(0,0,0,0.28)'; ctx.fillRect(px, py + t - Math.max(1, h * 0.12), t, Math.max(1, h * 0.12));
+          }
+        }
+        W.fichaEdificio(ctx, e, px, py - h, t, lod, col, est);
+        if (edadObra < 1) { ctx.restore(); ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.setLineDash([4, 3]); ctx.strokeRect(px + 1.5, py + 1.5, t - 3, t - 3); ctx.setLineDash([]); }
+      };
       const descargando = new Set();
       for (const e of m.ents) if (!e.edif && e.est === 'descargar') descargando.add(e.ref);
       for (const e of m.ents) {
@@ -279,19 +337,19 @@
         if (e.tipo === 'patio') est.activo = Je.obras.some((o) => !o.listo);
         else if (e.tipo === 'fabrica') est.activo = e.cola.length > 0;
         else if (EDIF[e.tipo].arma) { est.ang = giro(e).t; est.retro = retroceso(e, EDIF[e.tipo].arma); }
-        if (lod) { // sombra
-          ctx.fillStyle = 'rgba(0,0,0,0.17)';
-          if (e.tipo === 'torreta') { ctx.beginPath(); ctx.arc(px + t / 2 + so, py + t / 2 + so, t * 0.47, 0, TAU); ctx.fill(); } else ctx.fillRect(px + 1 + so, py + 1 + so, t - 2, t - 2);
+        const h = lod ? ALTO[e.tipo] * z : 0, redondo = e.tipo === 'torreta' || e.tipo === 'antiaerea'; // altura en píxeles
+        if (lod) { // sombra: cae hacia el sureste, más larga cuanto más alto el edificio
+          const sx = so + h * 0.75, sy = so + h * 0.45;
+          ctx.fillStyle = 'rgba(0,0,0,0.17)'; ctx.beginPath();
+          if (redondo) { ctx.arc(px + t / 2 + sx, py + t / 2 + sy, t * 0.47, 0, TAU); ctx.moveTo(px + t / 2, py + t / 2 + t * 0.47); ctx.lineTo(px + t / 2 + sx, py + t / 2 + sy + t * 0.47); ctx.lineTo(px + t / 2 + sx + t * 0.47, py + t / 2 + sy); ctx.lineTo(px + t / 2 + t * 0.47, py + t / 2); }
+          else { ctx.moveTo(px + 1, py + t); ctx.lineTo(px + t, py + t); ctx.lineTo(px + t, py + 1); ctx.lineTo(px + t + sx, py + 1 + sy); ctx.lineTo(px + t + sx, py + t + sy); ctx.lineTo(px + 1 + sx, py + t + sy); }
+          ctx.closePath(); ctx.fill();
         }
         const edadObra = e.nace > 0 ? (m.t - e.nace + alfa) / 30 : 1; // recién colocado: se levanta de abajo arriba
-        if (edadObra < 1) {
-          ctx.save(); ctx.beginPath(); ctx.rect(px - 2, py + t * (1 - edadObra), t + 4, t * edadObra + 2); ctx.clip();
-          W.fichaEdificio(ctx, e, px, py, t, lod, e.j === YO ? COL.yo : COL.rival, est);
-          ctx.restore();
-          ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.setLineDash([4, 3]); ctx.strokeRect(px + 1.5, py + 1.5, t - 3, t - 3); ctx.setLineDash([]);
-        } else W.fichaEdificio(ctx, e, px, py, t, lod, e.j === YO ? COL.yo : COL.rival, est);
+        cuerpos.set(e.id, [e, px, py, t, est, h, redondo, edadObra]);
+        cuerpo(e, px, py, t, est, h, redondo, edadObra);
         if (sel.has(e.id)) {
-          const g = Math.max(4, t * 0.18), a = px - 2, b = py - 2, c2 = px + t + 2, d2 = py + t + 2; // escuadras de selección
+          const g = Math.max(4, t * 0.18), a = px - 2, b = py - h - 2, c2 = px + t + 2, d2 = py + t + 2; // escuadras de selección
           ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.beginPath();
           ctx.moveTo(a, b + g); ctx.lineTo(a, b); ctx.lineTo(a + g, b); ctx.moveTo(c2 - g, b); ctx.lineTo(c2, b); ctx.lineTo(c2, b + g);
           ctx.moveTo(c2, d2 - g); ctx.lineTo(c2, d2); ctx.lineTo(c2 - g, d2); ctx.moveTo(a + g, d2); ctx.lineTo(a, d2); ctx.lineTo(a, d2 - g); ctx.stroke();
@@ -306,8 +364,8 @@
           ctx.beginPath(); ctx.moveTo(rx, ry); ctx.lineTo(rx, ry - 14); ctx.stroke();
           ctx.beginPath(); ctx.moveTo(rx, ry - 14); ctx.lineTo(rx + 9, ry - 10.5); ctx.lineTo(rx, ry - 7); ctx.closePath(); ctx.fill();
         }
-        if (sel.has(e.id) || e.vida < e.vidaMax) barras.push([px, py - 6, t, e.vida / e.vidaMax, m.t - e.curando < 12]);
-        if (e.j === YO && m.t - e.llama < 14) signos.push([px + t / 2, py - 18, '!']);
+        if (sel.has(e.id) || e.vida < e.vidaMax) barras.push([px, py - h - 6, t, e.vida / e.vidaMax, m.t - e.curando < 12]);
+        if (e.j === YO && m.t - e.llama < 14) signos.push([px + t / 2, py - h - 18, '!']);
       }
 
       // Líneas de recorrido de las unidades seleccionadas: ruta pendiente, destino y objetivo.
@@ -351,7 +409,10 @@
         }
       }
 
+      let repasado = false;
+      const repasar = () => { repasado = true; for (const id of tapan) cuerpo(...cuerpos.get(id)); }; // los edificios tapan a quien tienen justo detrás
       for (const e of m.ents.filter((u) => !u.edif && !UNID[u.tipo].aire).concat(m.ents.filter((u) => !u.edif && UNID[u.tipo].aire))) { // los aviones, encima
+        if (!repasado && UNID[e.tipo].aire) repasar();
         if (!veo(e)) continue;
         const wx = e.px + (e.x - e.px) * alfa, wy = e.py + (e.y - e.py) * alfa;
         if (fuera(wx, wy)) continue;
@@ -371,11 +432,18 @@
           }
         }
         ctx.save(); ctx.translate(px, py);
-        W.fichaUnidad(ctx, e, r, lod, e.j === YO ? COL.yo : COL.rival, {
+        const st = {
           ang: d.cat === 'inf' && e.obj && !anda ? g.t : g.a, angT: g.t, retro: d.arma ? retroceso(e, d.arma) : 0,
           anda, tiempo, carga: e.carga / (d.carga || 1), cosecha: e.est === 'cosechar', raro: e.cargaTipo === 2,
-        });
+        };
+        const canto = lod && !d.aire && r >= 3.5 ? Math.max(1, r * 0.26) : 0; // el cuerpo de la unidad: su silueta en oscuro, y encima la ficha
+        if (canto) { W.fichaUnidad(ctx, e, r, 1, e.j === YO ? COL.yoLado : COL.rivalLado, st); ctx.translate(0, -canto); }
+        W.fichaUnidad(ctx, e, r, lod, e.j === YO ? COL.yo : COL.rival, st);
         ctx.restore();
+        if (lod && !d.aire) { // si está pegada a la cara norte de un edificio, este la tapa
+          const idb = m.ocup[Math.floor(wy + 0.45) * N + Math.floor(wx)], cb = idb ? cuerpos.get(idb) : null;
+          if (cb && wy < cb[0].y) tapan.add(idb);
+        }
         if (sel.has(e.id)) { ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(px, py, r * 1.9 + 2, 0, TAU); ctx.stroke(); }
         if (sel.has(e.id) && e.j === YO && lod && sel.size <= 40) { // lo que ve: cerca alrededor, lejos solo al frente
           const E = W.ECON, rf = d.vision * E.visAd * z, rs = d.vision * E.visLado * z, rb = d.vision * E.visAt * z, a = g.a;
@@ -408,6 +476,7 @@
         const fuel = d.aire && e.j === YO ? e.fuel / d.fuel : -1;
         if (sel.has(e.id) || e.vida < e.vidaMax || (fuel >= 0 && fuel < 0.35)) barras.push([px - Math.max(r * 1.3, 8), py - r * 1.9 - 8, Math.max(r * 2.6, 16), e.vida / e.vidaMax, m.t - e.curando < 12, fuel]);
       }
+      if (!repasado) repasar();
 
       // Obuses en vuelo, con estela.
       ctx.lineCap = 'round';
