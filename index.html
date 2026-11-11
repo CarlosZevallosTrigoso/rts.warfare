@@ -94,6 +94,7 @@
       <div><kbd>Z</kbd> atrincherarse (infantería quieta): recibe menos daño</div>
       <div>tras mover, otro clic cerca (cualquier botón): hacia dónde mirar</div>
       <div>bosque: cubre a la infantería y frena a los vehículos</div>
+      <div>escribir <kbd>god</kbd>: recursos infinitos · <kbd>admin</kbd>: todo activado</div>
       <div>las unidades disparan hacia su frente; ven lejos delante,</div>
       <div>menos a los costados y casi nada detrás;</div>
       <div>tanques y torres giran la torreta, el resto gira entero</div>
@@ -155,11 +156,11 @@
     <button type="button" data-v="normal">normal</button><button type="button" data-v="agresivo">agresivo<small>ataca pronto</small></button></div></div>
   <div><h2>Semilla del mapa</h2><input id="op-s" inputmode="numeric" placeholder="al azar" autocomplete="off"></div>
   <button type="button" id="empezar">Empezar</button>
-  <div id="version">versión 26</div>
+  <div id="version">versión 27</div>
 </div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><p><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 26' };
+globalThis.W = { VERSION: 'versión 27' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -491,7 +492,7 @@ globalThis.W = { VERSION: 'versión 26' };
 
   function nuevoJugador(inicio) {
     return {
-      minerales: inicio || ECON.inicio, prod: 0, uso: 0, cuenta: {}, vivo: true, dios: false,
+      minerales: inicio || ECON.inicio, prod: 0, uso: 0, cuenta: {}, vivo: true, dios: false, admin: false,
       obras: [], // [{ tipo, prog, listo }]: varias a la vez, se reparten la velocidad
       colas: Object.fromEntries(Object.keys(UNID).map((t) => [t, { n: 0, prog: 0, sinAgua: false }])), // una cola por tipo de unidad
       alerta: null, cosechado: 0, bajas: 0, producidas: 0,
@@ -586,6 +587,7 @@ globalThis.W = { VERSION: 'versión 26' };
   W.disponible = function (m, j, d) { return W.tieneReq(m, j, d.req) && (d.nivel || 1) <= m.jug[j].nivel; };
   W.tieneReq = function (m, j, req) {
     const c = m.jug[j].cuenta;
+    if (m.jug[j].admin) return true; // modo ADMIN: sin requisitos
     for (let k = 0; k < req.length; k++) if (!c[req[k]]) return false;
     return true;
   };
@@ -606,7 +608,7 @@ globalThis.W = { VERSION: 'versión 26' };
       if (!agua) return false;
     }
     if (d.libre && !m.niebla[j][y * N + x]) return false; // solo en terreno explorado
-    let junto = !!d.libre;
+    let junto = !!d.libre || m.jug[j].admin; // en modo ADMIN se construye en cualquier parte
     const s = ECON.separacionColocar;
     for (let k = 0; k < m.ents.length; k++) {
       const e = m.ents[k];
@@ -765,6 +767,15 @@ globalThis.W = { VERSION: 'versión 26' };
       case 'dios': // modo GOD: recursos infinitos; al apagarlo vuelve el saldo anterior
         J.dios = !J.dios;
         if (J.dios) J.antesDios = [J.minerales, J.petroleo, J.raros, J.info]; else [J.minerales, J.petroleo, J.raros, J.info] = J.antesDios;
+        return;
+      case 'admin': // modo ADMIN, para probar: todo lo de GOD más nivel 3, todas las mejoras, sin requisitos, todo cuatro veces más rápido (300 % más) y el mapa a la vista
+        J.admin = !J.admin;
+        if (J.admin !== J.dios) { J.dios = J.admin; if (J.dios) J.antesDios = [J.minerales, J.petroleo, J.raros, J.info]; else [J.minerales, J.petroleo, J.raros, J.info] = J.antesDios; }
+        if (J.admin) {
+          J.nivel = 3;
+          for (const k in TEC) if (!TEC[k].sube) J.mejoras[k] = true;
+          for (const e of m.ents) if (!e.edif && e.j === cmd.j) { const nueva = vidaDe(J, e.tipo); if (nueva !== e.vidaMax) { e.vida = e.vida * (nueva / e.vidaMax); e.vidaMax = nueva; } }
+        }
         return;
       case 'construir': {
         const d = EDIF[cmd.tipo];
@@ -1375,7 +1386,7 @@ globalThis.W = { VERSION: 'versión 26' };
   function tickProduccion(m, j) {
     const J = m.jug[j];
     if (!J.vivo) return;
-    const factor = J.uso > J.prod ? 0.5 : 1; // déficit de energía: todo a media velocidad
+    const factor = J.admin ? 4 : J.uso > J.prod ? 0.5 : 1; // déficit de energía: todo a media velocidad
     if (m.t % ECON.goteoCada === 0) J.minerales += 1; // ingreso mínimo del patio: evita el bloqueo total
     // Investigaciones: avanzan en su edificio sin frenar obras ni unidades; si el edificio cae, se devuelve el costo.
     for (let k = J.inv.length - 1; k >= 0; k--) {
@@ -1504,6 +1515,7 @@ globalThis.W = { VERSION: 'versión 26' };
         }
       }
     }
+    for (let j = 0; j < 2; j++) if (m.jug[j].admin) m.niebla[j].fill(2); // modo ADMIN: todo el mapa a la vista
     for (let k = m.barridos.length - 1; k >= 0; k--) { // zonas reveladas por inteligencia
       const b = m.barridos[k], f = m.niebla[b.j], R = b.r;
       if (m.t > b.hasta) { m.barridos.splice(k, 1); continue; }
@@ -3024,7 +3036,7 @@ globalThis.W = { VERSION: 'versión 26' };
     function actualizarBarra() {
       const num = (v) => (J.dios ? '∞' : String(Math.floor(v)));
       $('rMin').textContent = num(J.minerales); $('rPet').textContent = num(J.petroleo); $('rRar').textContent = num(J.raros); $('rInf').textContent = num(J.info);
-      $('dios').hidden = !J.dios; $('sinColmena').hidden = J.colmena;
+      $('dios').hidden = !J.dios; { const t = J.admin ? 'ADMIN' : 'GOD'; if ($('dios').textContent !== t) $('dios').textContent = t; } $('sinColmena').hidden = J.colmena;
       const e = $('rEne'); e.textContent = J.uso + ' / ' + J.prod; e.className = J.uso > J.prod ? 'mal' : '';
       const ag = $('rAgu'); ag.textContent = J.aguaUso + ' / ' + (J.dios ? '∞' : J.aguaProd); ag.className = !J.dios && J.aguaUso >= J.aguaProd ? 'mal' : '';
       for (const o of botones) {
@@ -3216,8 +3228,14 @@ globalThis.W = { VERSION: 'versión 26' };
       son.activar();
       teclas.add(ev.code);
       if (ev.key.length === 1) {
-        tecleado = (tecleado + ev.key.toLowerCase()).slice(-3);
-        if (tecleado === 'god') { W.orden(m, { t: 'dios', j: YO }); tecleado = ''; }
+        tecleado = (tecleado + ev.key.toLowerCase()).slice(-5);
+        if (tecleado.endsWith('god')) { W.orden(m, { t: 'dios', j: YO }); tecleado = ''; }
+        if (tecleado === 'admin') {
+          W.orden(m, { t: 'admin', j: YO }); tecleado = '';
+          modo = null; deslizar = !deslizar; // deshace lo que las letras a y m hicieron por el camino (la n no llega a actuar)
+          aviso(J.admin ? 'Modo ADMIN desactivado' : 'Modo ADMIN: recursos infinitos, nivel 3, todas las mejoras, sin requisitos, todo 300 % más rápido y mapa a la vista');
+          return;
+        }
       }
       if (ev.code.startsWith('Arrow') || ev.code === 'Space') ev.preventDefault();
       const digito = /^Digit([1-9])$/.exec(ev.code);

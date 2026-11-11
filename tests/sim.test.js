@@ -603,6 +603,22 @@ prueba('frente: torreta, giro del cuerpo, flancos y visión en cono', () => {
   assert.ok(e2.vida < 60, 'pero sí hacia su frente');
 });
 
+prueba('modo admin: todo activado para probar', () => {
+  const m = W.crearMundo(5, { N: 128 }), J = m.jug[0];
+  W.tick(m);
+  assert.ok(!W.disponible(m, 0, W.EDIF.aerodromo) && !W.disponible(m, 0, W.UNID.pesado));
+  W.orden(m, { t: 'admin', j: 0 }); W.tick(m);
+  assert.ok(J.admin && J.dios && J.nivel === 3 && J.mejoras.canonLargo && J.mejoras.analisis, 'nivel 3 y todas las mejoras');
+  assert.ok(Object.values(W.EDIF).every((d) => W.disponible(m, 0, d)) && Object.values(W.UNID).every((d) => W.disponible(m, 0, d)), 'todo disponible sin requisitos');
+  for (let i = 0; i < 4; i++) W.tick(m);
+  assert.ok(m.niebla[0].every((v) => v === 2) && !m.niebla[1].every((v) => v === 2), 'mapa a la vista solo para quien lo activa');
+  W.orden(m, { t: 'construir', j: 0, tipo: 'aerodromo' });
+  for (let i = 0; i < W.EDIF.aerodromo.tiempo / 4 + 3; i++) W.tick(m);
+  assert.ok(J.obras[0] && J.obras[0].listo, 'las obras van cuatro veces más rápido');
+  const min = J.minerales; W.orden(m, { t: 'admin', j: 0 }); W.tick(m);
+  assert.ok(!J.admin && !J.dios && J.minerales < min && J.nivel === 3, 'al apagarlo vuelve el saldo; el nivel y las mejoras se quedan');
+});
+
 prueba('determinismo: misma semilla, misma partida', () => {
   const corre = () => {
     const m = W.crearMundo(777), a = W.iaCrear(0), b = W.iaCrear(1);

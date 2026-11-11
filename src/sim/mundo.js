@@ -10,7 +10,7 @@
 
   function nuevoJugador(inicio) {
     return {
-      minerales: inicio || ECON.inicio, prod: 0, uso: 0, cuenta: {}, vivo: true, dios: false,
+      minerales: inicio || ECON.inicio, prod: 0, uso: 0, cuenta: {}, vivo: true, dios: false, admin: false,
       obras: [], // [{ tipo, prog, listo }]: varias a la vez, se reparten la velocidad
       colas: Object.fromEntries(Object.keys(UNID).map((t) => [t, { n: 0, prog: 0, sinAgua: false }])), // una cola por tipo de unidad
       alerta: null, cosechado: 0, bajas: 0, producidas: 0,
@@ -105,6 +105,7 @@
   W.disponible = function (m, j, d) { return W.tieneReq(m, j, d.req) && (d.nivel || 1) <= m.jug[j].nivel; };
   W.tieneReq = function (m, j, req) {
     const c = m.jug[j].cuenta;
+    if (m.jug[j].admin) return true; // modo ADMIN: sin requisitos
     for (let k = 0; k < req.length; k++) if (!c[req[k]]) return false;
     return true;
   };
@@ -125,7 +126,7 @@
       if (!agua) return false;
     }
     if (d.libre && !m.niebla[j][y * N + x]) return false; // solo en terreno explorado
-    let junto = !!d.libre;
+    let junto = !!d.libre || m.jug[j].admin; // en modo ADMIN se construye en cualquier parte
     const s = ECON.separacionColocar;
     for (let k = 0; k < m.ents.length; k++) {
       const e = m.ents[k];
@@ -284,6 +285,15 @@
       case 'dios': // modo GOD: recursos infinitos; al apagarlo vuelve el saldo anterior
         J.dios = !J.dios;
         if (J.dios) J.antesDios = [J.minerales, J.petroleo, J.raros, J.info]; else [J.minerales, J.petroleo, J.raros, J.info] = J.antesDios;
+        return;
+      case 'admin': // modo ADMIN, para probar: todo lo de GOD más nivel 3, todas las mejoras, sin requisitos, todo cuatro veces más rápido (300 % más) y el mapa a la vista
+        J.admin = !J.admin;
+        if (J.admin !== J.dios) { J.dios = J.admin; if (J.dios) J.antesDios = [J.minerales, J.petroleo, J.raros, J.info]; else [J.minerales, J.petroleo, J.raros, J.info] = J.antesDios; }
+        if (J.admin) {
+          J.nivel = 3;
+          for (const k in TEC) if (!TEC[k].sube) J.mejoras[k] = true;
+          for (const e of m.ents) if (!e.edif && e.j === cmd.j) { const nueva = vidaDe(J, e.tipo); if (nueva !== e.vidaMax) { e.vida = e.vida * (nueva / e.vidaMax); e.vidaMax = nueva; } }
+        }
         return;
       case 'construir': {
         const d = EDIF[cmd.tipo];
@@ -894,7 +904,7 @@
   function tickProduccion(m, j) {
     const J = m.jug[j];
     if (!J.vivo) return;
-    const factor = J.uso > J.prod ? 0.5 : 1; // déficit de energía: todo a media velocidad
+    const factor = J.admin ? 4 : J.uso > J.prod ? 0.5 : 1; // déficit de energía: todo a media velocidad
     if (m.t % ECON.goteoCada === 0) J.minerales += 1; // ingreso mínimo del patio: evita el bloqueo total
     // Investigaciones: avanzan en su edificio sin frenar obras ni unidades; si el edificio cae, se devuelve el costo.
     for (let k = J.inv.length - 1; k >= 0; k--) {
@@ -1023,6 +1033,7 @@
         }
       }
     }
+    for (let j = 0; j < 2; j++) if (m.jug[j].admin) m.niebla[j].fill(2); // modo ADMIN: todo el mapa a la vista
     for (let k = m.barridos.length - 1; k >= 0; k--) { // zonas reveladas por inteligencia
       const b = m.barridos[k], f = m.niebla[b.j], R = b.r;
       if (m.t > b.hasta) { m.barridos.splice(k, 1); continue; }

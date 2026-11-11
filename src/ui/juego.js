@@ -811,7 +811,7 @@
     function actualizarBarra() {
       const num = (v) => (J.dios ? '∞' : String(Math.floor(v)));
       $('rMin').textContent = num(J.minerales); $('rPet').textContent = num(J.petroleo); $('rRar').textContent = num(J.raros); $('rInf').textContent = num(J.info);
-      $('dios').hidden = !J.dios; $('sinColmena').hidden = J.colmena;
+      $('dios').hidden = !J.dios; { const t = J.admin ? 'ADMIN' : 'GOD'; if ($('dios').textContent !== t) $('dios').textContent = t; } $('sinColmena').hidden = J.colmena;
       const e = $('rEne'); e.textContent = J.uso + ' / ' + J.prod; e.className = J.uso > J.prod ? 'mal' : '';
       const ag = $('rAgu'); ag.textContent = J.aguaUso + ' / ' + (J.dios ? '∞' : J.aguaProd); ag.className = !J.dios && J.aguaUso >= J.aguaProd ? 'mal' : '';
       for (const o of botones) {
@@ -1003,8 +1003,14 @@
       son.activar();
       teclas.add(ev.code);
       if (ev.key.length === 1) {
-        tecleado = (tecleado + ev.key.toLowerCase()).slice(-3);
-        if (tecleado === 'god') { W.orden(m, { t: 'dios', j: YO }); tecleado = ''; }
+        tecleado = (tecleado + ev.key.toLowerCase()).slice(-5);
+        if (tecleado.endsWith('god')) { W.orden(m, { t: 'dios', j: YO }); tecleado = ''; }
+        if (tecleado === 'admin') {
+          W.orden(m, { t: 'admin', j: YO }); tecleado = '';
+          modo = null; deslizar = !deslizar; // deshace lo que las letras a y m hicieron por el camino (la n no llega a actuar)
+          aviso(J.admin ? 'Modo ADMIN desactivado' : 'Modo ADMIN: recursos infinitos, nivel 3, todas las mejoras, sin requisitos, todo 300 % más rápido y mapa a la vista');
+          return;
+        }
       }
       if (ev.code.startsWith('Arrow') || ev.code === 'Space') ev.preventDefault();
       const digito = /^Digit([1-9])$/.exec(ev.code);
