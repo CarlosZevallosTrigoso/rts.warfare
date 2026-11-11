@@ -129,8 +129,14 @@ prueba('contraataque, disparo en marcha, curación y atropello', () => {
   m = nuevo(); franja(m);
   W.crearEdificio(m, 0, 'cuartel', 40, 62);
   const cerca = W.crearUnidad(m, 0, 'infanteria', en(m, 43, 63)), aparte = W.crearUnidad(m, 0, 'infanteria', en(m, 70, 63));
-  cerca.vida = 20; aparte.vida = 20; avanza(m, 400);
-  assert.ok(cerca.vida > 40, 'no se curó junto al cuartel: ' + cerca.vida);
+  cerca.vida = 20; aparte.vida = 20;
+  m.jug[0].minerales = 0; m.t = 5; avanza(m, 195); // el goteo del patio da algo, pero casi nada: apenas cura
+  const pobre = cerca.vida;
+  m.jug[0].minerales = 1000; avanza(m, 600);
+  assert.strictEqual(cerca.vida, 60, 'no se curó junto al cuartel: ' + cerca.vida);
+  assert.ok(pobre < 60, 'sin minerales no debía curarse del todo');
+  const gasto = 1000 + 600 / W.ECON.goteoCada - m.jug[0].minerales, justo = (40 / 60) * W.UNID.infanteria.costo * W.ECON.curaCosto;
+  assert.ok(gasto > 0 && gasto <= justo + 0.01, 'la curación debía costar poco: ' + gasto.toFixed(2) + ' (tope ' + justo.toFixed(2) + ')');
   assert.strictEqual(aparte.vida, 20, 'se curó lejos de todo edificio');
   // los edificios se reparan solos tras un rato sin recibir daño
   const cu = m.ents.find((e) => e.tipo === 'cuartel'); cu.vida = 300; cu.tDano = m.t; avanza(m, 250);
@@ -141,8 +147,11 @@ prueba('contraataque, disparo en marcha, curación y atropello', () => {
   m = nuevo(); franja(m);
   t = W.crearUnidad(m, 0, 'tanque', en(m, 40, 64));
   const victima = W.crearUnidad(m, 1, 'infanteria', en(m, 46, 64)), amigo = W.crearUnidad(m, 0, 'infanteria', en(m, 44, 64));
-  W.orden(m, { t: 'mover', j: 0, ids: [t.id], x: 52.5, y: 64.5 }); avanza(m, 110);
-  assert.ok(!m.porId.has(victima.id) && m.jug[0].aplastados === 1, 'el tanque no aplastó a la infantería enemiga');
+  W.orden(m, { t: 'mover', j: 0, ids: [t.id], x: 52.5, y: 64.5 });
+  let herida = false;
+  for (let i = 0; i < 110; i++) { W.tick(m); if (m.porId.has(victima.id) && victima.vida < 30 && victima.vida > 0) herida = true; }
+  assert.ok(herida, 'el atropello no debía matar de un solo golpe');
+  assert.ok(!m.porId.has(victima.id) && m.jug[0].aplastados === 1, 'pasarle por encima de lleno debía matarla');
   assert.ok(m.porId.has(amigo.id), 'aplastó a su propia infantería');
 });
 

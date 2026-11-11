@@ -166,7 +166,7 @@
     bateria: { alcance: 6.5, dano: 30, recarga: 30, vuelo: 1.1, vs: { ligero: 0.8, pesado: 1,    edificio: 0.5 } },
   };
 
-  W.ECON = { inicio: 2500, petInicio: 150, cosecha: 5, descarga: 25, colaMax: 9, separacionColocar: 3, goteoCada: 5, obrasMax: 8, curaUnidad: 0.01, curaEdificio: 0.0025, bonoProd: 0.5, bonoMax: 2.5 };
+  W.ECON = { inicio: 2500, petInicio: 150, cosecha: 5, descarga: 25, colaMax: 9, separacionColocar: 3, goteoCada: 5, obrasMax: 8, curaUnidad: 0.01, curaEdificio: 0.0025, curaCosto: 0.15, aplasta: 10, bonoProd: 0.5, bonoMax: 2.5 };
 })();
 
 // ===== sim/mapa.js =====
@@ -1023,19 +1023,28 @@
     const talleres = [[], []];
     for (const e of m.ents) if (e.edif && (e.tipo === 'patio' || e.tipo === 'cuartel' || e.tipo === 'fabrica')) talleres[e.j].push(e);
     for (const e of m.ents) {
-      if (e.vida >= e.vidaMax) continue;
+      if (e.vida >= e.vidaMax || e.vida <= 0) continue; // los caídos en este tick no se reaniman
       const calma = m.t - (e.tDano === undefined ? -999 : e.tDano);
-      if (e.edif) { if (calma > 300) { e.vida = Math.min(e.vidaMax, e.vida + e.vidaMax * ECON.curaEdificio); e.curando = m.t; } continue; }
+      // Curar cuesta minerales: recuperar toda la vida vale una fracción (curaCosto) del precio de la ficha.
+      const J = m.jug[e.j], d = e.edif ? EDIF[e.tipo] : UNID[e.tipo];
+      const sanar = (parte) => {
+        const pv = Math.min(e.vidaMax - e.vida, e.vidaMax * parte), precio = (pv / e.vidaMax) * d.costo * ECON.curaCosto;
+        if (J.minerales < precio) return false; // sin minerales no hay reparación
+        J.minerales -= precio; e.vida += pv; e.curando = m.t;
+        return true;
+      };
+      if (e.edif) { if (calma > 300) sanar(ECON.curaEdificio); continue; }
       if (calma < 100) continue;
       const quiere = UNID[e.tipo].cat === 'inf' ? 'cuartel' : 'fabrica';
       for (const b of talleres[e.j]) {
         if ((b.tipo !== 'patio' && b.tipo !== quiere) || dist(e.x, e.y, b) > 5) continue;
-        e.vida = Math.min(e.vidaMax, e.vida + e.vidaMax * ECON.curaUnidad); e.curando = m.t;
+        sanar(ECON.curaUnidad);
         break;
       }
     }
   }
-  // Los vehículos en marcha aplastan a la infantería enemiga que pisan.
+  // Los vehículos en marcha aplastan a la infantería enemiga que pisan: daño fuerte cada tick mientras la tienen
+  // debajo. Pasarle por encima de lleno la mata; un roce solo la hiere.
   function aplastar(m) {
     for (const a of m.ents) {
       if (a.edif || a.tipo === 'infanteria' || a.v < 0.03) continue;
@@ -1043,7 +1052,9 @@
         if (b.edif || b.tipo !== 'infanteria' || b.j === a.j || b.vida <= 0) continue;
         const dx = b.x - a.x; if (dx > 0.5 || dx < -0.5) continue;
         const dy = b.y - a.y; if (dy > 0.5 || dy < -0.5) continue;
-        if (dx * dx + dy * dy < 0.2) { b.vida = 0; m.jug[a.j].aplastados = (m.jug[a.j].aplastados || 0) + 1; }
+        if (dx * dx + dy * dy >= 0.2) continue;
+        b.vida -= ECON.aplasta; b.tDano = m.t;
+        if (b.vida <= 0) m.jug[a.j].aplastados = (m.jug[a.j].aplastados || 0) + 1;
       }
     }
   }
