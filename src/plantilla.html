@@ -58,7 +58,8 @@
   #ayuda kbd { font: inherit; color: var(--tinta); }
   #formas { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; }
   #formas .grupo { justify-content: center; }
-  #vender, #trinchera { justify-content: center; margin-top: 4px; }
+  #vender, #trinchera, #retiro { justify-content: center; margin-top: 4px; }
+  .chip.debe { border-style: dashed; color: var(--suave); }
   #abajo { position: fixed; left: 8px; bottom: 8px; z-index: 3; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; pointer-events: none; }
   #rend { border-collapse: collapse; background: var(--panel); border: 1px solid var(--linea); border-radius: 2px; font-size: 10px; line-height: 1.35; opacity: 0.92; pointer-events: auto; cursor: pointer; }
   #rend td { padding: 0 6px; } #rend td:last-child { text-align: right; color: var(--tinta); font-variant-numeric: tabular-nums; }
@@ -121,7 +122,12 @@
       <div>rueda o <kbd>+</kbd> <kbd>−</kbd>: zoom · <kbd>M</kbd> cambia rueda</div>
       <div><kbd>H</kbd> base · <kbd>espacio</kbd> alerta</div>
       <div><kbd>Mayús+1…9</kbd> guardar grupo · <kbd>1…9</kbd> elegirlo, dos veces ir</div>
-      <div>clic en un edificio: lo que produce y su cola</div>
+      <div>clic en un edificio: lo que produce y su cola;</div>
+      <div>«repetir» vuelve a encargar cada unidad que sale</div>
+      <div>doble clic en una unidad: todas las de su tipo en pantalla</div>
+      <div>muy dañadas, se retiran solas a reparar (se puede apagar)</div>
+      <div>galones: veteranía por bajas, +10 % de daño y vida cada uno</div>
+      <div>la artillería tira a lo que vea cualquier unidad propia</div>
       <div><kbd>B</kbd> patio · <kbd>Q</kbd> cuarteles · <kbd>V</kbd> fábricas · <kbd>X</kbd> aeródromos</div>
       <div>clic en la cola, <kbd>×</kbd> o clic derecho en botón: cancelar</div>
       <div><kbd>P</kbd> pausa · <kbd>T</kbd> tema · <kbd>N</kbd> silenciar</div>
@@ -144,7 +150,7 @@
     <canvas id="mini" width="208" height="208"></canvas>
     <div id="panel">
     <div id="vacio" class="tenue">Selecciona un edificio para ver lo que produce.<br><kbd>B</kbd> patio · <kbd>Q</kbd> cuarteles · <kbd>V</kbd> fábricas · <kbd>X</kbd> aeródromos</div>
-    <section id="secCola" hidden><h2>Cola de producción</h2><div id="cola"></div></section>
+    <section id="secCola" hidden><h2>Cola de producción</h2><div id="cola"></div><button type="button" id="bucle" class="grupo" title="Cada unidad que sale se vuelve a encargar al final de la cola. Se paga al empezarla.">repetir: no</button></section>
     <section id="secEdif" hidden><h2>Edificios</h2><div id="bEdif"></div><div id="obras" class="tenue"></div></section>
     <section id="secUnid" hidden><h2>Unidades</h2><div id="bUnid"></div></section>
     <section id="secTec" hidden><h2>Tecnología</h2><div id="bTec"></div></section>
@@ -154,6 +160,7 @@
       <button type="button" class="grupo on" data-f="grupo">grupo</button><button type="button" class="grupo" data-f="linea">línea</button><button type="button" class="grupo" data-f="columna">columna</button>
       <button type="button" class="grupo" data-f="cuna">cuña</button><button type="button" class="grupo" data-f="cuadro">cuadro</button></div></section>
     <div id="sel" class="tenue"></div>
+    <button type="button" id="retiro" class="btn" hidden title="Con poca vida, la unidad se va sola a reparar y luego vuelve a su puesto."></button>
     <button type="button" id="trinchera" class="btn" hidden></button>
     <button type="button" id="vender" class="btn" hidden></button>
     </div>

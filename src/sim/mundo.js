@@ -12,6 +12,7 @@
     return {
       minerales: inicio || ECON.inicio, prod: 0, uso: 0, cuenta: {}, vivo: true, dios: false, admin: false,
       obras: [], // [{ tipo, prog, listo }]: varias a la vez, se reparten la velocidad
+      retiro: false, // retirada automática por defecto para las unidades nuevas
       colas: Object.fromEntries(Object.keys(UNID).map((t) => [t, { n: 0, prog: 0, sinAgua: false }])), // total encargado por tipo; las colas de verdad están en cada edificio (e.cola)
       alerta: null, cosechado: 0, bajas: 0, producidas: 0,
       colmena: true, // inteligencia de colmena: las unidades piden y dan apoyo solas
@@ -58,7 +59,7 @@
   // ---------- entidades ----------
   function crearEdificio(m, j, tipo, x, y) {
     const d = EDIF[tipo], N = m.N;
-    const e = { id: m.sigId++, j, tipo, edif: true, x, y, tam: d.tam, cx: x + d.tam / 2, cy: y + d.tam / 2, vida: d.vida, vidaMax: d.vida, recarga: 0, obj: 0, reunion: null, acum: 0, nace: m.t, cola: [], prog: 0, sinAgua: false, angT: Math.atan2(N / 2 - y, N / 2 - x) };
+    const e = { id: m.sigId++, j, tipo, edif: true, x, y, tam: d.tam, cx: x + d.tam / 2, cy: y + d.tam / 2, vida: d.vida, vidaMax: d.vida, recarga: 0, obj: 0, reunion: null, acum: 0, nace: m.t, cola: [], pago: [], prog: 0, sinAgua: false, sinFondos: false, bucle: false, angT: Math.atan2(N / 2 - y, N / 2 - x) };
     for (let dy = 0; dy < d.tam; dy++) for (let dx = 0; dx < d.tam; dx++) { const i = (y + dy) * N + x + dx; m.ocup[i] = e.id; m.paso[i] = 0; }
     m.ents.push(e); m.porId.set(e.id, e);
     return e;
@@ -84,6 +85,8 @@
       quiere: 1, cargaTipo: 1, // cosechadora: qué busca y qué lleva (1 minerales, 2 raros)
       fuel: d.fuel || 0, repostando: false, casa: 0, enTierra: false, slot: 0, // aviación: su aeródromo y si está posado en él
       cola: [], patrulla: null, explora: false, // órdenes encadenadas, ruta de patrulla, exploración automática
+      retira: m.jug[j].retiro, retirando: false, volver: null, tRet: 0, huye: 0, // retirada automática a reparar; cosechadora que huye
+      bajas: 0, rango: 0, // veteranía
     };
     m.ents.push(u); m.porId.set(u.id, u);
     m.jug[j].producidas++;
@@ -191,7 +194,7 @@
 
   function propias(m, cmd) {
     const out = [];
-    for (let k = 0; k < cmd.ids.length; k++) { const u = m.porId.get(cmd.ids[k]); if (u && !u.edif && u.j === cmd.j) out.push(u); }
+    for (let k = 0; k < cmd.ids.length; k++) { const u = m.porId.get(cmd.ids[k]); if (u && !u.edif && u.j === cmd.j) { u.retirando = false; u.volver = null; u.noRetira = true; out.push(u); } } // una orden directa anula la retirada (hasta que se repare)
     return out;
   }
   // Puestos de una formación, en coordenadas locales [avance, lateral] respecto del rumbo del grupo.
@@ -297,7 +300,7 @@
         if (J.admin) {
           J.nivel = 3;
           for (const k in TEC) if (!TEC[k].sube) J.mejoras[k] = true;
-          for (const e of m.ents) if (!e.edif && e.j === cmd.j) { const nueva = vidaDe(J, e.tipo); if (nueva !== e.vidaMax) { e.vida = e.vida * (nueva / e.vidaMax); e.vidaMax = nueva; } }
+          for (const e of m.ents) if (!e.edif && e.j === cmd.j) { const nueva = Math.round(vidaDe(J, e.tipo) * (1 + ECON.rangoVida * e.rango)); if (nueva !== e.vidaMax) { e.vida = e.vida * (nueva / e.vidaMax); e.vidaMax = nueva; } }
         }
         return;
       case 'construir': {
@@ -334,7 +337,7 @@
           if (!fab || e.cola.length < fab.cola.length) fab = e;
         }
         if (!fab) return;
-        cobrar(J, d); fab.cola.push(cmd.tipo); J.colas[cmd.tipo].n++;
+        cobrar(J, d); fab.cola.push(cmd.tipo); fab.pago.push(true); J.colas[cmd.tipo].n++;
         return;
       }
       case 'cancelarUnidad': { // con id e i: ese puesto de la cola de ese edificio; si no, el último de ese tipo (en los edificios indicados o en todos)
@@ -348,9 +351,23 @@
           }
           if (!fab) return;
         }
-        const tipo = fab.cola[i];
-        fab.cola.splice(i, 1); if (i === 0) fab.prog = 0;
-        J.colas[tipo].n--; devolver(J, UNID[tipo]);
+        const tipo = fab.cola[i], pagado = fab.pago[i];
+        fab.cola.splice(i, 1); fab.pago.splice(i, 1); if (i === 0) fab.prog = 0;
+        J.colas[tipo].n--; if (pagado) devolver(J, UNID[tipo]);
+        return;
+      }
+      case 'bucle': { // producción en bucle: cada unidad que sale se vuelve a encargar al final de la cola (se paga al empezarla)
+        const eds = (cmd.ids || []).map((id) => m.porId.get(id)).filter((e) => e && e.edif && e.j === cmd.j && e.cola);
+        if (!eds.length) return;
+        const on = cmd.on !== undefined ? !!cmd.on : !eds[0].bucle;
+        for (const e of eds) e.bucle = on;
+        return;
+      }
+      case 'retiro': { // retirada automática: con ids, para esas unidades; sin ids, para todas y como valor por defecto
+        const on = !!cmd.on;
+        if (cmd.ids) { for (const u of propias(m, cmd)) { u.retira = on; u.noRetira = false; } return; }
+        J.retiro = on;
+        for (const e of m.ents) if (!e.edif && e.j === cmd.j) { e.retira = on; if (!on) { e.retirando = false; e.volver = null; } }
         return;
       }
       // cmd.enc (encadenar): la orden se añade a la cola de la unidad en vez de reemplazar lo que hace.
@@ -589,7 +606,10 @@
       const e = m.ents[k];
       if (e.j === a.j || e.vida <= 0 || !puede(arma, e)) continue;
       const d = dist(x, y, e);
-      if (d > md || (!a.edif && !veDir(m, a, e, d))) continue; // una unidad solo detecta por sí misma lo que cae en su visión
+      if (d > md) continue;
+      if (!a.edif) { // una unidad solo detecta por sí misma lo que cae en su visión; el arma indirecta, lo que vea cualquiera de los suyos
+        if (arma.indirecto ? m.niebla[a.j][Math.floor(posY(e)) * m.N + Math.floor(posX(e))] !== 2 : !veDir(m, a, e, d)) continue;
+      }
       md = d; mejor = e;
     }
     return mejor;
@@ -606,13 +626,32 @@
   function herir(m, b, arma, mult, de, ox, oy) {
     if (!puede(arma, b)) return;
     let fl = 1;
-    if (ox !== undefined && !b.edif && UNID[b.tipo].cat === 'veh') { const s = W.sector(m, b, { x: ox, y: oy }); fl = s === 2 ? ECON.espalda : s === 1 ? ECON.flanco : 1; if (s) b.tFlanco = m.t; }
+    if (ox !== undefined && !b.edif && UNID[b.tipo].cat === 'veh') { const s = W.sector(m, b, { x: ox, y: oy }); fl = s === 2 ? ECON.espalda : s === 1 ? ECON.flanco : 1; if (s && m.t - (b.tFlanco === undefined ? -99 : b.tFlanco) > 25) { b.tFlanco = m.t; m.efectos.push({ tipo: 'flanco', x1: b.x, y1: b.y, s, j: b.j, t: m.t }); } }
     b.vida -= fl * arma.dano * (mult || 1) * arma.vs[b.edif ? 'edificio' : UNID[b.tipo].blindaje] * (enTrinchera(m, b) ? ECON.trinchera : 1) * (enBosque(m, b) && UNID[b.tipo].cat === 'inf' ? ECON.bosqueCubre : 1);
     b.tDano = m.t; b.agresor = de;
+    if (b.vida <= 0 && !b.contada) { // veteranía: la baja se la apunta quien disparó
+      b.contada = true;
+      const a = de ? m.porId.get(de) : null;
+      if (a && !a.edif && a.vida > 0) {
+        a.bajas++;
+        while (a.rango < ECON.rangos.length && a.bajas >= ECON.rangos[a.rango]) {
+          a.rango++;
+          const nueva = Math.round(vidaDe(m.jug[a.j], a.tipo) * (1 + ECON.rangoVida * a.rango));
+          a.vida += nueva - a.vidaMax; a.vidaMax = nueva;
+          m.efectos.push({ tipo: 'ascenso', x1: a.x, y1: a.y, rango: a.rango, j: a.j, t: m.t });
+        }
+      }
+    }
   }
   // Contraataque: el atacado va por su agresor. Los compañeros llegan por la colmena (ver más abajo).
   function alertar(m, a, b) {
     m.jug[b.j].alerta = { x: posX(b), y: posY(b), t: m.t };
+    if (b.tipo === 'cosechadora' && b.orden !== 'mover') { // la cosechadora atacada deja lo que hace y se refugia en la refinería
+      if (!b.huye) m.efectos.push({ tipo: 'huye', x1: b.x, y1: b.y, j: b.j, t: m.t });
+      b.huye = m.t + ECON.huida;
+      if (b.est === 'ir' || b.est === 'cosechar' || b.est === 'buscar' || b.est === 'espera') { b.ruta = null; b.est = 'volver0'; }
+      return;
+    }
     if (b.edif || b.obj || !UNID[b.tipo].arma || b.repostando || (b.orden !== 'nada' && b.orden !== 'amover') || !puede(ARMAS[UNID[b.tipo].arma], a)) return;
     b.obj = a.id; b.tRep = m.t; b.ruta = null; b.pend = null;
   }
@@ -676,7 +715,7 @@
         for (const id of f.resp) { const u = m.porId.get(id); nodos.push({ x: u.x, y: u.y, r: 8, salto: u.salto }); }
         const cand = [];
         for (const u of m.ents) {
-          if (u.j !== j || u.edif || u.acude || u.guardia || u.vida <= 0 || vict.has(u.id) || !UNID[u.tipo].arma) continue;
+          if (u.j !== j || u.edif || u.acude || u.guardia || u.retirando || u.vida <= 0 || vict.has(u.id) || !UNID[u.tipo].arma) continue;
           const libre = (u.orden === 'nada' || u.orden === 'amover') && !u.obj;
           // Con una orden directa solo acude si atacan a una compañera que marcha en su misma misión.
           if (!libre && !(u.orden !== 'nada' && u.mision && f.victimas.some((v) => !v.edif && v.mision === u.mision && v.orden !== 'nada'))) continue;
@@ -702,7 +741,7 @@
   // Los efectos son avisos para la interfaz (dibujo y sonido); la simulación no los lee.
   function disparar(m, a, b, arma) {
     const clave = a.edif ? EDIF[a.tipo].arma : UNID[a.tipo].arma, ax = posX(a), ay = posY(a), bx = posX(b), by = posY(b);
-    const mult = !a.edif && UNID[a.tipo].cat === 'inf' && m.jug[a.j].mejoras.perforante ? 1.25 : 1;
+    const mult = (!a.edif && UNID[a.tipo].cat === 'inf' && m.jug[a.j].mejoras.perforante ? 1.25 : 1) * (a.edif ? 1 : 1 + ECON.rangoDano * a.rango);
     a.recarga = arma.recarga;
     if (arma.vuelo) { // obús: vuela hasta donde estaba el blanco al disparar
       m.proy.push({ ox: ax, oy: ay, x: ax, y: ay, px: ax, py: ay, tx: bx, ty: by, obj: b.id, j: a.j, arma: clave, mult, de: a.id });
@@ -803,6 +842,34 @@
     return true;
   }
 
+  // Retirada automática: la unidad muy dañada se va a reparar al taller más cercano (patio, o cuartel/fábrica según sea)
+  // y, ya recuperada, vuelve a su puesto o retoma su patrulla. Cualquier orden directa la anula.
+  function retirada(m, u) {
+    const cat = UNID[u.tipo].cat;
+    if (!u.retirando) {
+      if (u.vida >= u.vidaMax * ECON.retiroBajo) { u.noRetira = false; return; }
+      if (u.noRetira || u.guardia || u.cava > 0 || u.acude || enTrinchera(m, u)) return;
+      let t = null, md = Infinity;
+      for (const e of m.ents) {
+        if (!e.edif || e.j !== u.j || (e.tipo !== 'patio' && e.tipo !== LUGAR[cat])) continue;
+        const dd = Math.hypot(e.cx - u.x, e.cy - u.y);
+        if (dd < md) { md = dd; t = e; }
+      }
+      if (!t) return;
+      const enMarcha = u.dest && u.orden !== 'nada' && !u.patrulla;
+      u.volver = { x: enMarcha ? u.dest.x : u.x, y: enMarcha ? u.dest.y : u.y, ang: u.ang, patrulla: u.patrulla };
+      limpiar(u); u.obj = 0; u.retirando = true; u.tRet = m.t;
+      const c = W.cercaLibre(m, t.cx, t.y + t.tam + 1.5);
+      asignar(m, u, { t: 'mover', x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 });
+      m.efectos.push({ tipo: 'retira', x1: u.x, y1: u.y, j: u.j, t: m.t });
+      return;
+    }
+    if (u.vida < u.vidaMax * ECON.retiroAlto && m.t - u.tRet < 2400) return; // sigue reparándose (o lleva demasiado esperando)
+    const v = u.volver; u.retirando = false; u.volver = null;
+    if (!v) return;
+    if (v.patrulla) u.patrulla = v.patrulla;
+    else { asignar(m, u, { t: 'amover', x: v.x, y: v.y }); u.angFin = v.ang; }
+  }
   function tickUnidad(m, u) {
     const d = UNID[u.tipo];
     u.px = u.x; u.py = u.y;
@@ -821,6 +888,7 @@
       if (u.orden !== 'nada') u.cava = 0;
       else if (--u.cava <= 0) m.trincheras.set(Math.floor(u.y) * m.N + Math.floor(u.x), { x: Math.floor(u.x) + 0.5, y: Math.floor(u.y) + 0.5, ang: u.ang });
     }
+    if (!d.aire && (u.retira || u.retirando)) retirada(m, u);
     const arma = ARMAS[d.arma], alc = alcance(m, u, arma);
     if (u.orden === 'mover') { // cumple la orden sin desviarse, pero dispara a lo que tenga a tiro
       if ((m.t + u.id) % 4 === 0) { const e = buscarEnemigo(m, u, u.x, u.y, alc); u.mira = e ? e.id : 0; }
@@ -836,7 +904,7 @@
       if (casa && Math.hypot(posX(o) - casa.cx, posY(o) - casa.cy) > d.radioVuelo + alc) { o = null; u.obj = 0; u.ruta = null; if (u.orden === 'atacar') u.orden = 'nada'; }
     }
     if (!o && (m.t + u.id) % 5 === 0) {
-      o = buscarEnemigo(m, u, u.x, u.y, alc + (u.guardia ? 0 : 2));
+      o = buscarEnemigo(m, u, u.x, u.y, alc + (u.guardia || u.retirando ? 0 : 2));
       if (o) { u.obj = o.id; u.ruta = null; u.pend = null; }
     }
     if (o) {
@@ -845,8 +913,8 @@
         const listo = apuntar(m, u, o, true);
         if (listo && u.recarga <= 0 && dd >= (arma.alcanceMin || 0)) disparar(m, u, o, arma); // demasiado cerca, la artillería no puede tirar
         else if (!listo && u.orden !== 'atacar' && enTrinchera(m, u)) u.obj = 0; // fuera del arco de la trinchera: no puede responder
-      } else if (u.guardia) {
-        u.obj = 0; // en guardia no persigue
+      } else if (u.guardia || u.retirando) {
+        u.obj = 0; // en guardia, o reparándose, no persigue
       } else if (u.orden !== 'atacar' && dd > alc + (m.t - u.tRep < 240 ? 14 : 4)) { // al agresor lo persigue más lejos
         u.obj = 0; u.ruta = null; // se alejó demasiado: lo suelta
       } else {
@@ -952,11 +1020,11 @@
         const q = Math.min(ECON.descarga, u.carga);
         u.carga -= q;
         if (u.cargaTipo === 2) J.raros += q; else { J.minerales += q; J.cosechado += q; }
-        if (u.carga <= 0) u.est = 'buscar';
+        if (u.carga <= 0) { if (u.huye > m.t) { u.est = 'espera'; u.espera = u.huye - m.t; } else u.est = 'buscar'; } // si huía, espera a cubierto antes de volver
         break;
       }
       case 'espera':
-        if (--u.espera <= 0) u.est = u.carga >= cap ? 'volver0' : 'buscar';
+        if (--u.espera <= 0) { u.huye = 0; u.est = u.carga >= cap ? 'volver0' : 'buscar'; }
         break;
     }
   }
@@ -983,7 +1051,7 @@
       J.inv.splice(k, 1);
       if (t.sube) J.nivel = t.sube; else J.mejoras[i.clave] = true;
       if (i.clave === 'chalecos' || i.clave === 'reactivo') { // la vida extra llega también a las unidades ya existentes
-        for (const e of m.ents) if (!e.edif && e.j === j) { const nueva = vidaDe(J, e.tipo); if (nueva !== e.vidaMax) { e.vida = e.vida * (nueva / e.vidaMax); e.vidaMax = nueva; } }
+        for (const e of m.ents) if (!e.edif && e.j === j) { const nueva = Math.round(vidaDe(J, e.tipo) * (1 + ECON.rangoVida * e.rango)); if (nueva !== e.vidaMax) { e.vida = e.vida * (nueva / e.vidaMax); e.vidaMax = nueva; } }
       }
       m.efectos.push({ tipo: 'tec', clave: i.clave, j, t: m.t });
     }
@@ -1003,10 +1071,16 @@
       {
       fab.sinAgua = J.aguaUso + (UNID[tipo].agua || 0) > J.aguaProd; // sin agua no se sostiene más tropa
       if (fab.sinAgua) { q.sinAgua = true; continue; }
+      if (!fab.pago[0]) { // repetido por el bucle: se paga al empezarlo; si no alcanza, espera
+        fab.sinFondos = !W.puedePagar(J, UNID[tipo]);
+        if (fab.sinFondos) continue;
+        cobrar(J, UNID[tipo]); fab.pago[0] = true;
+      }
       fab.prog += factor;
       if (fab.prog > q.prog) q.prog = fab.prog;
       if (fab.prog < UNID[tipo].tiempo) continue;
-      fab.cola.shift(); fab.prog = 0; q.n--; J.aguaUso += UNID[tipo].agua || 0;
+      fab.cola.shift(); fab.pago.shift(); fab.prog = 0; q.n--; J.aguaUso += UNID[tipo].agua || 0;
+      if (fab.bucle && (cat !== 'aire' || W.cupoAire(m, j).hay + 1 < W.cupoAire(m, j).cupo)) { fab.cola.push(tipo); fab.pago.push(false); q.n++; }
       const u = crearUnidad(m, j, tipo, cat === 'aire' ? Math.floor(fab.cy) * m.N + Math.floor(fab.cx) : W.cercaLibre(m, fab.cx, fab.y + fab.tam + 0.5));
       if (cat === 'aire') { const casa = aerodromoLibre(m, u) || fab; posar(m, u, casa); } // el avión nace posado en un aeródromo con sitio
       if (fab.reunion) { // va al punto de reunión del edificio
@@ -1145,7 +1219,7 @@
       m.efectos.push({ tipo: e.vendido ? 'venta' : 'muerte', x2: posX(e), y2: posY(e), edif: e.edif, tam: e.tam || 0, clase: e.tipo, ang: e.ang || 0, j: e.j, t: m.t });
       if (e.edif) {
         const N = m.N;
-        for (const t of e.cola) { devolver(m.jug[e.j], UNID[t]); m.jug[e.j].colas[t].n--; } // lo que tenía encargado se devuelve
+        e.cola.forEach((t, i) => { if (e.pago[i]) devolver(m.jug[e.j], UNID[t]); m.jug[e.j].colas[t].n--; }); // lo que tenía encargado (y pagado) se devuelve
         e.cola.length = 0;
         for (let dy = 0; dy < e.tam; dy++) for (let dx = 0; dx < e.tam; dx++) { const i = (e.y + dy) * N + e.x + dx; m.ocup[i] = 0; m.paso[i] = 1; }
         if (e.tipo === 'patio') m.jug[e.j].vivo = false;

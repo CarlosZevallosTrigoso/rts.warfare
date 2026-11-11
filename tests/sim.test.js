@@ -671,6 +671,75 @@ prueba('modo admin: todo activado para probar', () => {
   assert.ok(!J.admin && !J.dios && J.minerales < min && J.nivel === 3, 'al apagarlo vuelve el saldo; el nivel y las mejoras se quedan');
 });
 
+prueba('fase 1a y 1b: bucle, retirada, cosechadora que huye, veteranía, observador y aviso de flanco', () => {
+  const m = W.crearMundo(4242, { N: 128 }), N = m.N, J = m.jug[0], b = m.mapa.bases[0];
+  const avanza = (n, fn) => { for (let i = 0; i < n; i++) { W.tick(m); if (fn) fn(); } };
+  const cel = (x, y) => y * N + x;
+  for (let y = 20; y < 60; y++) for (let x = 60; x < 120; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; m.mapa.mineral[i] = 0; } }
+  J.dios = true; m.jug[1].dios = true;
+  W.crearEdificio(m, 0, 'central', b.x + 3, b.y - 1); const cu = W.crearEdificio(m, 0, 'cuartel', b.x - 5, b.y - 6); avanza(1);
+  // bucle: cada soldado que sale se vuelve a encargar solo
+  const T = W.UNID.infanteria.tiempo, n0 = J.cuenta.infanteria || 0;
+  W.orden(m, { t: 'bucle', j: 0, ids: [cu.id] }); W.orden(m, { t: 'entrenar', j: 0, tipo: 'infanteria' }); avanza(3 * T + 10);
+  assert.ok(cu.bucle && (J.cuenta.infanteria || 0) - n0 === 3 && cu.cola.length === 1, 'en bucle debían salir tres soldados y quedar otro encargado: ' + ((J.cuenta.infanteria || 0) - n0));
+  // lo repetido se paga al empezarlo: sin dinero espera, y cancelarlo no devuelve nada
+  J.dios = false; J.minerales = 0; avanza(T + 5);
+  assert.ok(cu.sinFondos && cu.cola.length === 1 && cu.prog === 0, 'sin minerales el bucle espera');
+  W.orden(m, { t: 'cancelarUnidad', j: 0, id: cu.id, i: 0 }); W.orden(m, { t: 'bucle', j: 0, ids: [cu.id], on: false }); avanza(1);
+  assert.ok(cu.cola.length === 0 && J.minerales < 50, 'cancelar un encargo aún sin pagar no devuelve dinero');
+  J.dios = true; avanza(1);
+  // veteranía: dos bajas dan el primer galón, con más vida y más daño
+  const vet = W.crearUnidad(m, 0, 'tanque', cel(80, 30)); vet.ang = vet.angT = 0;
+  for (let k = 0; k < 2; k++) { const e = W.crearUnidad(m, 1, 'infanteria', cel(84, 29 + k * 2)); e.recarga = 99999; e.guardia = true; }
+  avanza(400);
+  assert.ok(vet.bajas === 2 && vet.rango === 1 && vet.vidaMax === Math.round(W.UNID.tanque.vida * 1.1), 'dos bajas, un galón: ' + vet.bajas + ' · ' + vet.rango + ' · ' + vet.vidaMax);
+  const blanco = W.crearUnidad(m, 1, 'tanque', cel(84, 30)); blanco.recarga = 99999; blanco.guardia = true; blanco.ang = Math.PI;
+  avanza(40);
+  const golpe = W.ARMAS.canon.dano * (1 + W.ECON.rangoDano);
+  assert.ok(Math.abs((blanco.vidaMax - blanco.vida) % golpe) < 0.01 && blanco.vida < blanco.vidaMax, 'el veterano pega un 10 % más: ' + (blanco.vidaMax - blanco.vida));
+  // aviso de flanco: al darle por la espalda sale el efecto
+  blanco.ang = 0; blanco.vida = blanco.vidaMax; m.efectos.length = 0; let avisos = 0;
+  avanza(80, () => { avisos += m.efectos.filter((e) => e.tipo === 'flanco' && e.s === 2).length; m.efectos.length = 0; });
+  assert.ok(avisos >= 1, 'debía avisar del golpe por la espalda');
+  // retirada automática: muy dañado se va a reparar y vuelve a su puesto
+  blanco.vida = 0; avanza(2);
+  W.orden(m, { t: 'retiro', j: 0, on: true }); avanza(1);
+  const x0 = vet.x, y0 = vet.y; vet.vida = vet.vidaMax * 0.2; avanza(5);
+  assert.ok(vet.retirando && vet.orden === 'mover', 'con poca vida debía retirarse');
+  let cercaBase = false;
+  avanza(4500, () => { if (Math.hypot(vet.x - b.x, vet.y - b.y) < 9) cercaBase = true; });
+  assert.ok(cercaBase, 'debía llegar a su base a repararse');
+  assert.ok(!vet.retirando && vet.vida >= vet.vidaMax * 0.9 && Math.hypot(vet.x - x0, vet.y - y0) < 1.5, 'reparado, vuelve a su puesto: ' + vet.vida.toFixed(0) + ' · ' + Math.hypot(vet.x - x0, vet.y - y0).toFixed(1));
+  // una orden directa anula la retirada
+  vet.vida = vet.vidaMax * 0.2; avanza(5);
+  W.orden(m, { t: 'mover', j: 0, ids: [vet.id], x: 90.5, y: 30.5 }); avanza(2);
+  assert.ok(!vet.retirando, 'la orden del jugador manda');
+  W.orden(m, { t: 'retiro', j: 0, on: false }); vet.vida = vet.vidaMax; avanza(300);
+  // observador: la artillería no ve al blanco; en cuanto un soldado propio lo ve, dispara
+  const ar = W.crearUnidad(m, 0, 'artilleria', cel(70, 50)); ar.ang = Math.PI; // de espaldas
+  const lejos = W.crearUnidad(m, 1, 'tanque', cel(80, 50)); lejos.recarga = 99999; lejos.guardia = true;
+  avanza(150);
+  assert.strictEqual(lejos.vida, lejos.vidaMax, 'sin nadie que lo vea, la artillería no dispara');
+  const ojo = W.crearUnidad(m, 0, 'infanteria', cel(76, 53)); ojo.ang = 0; ojo.recarga = 99999; ojo.guardia = true;
+  avanza(250);
+  assert.ok(lejos.vida < lejos.vidaMax, 'con un observador, la artillería debía disparar');
+  // cosechadora: atacada, deja la mina y se refugia en la refinería; pasado el susto vuelve a cosechar
+  for (const e of [lejos, ojo, ar]) e.vida = 0; avanza(2);
+  const ref = W.crearEdificio(m, 0, 'refineria', b.x - 7, b.y + 3); avanza(1);
+  const co = m.ents.find((e) => e.tipo === 'cosechadora' && e.j === 0) || W.crearUnidad(m, 0, 'cosechadora', W.cercaLibre(m, b.x - 3, b.y + 6));
+  avanza(900);
+  assert.ok(co.est === 'cosechar' || co.est === 'ir' || co.est === 'volver' || co.est === 'descargar', 'la cosechadora debía estar trabajando: ' + co.est);
+  let espera = 0; while (co.est !== 'cosechar' && espera++ < 1500) W.tick(m);
+  const malo = W.crearUnidad(m, 1, 'infanteria', W.cercaLibre(m, co.x + 2, co.y)); malo.guardia = true;
+  avanza(60);
+  assert.ok(co.huye > 0 && (co.est === 'volver0' || co.est === 'volver'), 'atacada, debía huir a la refinería: ' + co.est);
+  malo.vida = 0; let llego = false;
+  avanza(900, () => { if (W.dist(co.x, co.y, ref) <= 1.5) llego = true; });
+  assert.ok(llego, 'debía llegar a la refinería');
+  avanza(700);
+  assert.ok(co.huye === 0 && co.est !== 'espera', 'pasado el susto vuelve al trabajo: ' + co.est);
+});
+
 prueba('determinismo: misma semilla, misma partida', () => {
   const corre = () => {
     const m = W.crearMundo(777), a = W.iaCrear(0), b = W.iaCrear(1);

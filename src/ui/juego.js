@@ -144,6 +144,9 @@
         if (e.tipo === 'cosechadora' && e.j === YO) t += ' · carga ' + e.carga;
         if (e.cava > 0) t += ' · cavando'; else if (e.guardia && e.j === YO && !W.enTrinchera(m, e)) t += ' · en guardia';
         if (UNID[e.tipo] && UNID[e.tipo].aire && e.j === YO) t += (e.enTierra ? ' · en tierra' : e.repostando ? ' · vuelve a repostar' : e.patrulla ? ' · patrulla' : '') + ' · combustible ' + Math.round(e.fuel / UNID[e.tipo].fuel * 100) + ' %';
+        if (!e.edif && e.rango) t += ' · veterano ' + '▲'.repeat(e.rango);
+        if (!e.edif && e.j === YO && e.bajas) t += ' · ' + e.bajas + (e.bajas === 1 ? ' baja' : ' bajas');
+        if (e.retirando) t += ' · se retira a reparar'; else if (e.huye > m.t) t += ' · huye';
         if (e.tipo === 'aerodromo' && e.j === YO) t += ' · aviones ' + m.ents.filter((u) => !u.edif && u.casa === e.id).length + '/' + W.ECON.cupoAviones;
         const ef = efectos(e); if (ef) t += ' · ' + ef;
         return t;
@@ -387,6 +390,11 @@
           ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(px - r * 1.3, py + r * 1.9); ctx.lineTo(px + r * 1.3, py + r * 1.9); ctx.moveTo(px - r * 0.7, py + r * 1.9 + 3); ctx.lineTo(px + r * 0.7, py + r * 1.9 + 3); ctx.stroke();
         }
         if (e.j === YO) { if (m.t - e.llama < 14) signos.push([px, py - r * 1.9 - 20, '!']); else if (m.t - e.oyo < 36) signos.push([px, py - r * 1.9 - 20, '✓']); }
+        if (e.rango && lod) { // galones de veteranía, junto a la unidad
+          ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.2; ctx.beginPath();
+          for (let g2 = 0; g2 < e.rango; g2++) { const gx = px + r * 1.2 + 3, gy = py - r - g2 * 4; ctx.moveTo(gx - 3, gy + 2); ctx.lineTo(gx, gy - 1); ctx.lineTo(gx + 3, gy + 2); }
+          ctx.stroke();
+        }
         const fuel = d.aire && e.j === YO ? e.fuel / d.fuel : -1;
         if (sel.has(e.id) || e.vida < e.vidaMax || (fuel >= 0 && fuel < 0.35)) barras.push([px - Math.max(r * 1.3, 8), py - r * 1.9 - 8, Math.max(r * 2.6, 16), e.vida / e.vidaMax, m.t - e.curando < 12, fuel]);
       }
@@ -467,6 +475,13 @@
           else if (UNID[e.tipo].aire && e.casa && m.porId.has(e.casa)) aro(m.porId.get(e.casa), UNID[e.tipo].radioVuelo);
         }
         ctx.setLineDash([]); ctx.globalAlpha = 1;
+      }
+      for (let k = flotantes.length - 1; k >= 0; k--) {
+        const q = flotantes[k], fr = (performance.now() - q.t0) / 1100;
+        if (fr >= 1) { flotantes.splice(k, 1); continue; }
+        ctx.globalAlpha = 1 - fr * fr; ctx.fillStyle = q.color; ctx.textAlign = 'center';
+        ctx.fillText(q.txt, ox + q.x * z, oy + q.y * z - 14 - fr * 18);
+        ctx.textAlign = 'left'; ctx.globalAlpha = 1;
       }
       for (const s of signos) { // ! pide apoyo, ✓ acude
         const k = 6 + (s[2] === '!' ? Math.sin(performance.now() * 0.012) * 1.5 : 0);
@@ -612,6 +627,14 @@
           if (d.j !== YO) continue;
           senales.push({ k: 'enlace', x: d.x1, y: d.y1, x2: d.x2, y2: d.y2, t0: performance.now(), dur: 1100 });
           if (n++ < 6) son.acude(Math.max(0.2, cerca(d.x1, d.y1)), paneo(d.x1));
+        } else if (d.tipo === 'flanco') { // golpe por el costado o la espalda de un vehículo
+          if (enVista) flotar(d.x1, d.y1, d.s === 2 ? 'espalda +50 %' : 'costado +25 %', d.j === YO ? P.mal : P.bien);
+        } else if (d.tipo === 'ascenso') {
+          if (d.j === YO) { flotar(d.x1, d.y1, 'veterano ' + '▲'.repeat(d.rango), P.tinta); if (n++ < 6) son.unidadLista(); }
+        } else if (d.tipo === 'retira') {
+          if (d.j === YO) flotar(d.x1, d.y1, 'se retira a reparar', P.suave || P.tinta);
+        } else if (d.tipo === 'huye') {
+          if (d.j === YO && performance.now() - (oido.huye || 0) > 4000) { oido.huye = performance.now(); aviso('Cosechadora atacada: se refugia en la refinería'); }
         } else if (d.tipo === 'reposta') {
           if (d.j === YO && performance.now() - (oido.reposta || 0) > 4000) { oido.reposta = performance.now(); aviso('Un avión vuelve a repostar'); }
         } else if (d.tipo === 'venta') {
@@ -636,6 +659,9 @@
     }
 
     // ---------- avisos breves sobre el mapa ----------
+    // Textos que suben y se desvanecen sobre el mapa (flancos, ascensos, retiradas).
+    const flotantes = [];
+    function flotar(x, y, txt, color) { flotantes.push({ x, y, txt, color, t0: performance.now() }); if (flotantes.length > 40) flotantes.shift(); }
     const avisos = [];
     function aviso(txt) { avisos.push({ txt, t0: performance.now() }); if (avisos.length > 4) avisos.shift(); }
 
@@ -717,8 +743,12 @@
     const paraCavar = () => unidadesSel().filter((u) => u.j === YO && UNID[u.tipo].cat === 'inf' && u.orden === 'nada' && !(u.cava > 0) && !W.enTrinchera(m, u));
     function atrincherar() { const ids = paraCavar().map((u) => u.id); if (ids.length) { W.orden(m, { t: 'trinchera', j: YO, ids }); son.colocar(); } }
     $('trinchera').addEventListener('click', atrincherar);
+    W.orden(m, { t: 'retiro', j: YO, on: true }); // por defecto, las unidades propias muy dañadas se retiran solas a reparar
+    const paraRetiro = () => unidadesSel().filter((u) => !UNID[u.tipo].aire && u.tipo !== 'cosechadora');
+    $('retiro').addEventListener('click', () => { const us = paraRetiro(); if (us.length) W.orden(m, { t: 'retiro', j: YO, ids: us.map((u) => u.id), on: !us.every((u) => u.retira) }); });
     // Segundo clic derecho tras ordenar mover: fija hacia dónde queda mirando la unidad (o el frente de la formación).
     let giroPend = null, giroCerca = false;
+    const ultClic = { id: 0, t: 0 };
     const mismaSel = (ids) => { const a = unidadesSel(); return a.length === ids.length && a.every((u) => ids.includes(u.id)); };
     function flecha(x1, y1, x2, y2, color) {
       const a = Math.atan2(y2 - y1, x2 - x1), k = 9;
@@ -814,18 +844,24 @@
       const c = ev.target.closest('.chip');
       if (c) W.orden(m, { t: 'cancelarUnidad', j: YO, id: +c.dataset.id, i: +c.dataset.i });
     });
+    $('bucle').addEventListener('click', () => {
+      const prod = edificiosSel().filter((e) => e.tipo === 'cuartel' || e.tipo === 'fabrica' || e.tipo === 'aerodromo');
+      if (prod.length) W.orden(m, { t: 'bucle', j: YO, ids: prod.map((e) => e.id), on: !prod.every((e) => e.bucle) });
+    });
     function actualizarCola(eds) {
       const prod = eds.filter((e) => e.tipo === 'cuartel' || e.tipo === 'fabrica' || e.tipo === 'aerodromo').slice(0, 8);
       $('secCola').hidden = !prod.length;
       if (!prod.length) { firmaCola = ''; return; }
-      const firma = prod.map((e) => e.id + ':' + e.cola.join(',') + (e.sinAgua ? '!' : '')).join('|');
+      const rep = prod.every((e) => e.bucle), tb = 'repetir: ' + (rep ? 'sí' : prod.some((e) => e.bucle) ? 'algunos' : 'no');
+      if ($('bucle').textContent !== tb) { $('bucle').textContent = tb; $('bucle').classList.toggle('on', rep); }
+      const firma = prod.map((e) => e.id + ':' + e.cola.join(',') + e.pago.map((p) => (p ? 1 : 0)).join('') + (e.sinAgua ? '!' : '') + (e.sinFondos ? '$' : '')).join('|');
       if (firma !== firmaCola) {
         firmaCola = firma;
         const num = {};
         $('cola').innerHTML = prod.map((e) => {
           num[e.tipo] = (num[e.tipo] || 0) + 1;
           const quien = '<span class="quien">' + EDIF[e.tipo].nombre + (prod.length > 1 ? ' ' + num[e.tipo] : '') + (e.tipo === 'aerodromo' ? ' · aviones ' + m.ents.filter((u) => !u.edif && u.casa === e.id).length + '/' + W.ECON.cupoAviones : '') + '</span>';
-          const chips = e.cola.length ? e.cola.map((t, i) => '<button type="button" class="chip' + (i === 0 && e.sinAgua ? ' espera' : '') + '" data-id="' + e.id + '" data-i="' + i + '" title="Cancelar">' + UNID[t].nombre + (i === 0 && e.sinAgua ? ' · falta agua' : '') + '</button>').join('') : '<span class="tenue">sin encargos</span>';
+          const chips = e.cola.length ? e.cola.map((t, i) => '<button type="button" class="chip' + (i === 0 && (e.sinAgua || e.sinFondos) ? ' espera' : !e.pago[i] ? ' debe' : '') + '" data-id="' + e.id + '" data-i="' + i + '" title="' + (e.pago[i] ? 'Cancelar' : 'Repetido: se pagará al empezarlo. Clic para quitarlo') + '">' + UNID[t].nombre + (i === 0 && e.sinAgua ? ' · falta agua' : i === 0 && e.sinFondos ? ' · faltan recursos' : '') + '</button>').join('') : '<span class="tenue">sin encargos</span>';
           return '<div class="cola-fila" data-id="' + e.id + '">' + quien + chips + '</div>';
         }).join('');
       }
@@ -933,6 +969,8 @@
       const dem = vendibles(), bv = $('vender');
       const cav = paraCavar().length, bt = $('trinchera');
       bt.hidden = !cav;
+      { const us = paraRetiro(), br = $('retiro'); br.hidden = !us.length;
+        if (us.length) { const t = 'Retirada automática: ' + (us.every((u) => u.retira) ? 'sí' : us.some((u) => u.retira) ? 'algunas' : 'no'); if (br.textContent !== t) br.textContent = t; } }
       if (cav) { const t = 'Atrincherarse · ' + cav + (cav === 1 ? ' soldado' : ' soldados'); if (bt.textContent !== t) bt.textContent = t; }
       const h = contexto(vivos);
       if (h !== ctxHtml) { ctxHtml = h; $('contexto').innerHTML = h; $('contexto').hidden = !h; }
@@ -1037,6 +1075,12 @@
       if (clic) {
         const e = entEn(aMundoX(raton.x), aMundoY(raton.y));
         if (e && e.j === YO) { if (ev.shiftKey && sel.has(e.id)) sel.delete(e.id); else sel.add(e.id); }
+        const ahora = performance.now();
+        if (e && e.j === YO && !e.edif && ultClic.id === e.id && ahora - ultClic.t < 380) { // doble clic: todas las de su tipo que estén en pantalla
+          const c = lienzo.getBoundingClientRect(), ax = aMundoX(0), bx = aMundoX(c.width), ay = aMundoY(0), by = aMundoY(c.height);
+          for (const u of m.ents) if (!u.edif && u.j === YO && u.tipo === e.tipo && u.x >= ax && u.x <= bx && u.y >= ay && u.y <= by) sel.add(u.id);
+        }
+        ultClic.id = e ? e.id : 0; ultClic.t = ahora;
         return;
       }
       const ax = aMundoX(Math.min(raton.x, raton.x0)), bx = aMundoX(Math.max(raton.x, raton.x0));
