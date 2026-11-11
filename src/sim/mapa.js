@@ -143,7 +143,16 @@
       sitio('conocimiento', x, y); n++;
     }
 
+    // Puestos neutrales (se sortean al final, para no alterar el resto del mapa): antena, depósito y taller, por parejas simétricas.
+    const puestos = [], TIPOS_PUESTO = ['antena', 'deposito', 'taller'];
+    for (let k = 0, n = 0; k < 900 * K && n < Math.round(3 * K); k++) {
+      const x = 5 + Math.floor(r() * (N - 10)), y = 5 + Math.floor(r() * (N - 10));
+      if (!sitioValido(x, y) || dBase(x, y) < 22 || !lejos(x, y, puestos, 14) || Math.hypot(x - mitad, y - mitad) < 4) continue;
+      anota(puestos, x, y, { tipo: TIPOS_PUESTO[n % 3] });
+      sitioEn[y * N + x] = 1; sitioEn[espejo(y * N + x)] = 1; n++;
+    }
+
     const sitioTipo = new Map(sitios.map((s) => [s.y * N + s.x, s.tipo]));
-    return { N, semilla, terreno, mineral, tipoMin, sitios, sitioEn, sitioTipo, bases, alcanzable };
+    return { N, semilla, terreno, mineral, tipoMin, sitios, sitioEn, sitioTipo, bases, alcanzable, puestos };
   };
 })();

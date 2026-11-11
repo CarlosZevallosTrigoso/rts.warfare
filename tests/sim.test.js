@@ -863,6 +863,134 @@ prueba('fase 2a: patio móvil, segundas bases, obras por patio y derrota al perd
   assert.strictEqual(m.ganador, 1, 'sin patios ni patio móvil, derrota');
 });
 
+prueba('fase 2b: puestos neutrales, escondite en el bosque y chatarra', () => {
+  const m = W.crearMundo(123, { N: 128 }), N = m.N, J = m.jug[0];
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  const cel = (x, y) => y * N + x;
+  const mudo = (u) => { u.recarga = 99999; u.guardia = true; return u; };
+  // el mapa trae puestos por parejas simétricas y de los tres tipos
+  assert.ok(m.puestos.length >= 4 && m.puestos.length % 2 === 0, 'puestos: ' + m.puestos.length);
+  assert.deepStrictEqual([...new Set(m.puestos.map((p) => p.tipo))].sort(), ['antena', 'deposito', 'taller']);
+  const p0 = m.mapa.puestos[0], p1 = m.mapa.puestos[1];
+  assert.ok(p0.x + p1.x === N - 1 && p0.y + p1.y === N - 1 && p0.tipo === p1.tipo, 'simétricos');
+  assert.ok(!W.puedeColocar(m, 0, 'bomba', p0.x, p0.y) , 'sobre un puesto no se construye');
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  J.dios = true; m.jug[1].dios = true;
+  const de = (tipo) => m.puestos.find((p) => p.tipo === tipo);
+  const junto = (p, j, tipo) => { const c = W.cercaLibre(m, p.x + 1, p.y); return W.crearUnidad(m, j, tipo || 'infanteria', c); };
+  // captura: un soldado tarda; con un enemigo al lado, disputado; al quedar solo, lo toma
+  const an = de('antena'), s1 = mudo(junto(an, 0)), riv = mudo(junto(an, 1));
+  avanza(W.ECON.captura + 50);
+  assert.strictEqual(an.dueno, -1, 'disputado, nadie lo captura');
+  riv.vida = 0; avanza(W.ECON.captura + 20);
+  assert.strictEqual(an.dueno, 0, 'solo, el soldado captura la antena');
+  // la antena da visión de su zona aunque el soldado se vaya
+  s1.vida = 0; avanza(8);
+  assert.strictEqual(m.niebla[0][cel(Math.floor(an.x) + 8, Math.floor(an.y))] === 2 || m.niebla[0][cel(Math.floor(an.x) - 8, Math.floor(an.y))] === 2, true, 'la antena debía dar visión');
+  // el ingeniero captura el doble de rápido; el depósito da petróleo
+  const dp = de('deposito'); mudo(junto(dp, 0, 'ingeniero')); avanza(W.ECON.captura / 2 + 20);
+  assert.strictEqual(dp.dueno, 0, 'el ingeniero vale por dos');
+  J.dios = false; J.petroleo = 0; J.minerales = 5000; avanza(W.ECON.depositoCada * 10 * 3);
+  assert.ok(J.petroleo >= 20, 'el depósito debía dar petróleo: ' + J.petroleo);
+  // el taller repara a los suyos cerca
+  const ta = de('taller'); ta.dueno = 0;
+  const herido = mudo(junto(ta, 0, 'tanque')); herido.vida = 100; herido.tDano = m.t - 500; avanza(200);
+  assert.ok(herido.vida > 140, 'el taller capturado repara: ' + herido.vida);
+  J.dios = true;
+  // escondite: infantería quieta en el bosque no es atacada hasta tenerla muy cerca; si dispara, se delata
+  for (let y = 60; y < 70; y++) for (let x = 40; x < 60; x++) { const i = cel(x, y); if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; m.mapa.mineral[i] = 0; } }
+  for (let x = 48; x < 52; x++) m.mapa.terreno[cel(x, 64)] = 3;
+  const esc = W.crearUnidad(m, 1, 'infanteria', cel(50, 64)); esc.recarga = 99999; esc.guardia = true; esc.ang = Math.PI;
+  const tq = W.crearUnidad(m, 0, 'tanque', cel(46, 64)); tq.ang = tq.angT = 0; tq.guardia = true;
+  avanza(100);
+  assert.ok(W.oculta(m, esc) && esc.vida === esc.vidaMax && tq.obj === 0, 'escondido en el bosque, el tanque no lo ve');
+  esc.recarga = 0; avanza(40);
+  assert.ok(!W.oculta(m, esc) && tq.obj === esc.id, 'al disparar se delata');
+  esc.vida = 0; avanza(2);
+  const esc2 = mudo(W.crearUnidad(m, 1, 'infanteria', cel(48, 64))); avanza(40);
+  assert.ok(esc2.vida < esc2.vidaMax || !m.porId.has(esc2.id), 'a dos celdas sí lo descubre');
+  // chatarra: el vehículo destruido deja restos que la cosechadora recicla
+  tq.vida = 0; avanza(2);
+  const cc = cel(46, 64);
+  assert.ok(m.mapa.tipoMin[cc] === 3 && m.mapa.mineral[cc] === Math.round(W.UNID.tanque.costo * W.ECON.chatarra), 'debía quedar chatarra: ' + m.mapa.mineral[cc]);
+  const b = m.mapa.bases[0];
+  W.crearEdificio(m, 0, 'refineria', b.x - 7, b.y + 3); avanza(1);
+  const co = W.crearUnidad(m, 0, 'cosechadora', cel(45, 65)); co.pref = { x: 46.5, y: 64.5 };
+  J.dios = false; J.minerales = 0; const antes = J.cosechado;
+  avanza(60);
+  assert.ok(m.mapa.mineral[cc] < 150 && co.carga > 0, 'la cosechadora debía reciclar la chatarra');
+});
+
+prueba('fase 2b: francotirador, transporte, lanzacohetes, vehículo de mando y helicóptero', () => {
+  const m = W.crearMundo(31, { N: 128 }), N = m.N, J = m.jug[0];
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  for (let y = 30; y < 100; y++) for (let x = 30; x < 110; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; m.mapa.mineral[i] = 0; } }
+  const avanza = (n, fn) => { for (let i = 0; i < n; i++) { W.tick(m); if (fn) fn(); } };
+  const cel = (x, y) => y * N + x;
+  const mudo = (u) => { u.recarga = 99999; u.guardia = true; return u; };
+  J.dios = true; m.jug[1].dios = true; J.nivel = 3;
+  // francotirador: quieto no se le ve ni en campo abierto; mata infantería de lejos y a un tanque no le hace nada
+  const fr = W.crearUnidad(m, 0, 'francotirador', cel(50, 40)); fr.ang = 0; fr.guardia = true;
+  avanza(3);
+  assert.ok(W.oculta(m, fr), 'el francotirador quieto está oculto');
+  const e1 = W.crearUnidad(m, 1, 'infanteria', cel(58, 40)); e1.ang = Math.PI; e1.guardia = true; e1.recarga = 99999;
+  avanza(200);
+  assert.ok(!m.porId.has(e1.id), 'debía abatir al soldado a 8 celdas');
+  const t1 = mudo(W.crearUnidad(m, 1, 'tanque', cel(57, 40))); avanza(300);
+  assert.ok(t1.vida > t1.vidaMax * 0.9, 'el rifle no sirve contra un tanque');
+  t1.vida = 0; fr.vida = 0; avanza(2);
+  // transporte: suben hasta seis, viajan dentro, cuentan como tropa y bajan donde se ordena
+  const tr = W.crearUnidad(m, 0, 'transporte', cel(50, 60));
+  const inf = []; for (let k = 0; k < 7; k++) inf.push(W.crearUnidad(m, 0, 'infanteria', cel(46 + k % 4, 62 + (k >> 2))));
+  avanza(1); const n0 = J.cuenta.infanteria;
+  W.orden(m, { t: 'cargar', j: 0, ids: inf.map((u) => u.id), en: tr.id }); avanza(250);
+  assert.strictEqual(tr.pasajeros.length, 6, 'seis plazas: ' + tr.pasajeros.length);
+  assert.ok(m.ents.filter((e) => e.tipo === 'infanteria' && e.j === 0).length === 1 && J.cuenta.infanteria === n0, 'los de dentro salen del mapa pero siguen contando');
+  W.orden(m, { t: 'mover', j: 0, ids: [tr.id], x: 80.5, y: 60.5 }); avanza(400);
+  W.orden(m, { t: 'descargar', j: 0, ids: [tr.id] }); avanza(2);
+  const bajados = m.ents.filter((e) => e.tipo === 'infanteria' && e.j === 0 && Math.hypot(e.x - tr.x, e.y - tr.y) < 3.5);
+  assert.ok(tr.pasajeros.length === 0 && bajados.length === 6 && bajados.every((u) => m.porId.get(u.id) === u), 'debían bajar los seis junto al transporte: ' + bajados.length);
+  // si lo destruyen cargado, se salva la mitad
+  W.orden(m, { t: 'cargar', j: 0, ids: bajados.map((u) => u.id), en: tr.id }); avanza(250);
+  assert.strictEqual(tr.pasajeros.length, 6);
+  tr.vida = 0; avanza(2);
+  assert.strictEqual(m.ents.filter((e) => e.tipo === 'infanteria' && e.j === 0 && Math.hypot(e.x - 80.5, e.y - 60.5) < 5).length, 3, 'del transporte destruido sale la mitad');
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); avanza(2);
+  // lanzacohetes: salva de cuatro cohetes en área, de lejos, con observador
+  const lc = W.crearUnidad(m, 0, 'lanzacohetes', cel(40, 80)); lc.ang = 0;
+  const grupo = [0, 1, 2].map((k) => mudo(W.crearUnidad(m, 1, 'infanteria', cel(52 + k, 80))));
+  const ojo = mudo(W.crearUnidad(m, 0, 'explorador', cel(45, 83))); ojo.ang = 0;
+  let cohetes = 0;
+  avanza(120, () => { cohetes = Math.max(cohetes, m.proy.filter((q) => q.arma === 'salva').length); });
+  assert.strictEqual(cohetes, 4, 'la salva son cuatro cohetes');
+  assert.ok(grupo.filter((u) => !m.porId.has(u.id) || u.vida < u.vidaMax).length >= 2, 'la salva debía alcanzar a varios');
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); avanza(2);
+  // vehículo de mando: los suyos a su alrededor ven en redondo; gasta información; sin ella, nada
+  J.dios = false; J.info = 50; J.minerales = 9999;
+  const so = W.crearUnidad(m, 0, 'infanteria', cel(60, 50)); so.ang = 0; so.guardia = true; avanza(8);
+  const atras = cel(60 - 6, 50);
+  assert.notStrictEqual(m.niebla[0][atras], 2, 'sin mando, no ve a su espalda');
+  const md = W.crearUnidad(m, 0, 'mando', cel(62, 52)); md.ang = 0; avanza(24);
+  assert.strictEqual(m.niebla[0][atras], 2, 'con el vehículo de mando ve en redondo');
+  avanza(400);
+  assert.ok(J.info < 50 && J.info > 30, 'el mando gasta información: ' + J.info);
+  J.info = 0; avanza(40);
+  assert.notStrictEqual(m.niebla[0][atras], 2, 'sin información, el mando no hace nada');
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); avanza(2);
+  // helicóptero: se queda en el aire disparando; pega fuerte a los tanques; radio de vuelo corto
+  J.dios = true;
+  const ae = W.crearEdificio(m, 0, 'aerodromo', 40, 90); avanza(1);
+  const he = W.crearUnidad(m, 0, 'helicoptero', cel(41, 91)); avanza(30);
+  assert.ok(he.enTierra && he.casa === ae.id);
+  const t2 = mudo(W.crearUnidad(m, 1, 'tanque', cel(60, 92)));
+  W.orden(m, { t: 'atacar', j: 0, ids: [he.id], obj: t2.id }); avanza(700);
+  assert.ok(!m.porId.has(t2.id), 'el helicóptero debía destruir el tanque');
+  let maxR = 0;
+  W.orden(m, { t: 'mover', j: 0, ids: [he.id], x: 105.5, y: 91.5 });
+  avanza(900, () => { maxR = Math.max(maxR, Math.hypot(he.x - ae.cx, he.y - ae.cy)); });
+  assert.ok(maxR < W.UNID.helicoptero.radioVuelo + 0.5 && maxR > 40, 'radio de vuelo corto: ' + maxR.toFixed(1));
+});
+
 prueba('determinismo: misma semilla, misma partida', () => {
   const corre = () => {
     const m = W.crearMundo(777), a = W.iaCrear(0), b = W.iaCrear(1);

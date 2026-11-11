@@ -112,7 +112,7 @@
     }
     const aMundoX = (sx) => cam.x + (sx - cw / 2) / cam.z, aMundoY = (sy) => cam.y + (sy - ch / 2) / cam.z;
     const visible = (x, y) => x >= 0 && y >= 0 && x < N && y < N && m.niebla[YO][Math.floor(y) * N + Math.floor(x)] === 2;
-    const veo = (e) => e.j === YO || visible(e.edif ? e.cx : e.x, e.edif ? e.cy : e.y);
+    const veo = (e) => e.j === YO || (visible(e.edif ? e.cx : e.x, e.edif ? e.cy : e.y) && !(W.oculta(m, e) && m.t - (e.delatada === undefined ? -99 : e.delatada) > 20)); // al enemigo escondido no se le ve hasta descubrirlo
 
     // Volumen: la vista sigue siendo cenital, pero cada cosa tiene altura. Los edificios muestran su pared sur y el tejado
     // se dibuja desplazado hacia arriba; las unidades llevan un canto; la roca y el agua, un escalón.
@@ -140,6 +140,7 @@
       if (W.enBosque(m, e)) out.push(inf ? 'bosque: −' + pct(W.ECON.bosqueCubre) + ' daño' : 'bosque: −' + pct(W.ECON.bosqueVeh) + ' velocidad');
       return out.join(' · ');
     }
+    const NOMBRE_PUESTO = { antena: 'Antena (da visión de la zona)', deposito: 'Depósito (da petróleo)', taller: 'Taller (repara a los tuyos cerca)' };
     function bajoCursor() {
       const wx = aMundoX(raton.x), wy = aMundoY(raton.y);
       if (wx < 0 || wy < 0 || wx >= N || wy >= N) return '';
@@ -154,11 +155,17 @@
         if (!e.edif && e.rango) t += ' · veterano ' + '▲'.repeat(e.rango);
         if (!e.edif && e.j === YO && e.bajas) t += ' · ' + e.bajas + (e.bajas === 1 ? ' baja' : ' bajas');
         if (e.arregla && e.j === YO) t += ' · reparando';
+        if (!e.edif && UNID[e.tipo].plazas && e.j === YO) t += ' · ' + e.pasajeros.length + '/' + UNID[e.tipo].plazas + ' dentro';
+        if (!e.edif && UNID[e.tipo].mando && e.j === YO) t += e.sinInfo ? ' · sin información: apagado' : ' · mando activo';
+        if (!e.edif && e.j === YO && W.oculta(m, e)) t += ' · oculta';
         if (e.retirando) t += ' · se retira a reparar'; else if (e.huye > m.t) t += ' · huye';
         if (e.tipo === 'aerodromo' && e.j === YO) t += ' · aviones ' + m.ents.filter((u) => !u.edif && u.casa === e.id).length + '/' + W.ECON.cupoAviones;
         const ef = efectos(e); if (ef) t += ' · ' + ef;
         return t;
       }
+      const pu = m.puestos.find((p) => Math.abs(p.x - wx) < 0.8 && Math.abs(p.y - wy) < 0.8);
+      if (pu) return NOMBRE_PUESTO[pu.tipo] + (pu.dueno === YO ? ' · tuyo' : pu.dueno >= 0 ? ' · del rival' : ' · neutral: lo captura la infantería') + (pu.prog > 0 ? ' · capturando ' + Math.floor((pu.prog / W.ECON.captura) * 100) + ' %' : '');
+      if (m.mapa.tipoMin[c] === 3) return 'Chatarra · ' + m.mapa.mineral[c] + ' (la reciclan las cosechadoras)';
       const sitio = sitioPorCelda.get(c);
       if (sitio) return sitio === 'petroleo' ? 'Yacimiento de petróleo' : 'Campo de conocimiento';
       if (m.mapa.tipoMin[c] === 1) return 'Minerales · ' + m.mapa.mineral[c];
@@ -231,10 +238,12 @@
         ctx.fillStyle = COL.rocaLuz; ctx.fill(luz);
         ctx.fillStyle = COL.copa; ctx.fill(copas);
       }
+      const chatarra = [];
       ctx.fillStyle = P.mineral; ctx.beginPath();
       for (const c of m.minas) {
         const x = c % N, y = (c / N) | 0;
         if (fuera(x, y) || !f[c]) continue;
+        if (mp.tipoMin[c] === 3) { chatarra.push(c); continue; }
         const r = z * (0.13 + 0.25 * Math.min(1, mp.mineral[c] / 600)), px = ox + (x + 0.5) * z, py = oy + (y + 0.5) * z;
         if (z < 8) { ctx.moveTo(px + r, py); ctx.arc(px, py, r, 0, TAU); continue; }
         for (let k = 0; k < 3; k++) { // de cerca, cada celda es un racimo de tres cristales
@@ -243,6 +252,30 @@
         }
       }
       ctx.fill();
+      if (chatarra.length) { // restos de vehículos: planchas torcidas, hasta que una cosechadora las recicle
+        ctx.fillStyle = COL.rocaCara; ctx.strokeStyle = P.roca; ctx.lineWidth = 1;
+        for (const c of chatarra) {
+          const px = ox + ((c % N) + 0.5) * z, py = oy + (((c / N) | 0) + 0.5) * z, s = z * (0.16 + 0.1 * Math.min(1, mp.mineral[c] / 400));
+          ctx.beginPath();
+          for (let k = 0; k < 3; k++) { const a = c * 1.3 + k * 2.2, qx = px + Math.cos(a) * z * 0.17, qy = py + Math.sin(a) * z * 0.17; ctx.moveTo(qx - s, qy - s * 0.3); ctx.lineTo(qx + s * 0.6, qy - s * 0.6); ctx.lineTo(qx + s, qy + s * 0.3); ctx.lineTo(qx - s * 0.5, qy + s * 0.5); ctx.closePath(); }
+          ctx.fill(); if (z >= 16) ctx.stroke();
+        }
+      }
+      // Puestos neutrales: una caseta con su símbolo, del color de quien la tiene, y el avance de la captura alrededor.
+      for (const p of m.puestos) {
+        const c = Math.floor(p.y) * N + Math.floor(p.x);
+        if (fuera(p.x, p.y) || !f[c]) continue;
+        const px = ox + p.x * z, py = oy + p.y * z, s = Math.max(4, z * 0.42), col = p.dueno === YO ? P.yo : p.dueno >= 0 ? P.rival : P.roca, h = z >= 8 ? z * 0.2 : 0;
+        if (h) { ctx.fillStyle = 'rgba(0,0,0,0.17)'; ctx.fillRect(px - s + h * 0.9, py - s + h * 0.6, s * 2, s * 2); ctx.fillStyle = COL.rocaCara; ctx.fillRect(px - s, py + s - h, s * 2, h); }
+        ctx.fillStyle = P.llano; ctx.strokeStyle = col; ctx.lineWidth = Math.max(1.5, z * 0.09);
+        ctx.beginPath(); ctx.rect(px - s, py - s - h, s * 2, s * 2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = col; ctx.lineWidth = Math.max(1, z * 0.06); ctx.beginPath();
+        const cy = py - h;
+        if (p.tipo === 'antena') { ctx.moveTo(px, cy + s * 0.6); ctx.lineTo(px, cy - s * 0.5); ctx.moveTo(px + s * 0.55, cy - s * 0.5); ctx.arc(px, cy - s * 0.5, s * 0.55, 0, -Math.PI, true); ctx.stroke(); }
+        else if (p.tipo === 'deposito') { ctx.arc(px, cy, s * 0.55, 0, TAU); ctx.fill(); }
+        else { ctx.moveTo(px - s * 0.5, cy + s * 0.5); ctx.lineTo(px + s * 0.5, cy - s * 0.5); ctx.moveTo(px - s * 0.5, cy - s * 0.5); ctx.lineTo(px + s * 0.5, cy + s * 0.5); ctx.stroke(); }
+        if (p.prog > 0) { ctx.strokeStyle = p.quien === YO ? P.yo : P.rival; ctx.lineWidth = Math.max(2, z * 0.1); ctx.beginPath(); ctx.arc(px, cy, s * 1.7, -Math.PI / 2, -Math.PI / 2 + TAU * (p.prog / W.ECON.captura)); ctx.stroke(); }
+      }
       ctx.fillStyle = P.raro; ctx.beginPath();
       for (const c of m.raros) {
         const x = c % N, y = (c / N) | 0;
@@ -468,6 +501,13 @@
           const o = m.porId.get(e.arregla);
           if (o && W.dist(e.x, e.y, o) <= 1.7) { ctx.strokeStyle = P.bien; ctx.lineWidth = 1.5; ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(ox + (o.edif ? o.cx : o.x) * z, oy + (o.edif ? o.cy : o.y) * z); ctx.stroke(); ctx.setLineDash([]); }
         }
+        if (d.mando && e.j === YO && (sel.has(e.id) || lod === 2)) { // radio del vehículo de mando
+          ctx.strokeStyle = e.sinInfo ? P.mal : P.bien; ctx.lineWidth = 1; ctx.globalAlpha = sel.has(e.id) ? 0.6 : 0.22; ctx.setLineDash([2, 5]);
+          ctx.beginPath(); ctx.arc(px, py, d.mando * z, 0, TAU); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+        }
+        if (d.plazas && e.j === YO && lod && e.pasajeros.length) { // cuántos lleva dentro
+          ctx.fillStyle = P.tinta; for (let q = 0; q < e.pasajeros.length; q++) ctx.fillRect(px - r * 1.2 + q * 4, py + r * 1.6 + 3, 3, 3);
+        }
         if (d.despliega && sel.has(e.id) && e.j === YO) { // dónde quedaría el patio: verde si cabe
           const bx = ox + (Math.floor(e.x) - 1) * z, by = oy + (Math.floor(e.y) - 1) * z;
           ctx.strokeStyle = W.puedeDesplegar(m, e) ? P.bien : P.mal; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.strokeRect(bx, by, z * 3, z * 3); ctx.setLineDash([]);
@@ -659,6 +699,11 @@
       }
       mctx.imageSmoothingEnabled = true;
       mctx.drawImage(cNie, 0, 0, MS, MS);
+      for (const p of m.puestos) { // puestos: rombo del color de su dueño
+        if (!m.niebla[YO][Math.floor(p.y) * N + Math.floor(p.x)]) continue;
+        mctx.fillStyle = p.dueno === YO ? P.yo : p.dueno >= 0 ? P.rival : P.tinta;
+        mctx.beginPath(); mctx.moveTo(p.x * k, p.y * k - 3.5); mctx.lineTo(p.x * k + 3.5, p.y * k); mctx.lineTo(p.x * k, p.y * k + 3.5); mctx.lineTo(p.x * k - 3.5, p.y * k); mctx.closePath(); mctx.fill();
+      }
       { // patios: los propios, con un aro; del rival, su último patio (o patio móvil) queda a la vista cuando ya ha perdido alguno
         const R = m.jug[1 - YO], delata = R.patiosMax > 1 && (R.cuenta.patio || 0) <= 1;
         mctx.lineWidth = 1.5;
@@ -700,6 +745,9 @@
           const area = W.ARMAS[d.arma].area || 0; // los obuses de área dejan un cráter mayor
           estallido(d.x2, d.y2, area ? 2 : 1); marcaSuelo('quemado', d.x2, d.y2, area || 0.42, 0, 15000);
           if (n++ < 6) son.impacto(cerca(d.x2, d.y2), paneo(d.x2));
+        } else if (d.tipo === 'captura') {
+          const que = d.clase === 'antena' ? 'una antena' : d.clase === 'deposito' ? 'un depósito' : 'un taller';
+          if (d.j === YO) { son.obraLista(); aviso('Has capturado ' + que); } else if (visible(d.x2, d.y2) || m.puestos.some((p) => p.x === d.x2 && p.y === d.y2)) aviso('El rival ha capturado ' + que);
         } else if (d.tipo === 'despliega') {
           if (d.j === YO) { son.colocar(); aviso('Patio desplegado: ya puedes construir a su alrededor'); }
         } else if (d.tipo === 'muerte') {
@@ -839,6 +887,9 @@
     const paraCavar = () => unidadesSel().filter((u) => u.j === YO && UNID[u.tipo].cat === 'inf' && u.orden === 'nada' && !(u.cava > 0) && !W.enTrinchera(m, u));
     function atrincherar() { const ids = paraCavar().map((u) => u.id); if (ids.length) { W.orden(m, { t: 'trinchera', j: YO, ids }); son.colocar(); } }
     $('trinchera').addEventListener('click', atrincherar);
+    const conCarga = () => unidadesSel().filter((u) => UNID[u.tipo].plazas && u.pasajeros.length);
+    function descargar() { const us = conCarga(); if (us.length) { W.orden(m, { t: 'descargar', j: YO, ids: us.map((u) => u.id) }); son.orden(); } }
+    $('descargar').addEventListener('click', descargar);
     const paraDesplegar = () => unidadesSel().filter((u) => UNID[u.tipo].despliega);
     function desplegar() {
       const us = paraDesplegar(); if (!us.length) return;
@@ -868,6 +919,8 @@
       if (us.length) {
         const armadas = us.some((u) => UNID[u.tipo].arma);
         const soloAire = us.every((u) => UNID[u.tipo].aire);
+        if (us.some((u) => UNID[u.tipo].plazas)) L.push('<b>transporte: la infantería sube con clic derecho sobre él · ' + k('U') + ' descargar</b>');
+        if (us.some((u) => UNID[u.tipo].mando)) L.push('<b>mando: los tuyos en su radio ven en redondo y giran más rápido; gasta información</b>');
         if (us.some((u) => UNID[u.tipo].despliega)) L.push('<b>patio móvil: ' + k('D') + ' lo despliega aquí como patio nuevo (no se repliega)</b>');
         if (us.some((u) => UNID[u.tipo].repara)) L.push('<b>ingeniero: repara solo los vehículos y edificios cercanos</b>');
         if (soloAire) L.push('clic derecho: ir y volver, o atacar · ' + k('S') + ' volver ya');
@@ -1077,6 +1130,7 @@
       const cav = paraCavar().length, bt = $('trinchera');
       bt.hidden = !cav;
       $('desplegar').hidden = !paraDesplegar().length;
+      { const us = conCarga(), bd = $('descargar'); bd.hidden = !us.length; if (us.length) { const t = 'Descargar · ' + us.reduce((a, u) => a + u.pasajeros.length, 0) + ' dentro'; if (bd.textContent !== t) bd.textContent = t; } }
       { const us = paraRetiro(), br = $('retiro'); br.hidden = !us.length;
         if (us.length) { const t = 'Retirada automática: ' + (us.every((u) => u.retira) ? 'sí' : us.some((u) => u.retira) ? 'algunas' : 'no'); if (br.textContent !== t) br.textContent = t; } }
       if (cav) { const t = 'Atrincherarse · ' + cav + (cav === 1 ? ' soldado' : ' soldados'); if (bt.textContent !== t) bt.textContent = t; }
@@ -1148,6 +1202,12 @@
         if (o && o.j !== YO) {
           if (!us.some((u) => UNID[u.tipo].arma && W.puedeAtacar(u, o))) aviso(UNID[o.tipo] && UNID[o.tipo].aire ? 'Estas unidades no alcanzan a los aviones' : 'Estas unidades no pueden atacar eso');
           W.orden(m, { t: 'atacar', j: YO, ids, obj: o.id, enc }); marca(wx, wy, P.mal); return;
+        }
+        if (o && o.j === YO && !o.edif && UNID[o.tipo].plazas && us.some((u) => UNID[u.tipo].cat === 'inf')) { // clic derecho sobre un transporte propio: la infantería sube
+          const libres = UNID[o.tipo].plazas - o.pasajeros.length;
+          if (libres <= 0) { aviso('El transporte está lleno'); return; }
+          W.orden(m, { t: 'cargar', j: YO, ids: us.filter((u) => UNID[u.tipo].cat === 'inf').map((u) => u.id), en: o.id }); marca(wx, wy, P.bien); son.orden();
+          return;
         }
         if (us.some((u) => { const b = UNID[u.tipo].aire && u.casa ? m.porId.get(u.casa) : null; return b && Math.hypot(wx - b.cx, wy - b.cy) > UNID[u.tipo].radioVuelo; })) aviso('Fuera del radio de vuelo: el avión llegará hasta el límite');
         const cos = us.filter((u) => u.tipo === 'cosechadora').map((u) => u.id);
@@ -1238,7 +1298,8 @@
       const wx = aMundoX(raton.x), wy = aMundoY(raton.y), e = entEn(wx, wy, 14 / cam.z);
       const hayTropa = unidadesSel().length > 0, hayFabrica = edificiosSel().some((b) => b.tipo === 'cuartel' || b.tipo === 'fabrica' || b.tipo === 'aerodromo');
       if (e && !e.edif) { const r = lienzo.getBoundingClientRect(); x = r.left + cw / 2 + (e.x - cam.x) * cam.z; y = r.top + ch / 2 + (e.y - cam.y) * cam.z; } // el toque se centra en la unidad
-      const boton = e && e.j === YO ? 0 : hayTropa || (hayFabrica && !e) ? 2 : 0;
+      const sube = e && e.j === YO && !e.edif && UNID[e.tipo].plazas && unidadesSel().some((u) => UNID[u.tipo].cat === 'inf'); // toque en un transporte con infantería elegida: suben
+      const boton = sube ? 2 : e && e.j === YO ? 0 : hayTropa || (hayFabrica && !e) ? 2 : 0;
       raton2('mousedown', x, y, boton); raton2('mouseup', x, y, boton);
     }
     lienzo.addEventListener('touchstart', (ev) => {
@@ -1335,6 +1396,7 @@
         case 'KeyR': if (unidadesSel().length) modo = 'patrulla'; break;
         case 'KeyZ': atrincherar(); break;
         case 'KeyD': desplegar(); break;
+        case 'KeyU': descargar(); break;
         case 'KeyB': elegirEdificios('patio'); break;
         case 'KeyQ': elegirEdificios('cuartel'); break;
         case 'KeyV': elegirEdificios('fabrica'); break;

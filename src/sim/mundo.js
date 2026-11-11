@@ -31,7 +31,8 @@
       ocup: new Int32Array(NN), paso: new Uint8Array(NN),
       jug: [nuevoJugador(op.inicio), nuevoJugador(op.inicio)],
       niebla: [new Uint8Array(NN), new Uint8Array(NN)],
-      cola: [], colaRutas: [], efectos: [], proy: [], barridos: [], trincheras: new Map(), focos: [[], []], sigFoco: 1, sigMision: 1, minas: [], raros: [], ganador: -1,
+      cola: [], colaRutas: [], efectos: [], proy: [], barridos: [], trincheras: new Map(), focos: [[], []], sigFoco: 1, sigMision: 1, minas: [], raros: [], ganador: -1, embarques: [],
+      puestos: mapa.puestos.map((p, i) => ({ id: i, tipo: p.tipo, x: p.x + 0.5, y: p.y + 0.5, dueno: -1, prog: 0, quien: -1 })), // puestos neutrales: los captura la infantería
       ruta: W.crearRuta(N),
     };
     for (let i = 0; i < NN; i++) {
@@ -88,6 +89,7 @@
       cola: [], patrulla: null, explora: false, // órdenes encadenadas, ruta de patrulla, exploración automática
       retira: m.jug[j].retiro, retirando: false, volver: null, tRet: 0, huye: 0, // retirada automática a reparar; cosechadora que huye
       bajas: 0, rango: 0, // veteranía
+      pasajeros: [], sube: 0, dentro: false, // transporte: quién va dentro; infantería: a qué transporte va a subir
     };
     m.ents.push(u); m.porId.set(u.id, u);
     m.jug[j].producidas++;
@@ -172,7 +174,7 @@
         if (en > 0) J.prod += en * (J.mejoras.turbinas ? 1.5 : 1); else J.uso -= en;
         J.aguaProd += (d.agua || 0) * (e.tipo === 'bomba' && J.mejoras.depuracion ? 1.5 : 1);
       }
-      else J.aguaUso += UNID[e.tipo].agua || 0;
+      else { J.aguaUso += UNID[e.tipo].agua || 0; for (const p of e.pasajeros) { J.cuenta[p.tipo] = (J.cuenta[p.tipo] || 0) + 1; J.aguaUso += UNID[p.tipo].agua || 0; } } // los que van dentro de un transporte también cuentan
     }
     for (let j = 0; j < 2; j++) {
       const J = m.jug[j];
@@ -342,6 +344,17 @@
         const e = crearEdificio(m, cmd.j, cmd.tipo, cmd.x, cmd.y);
         J.obras.splice(i, 1);
         if (e.tipo === 'refineria') crearUnidad(m, cmd.j, 'cosechadora', W.cercaLibre(m, e.cx, e.y + e.tam + 0.5));
+        contar(m);
+        return;
+      }
+      case 'cargar': { // la infantería indicada va a subir al transporte cmd.en
+        const t = m.porId.get(cmd.en);
+        if (!t || t.edif || t.j !== cmd.j || !UNID[t.tipo].plazas) return;
+        for (const u of propias(m, cmd)) if (UNID[u.tipo].cat === 'inf') { limpiar(u); u.orden = 'nada'; u.obj = 0; u.ruta = null; u.pend = null; u.guardia = false; u.sube = t.id; }
+        return;
+      }
+      case 'descargar': {
+        for (const t of propias(m, cmd)) if (t.pasajeros.length) { apear(m, t, t.pasajeros); t.pasajeros = []; }
         contar(m);
         return;
       }
@@ -613,22 +626,23 @@
     if (q && Math.abs(difAng(Math.atan2(dy, dx), q.ang)) > ECON.arcoTrinchera) return false; // desde la trinchera solo se cubre su frente
     if (d <= v * ECON.visAt) return true;
     if (d > v * ECON.visAd) return false;
-    if (CAMPO[a.tipo].todo) return true;
+    if (CAMPO[a.tipo].todo || mandado(m, a)) return true;
     const c = (dx * Math.cos(a.ang) + dy * Math.sin(a.ang)) / (Math.hypot(dx, dy) || 1); // coseno del ángulo respecto al frente
     return c >= CAMPO[a.tipo].cos || (c >= COS_PERI && d <= v * ECON.visLado);
   }
   // Apunta el arma al blanco y dice si ya puede disparar. Con torreta gira solo la torreta; sin ella, el cuerpo entero
   // (y solo si está quieto: en marcha el cuerpo sigue el camino). Desde una trinchera no se sale de su arco frontal.
+  const mandado = (m, u) => m.t - (u.tMando === undefined ? -99 : u.tMando) <= 12; // bajo el radio de un vehículo de mando
   function apuntar(m, a, o, quieto) {
     const meta = Math.atan2(posY(o) - posY(a), posX(o) - posX(a));
     if (a.edif) { a.angT = girarHacia(a.angT, meta, EDIF[a.tipo].giroT); return Math.abs(difAng(meta, a.angT)) <= ECON.arco; }
-    const d = UNID[a.tipo];
+    const d = UNID[a.tipo], kg = mandado(m, a) ? ECON.mandoGiro : 1;
     if (ARMAS[d.arma].omni) return true;
     a.apunto = true;
-    if (d.giroT) { a.angT = girarHacia(a.angT, meta, d.giroT); return Math.abs(difAng(meta, a.angT)) <= ECON.arco; }
+    if (d.giroT) { a.angT = girarHacia(a.angT, meta, d.giroT * kg); return Math.abs(difAng(meta, a.angT)) <= ECON.arco; }
     const q = trincheraDe(m, a);
     if (q && Math.abs(difAng(meta, q.ang)) > ECON.arcoTrinchera) return false;
-    if (quieto) a.ang = girarHacia(a.ang, meta, d.giro);
+    if (quieto) a.ang = girarHacia(a.ang, meta, d.giro * kg);
     return Math.abs(difAng(meta, a.ang)) <= (d.arco || ECON.arco);
   }
   W.sector = (m, a, e) => { // 0 frente, 1 costado, 2 espalda: desde dónde le llega a "a" algo situado en "e"
@@ -636,6 +650,14 @@
     return rel > 2.094 ? 2 : rel > 1.047 ? 1 : 0;
   };
 
+  // Escondida: infantería quieta en el bosque (o un francotirador quieto en cualquier parte) que no ha disparado hace poco.
+  // El enemigo no la ve ni la ataca por su cuenta hasta tenerla a un par de celdas.
+  function oculta(m, e) {
+    if (e.edif || e.orden !== 'nada' || e.v > 0.001 || m.t - (e.tDisparo === undefined ? -999 : e.tDisparo) < 60) return false;
+    const d = UNID[e.tipo];
+    return d.cat === 'inf' && (d.sigilo || m.mapa.terreno[Math.floor(e.y) * m.N + Math.floor(e.x)] === T.BOSQUE);
+  }
+  W.oculta = oculta;
   function buscarEnemigo(m, a, x, y, rango) {
     const arma = ARMAS[a.edif ? EDIF[a.tipo].arma : UNID[a.tipo].arma];
     let mejor = null, md = rango;
@@ -644,6 +666,7 @@
       if (e.j === a.j || e.vida <= 0 || !puede(arma, e)) continue;
       const d = dist(x, y, e);
       if (d > md) continue;
+      if (oculta(m, e)) { if (d > ECON.ocultaVe) continue; e.delatada = m.t; } // escondida: solo se la ve de muy cerca
       if (!a.edif) { // una unidad solo detecta por sí misma lo que cae en su visión; el arma indirecta, lo que vea cualquiera de los suyos
         if (arma.indirecto ? m.niebla[a.j][Math.floor(posY(e)) * m.N + Math.floor(posX(e))] !== 2 : !veDir(m, a, e, d)) continue;
       }
@@ -779,9 +802,13 @@
   function disparar(m, a, b, arma) {
     const clave = a.edif ? EDIF[a.tipo].arma : UNID[a.tipo].arma, ax = posX(a), ay = posY(a), bx = posX(b), by = posY(b);
     const mult = (!a.edif && UNID[a.tipo].cat === 'inf' && m.jug[a.j].mejoras.perforante ? 1.25 : 1) * (a.edif ? 1 : 1 + ECON.rangoDano * a.rango);
-    a.recarga = arma.recarga;
+    a.recarga = arma.recarga; a.tDisparo = m.t;
     if (arma.vuelo) { // obús: vuela hasta donde estaba el blanco al disparar
       m.proy.push({ ox: ax, oy: ay, x: ax, y: ay, px: ax, py: ay, tx: bx, ty: by, obj: b.id, j: a.j, arma: clave, mult, de: a.id });
+      for (let k = 1; k < (arma.rafaga || 1); k++) { // el resto de la salva cae repartido alrededor, un poco más tarde cada cohete
+        const ang = a.id * 1.7 + m.t * 0.37 + k * 2.4, rr = arma.area * 0.95;
+        m.proy.push({ ox: ax, oy: ay, x: ax, y: ay, px: ax, py: ay, tx: bx + Math.cos(ang) * rr, ty: by + Math.sin(ang) * rr, obj: 0, j: a.j, arma: clave, mult, de: a.id, vel: arma.vuelo * (1 - k * 0.09) });
+      }
       m.efectos.push({ tipo: 'boca', x1: ax, y1: ay, x2: bx, y2: by, j: a.j, t: m.t, arma: clave });
     } else {
       herir(m, b, arma, mult, a.id, ax, ay);
@@ -793,7 +820,8 @@
     for (let k = m.proy.length - 1; k >= 0; k--) {
       const p = m.proy[k], arma = ARMAS[p.arma], dx = p.tx - p.x, dy = p.ty - p.y, dd = Math.hypot(dx, dy);
       p.px = p.x; p.py = p.y;
-      if (dd > arma.vuelo) { p.x += (dx / dd) * arma.vuelo; p.y += (dy / dd) * arma.vuelo; continue; }
+      const vel = p.vel || arma.vuelo;
+      if (dd > vel) { p.x += (dx / dd) * vel; p.y += (dy / dd) * vel; continue; }
       let acierto = false;
       if (arma.area) { // explosión: daña a todo enemigo dentro del radio
         for (const e of m.ents) if (e.j !== p.j && e.vida > 0 && dist(p.tx, p.ty, e) <= arma.area) { herir(m, e, arma, p.mult, p.de); acierto = true; }
@@ -938,6 +966,15 @@
     if (u.tipo === 'cosechadora') { tickCosechadora(m, u); return; }
     if (d.giroT) { if (!u.apunto) u.angT = girarHacia(u.angT, u.ang, d.giroT); } else u.angT = u.ang; // sin blanco, la torreta vuelve al frente
     u.apunto = false;
+    if (u.sube) { // camino de su transporte
+      const t = m.porId.get(u.sube);
+      if (!t || t.vida <= 0 || t.pasajeros.length >= UNID[t.tipo].plazas || u.orden !== 'nada') u.sube = 0;
+      else {
+        if (Math.hypot(t.x - u.x, t.y - u.y) <= 1.7) { if (!m.embarques.includes(u)) m.embarques.push(u); }
+        else { if (!u.pend && (!u.ruta || (m.t + u.id) % 15 === 0)) pedirRuta(m, u, t.x, t.y, 1); avanzar(m, u); }
+        return;
+      }
+    }
     if (u.fallo) { u.fallo = false; u.orden = 'nada'; u.obj = 0; limpiar(u); }
     if (u.orden === 'nada' && !u.obj && !u.acude && (u.cola.length || u.patrulla || u.explora)) siguienteOrden(m, u);
     if (u.orden === 'nada' && !u.obj && u.angFin != null) { // en su puesto, se encara como el resto de la formación
@@ -1058,7 +1095,7 @@
         u.fijo = true;
         const hay = m.mapa.mineral[u.celda];
         if (hay <= 0) { quitarMina(m, u.celda); u.est = 'buscar'; break; }
-        if (u.carga === 0) u.cargaTipo = m.mapa.tipoMin[u.celda] || 1;
+        if (u.carga === 0) u.cargaTipo = m.mapa.tipoMin[u.celda] === 2 ? 2 : 1; // la chatarra (3) cuenta como minerales
         const q = Math.min(ECON.cosecha, cap - u.carga, hay);
         m.mapa.mineral[u.celda] -= q; u.carga += q;
         if (m.mapa.mineral[u.celda] <= 0) quitarMina(m, u.celda);
@@ -1178,6 +1215,7 @@
   function curar(m) {
     const talleres = [[], []];
     for (const e of m.ents) if (e.edif && (e.tipo === 'patio' || e.tipo === 'cuartel' || e.tipo === 'fabrica' || e.tipo === 'aerodromo')) talleres[e.j].push(e);
+    const puestosTaller = m.puestos.filter((p) => p.tipo === 'taller' && p.dueno >= 0);
     for (const e of m.ents) {
       if (e.vida >= e.vidaMax || e.vida <= 0) continue; // los caídos en este tick no se reaniman
       const calma = m.t - (e.tDano === undefined ? -999 : e.tDano);
@@ -1192,11 +1230,47 @@
       if (e.edif) { if (calma > 300) sanar(ECON.curaEdificio); continue; }
       if (calma < 100) continue;
       const quiere = LUGAR[UNID[e.tipo].cat];
+      if (!UNID[e.tipo].aire && puestosTaller.some((p) => p.dueno === e.j && Math.hypot(p.x - e.x, p.y - e.y) <= ECON.tallerRadio)) { sanar(ECON.curaUnidad); continue; } // taller capturado: repara a cualquiera de los suyos
       for (const b of talleres[e.j]) {
         if ((b.tipo !== 'patio' && b.tipo !== quiere) || dist(e.x, e.y, b) > 5) continue;
         sanar(ECON.curaUnidad);
         break;
       }
+    }
+  }
+  // Vehículo de mando: mientras su jugador tenga información, los suyos a su alrededor ven en redondo y giran más rápido.
+  function tickMando(m) {
+    for (const e of m.ents) {
+      if (e.edif || !UNID[e.tipo].mando || e.vida <= 0) continue;
+      const J = m.jug[e.j];
+      if (J.info <= 0) { e.sinInfo = true; continue; }
+      e.sinInfo = false;
+      if (m.t % ECON.mandoCada === 0) J.info--;
+      const r = UNID[e.tipo].mando;
+      for (const u of m.ents) if (!u.edif && u.j === e.j && Math.abs(u.x - e.x) <= r && Math.hypot(u.x - e.x, u.y - e.y) <= r) u.tMando = m.t;
+    }
+  }
+  // Transporte: sacar a los pasajeros alrededor del vehículo (todos, o solo los supervivientes si lo han destruido).
+  function apear(m, t, lista) {
+    lista.forEach((p, i) => {
+      const a = (i / Math.max(1, lista.length)) * TAU, c = W.cercaLibre(m, t.x + Math.cos(a) * 1.3, t.y + Math.sin(a) * 1.3);
+      p.x = p.px = (c % m.N) + 0.5; p.y = p.py = ((c / m.N) | 0) + 0.5; p.dentro = false; p.sube = 0; p.orden = 'nada'; p.obj = 0; p.ruta = null; p.pend = null; p.v = 0;
+      m.ents.push(p); m.porId.set(p.id, p);
+    });
+  }
+  // Puestos neutrales: los captura la infantería que se queda junto a ellos sin enemigos cerca (el ingeniero vale por dos).
+  // La antena da visión de su zona, el depósito gotea petróleo y el taller repara a los suyos.
+  function tickPuestos(m) {
+    for (const p of m.puestos) {
+      const n = [0, 0];
+      for (const e of m.ents) if (!e.edif && e.vida > 0 && UNID[e.tipo].cat === 'inf' && Math.hypot(e.x - p.x, e.y - p.y) <= ECON.capturaRadio) n[e.j] += UNID[e.tipo].repara ? 2 : 1;
+      const j = n[0] && !n[1] ? 0 : n[1] && !n[0] ? 1 : -1;
+      if (j >= 0 && j !== p.dueno) {
+        if (p.quien !== j) { p.quien = j; p.prog = 0; }
+        p.prog += 10 * Math.min(3, n[j]);
+        if (p.prog >= ECON.captura) { p.dueno = j; p.prog = 0; p.quien = -1; m.efectos.push({ tipo: 'captura', x2: p.x, y2: p.y, clase: p.tipo, j, t: m.t }); }
+      } else if (p.prog > 0 && !(n[0] && n[1])) { p.prog = Math.max(0, p.prog - 10); if (!p.prog) p.quien = -1; } // sin nadie, lo ganado se pierde poco a poco
+      if (p.dueno >= 0 && p.tipo === 'deposito' && m.t % (ECON.depositoCada * 10) === 0) { m.jug[p.dueno].petroleo += 10; m.jug[p.dueno].extraido += 10; }
     }
   }
   // Los vehículos en marcha aplastan a la infantería enemiga que pisan: daño fuerte cada tick mientras la tienen
@@ -1236,13 +1310,13 @@
       }
       // Las unidades ven cerca alrededor y lejos solo en un cono hacia su frente.
       const v = UNID[e.tipo].vision, rc = v * ECON.visAt, rc2 = rc * rc, rs = v * ECON.visLado, rs2 = rs * rs, rl = v * ECON.visAd, rl2 = rl * rl, R = Math.ceil(rl);
-      const ux = Math.cos(e.ang), uy = Math.sin(e.ang), campo = CAMPO[e.tipo], kc = campo.k;
+      const ux = Math.cos(e.ang), uy = Math.sin(e.ang), campo = CAMPO[e.tipo], kc = campo.k, redondo = campo.todo || mandado(m, e);
       for (let dy = -R; dy <= R; dy++) {
         const y = cy + dy; if (y < 0 || y >= N) continue;
         for (let dx = -R; dx <= R; dx++) {
           const x = cx + dx, d2 = dx * dx + dy * dy;
           if (x < 0 || x >= N || d2 > rl2) continue;
-          if (d2 > rc2 && !campo.todo) { // fuera del círculo cercano: al frente llega lejos, a los costados menos, detrás nada
+          if (d2 > rc2 && !redondo) { // fuera del círculo cercano: al frente llega lejos, a los costados menos, detrás nada
             const p = dx * ux + dy * uy, s = p * Math.abs(p);
             if (s < kc * d2 && (d2 > rs2 || s < K_PERI * d2)) continue;
           }
@@ -1251,6 +1325,14 @@
       }
     }
     for (let j = 0; j < 2; j++) if (m.jug[j].admin) m.niebla[j].fill(2); // modo ADMIN: todo el mapa a la vista
+    for (const p of m.puestos) { // una antena capturada da visión de su zona
+      if (p.tipo !== 'antena' || p.dueno < 0) continue;
+      const f = m.niebla[p.dueno], R = ECON.antenaRadio, px = Math.floor(p.x), py = Math.floor(p.y);
+      for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+        const x = px + dx, y = py + dy;
+        if (x >= 0 && y >= 0 && x < N && y < N && dx * dx + dy * dy <= R * R) f[y * N + x] = 2;
+      }
+    }
     for (let k = m.barridos.length - 1; k >= 0; k--) { // zonas reveladas por inteligencia
       const b = m.barridos[k], f = m.niebla[b.j], R = b.r;
       if (m.t > b.hasta) { m.barridos.splice(k, 1); continue; }
@@ -1286,12 +1368,25 @@
     if (m.t % 10 === 0) { curar(m); colmena(m); }
 
     let muertos = false;
+    const apeados = [];
     for (let k = 0; k < m.ents.length; k++) {
       const e = m.ents[k];
       if (e.vida > 0) continue;
       muertos = true; m.porId.delete(e.id);
       if (e.desplegado) continue; // el patio móvil no muere: se ha convertido en patio
       m.jug[e.j].bajas++;
+      if (!e.edif && e.pasajeros.length) { // del transporte destruido sale la mitad de su carga
+        const vivos = e.pasajeros.filter((p, i) => i % 2 === 0);
+        m.jug[e.j].bajas += e.pasajeros.length - vivos.length; e.pasajeros = [];
+        apeados.push([e, vivos]);
+      }
+      if (!e.edif && UNID[e.tipo].cat === 'veh') { // el vehículo destruido deja chatarra que las cosechadoras reciclan
+        const c = Math.floor(e.y) * m.N + Math.floor(e.x), tm = m.mapa.tipoMin[c];
+        if (m.paso[c] && !m.ocup[c] && !m.mapa.sitioEn[c] && tm !== 2) {
+          if (!tm) { m.mapa.tipoMin[c] = 3; m.minas.push(c); }
+          m.mapa.mineral[c] += Math.round(UNID[e.tipo].costo * ECON.chatarra);
+        }
+      }
       m.efectos.push({ tipo: e.vendido ? 'venta' : 'muerte', x2: posX(e), y2: posY(e), edif: e.edif, tam: e.tam || 0, clase: e.tipo, ang: e.ang || 0, j: e.j, t: m.t });
       if (e.edif) {
         const N = m.N;
@@ -1302,9 +1397,21 @@
     }
     if (muertos) {
       m.ents = m.ents.filter((e) => e.vida > 0);
+      for (const [t, vivos] of apeados) apear(m, t, vivos);
       contar(m);
       for (const J of m.jug) if (!J.cuenta.patio && !J.cuenta.patioMovil) J.vivo = false; // se pierde al quedarse sin patios (ni patio móvil que desplegar)
       if (!m.jug[0].vivo || !m.jug[1].vivo) m.ganador = m.jug[0].vivo ? 0 : m.jug[1].vivo ? 1 : 2;
+    }
+    if (m.t % 10 === 0) { tickPuestos(m); tickMando(m); }
+    if (m.embarques.length) { // la infantería que ha llegado a su transporte entra en él y deja el mapa
+      for (const u of m.embarques) {
+        const t = m.porId.get(u.sube);
+        if (t && t.vida > 0 && u.vida > 0 && t.pasajeros.length < UNID[t.tipo].plazas) { u.dentro = true; u.sube = 0; u.ruta = null; u.v = 0; t.pasajeros.push(u); m.porId.delete(u.id); }
+        else u.sube = 0;
+      }
+      m.embarques.length = 0;
+      m.ents = m.ents.filter((e) => !e.dentro);
+      contar(m);
     }
     if (m.efectos.length && m.efectos[0].t < m.t - 4) m.efectos = m.efectos.filter((f) => f.t >= m.t - 4);
     if (m.t % 4 === 0) W.actualizarNiebla(m);
