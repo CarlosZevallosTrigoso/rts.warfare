@@ -33,6 +33,11 @@
   .btn.con-x .x { display: inline-block; }
   .btn .x:hover { background: var(--mal); color: #fff; }
   #obras, #ritmo { min-height: 16px; }
+  #grupos { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+  .grupo { display: flex; gap: 7px; align-items: baseline; font: inherit; font-size: 11px; color: var(--tinta); text-align: left; padding: 4px 6px; background: var(--panel); border: 1px solid var(--linea); border-radius: 2px; cursor: pointer; overflow: hidden; white-space: nowrap; }
+  .grupo:hover { border-color: var(--tinta); }
+  .grupo.on { background: var(--tinta); color: var(--fondo); border-color: var(--tinta); }
+  .grupo b { font-size: 12px; }
   #sel { min-height: 18px; }
   #ayuda { margin-top: auto; border-top: 1px solid var(--linea); padding-top: 9px; }
   #ayuda kbd { font: inherit; color: var(--tinta); }
@@ -68,6 +73,7 @@
     <canvas id="mini" width="208" height="208"></canvas>
     <section><h2>Edificios</h2><div id="bEdif"></div><div id="obras" class="tenue"></div></section>
     <section><h2>Unidades</h2><div id="bUnid"></div><div id="ritmo" class="tenue"></div></section>
+    <section id="secGrupos" hidden><h2>Grupos</h2><div id="grupos"></div></section>
     <div id="sel" class="tenue"></div>
     <div id="ayuda" class="tenue">
       <div>clic / caja: seleccionar</div>
@@ -81,7 +87,7 @@
       <div>trackpad: dos dedos desplazan, pellizco zoom</div>
       <div>rueda o <kbd>+</kbd> <kbd>−</kbd>: zoom · <kbd>M</kbd> cambia rueda</div>
       <div><kbd>H</kbd> base · <kbd>espacio</kbd> alerta</div>
-      <div><kbd>Mayús+1…9</kbd> guardar grupo · <kbd>1…9</kbd> ir a él</div>
+      <div><kbd>Mayús+1…9</kbd> guardar grupo · <kbd>1…9</kbd> elegirlo, dos veces ir</div>
       <div><kbd>×</kbd> o clic derecho en botón: cancelar</div>
       <div><kbd>P</kbd> pausa · <kbd>T</kbd> tema · <kbd>N</kbd> silenciar</div>
       <div id="semilla"></div>

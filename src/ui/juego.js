@@ -387,6 +387,50 @@
       if (J.alerta && J.alerta.t > oido.alerta + 300) { oido.alerta = J.alerta.t; if (cerca(J.alerta.x, J.alerta.y) === 0) son.alerta(); }
     }
 
+    // ---------- grupos numerados ----------
+    const ultimoGrupo = { n: '', t: 0 };
+    let firmaGrupos = '';
+    function llamarGrupo(n, ir) {
+      if (!grupos[n]) return;
+      sel.clear();
+      let sx = 0, sy = 0, k = 0;
+      for (const id of grupos[n]) {
+        const e = m.porId.get(id);
+        if (!e) continue;
+        sel.add(id); sx += e.edif ? e.cx : e.x; sy += e.edif ? e.cy : e.y; k++;
+      }
+      if (ir && k) { cam.x = sx / k; cam.y = sy / k; limitarCam(); }
+    }
+    function listarGrupos() {
+      const filas = [];
+      for (const n of Object.keys(grupos).sort()) {
+        grupos[n] = grupos[n].filter((id) => m.porId.has(id)); // los caídos salen del grupo
+        if (!grupos[n].length) { delete grupos[n]; continue; }
+        const cuenta = {};
+        for (const id of grupos[n]) { const e = m.porId.get(id); cuenta[e.tipo] = (cuenta[e.tipo] || 0) + 1; }
+        const txt = Object.keys(cuenta).map((t) => cuenta[t] + ' ' + (EDIF[t] || UNID[t]).nombre.toLowerCase().slice(0, 3)).join(' · ');
+        const activo = grupos[n].length === sel.size && grupos[n].every((id) => sel.has(id));
+        filas.push(n + '|' + txt + '|' + (activo ? 1 : 0));
+      }
+      const firma = filas.join(';');
+      if (firma === firmaGrupos) return;
+      firmaGrupos = firma;
+      const cont = $('grupos');
+      cont.textContent = '';
+      for (const f of filas) {
+        const [n, txt, activo] = f.split('|'), b = document.createElement('button');
+        b.type = 'button'; b.className = 'grupo' + (activo === '1' ? ' on' : ''); b.dataset.g = n;
+        b.innerHTML = '<b></b><span></span>'; b.firstChild.textContent = n; b.lastChild.textContent = txt;
+        b.title = 'Clic: seleccionar · doble clic: ir';
+        cont.appendChild(b);
+      }
+      $('secGrupos').hidden = !filas.length;
+    }
+    $('grupos').addEventListener('click', (ev) => {
+      const b = ev.target.closest('[data-g]');
+      if (b) llamarGrupo(b.dataset.g, ev.detail >= 2);
+    });
+
     // ---------- barra lateral ----------
     const botones = [];
     function boton(cont, tipo, d, esEdif) {
@@ -442,6 +486,7 @@
         if (o.n.textContent !== nombre) o.n.textContent = nombre;
         o.b.style.setProperty('--p', (p * 100).toFixed(1) + '%');
       }
+      listarGrupos();
       const enCurso = J.obras.filter((a) => !a.listo).length;
       const reparto = enCurso > 1 ? enCurso + ' obras a la vez: cada una a 1/' + enCurso + ' de velocidad' : '';
       if ($('obras').textContent !== reparto) $('obras').textContent = reparto;
@@ -577,16 +622,11 @@
       if (ev.code.startsWith('Arrow') || ev.code === 'Space') ev.preventDefault();
       const digito = /^Digit([1-9])$/.exec(ev.code);
       if (digito) {
-        if (ev.shiftKey) grupos[digito[1]] = [...sel];
-        else if (grupos[digito[1]]) { // selecciona el grupo y lleva la cámara a su centro
-          sel.clear();
-          let sx = 0, sy = 0, n = 0;
-          for (const id of grupos[digito[1]]) {
-            const e = m.porId.get(id);
-            if (!e) continue;
-            sel.add(id); sx += e.edif ? e.cx : e.x; sy += e.edif ? e.cy : e.y; n++;
-          }
-          if (n) { cam.x = sx / n; cam.y = sy / n; limitarCam(); }
+        if (ev.shiftKey) { if (sel.size) grupos[digito[1]] = [...sel]; else delete grupos[digito[1]]; }
+        else { // una pulsación selecciona; dos seguidas llevan la cámara al grupo
+          const ahora = performance.now();
+          llamarGrupo(digito[1], ultimoGrupo.n === digito[1] && ahora - ultimoGrupo.t < 400);
+          ultimoGrupo.n = digito[1]; ultimoGrupo.t = ahora;
         }
         return;
       }
