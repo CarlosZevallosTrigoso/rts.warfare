@@ -90,6 +90,7 @@
       if (!listo(v)) return;
       const b = bus(v, pan);
       let k = vari();
+      if (arma === 'misil') arma = 'cohete'; else if (arma === 'bomba') arma = 'obus'; else if (arma === 'flak') arma = 'bateria';
       if (arma === 'cohete') { // silbido que sube y un golpe seco
         ruido(b, 'bandpass', 500 * k, 2600, 0.45, 0.5); tono(b, 'sawtooth', 180 * k, 320, 0.35, 0.12); ruido(b, 'lowpass', 700, 200, 0.12, 0.5);
         return;

@@ -6,7 +6,7 @@
 
   // Orden de construcción: [tipo, cantidad deseada].
   const PLAN = [['central', 1], ['refineria', 1], ['cuartel', 1], ['bomba', 1], ['extractor', 1], ['fabrica', 1], ['torreta', 1], ['refineria', 2],
-    ['estacion', 1], ['torreta', 2], ['cuartel', 2], ['extractor', 2], ['torreta', 3], ['fabrica', 2], ['torreCanon', 1], ['torreCanon', 2]];
+    ['estacion', 1], ['torreta', 2], ['cuartel', 2], ['extractor', 2], ['torreta', 3], ['fabrica', 2], ['torreCanon', 1], ['aerodromo', 1], ['antiaerea', 1], ['torreCanon', 2], ['antiaerea', 2]];
   // Orden fijo de investigación.
   const ORDEN_TEC = ['tolva', 'perforante', 'nivel2', 'motores', 'chalecos', 'reactivo', 'telemetro', 'turbinas', 'depuracion', 'nivel3', 'canonLargo', 'analisis'];
 
@@ -119,6 +119,11 @@
       if (J.nivel >= 3 && (c.pesado || 0) < 5 && W.puedePagar(J, UNID.pesado)) veh = 'pesado';
       else if (J.nivel >= 2 && (c.artilleria || 0) * 4 < (c.tanque || 0)) veh = 'artilleria';
       if (c.fabrica && !enFabrica && dinero >= UNID[veh].costo && W.puedePagar(J, UNID[veh])) { W.orden(m, { t: 'entrenar', j, tipo: veh }); dinero -= UNID[veh].costo; }
+      // Aviación: hasta tres cazas y, con nivel 3, dos bombarderos; uno a la vez y sin vaciar la caja.
+      if (c.aerodromo && !(J.colas.caza.n + J.colas.bombardero.n)) {
+        const av = J.nivel >= 3 && (c.bombardero || 0) < 2 && W.puedePagar(J, UNID.bombardero) ? 'bombardero' : (c.caza || 0) < 3 ? 'caza' : null;
+        if (av && dinero >= UNID[av].costo + 600 && W.puedePagar(J, UNID[av])) { W.orden(m, { t: 'entrenar', j, tipo: av }); dinero -= UNID[av].costo; }
+      }
       // Infantería: un antitanque por cada dos fusileros desde el nivel 2.
       const inf = J.nivel >= 2 && (c.antitanque || 0) * 2 < (c.infanteria || 0) ? 'antitanque' : 'infanteria';
       if (c.cuartel && J.colas.infanteria.n + J.colas.antitanque.n < 2 && dinero >= UNID[inf].costo) { W.orden(m, { t: 'entrenar', j, tipo: inf }); dinero -= UNID[inf].costo; }

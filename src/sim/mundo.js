@@ -64,7 +64,7 @@
     return e;
   }
   // ---------- efectos de las mejoras ----------
-  const bonoVida = (J, tipo) => (UNID[tipo].cat === 'inf' ? (J.mejoras.chalecos ? 1.3 : 1) : J.mejoras.reactivo ? 1.25 : 1);
+  const bonoVida = (J, tipo) => (UNID[tipo].cat === 'inf' ? (J.mejoras.chalecos ? 1.3 : 1) : UNID[tipo].cat === 'veh' && J.mejoras.reactivo ? 1.25 : 1);
   function vidaDe(J, tipo) { return Math.round(UNID[tipo].vida * bonoVida(J, tipo)); }
   function alcance(m, e, arma) {
     const J = m.jug[e.j];
@@ -82,6 +82,7 @@
       guardia: false, mision: 0, acude: 0, salto: 0, origen: null, previo: null, // colmena: modo fijo, misión, foco al que acude // rumbo, velocidad actual
       carga: 0, est: tipo === 'cosechadora' ? 'buscar' : '', celda: -1, ref: 0, espera: 0, pref: null,
       quiere: 1, cargaTipo: 1, // cosechadora: qué busca y qué lleva (1 minerales, 2 raros)
+      fuel: d.fuel || 0, repostando: false, // aviación
       cola: [], patrulla: null, explora: false, // órdenes encadenadas, ruta de patrulla, exploración automática
     };
     m.ents.push(u); m.porId.set(u.id, u);
@@ -176,6 +177,11 @@
   W.orden = function (m, cmd) { m.cola.push(cmd); };
 
   function pedirRuta(m, u, x, y, radio) {
+    if (UNID[u.tipo].aire) { // un avión no busca camino: va en línea recta
+      const N = m.N, cx = Math.max(0.5, Math.min(N - 0.5, x)), cy = Math.max(0.5, Math.min(N - 0.5, y));
+      u.ruta = [Math.floor(cy) * N + Math.floor(cx)]; u.ri = 0; u.fin = { x: cx, y: cy }; u.pend = null; u.meta = { x, y, radio };
+      return;
+    }
     if (!u.pend) m.colaRutas.push(u.id);
     u.pend = { x, y, radio }; u.meta = u.pend;
   }
@@ -199,6 +205,7 @@
   // Reparte destinos. Sin formación (o 'grupo'): racimo alrededor del punto. Con formación: cada unidad a su
   // puesto, orientada según el rumbo del grupo, y todas al paso de la más lenta para llegar juntas.
   function destinos(m, us, x, y, fn, forma, rumboPedido) {
+    const aire = us.length > 0 && us.every((u) => UNID[u.tipo].aire); // un grupo solo de aviones puede quedar sobre agua o roca
     if (forma && forma !== 'grupo' && us.length > 1) {
       let sx = 0, sy = 0, tope = Infinity;
       for (const u of us) { sx += u.x; sy += u.y; tope = Math.min(tope, UNID[u.tipo].vel); }
@@ -207,7 +214,7 @@
       const ps = puestos(forma, orden.length);
       for (let i = 0; i < orden.length; i++) {
         const px = x + ps[i][0] * c - ps[i][1] * s, py = y + ps[i][0] * s + ps[i][1] * c, cel = W.cercaLibre(m, px, py);
-        const libre = px >= 0 && py >= 0 && px < m.N && py < m.N && m.paso[Math.floor(py) * m.N + Math.floor(px)];
+        const libre = px >= 0 && py >= 0 && px < m.N && py < m.N && (aire || m.paso[Math.floor(py) * m.N + Math.floor(px)]);
         fn(orden[i], libre ? px : (cel % m.N) + 0.5, libre ? py : ((cel / m.N) | 0) + 0.5);
         orden[i].tope = tope; orden[i].angFin = rumbo;
       }
@@ -219,7 +226,7 @@
       let c = -1;
       while (k < ESPIRAL.length) {
         const xx = cx + ESPIRAL[k][0], yy = cy + ESPIRAL[k][1]; k++;
-        if (xx >= 0 && yy >= 0 && xx < N && yy < N && m.paso[yy * N + xx]) { c = yy * N + xx; break; }
+        if (xx >= 0 && yy >= 0 && xx < N && yy < N && (aire || m.paso[yy * N + xx])) { c = yy * N + xx; break; }
       }
       if (c < 0) c = W.cercaLibre(m, x, y);
       fn(us[i], (c % N) + 0.5, ((c / N) | 0) + 0.5);
@@ -232,7 +239,7 @@
   function asignar(m, u, o) {
     if (o.t === 'atacar') {
       const ob = m.porId.get(o.obj);
-      if (!ob || ob.vida <= 0) return false;
+      if (!ob || ob.vida <= 0 || !puede(ARMAS[UNID[u.tipo].arma], ob)) return false;
       u.orden = 'atacar'; u.obj = ob.id; u.ruta = null; u.pend = null; u.guardia = false;
       return true;
     }
@@ -381,7 +388,7 @@
         return;
       case 'reunion': { // punto de reunión de un cuartel o una fábrica
         const e = m.porId.get(cmd.id);
-        if (e && e.edif && e.j === cmd.j && (e.tipo === 'cuartel' || e.tipo === 'fabrica')) e.reunion = { x: cmd.x, y: cmd.y };
+        if (e && e.edif && e.j === cmd.j && (e.tipo === 'cuartel' || e.tipo === 'fabrica' || e.tipo === 'aerodromo')) e.reunion = { x: cmd.x, y: cmd.y };
         return;
       }
       case 'detener':
@@ -402,9 +409,9 @@
     if (u.ri >= u.ruta.length) { u.ruta = null; u.v = 0; return true; }
     const N = m.N, d = UNID[u.tipo], c = u.ruta[u.ri];
     const replantear = () => { u.ruta = null; u.v = 0; u.tReplan = m.t; if (u.meta) pedirRuta(m, u, u.meta.x, u.meta.y, u.meta.radio); };
-    if (!m.paso[c]) { replantear(); return false; } // alguien construyó en el punto de paso
+    if (!d.aire && !m.paso[c]) { replantear(); return false; } // alguien construyó en el punto de paso
     const vel = d.vel * (d.cat === 'veh' && m.jug[u.j].mejoras.motores ? 1.15 : 1);
-    const vmax = (u.tope && u.tope < vel ? u.tope : vel) * (UNID[u.tipo].cat !== 'inf' && m.mapa.terreno[Math.floor(u.y) * N + Math.floor(u.x)] === T.BOSQUE ? ECON.bosqueVeh : 1); // el bosque frena a los vehículos, no a la tropa a pie
+    const vmax = (u.tope && u.tope < vel ? u.tope : vel) * (d.cat === 'veh' && m.mapa.terreno[Math.floor(u.y) * N + Math.floor(u.x)] === T.BOSQUE ? ECON.bosqueVeh : 1); // el bosque frena a los vehículos, no a la tropa a pie
     const alFinal = u.ri === u.ruta.length - 1 && u.fin;
     const tx = alFinal ? u.fin.x : (c % N) + 0.5, ty = alFinal ? u.fin.y : ((c / N) | 0) + 0.5, dx = tx - u.x, dy = ty - u.y, dd = Math.hypot(dx, dy);
     let alin = 1;
@@ -421,7 +428,7 @@
     if (ultimo && dd <= 0.25) { u.ruta = null; u.v = 0; return true; } // en el destino basta con quedar cerca
     if (dd <= Math.max(u.v, 0.02)) { u.x = tx; u.y = ty; u.ri++; return false; }
     const nx = u.x + (dx / dd) * u.v, ny = u.y + (dy / dd) * u.v;
-    if (m.ocup[Math.floor(ny) * N + Math.floor(nx)] && m.t - u.tReplan > 10) { replantear(); return false; } // edificio nuevo en medio del tramo
+    if (!d.aire && m.ocup[Math.floor(ny) * N + Math.floor(nx)] && m.t - u.tReplan > 10) { replantear(); return false; } // edificio nuevo en medio del tramo
     u.x = nx; u.y = ny;
     return false;
   }
@@ -481,6 +488,7 @@
         const B = us[b];
         let dx = B.x - A.x; if (dx > 1 || dx < -1) continue;
         let dy = B.y - A.y; if (dy > 1 || dy < -1) continue;
+        if (!UNID[A.tipo].aire !== !UNID[B.tipo].aire) continue; // los aviones pasan por encima de todo lo demás
         if (A.j !== B.j && (UNID[A.tipo].cat === 'inf') !== (UNID[B.tipo].cat === 'inf')) continue; // un vehículo no esquiva a la infantería enemiga: la arrolla
         const min = ra + UNID[B.tipo].radio;
         let d = Math.hypot(dx, dy);
@@ -498,16 +506,20 @@
       if (!dx && !dy) return;
       const nx = u.x + dx, ny = u.y + dy;
       if (nx < 0.3 || ny < 0.3 || nx > N - 0.3 || ny > N - 0.3) return;
-      if (m.paso[Math.floor(ny) * N + Math.floor(nx)]) { u.x = nx; u.y = ny; }
+      if (UNID[u.tipo].aire || m.paso[Math.floor(ny) * N + Math.floor(nx)]) { u.x = nx; u.y = ny; }
     }
   }
 
   // ---------- combate ----------
+  // ¿Puede esta arma dañar a ese blanco? (los cañones no alcanzan a los aviones; la antiaérea solo a ellos)
+  function puede(arma, b) { return !!arma && arma.vs[b.edif ? 'edificio' : UNID[b.tipo].blindaje] > 0; }
+  W.puedeAtacar = (a, b) => puede(ARMAS[a.edif ? EDIF[a.tipo].arma : UNID[a.tipo].arma], b);
   function buscarEnemigo(m, a, x, y, rango) {
+    const arma = ARMAS[a.edif ? EDIF[a.tipo].arma : UNID[a.tipo].arma];
     let mejor = null, md = rango;
     for (let k = 0; k < m.ents.length; k++) {
       const e = m.ents[k];
-      if (e.j === a.j || e.vida <= 0) continue;
+      if (e.j === a.j || e.vida <= 0 || !puede(arma, e)) continue;
       const d = dist(x, y, e);
       if (d <= md) { md = d; mejor = e; }
     }
@@ -518,16 +530,17 @@
   function enTrinchera(m, b) { return !b.edif && b.orden === 'nada' && UNID[b.tipo].cat === 'inf' && m.trincheras.has(Math.floor(b.y) * m.N + Math.floor(b.x)); }
   W.enTrinchera = enTrinchera;
   // El bosque cubre a la infantería (recibe menos daño) y frena a los vehículos.
-  function enBosque(m, b) { return !b.edif && m.mapa.terreno[Math.floor(b.y) * m.N + Math.floor(b.x)] === T.BOSQUE; }
+  function enBosque(m, b) { return !b.edif && !UNID[b.tipo].aire && m.mapa.terreno[Math.floor(b.y) * m.N + Math.floor(b.x)] === T.BOSQUE; }
   W.enBosque = enBosque;
   function herir(m, b, arma, mult, de) {
+    if (!puede(arma, b)) return;
     b.vida -= arma.dano * (mult || 1) * arma.vs[b.edif ? 'edificio' : UNID[b.tipo].blindaje] * (enTrinchera(m, b) ? ECON.trinchera : 1) * (enBosque(m, b) && UNID[b.tipo].cat === 'inf' ? ECON.bosqueCubre : 1);
     b.tDano = m.t; b.agresor = de;
   }
   // Contraataque: el atacado va por su agresor. Los compañeros llegan por la colmena (ver más abajo).
   function alertar(m, a, b) {
     m.jug[b.j].alerta = { x: posX(b), y: posY(b), t: m.t };
-    if (b.edif || b.obj || !UNID[b.tipo].arma || (b.orden !== 'nada' && b.orden !== 'amover')) return;
+    if (b.edif || b.obj || !UNID[b.tipo].arma || b.repostando || (b.orden !== 'nada' && b.orden !== 'amover') || !puede(ARMAS[UNID[b.tipo].arma], a)) return;
     b.obj = a.id; b.tRep = m.t; b.ruta = null; b.pend = null;
   }
 
@@ -655,10 +668,32 @@
     if (o && e.recarga <= 0) disparar(m, e, o, arma);
   }
 
+  // Aviación: gasta combustible en vuelo, reposta sobre un aeródromo propio y vuelve sola cuando le queda lo justo.
+  // Devuelve true si este tick lo dedica a volver a base.
+  function tickVuelo(m, u) {
+    const d = UNID[u.tipo];
+    let base = null, md = Infinity;
+    for (const e of m.ents) if (e.edif && e.j === u.j && e.tipo === 'aerodromo') { const dd = Math.hypot(e.cx - u.x, e.cy - u.y); if (dd < md) { md = dd; base = e; } }
+    if (base && md <= 2.2) { u.fuel = Math.min(d.fuel, u.fuel + ECON.reposta); if (u.fuel >= d.fuel) u.repostando = false; }
+    else u.fuel--;
+    if (u.fuel <= 0) { u.fuel = 0; u.vida -= u.vidaMax / ECON.fuelCae; u.tDano = m.t; if (!base) return false; u.repostando = true; } // sin combustible, cae
+    if (!u.repostando && base && u.fuel < (md / d.vel) * 1.3 + 60) { // lo justo para volver: suelta lo que hace
+      u.repostando = true; limpiar(u); u.orden = 'nada'; u.obj = 0; u.ruta = null; u.guardia = false;
+      m.efectos.push({ tipo: 'reposta', x1: u.x, y1: u.y, x2: base.cx, y2: base.cy, j: u.j, t: m.t });
+    }
+    if (!u.repostando) return false;
+    if (!base) { u.repostando = false; return false; }
+    u.orden = 'nada'; u.obj = 0; u.cola.length = 0;
+    if (md > 1.2) { if (!u.ruta || u.meta.x !== base.cx || u.meta.y !== base.cy) pedirRuta(m, u, base.cx, base.cy, 0); avanzar(m, u); }
+    else { u.ruta = null; u.v = 0; }
+    return true;
+  }
+
   function tickUnidad(m, u) {
     const d = UNID[u.tipo];
     u.px = u.x; u.py = u.y;
     if (u.recarga > 0) u.recarga--;
+    if (d.aire && tickVuelo(m, u)) return;
     if (u.tipo === 'cosechadora') { tickCosechadora(m, u); return; }
     if (u.fallo) { u.fallo = false; u.orden = 'nada'; u.obj = 0; limpiar(u); }
     if (u.orden === 'nada' && !u.obj && !u.acude && (u.cola.length || u.patrulla || u.explora)) siguienteOrden(m, u);
@@ -834,10 +869,10 @@
     const ritmoObras = (factor * W.ritmo(J.cuenta.patio || 0)) / (activas.length || 1);
     for (const o of activas) { o.prog += ritmoObras; if (o.prog >= EDIF[o.tipo].tiempo) o.listo = true; }
     // Unidades: igual, una cola por tipo; las de un mismo edificio (cuartel o fábrica) se reparten su velocidad.
-    for (const cat of ['inf', 'veh']) {
+    for (const cat of ['inf', 'veh', 'aire']) {
       const tipos = Object.keys(UNID).filter((t) => UNID[t].cat === cat && J.colas[t].n > 0);
       if (!tipos.length) continue;
-      const fabs = edificiosDe(m, j, cat === 'inf' ? 'cuartel' : 'fabrica');
+      const fabs = edificiosDe(m, j, LUGAR[cat]);
       if (!fabs.length) { for (const t of tipos) { const q = J.colas[t]; for (let k = 0; k < q.n; k++) devolver(J, UNID[t]); q.n = 0; q.prog = 0; } continue; }
       let enCurso = 0;
       for (const t of tipos) { const q = J.colas[t]; q.sinAgua = J.aguaUso + (UNID[t].agua || 0) > J.aguaProd; if (!q.sinAgua) enCurso++; } // sin agua no se sostiene más tropa
@@ -848,11 +883,12 @@
       q.prog += (factor * W.ritmo(fabs.length)) / enCurso;
       if (q.prog < UNID[tipo].tiempo || J.aguaUso + (UNID[tipo].agua || 0) > J.aguaProd) continue;
       q.n--; q.prog = 0; J.aguaUso += UNID[tipo].agua || 0;
-      const u = crearUnidad(m, j, tipo, W.cercaLibre(m, fab.cx, fab.y + fab.tam + 0.5));
+      const u = crearUnidad(m, j, tipo, cat === 'aire' ? Math.floor(fab.cy) * m.N + Math.floor(fab.cx) : W.cercaLibre(m, fab.cx, fab.y + fab.tam + 0.5)); // el avión sale sobre su pista
       if (fab.reunion) { // va al punto de reunión del edificio
         if (tipo === 'cosechadora') u.pref = { x: fab.reunion.x, y: fab.reunion.y };
+        else if (cat === 'aire') asignar(m, u, { t: 'mover', x: fab.reunion.x, y: fab.reunion.y });
         else { const c = W.cercaLibre(m, fab.reunion.x, fab.reunion.y); asignar(m, u, { t: 'mover', x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 }); }
-      } else if (tipo !== 'cosechadora') { // se aparta de la puerta, hacia el centro del mapa
+      } else if (tipo !== 'cosechadora' && cat !== 'aire') { // se aparta de la puerta, hacia el centro del mapa
         const cx = m.N / 2 - fab.cx, cy = m.N / 2 - fab.cy, cd = Math.hypot(cx, cy) || 1;
         const c = W.cercaLibre(m, fab.cx + (cx / cd) * (fab.tam + 2), fab.cy + (cy / cd) * (fab.tam + 2));
         u.orden = 'mover'; u.dest = { x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 };
@@ -865,9 +901,10 @@
   // ---------- curación y atropello ----------
   // Fuera de combate, las unidades se reparan cerca de su edificio (infantería: cuartel; vehículos: fábrica;
   // todos: patio) y los edificios se reparan solos, más despacio.
+  const LUGAR = { inf: 'cuartel', veh: 'fabrica', aire: 'aerodromo' }; // dónde se produce y se repara cada categoría
   function curar(m) {
     const talleres = [[], []];
-    for (const e of m.ents) if (e.edif && (e.tipo === 'patio' || e.tipo === 'cuartel' || e.tipo === 'fabrica')) talleres[e.j].push(e);
+    for (const e of m.ents) if (e.edif && (e.tipo === 'patio' || e.tipo === 'cuartel' || e.tipo === 'fabrica' || e.tipo === 'aerodromo')) talleres[e.j].push(e);
     for (const e of m.ents) {
       if (e.vida >= e.vidaMax || e.vida <= 0) continue; // los caídos en este tick no se reaniman
       const calma = m.t - (e.tDano === undefined ? -999 : e.tDano);
@@ -881,7 +918,7 @@
       };
       if (e.edif) { if (calma > 300) sanar(ECON.curaEdificio); continue; }
       if (calma < 100) continue;
-      const quiere = UNID[e.tipo].cat === 'inf' ? 'cuartel' : 'fabrica';
+      const quiere = LUGAR[UNID[e.tipo].cat];
       for (const b of talleres[e.j]) {
         if ((b.tipo !== 'patio' && b.tipo !== quiere) || dist(e.x, e.y, b) > 5) continue;
         sanar(ECON.curaUnidad);
@@ -893,7 +930,7 @@
   // debajo. Pasarle por encima de lleno la mata; un roce solo la hiere.
   function aplastar(m) {
     for (const a of m.ents) {
-      if (a.edif || UNID[a.tipo].cat === 'inf' || a.v < 0.03) continue;
+      if (a.edif || UNID[a.tipo].cat !== 'veh' || a.v < 0.03) continue;
       for (const b of m.ents) {
         if (b.edif || UNID[b.tipo].cat !== 'inf' || b.j === a.j || b.vida <= 0 || enTrinchera(m, b)) continue;
         const dx = b.x - a.x; if (dx > 0.5 || dx < -0.5) continue;

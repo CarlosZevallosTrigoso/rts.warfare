@@ -127,7 +127,7 @@
     // Lo que el terreno (o la trinchera) le da o le quita a una unidad, en texto.
     const pct = (k) => Math.round(Math.abs(1 - k) * 100) + ' %';
     function efectos(e) {
-      if (e.edif) return '';
+      if (e.edif || UNID[e.tipo].aire) return '';
       const inf = UNID[e.tipo].cat === 'inf', out = [];
       if (W.enTrinchera(m, e)) out.push('trinchera: −' + pct(W.ECON.trinchera) + ' daño, no la atropellan');
       if (W.enBosque(m, e)) out.push(inf ? 'bosque: −' + pct(W.ECON.bosqueCubre) + ' daño' : 'bosque: −' + pct(W.ECON.bosqueVeh) + ' velocidad');
@@ -143,6 +143,7 @@
         let t = (e.edif ? EDIF : UNID)[e.tipo].nombre + (e.j === YO ? '' : ' rival') + ' · ' + Math.ceil(e.vida) + '/' + e.vidaMax;
         if (e.tipo === 'cosechadora' && e.j === YO) t += ' · carga ' + e.carga;
         if (e.cava > 0) t += ' · cavando'; else if (e.guardia && e.j === YO && !W.enTrinchera(m, e)) t += ' · en guardia';
+        if (UNID[e.tipo] && UNID[e.tipo].aire && e.j === YO) t += e.repostando ? ' · vuelve a repostar' : ' · combustible ' + Math.round(e.fuel / UNID[e.tipo].fuel * 100) + ' %';
         const ef = efectos(e); if (ef) t += ' · ' + ef;
         return t;
       }
@@ -346,15 +347,17 @@
         }
       }
 
-      for (const e of m.ents) {
-        if (e.edif || !veo(e)) continue;
+      for (const e of m.ents.filter((u) => !u.edif && !UNID[u.tipo].aire).concat(m.ents.filter((u) => !u.edif && UNID[u.tipo].aire))) { // los aviones, encima
+        if (!veo(e)) continue;
         const wx = e.px + (e.x - e.px) * alfa, wy = e.py + (e.y - e.py) * alfa;
         if (fuera(wx, wy)) continue;
         const d = UNID[e.tipo], px = ox + wx * z, py = oy + wy * z, r = Math.max(2, d.radio * z), g = giro(e);
         const anda = (e.x - e.px) ** 2 + (e.y - e.py) ** 2 > 1e-6;
         if (lod) { // sombra
           ctx.fillStyle = 'rgba(0,0,0,0.17)'; ctx.beginPath();
-          ctx.ellipse(px + so * 0.8, py + so * 0.8, r * (d.cat === 'inf' ? 1.1 : 1.45), r * 1.1, g.a, 0, TAU); ctx.fill();
+          const alto = d.aire ? r * 1.5 : 0; // la sombra de un avión cae lejos: vuela
+          if (alto) ctx.fillStyle = 'rgba(0,0,0,0.12)';
+          ctx.ellipse(px + so * 0.8 + alto, py + so * 0.8 + alto, r * (d.cat === 'inf' ? 1.1 : 1.45), r * 1.1, g.a, 0, TAU); ctx.fill();
           if (anda && d.cat === 'veh' && !pausa) { // los vehículos dejan huella y levantan polvo
             g.d = (g.d || 0) + e.v * (dtCuadro / 50);
             if (g.d > 0.5) {
@@ -377,7 +380,8 @@
           ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(px - r * 1.3, py + r * 1.9); ctx.lineTo(px + r * 1.3, py + r * 1.9); ctx.moveTo(px - r * 0.7, py + r * 1.9 + 3); ctx.lineTo(px + r * 0.7, py + r * 1.9 + 3); ctx.stroke();
         }
         if (e.j === YO) { if (m.t - e.llama < 14) signos.push([px, py - r * 1.9 - 20, '!']); else if (m.t - e.oyo < 36) signos.push([px, py - r * 1.9 - 20, '✓']); }
-        if (sel.has(e.id) || e.vida < e.vidaMax) barras.push([px - r * 1.3, py - r * 1.9 - 8, r * 2.6, e.vida / e.vidaMax, m.t - e.curando < 12]);
+        const fuel = d.aire && e.j === YO ? e.fuel / d.fuel : -1;
+        if (sel.has(e.id) || e.vida < e.vidaMax || (fuel >= 0 && fuel < 0.35)) barras.push([px - r * 1.3, py - r * 1.9 - 8, r * 2.6, e.vida / e.vidaMax, m.t - e.curando < 12, fuel]);
       }
 
       // Obuses en vuelo, con estela.
@@ -453,6 +457,7 @@
       for (const b of barras) {
         ctx.fillStyle = P.fondo; ctx.fillRect(b[0], b[1], b[2], 3);
         ctx.fillStyle = b[3] > 0.5 ? P.bien : b[3] > 0.25 ? P.rival : P.mal; ctx.fillRect(b[0], b[1], b[2] * Math.max(0, b[3]), 3);
+        if (b[5] >= 0) { ctx.fillStyle = P.fondo; ctx.fillRect(b[0], b[1] + 4, b[2], 2); ctx.fillStyle = b[5] > 0.3 ? P.tinta : P.mal; ctx.fillRect(b[0], b[1] + 4, b[2] * b[5], 2); } // combustible
         if (b[4]) { // se está curando: una cruz que late junto a la barra
           const cx = b[0] + b[2] + 6, cy = b[1] + 1.5, k = 3 + Math.sin(performance.now() * 0.008);
           ctx.strokeStyle = P.bien; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(cx - k, cy); ctx.lineTo(cx + k, cy); ctx.moveTo(cx, cy - k); ctx.lineTo(cx, cy + k); ctx.stroke();
@@ -584,6 +589,8 @@
           if (d.j !== YO) continue;
           senales.push({ k: 'enlace', x: d.x1, y: d.y1, x2: d.x2, y2: d.y2, t0: performance.now(), dur: 1100 });
           if (n++ < 6) son.acude(Math.max(0.2, cerca(d.x1, d.y1)), paneo(d.x1));
+        } else if (d.tipo === 'reposta') {
+          if (d.j === YO && performance.now() - (oido.reposta || 0) > 4000) { oido.reposta = performance.now(); aviso('Un avión vuelve a repostar'); }
         } else if (d.tipo === 'venta') {
           for (let k = 0; k < d.tam * 4; k++) parte('polvo', d.x2 + (azar() - 0.5) * d.tam, d.y2 + (azar() - 0.5) * d.tam, (azar() - 0.5) * 0.6, -0.2 - azar() * 0.4, 1 + azar(), 0.4);
           if (d.j === YO) son.colocar();
@@ -708,7 +715,8 @@
         const n = {}; for (const u of us) { const ef = efectos(u); if (ef) n[ef] = (n[ef] || 0) + 1; }
         for (const ef in n) L.push('<b>' + (us.length > 1 ? n[ef] + ' en ' : 'en ') + ef + '</b>');
       }
-      if (eds.some((e) => e.tipo === 'cuartel' || e.tipo === 'fabrica') && !us.length) L.push('clic derecho: punto de reunión');
+      if (us.some((u) => UNID[u.tipo].aire)) L.push('<b>aviones: vuelan sobre todo; repostan solos en el aeródromo</b>');
+      if (eds.some((e) => e.tipo === 'cuartel' || e.tipo === 'fabrica' || e.tipo === 'aerodromo') && !us.length) L.push('clic derecho: punto de reunión');
       if (vendibles().length) L.push(k('Supr') + ' demoler y recuperar la mitad');
       if (L.length) L.push(k('Mayús+1…9') + ' guardar grupo · ' + k('Esc') + ' soltar');
       return L.map((t) => '<div>' + t + '</div>').join('');
@@ -897,12 +905,15 @@
         const us = unidadesSel();
         if (!us.length) { // con un cuartel o una fábrica seleccionados: punto de reunión
           let puesto = false;
-          for (const id of sel) { const e = m.porId.get(id); if (e && e.edif && (e.tipo === 'cuartel' || e.tipo === 'fabrica')) { W.orden(m, { t: 'reunion', j: YO, id, x: wx, y: wy }); puesto = true; } }
+          for (const id of sel) { const e = m.porId.get(id); if (e && e.edif && (e.tipo === 'cuartel' || e.tipo === 'fabrica' || e.tipo === 'aerodromo')) { W.orden(m, { t: 'reunion', j: YO, id, x: wx, y: wy }); puesto = true; } }
           if (puesto) { marca(wx, wy, P.bien); son.orden(); }
           return;
         }
         const ids = us.map((u) => u.id), o = entEn(wx, wy), c = Math.floor(wy) * N + Math.floor(wx);
-        if (o && o.j !== YO) { W.orden(m, { t: 'atacar', j: YO, ids, obj: o.id, enc }); marca(wx, wy, P.mal); return; }
+        if (o && o.j !== YO) {
+          if (!us.some((u) => UNID[u.tipo].arma && W.puedeAtacar(u, o))) aviso(UNID[o.tipo] && UNID[o.tipo].aire ? 'Estas unidades no alcanzan a los aviones' : 'Estas unidades no pueden atacar eso');
+          W.orden(m, { t: 'atacar', j: YO, ids, obj: o.id, enc }); marca(wx, wy, P.mal); return;
+        }
         const cos = us.filter((u) => u.tipo === 'cosechadora').map((u) => u.id);
         if (cos.length && m.mapa.tipoMin[c] >= 1 && m.niebla[YO][c]) {
           W.orden(m, { t: 'cosechar', j: YO, ids: cos, x: wx, y: wy });

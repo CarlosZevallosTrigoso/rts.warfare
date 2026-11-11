@@ -55,6 +55,27 @@
       c.closePath(); c.fill(); c.stroke();
       if (lod === 2) { c.fillStyle = col.luz; c.beginPath(); c.arc(-w * 0.12, w * 0.12, w * 0.13, 0, TAU); c.fill(); } // escotilla
       if (e.retro > 0.6) { c.fillStyle = col.fuego; c.beginPath(); c.arc(w * 0.2 + L * 1.45, 0, w * 0.34, 0, TAU); c.fill(); }
+    } else if (u.tipo === 'caza') { // ala en delta, morro afilado
+      const L = r * 1.9;
+      c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1;
+      c.beginPath(); c.moveTo(L, 0); c.lineTo(-L * 0.55, -L * 0.8); c.lineTo(-L * 0.3, 0); c.lineTo(-L * 0.55, L * 0.8); c.closePath(); c.fill(); c.stroke();
+      c.fillStyle = col.osc; c.fillRect(-L * 0.75, -L * 0.1, L * 1.2, L * 0.2); // fuselaje
+      if (lod === 2) { c.fillStyle = col.luz; c.beginPath(); c.ellipse(L * 0.35, 0, L * 0.22, L * 0.09, 0, 0, TAU); c.fill(); } // cabina
+      if (e.anda) { c.fillStyle = col.fuego; c.globalAlpha = 0.8; c.beginPath(); c.moveTo(-L * 0.75, -L * 0.08); c.lineTo(-L * (1.0 + 0.15 * Math.sin(e.tiempo * 0.05)), 0); c.lineTo(-L * 0.75, L * 0.08); c.fill(); c.globalAlpha = 1; }
+      if (e.retro > 0.6) { c.fillStyle = col.fuego; c.beginPath(); c.arc(L * 0.2, L * 0.5, L * 0.12, 0, TAU); c.arc(L * 0.2, -L * 0.5, L * 0.12, 0, TAU); c.fill(); }
+    } else if (u.tipo === 'bombardero') { // alas rectas y anchas, dos motores
+      const L = r * 1.7;
+      c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1;
+      c.beginPath(); c.rect(-L * 0.25, -L * 1.15, L * 0.55, L * 2.3); c.fill(); c.stroke(); // ala
+      c.beginPath(); c.rect(-L * 1.0, -L * 0.42, L * 0.28, L * 0.84); c.fill(); c.stroke(); // cola
+      c.fillStyle = col.osc; c.beginPath(); c.ellipse(0, 0, L * 1.05, L * 0.2, 0, 0, TAU); c.fill(); // fuselaje
+      c.fillRect(-L * 0.05, -L * 0.72, L * 0.5, L * 0.18); c.fillRect(-L * 0.05, L * 0.54, L * 0.5, L * 0.18); // motores
+      if (lod === 2) {
+        c.fillStyle = col.luz; c.beginPath(); c.ellipse(L * 0.6, 0, L * 0.2, L * 0.1, 0, 0, TAU); c.fill();
+        c.strokeStyle = col.luz; c.globalAlpha = 0.6; const a = e.tiempo * 0.04; // hélices
+        for (const y of [-0.63, 0.63]) { c.beginPath(); c.moveTo(L * 0.47, L * (y - 0.2 * Math.cos(a))); c.lineTo(L * 0.47, L * (y + 0.2 * Math.cos(a))); c.stroke(); }
+        c.globalAlpha = 1;
+      }
     } else if (u.tipo === 'artilleria') {
       const L = r * 1.4, w = r * 0.85;
       c.strokeStyle = col.osc; c.lineWidth = Math.max(1.5, r * 0.22); c.beginPath(); // patas de anclaje
@@ -93,8 +114,8 @@
     const lw = Math.max(1, t * 0.035);
     c.lineJoin = 'round'; c.lineCap = 'butt';
 
-    if (e.tipo === 'torreta') {
-      const R = t * 0.47;
+    if (e.tipo === 'torreta' || e.tipo === 'antiaerea') {
+      const R = t * 0.47, aa = e.tipo === 'antiaerea';
       c.fillStyle = lod ? col.osc : col.base; c.beginPath();
       for (let k = 0; k < 8; k++) { const a = (k + 0.5) / 8 * TAU; c.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); }
       c.closePath(); c.fill();
@@ -107,9 +128,10 @@
       c.save(); c.translate(cx, cy); c.rotate(s.ang);
       const rec = s.retro * R * 0.35;
       c.fillStyle = s.deficit ? col.humo : col.osc;
-      c.fillRect(R * 0.1 - rec, -R * 0.36, R * 1.25, R * 0.26); c.fillRect(R * 0.1 - rec, R * 0.1, R * 1.25, R * 0.26); // doble cañón
+      if (aa) for (const y of [-0.4, -0.16, 0.08, 0.32]) c.fillRect(R * 0.1 - rec, R * y, R * 1.7, R * 0.1); // cuatro tubos finos y largos
+      else { c.fillRect(R * 0.1 - rec, -R * 0.36, R * 1.25, R * 0.26); c.fillRect(R * 0.1 - rec, R * 0.1, R * 1.25, R * 0.26); } // doble cañón
       c.fillStyle = col.luz; c.strokeStyle = col.osc; c.lineWidth = 1;
-      c.beginPath(); c.arc(0, 0, R * 0.42, 0, TAU); c.fill(); c.stroke();
+      c.beginPath(); if (aa) c.rect(-R * 0.4, -R * 0.5, R * 0.6, R); else c.arc(0, 0, R * 0.42, 0, TAU); c.fill(); c.stroke();
       if (s.retro > 0.6) { c.fillStyle = col.fuego; c.beginPath(); c.arc(R * 1.5, 0, R * 0.36, 0, TAU); c.fill(); }
       c.restore();
       danos(c, cx, cy, t, col, s);
@@ -192,6 +214,17 @@
           c.globalAlpha = 0.5 * (1 - f); c.beginPath(); c.arc(X(0.84) + f * t * 0.16, Y(0.62) - f * t * 0.26, t * (0.03 + f * 0.05), 0, TAU); c.fill();
         }
         c.globalAlpha = 1;
+      }
+    } else if (e.tipo === 'aerodromo') { // pista en diagonal con eje discontinuo, hangar y manga de viento
+      c.save(); c.translate(cx, cy); c.rotate(-0.5);
+      c.fillStyle = col.osc; c.fillRect(-t * 0.42, -t * 0.11, t * 0.84, t * 0.22);
+      c.strokeStyle = col.luz; c.lineWidth = lw * 1.2; c.setLineDash([t * 0.07, t * 0.05]); c.beginPath(); c.moveTo(-t * 0.38, 0); c.lineTo(t * 0.38, 0); c.stroke(); c.setLineDash([]);
+      c.restore();
+      c.fillStyle = col.luz; c.beginPath(); c.arc(X(0.2), Y(0.26), t * 0.1, Math.PI, 0); c.fill(); c.fillRect(X(0.1), Y(0.26), t * 0.2, t * 0.05); // hangar
+      if (lod === 2) {
+        const o = Math.sin(s.tiempo * 0.004 + s.id) * t * 0.03;
+        c.fillStyle = col.fuego; c.beginPath(); c.moveTo(X(0.84), Y(0.72)); c.lineTo(X(0.84) - t * 0.16, Y(0.75) + o); c.lineTo(X(0.84), Y(0.8)); c.closePath(); c.fill();
+        c.fillStyle = col.osc; c.fillRect(X(0.84) - 1, Y(0.7), 2, t * 0.18);
       }
     } else if (e.tipo === 'cuartel') {
       c.fillStyle = col.suelo; c.fillRect(X(0.38), Y(0.78), t * 0.24, t * 0.22); // puerta
