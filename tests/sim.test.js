@@ -1545,6 +1545,46 @@ prueba('laboratorio y mejoras de rendimiento por edificio', () => {
   assert.ok(!cu.nivelE, 'el cuartel no se mejora'); void cen2;
 });
 
+prueba('ingeniero civil en automático conecta lo que está fuera de la red; patrulla por puntos compartida', () => {
+  const m = W.crearMundo(31, { N: 128, logistica: true }), N = m.N, J = m.jug[0];
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const cel = (x, y) => y * N + x, patio = m.ents.find((e) => e.j === 0 && e.tipo === 'patio'), px = Math.floor(patio.cx), py = Math.floor(patio.cy), dir = px < 64 ? 1 : -1;
+  for (let y = py - 10; y <= py + 10; y++) for (let x = Math.min(px, px + dir * 60) - 2; x <= Math.max(px, px + dir * 60) + 2; x++) { const i = cel(x, y); if (x < 2 || y < 2 || x >= N - 2 || y >= N - 2 || m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  m.terrenoV++;
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  J.dios = false; J.minerales = 20000;
+  const c1 = W.crearEdificio(m, 0, 'central', px + dir * 22, py - 3), c2 = W.crearEdificio(m, 0, 'central', px + dir * 22, py + 6); avanza(3);
+  assert.ok(!c1.conRed && !c2.conRed, 'las dos centrales lejanas nacen fuera de la red');
+  const ing = W.crearUnidad(m, 0, 'civil', cel(px + dir * 4, py + 1)), ing2 = W.crearUnidad(m, 0, 'civil', cel(px + dir * 4, py + 2));
+  assert.ok(ing.auto, 'el ingeniero civil nace en automático');
+  avanza(40);
+  assert.strictEqual(ing.orden, 'conectar', 'sin que nadie se lo ordene, se pone a conectar');
+  assert.ok(ing2.orden !== 'conectar' || ing2.obra.pares[0][1] !== ing.obra.pares[0][1], 'dos ingenieros no se encargan del mismo edificio');
+  avanza(2500);
+  assert.ok(c1.conRed && c2.conRed, 'las dos quedan conectadas');
+  assert.ok(m.ents.some((e) => e.linea && e.j === 0), 'con líneas de servicio');
+  const nLin = m.ents.filter((e) => e.linea).length; avanza(200);
+  assert.strictEqual(m.ents.filter((e) => e.linea).length, nLin, 'y con todo conectado no tiende nada más');
+  // una orden a mano lo saca del automático; el botón lo devuelve
+  W.orden(m, { t: 'mover', j: 0, ids: [ing.id], x: ing.x + 1, y: ing.y }); avanza(2); assert.ok(!ing.auto, 'una orden a mano lo deja en manual');
+  W.orden(m, { t: 'autoCivil', j: 0, ids: [ing.id], on: true }); avanza(2); assert.ok(ing.auto, 'y se le puede devolver');
+  // patrulla por puntos: el grupo recorre el mismo circuito, al paso del más lento
+  const t1 = W.crearUnidad(m, 0, 'tanque', cel(px + dir * 8, py - 6)), i1 = W.crearUnidad(m, 0, 'infanteria', cel(px + dir * 8, py - 5));
+  const pts = [{ x: px + dir * 12, y: py - 7 }, { x: px + dir * 18, y: py - 7 }, { x: px + dir * 18, y: py - 9 }];
+  W.orden(m, { t: 'patrulla', j: 0, ids: [t1.id, i1.id], pts }); avanza(2);
+  assert.strictEqual(t1.patrulla.pts.length, 3); assert.strictEqual(i1.patrulla.pts.length, 3);
+  assert.ok(Math.hypot(t1.patrulla.pts[1].x - pts[1].x, t1.patrulla.pts[1].y - pts[1].y) < 3, 'cada unidad lleva su puesto junto a cada punto');
+  avanza(5); assert.ok(Math.hypot(t1.dest.x - pts[0].x, t1.dest.y - pts[0].y) < 3, 'empieza por el primer punto');
+  const vistos = new Set(); let sep = 0;
+  for (let k = 0; k < 2400; k++) { W.tick(m); pts.forEach((q, n) => { if (Math.hypot(t1.x - q.x, t1.y - q.y) < 2.5) vistos.add(n); }); sep = Math.max(sep, Math.hypot(t1.x - i1.x, t1.y - i1.y)); }
+  assert.strictEqual(vistos.size, 3, 'pasa por los tres puntos');
+  assert.ok(t1.patrulla && i1.patrulla, 'y sigue patrullando');
+  assert.ok(sep < 6, 'el tanque no deja atrás a la infantería (separación máxima ' + sep.toFixed(1) + ')');
+  // un solo punto: ida y vuelta desde donde está
+  W.orden(m, { t: 'patrulla', j: 0, ids: [i1.id], pts: [{ x: i1.x + dir * 5, y: i1.y }] }); avanza(2);
+  assert.strictEqual(i1.patrulla.pts.length, 2, 'con un punto, va y vuelve');
+});
+
 prueba('tanda 5: puente aéreo, puesto de avanzada, hospital y traslado de infantería', () => {
   const m = W.crearMundo(31, { N: 128, logistica: true }), N = m.N, J = m.jug[0];
   m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);

@@ -188,6 +188,7 @@
       if (e) {
         let t = (e.muro ? W.MURO_N[e.muro] : (e.edif ? EDIF : UNID)[e.tipo]).nombre + (e.j === YO ? '' : ' rival') + ' · ' + Math.ceil(e.vida) + '/' + e.vidaMax;
         if (e.tipo === 'cosechadora' && e.j === YO) t += ' · carga ' + e.carga;
+        if (!e.edif && UNID[e.tipo].tiende && e.j === YO && m.logistica !== false) t += e.orden === 'conectar' ? ' · tendiendo línea' : e.auto ? ' · automático' : ' · manual';
         if (e.cava > 0) t += ' · cavando'; else if (e.guardia && e.j === YO && !W.enTrinchera(m, e)) t += ' · en guardia';
         if (UNID[e.tipo] && UNID[e.tipo].aire && e.j === YO) t += (e.enTierra ? ' · en tierra' : e.repostando ? ' · vuelve a repostar' : e.patrulla ? ' · patrulla' : '') + ' · combustible ' + Math.round(e.fuel / UNID[e.tipo].fuel * 100) + ' %';
         if (!e.edif && e.rango) t += ' · veterano ' + '▲'.repeat(e.rango);
@@ -876,7 +877,17 @@
       ctx.font = '11px "Fira Code", ui-monospace, monospace';
       if (pausa || modo === 'amover' || modo === 'patrulla' || modo === 'barrido') {
         ctx.fillStyle = P.tinta;
-        ctx.fillText(pausa ? 'pausa' : modo === 'amover' ? 'atacar al avanzar: elige destino' : modo === 'barrido' ? 'barrido: elige la zona a revelar' : 'patrulla: elige el punto (con Mayús añades más)', 12, ch - 14);
+        ctx.fillText(pausa ? 'pausa' : modo === 'amover' ? 'atacar al avanzar: elige destino' : modo === 'barrido' ? 'barrido: elige la zona a revelar' : rutaP.length ? 'patrulla: ' + rutaP.length + (rutaP.length === 1 ? ' punto' : ' puntos') + ' · clic derecho, Enter o R: en marcha · Retroceso: quita el último · Esc: cancela' : 'patrulla: marca los puntos con clic; clic derecho, Enter o R para ponerla en marcha', 12, ch - 14);
+      }
+      if (modo === 'patrulla' && !rutaP.length && raton.dentro) { ctx.fillStyle = P.tinta; ctx.fillText('patrulla: marca el primer punto', raton.x + 14, raton.y - 8); }
+      if (modo === 'patrulla' && rutaP.length) { // la ruta que se está armando: puntos numerados, cerrada si es un circuito, y el tramo hasta el cursor
+        ctx.strokeStyle = P.mal; ctx.fillStyle = P.mal; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.beginPath();
+        rutaP.forEach((q, i) => { const px = ox + q.x * z, py = oy + q.y * z; if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py); });
+        if (raton.dentro && rutaP.length < 12) ctx.lineTo(raton.x, raton.y);
+        if (rutaP.length + (raton.dentro ? 1 : 0) >= 3) ctx.closePath();
+        ctx.stroke(); ctx.setLineDash([]);
+        if (raton.dentro) { ctx.fillStyle = P.tinta; ctx.fillText('clic: otro punto · clic derecho: en marcha', raton.x + 14, raton.y - 8); }
+        rutaP.forEach((q, i) => { const px = ox + q.x * z, py = oy + q.y * z; ctx.fillStyle = P.mal; ctx.beginPath(); ctx.arc(px, py, 8, 0, TAU); ctx.fill(); ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.fillText(String(i + 1), px, py + 4); ctx.textAlign = 'left'; });
       }
       if (modo === 'conectar' && raton.dentro) { // la línea que saldría del último edificio marcado, y lo que costaría
         const a = conectaDesde ? m.porId.get(conectaDesde) : null, wx = aMundoX(raton.x), wy = aMundoY(raton.y), e = entEn(wx, wy), vale = e && e.edif && !e.infra && e.j === YO;
@@ -1297,6 +1308,14 @@
     let conectaDesde = 0, conectaN = 0; // conectar: el último edificio marcado y cuántos tramos van
     function conectar() { if (unidadesSel().some((u) => UNID[u.tipo].tiende)) { modo = 'conectar'; conectaDesde = 0; conectaN = 0; aviso('Conectar: toca el edificio de partida y luego los que quieras unir · Esc termina'); } }
     $('conectar').addEventListener('click', conectar);
+    $('autoCivil').addEventListener('click', () => { const cs = unidadesSel().filter((u) => UNID[u.tipo].tiende); if (!cs.length) return; const on = !cs.every((u) => u.auto); W.orden(m, { t: 'autoCivil', j: YO, ids: cs.map((u) => u.id), on }); aviso(on ? 'Ingeniero en automático: conecta solo lo que esté fuera de la red' : 'Ingeniero en manual'); });
+    // Patrulla: R abre el modo; cada clic añade un punto; clic derecho, Enter o R otra vez la ponen en marcha; Esc la cancela.
+    let rutaP = [];
+    function cerrarPatrulla() {
+      const ids = unidadesSel().map((u) => u.id);
+      if (rutaP.length && ids.length) { W.orden(m, { t: 'patrulla', j: YO, ids, pts: rutaP }); son.orden(); aviso(rutaP.length === 1 ? 'Patrulla: ida y vuelta' : rutaP.length === 2 ? 'Patrulla entre dos puntos' : 'Patrulla en circuito de ' + rutaP.length + ' puntos'); }
+      modo = null; rutaP = [];
+    }
     function trazar() { if (unidadesSel().some((u) => UNID[u.tipo].traza)) { modo = 'trazar'; trazaDesde = null; if (tactil) aviso('Arrastra hasta donde debe llegar el camino y suelta'); } }
     $('trazar').addEventListener('click', trazar);
     const paraDesplegar = () => unidadesSel().filter((u) => UNID[u.tipo].despliega);
@@ -1380,7 +1399,7 @@
         else L.push('clic derecho: mover' + (armadas ? ' o atacar' : '') + ' · otro clic cerca: orientar');
         if (us.some((u) => u.tipo === 'cosechadora')) L.push('clic derecho en una veta: cosechar');
         if (!soloAire) {
-          L.push((armadas ? k('A') + ' atacar al avanzar · ' : '') + k('R') + ' patrulla · ' + k('E') + ' explorar');
+          L.push((armadas ? k('A') + ' atacar al avanzar · ' : '') + k('R') + ' patrulla (clic: puntos; clic derecho: en marcha) · ' + k('E') + ' explorar');
           L.push(k('S') + ' detener · ' + k('G') + ' guardia · ' + k('Mayús') + ' encadenar');
         }
         if (us.length > 1) L.push(k('F') + ' formación: ' + forma);
@@ -1390,7 +1409,7 @@
       }
       if (us.some((u) => UNID[u.tipo].aire)) {
         L.push('<b>aviones: al acabar la orden vuelven a su aeródromo</b>');
-        L.push(k('R') + ' patrulla aérea: da vueltas sobre el punto; con ' + k('Mayús') + ', más puntos');
+        L.push(k('R') + ' patrulla aérea: con un punto da vueltas sobre él; con más, los recorre');
         L.push('repostan solos y retoman la patrulla · círculo: radio de vuelo');
       }
       if (eds.some((e) => W.PRODUCE[e.tipo]) && !us.length) L.push('barra: encargar · clic en la cola: cancelar' + (eds.length > 1 ? ' · el encargo va a la cola más corta' : ''));
@@ -1633,7 +1652,7 @@
       if (dentroT) { const t = 'Salir de la trinchera · ' + dentroT; if (bt.textContent !== t) bt.textContent = t; }
       $('desplegar').hidden = !paraDesplegar().length;
       { const hay = unidadesSel().some((u) => UNID[u.tipo].tiende), bm = $('bMuro'); bm.hidden = !hay; if (!hay && (modo === 'murar' || modo === 'quitarMuro')) modo = null; for (const b of bm.querySelectorAll('[data-m]')) b.classList.toggle('on', (modo === 'murar' || modo === 'quitarMuro') && muroTipo === b.dataset.m); }
-      { const hay = unidadesSel().some((u) => UNID[u.tipo].tiende), bc = $('conectar'); bc.hidden = !hay; bc.classList.toggle('listo', modo === 'conectar'); if (!hay && modo === 'conectar') modo = null; }
+      { const cs = unidadesSel().filter((u) => UNID[u.tipo].tiende), hay = cs.length > 0, bc = $('conectar'), ba = $('autoCivil'); ba.hidden = !hay || m.logistica === false; if (hay) { const on = cs.every((u) => u.auto), tx = on ? 'Automático: sí' : 'Automático: no'; if (ba.textContent !== tx) ba.textContent = tx; ba.classList.toggle('listo', on); } bc.hidden = !hay; bc.classList.toggle('listo', modo === 'conectar'); if (!hay && modo === 'conectar') modo = null; }
       { const hay = unidadesSel().some((u) => UNID[u.tipo].traza), bz = $('trazar'); bz.hidden = !hay; bz.classList.toggle('listo', modo === 'trazar'); }
       { const us = conCarga(), bd = $('descargar'); bd.hidden = !us.length; if (us.length) { const t = 'Descargar · ' + us.reduce((a, u) => a + u.pasajeros.length, 0) + ' dentro'; if (bd.textContent !== t) bd.textContent = t; } }
       { const e = mejorable(), bm = $('mejorar'); bm.hidden = !e; if (e) { const pr = W.costoMejora(e), t = 'Mejorar a nivel ' + ((e.nivelE || 1) + 1) + ' · ' + pr, cl = 'btn' + (J.minerales < pr && !J.dios ? ' caro' : ''); if (bm.textContent !== t) bm.textContent = t; if (bm.className !== cl) bm.className = cl; } }
@@ -1701,13 +1720,14 @@
           if (!ev.shiftKey) { modo = null; trazaDesde = null; }
           return;
         }
-        if (modo === 'amover' || modo === 'patrulla') {
+        if (modo === 'patrulla') { if (rutaP.length < 12) { rutaP.push({ x: wx, y: wy }); marca(wx, wy, P.mal); } return; }
+        if (modo === 'amover') {
           const ids = unidadesSel().map((u) => u.id);
           if (ids.length) {
             W.orden(m, { t: modo, j: YO, ids, x: wx, y: wy, enc: ev.shiftKey, forma }); marca(wx, wy, P.mal); son.orden();
             if (modo === 'amover' && !ev.shiftKey) giroPend = { tipo: 'amover', ids, x: wx, y: wy, forma, t0: performance.now() };
           }
-          if (!(modo === 'patrulla' && ev.shiftKey)) modo = null; // con Mayús se siguen añadiendo puntos de patrulla
+          modo = null;
           return;
         }
         raton.izq = true; raton.x0 = raton.x; raton.y0 = raton.y;
@@ -1796,6 +1816,7 @@
       if (ev.button === 2 && raton.der) {
         const fue = raton.arrastre;
         raton.der = false; raton.arrastre = false;
+        if (!fue && modo === 'patrulla') { cerrarPatrulla(); return; }
         if (!fue) ordenar(aMundoX(raton.x), aMundoY(raton.y), ev.shiftKey);
         return;
       }
@@ -1958,7 +1979,8 @@
       }
       switch (ev.code) {
         case 'KeyA': if (unidadesSel().length) modo = 'amover'; break;
-        case 'KeyR': if (unidadesSel().length) modo = 'patrulla'; break;
+        case 'KeyR': if (modo === 'patrulla') cerrarPatrulla(); else if (unidadesSel().length) { modo = 'patrulla'; rutaP = []; } break;
+        case 'Enter': case 'NumpadEnter': if (modo === 'patrulla') cerrarPatrulla(); break;
         case 'KeyZ': atrincherar(); break;
         case 'KeyD': desplegar(); break;
         case 'F6': ev.preventDefault(); guardar(); break;
@@ -1972,7 +1994,7 @@
         case 'KeyG': { const ids = unidadesSel().map((u) => u.id); if (ids.length) { W.orden(m, { t: 'guardia', j: YO, ids }); son.orden(); } break; }
         case 'KeyC': W.orden(m, { t: 'colmena', j: YO }); aviso(J.colmena ? 'Colmena desactivada: nadie acude solo' : 'Colmena activada'); break;
         case 'KeyF': ponerForma(FORMAS[(FORMAS.indexOf(forma) + 1) % FORMAS.length]); break;
-        case 'Delete': case 'Backspace': vender(); break;
+        case 'Delete': case 'Backspace': if (modo === 'patrulla') { rutaP.pop(); break; } vender(); break;
         case 'KeyE': { const ids = unidadesSel().map((u) => u.id); if (ids.length) { W.orden(m, { t: 'explorar', j: YO, ids }); son.orden(); } break; }
         case 'KeyS': { const ids = unidadesSel().map((u) => u.id); if (ids.length) W.orden(m, { t: 'detener', j: YO, ids }); break; }
         case 'KeyH': cam.x = m.mapa.bases[YO].x; cam.y = m.mapa.bases[YO].y; break;
@@ -1984,7 +2006,7 @@
         case 'Equal': case 'NumpadAdd': raton.x = cw / 2; raton.y = ch / 2; zoom(1.25); break;
         case 'Minus': case 'NumpadSubtract': raton.x = cw / 2; raton.y = ch / 2; zoom(0.8); break;
         case 'KeyT': ponerTema(tema === 'clara' ? 'oscura' : 'clara'); break;
-        case 'Escape': if (!$('guia').hidden) { $('guia').hidden = true; break; } modo = null; sel.clear(); break;
+        case 'Escape': if (!$('guia').hidden) { $('guia').hidden = true; break; } if (modo === 'patrulla') { modo = null; rutaP = []; break; } modo = null; sel.clear(); break;
       }
     });
     window.addEventListener('keyup', (ev) => teclas.delete(ev.code));

@@ -90,6 +90,24 @@
     m.ents.push(e); m.porId.set(e.id, e); m.redSucia = true;
     return e;
   }
+  // Ingeniero civil en automático: busca el edificio propio sin red que tenga más cerca (y que no esté ya encargado a otro) y lo une con el edificio conectado más próximo a él.
+  function autoConectar(m, u) {
+    const tomados = new Set();
+    for (const o of m.ents) if (!o.edif && o.j === u.j && o !== u && o.orden === 'conectar' && o.obra) for (const p of o.obra.pares) { tomados.add(p[0]); tomados.add(p[1]); }
+    let b = null, db = Infinity;
+    for (const e of m.ents) {
+      if (!e.edif || e.infra || e.j !== u.j || e.vida <= 0 || e.conRed || e.tipo === 'avanzada' || tomados.has(e.id)) continue;
+      const d0 = Math.hypot(e.cx - u.x, e.cy - u.y); if (d0 < db) { db = d0; b = e; }
+    }
+    if (!b) return;
+    let a = null, da = Infinity;
+    for (const e of m.ents) {
+      if (!e.edif || e.infra || e.j !== u.j || e.vida <= 0 || !e.conRed) continue;
+      const d0 = Math.hypot(e.cx - b.cx, e.cy - b.cy); if (d0 < da) { da = d0; a = e; }
+    }
+    if (!a) return;
+    u.orden = 'conectar'; u.obra = { pares: [[a.id, b.id]], prog: 0, hecho: 0, ult: 0, auto: true }; u.ruta = null; u.pend = null; u.obj = 0;
+  }
   // El ingeniero civil conectando: va al primer edificio del par y, desde ahí, la línea avanza sola hasta el segundo, tramo a tramo y pagando cada uno.
   function tickConectar(m, u) {
     const ob = u.obra, J = m.jug[u.j];
@@ -99,7 +117,7 @@
     if (!ob.pares.length) { fin(); return; }
     const a = m.porId.get(ob.pares[0][0]), b = m.porId.get(ob.pares[0][1]);
     if (dist(u.x, u.y, a) > 2.2) { // aún no ha llegado al edificio de partida
-      if (u.fallo) { u.fallo = false; m.efectos.push({ tipo: 'sinLinea', x1: u.x, y1: u.y, j: u.j, t: m.t, llegar: true }); fin(); return; }
+      if (u.fallo) { u.fallo = false; if (ob.auto) u.autoT = m.t + 600; else m.efectos.push({ tipo: 'sinLinea', x1: u.x, y1: u.y, j: u.j, t: m.t, llegar: true }); fin(); return; }
       if (!u.pend && !u.ruta) pedirRuta(m, u, a.cx, a.cy, a.tam / 2 + 1.2);
       avanzar(m, u); return;
     }
@@ -394,7 +412,7 @@
       carga: 0, est: tipo === 'cosechadora' ? 'buscar' : '', celda: -1, ref: 0, espera: 0, pref: null,
       quiere: 1, cargaTipo: 1, // cosechadora: qué busca y qué lleva (1 minerales, 2 raros)
       fuel: d.fuel || 0, repostando: false, casa: 0, enTierra: false, slot: 0, // aviación: su aeródromo y si está posado en él
-      cola: [], patrulla: null, explora: false, // órdenes encadenadas, ruta de patrulla, exploración automática
+      auto: !!d.tiende, cola: [], patrulla: null, explora: false, // órdenes encadenadas, ruta de patrulla, exploración automática
       retira: m.jug[j].retiro, retirando: false, volver: null, tRet: 0, huye: 0, // retirada automática a reparar; cosechadora que huye
       bajas: 0, rango: 0, // veteranía
       trazas: [], // excavadora: tramos de camino pendientes
@@ -707,11 +725,15 @@
   function siguienteOrden(m, u) {
     while (u.cola.length) if (asignar(m, u, u.cola.shift())) return;
     if (u.patrulla) {
-      const p = u.patrulla; p.i = (p.i + 1) % p.pts.length;
+      const p = u.patrulla;
+      if (p.g && (p.esp = (p.esp || 0) + 1) < 200) { // patrulla en grupo: en cada punto espera (un rato) a los compañeros que aún vienen de camino
+        for (const o of m.ents) if (o !== u && !o.edif && o.vida > 0 && o.patrulla && o.patrulla.g === p.g && o.patrulla.i === p.i && o.orden !== 'nada' && o.dest && Math.hypot(o.x - o.dest.x, o.y - o.dest.y) > 2.5) return;
+      }
+      p.esp = 0; p.i = (p.i + 1) % p.pts.length;
       if (UNID[u.tipo].aire && p.pts.length === 1) { // patrulla aérea sobre un punto: da vueltas a su alrededor
         p.a = (p.a === undefined ? u.id * 2.4 : p.a) + 0.8; // cada avión entra en la órbita por un punto distinto, para no ir encimados
         asignar(m, u, { t: 'amover', x: p.pts[0].x + Math.cos(p.a) * ECON.orbita, y: p.pts[0].y + Math.sin(p.a) * ECON.orbita });
-      } else asignar(m, u, { t: 'amover', x: p.pts[p.i].x, y: p.pts[p.i].y });
+      } else asignar(m, u, { t: 'amover', x: p.pts[p.i].x, y: p.pts[p.i].y, tope: p.tope || 0 });
     } else if (u.explora) {
       const c = celdaSinExplorar(m, u);
       if (c < 0) { u.explora = false; m.efectos.push({ tipo: 'explorado', x1: u.x, y1: u.y, j: u.j, t: m.t }); } else asignar(m, u, { t: 'mover', x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 });
@@ -737,7 +759,9 @@
       const mision = m.sigMision++;
       for (const id of cmd.ids) { const u = m.porId.get(id); if (u && !u.edif && u.j === cmd.j) u.mision = mision; }
     }
+    if (cmd.ids && cmd.t !== 'autoCivil') for (const id of cmd.ids) { const u = m.porId.get(id); if (u && !u.edif && u.j === cmd.j && u.auto) u.auto = false; } // una orden a mano saca al ingeniero civil del automático
     switch (cmd.t) {
+      case 'autoCivil': for (const u of propias(m, cmd)) if (UNID[u.tipo].tiende) u.auto = !!cmd.on; return;
       case 'dios': // modo GOD: recursos infinitos; al apagarlo vuelve el saldo anterior
         J.dios = !J.dios;
         if (J.dios) J.antesDios = [J.minerales, J.petroleo, J.raros, J.info]; else [J.minerales, J.petroleo, J.raros, J.info] = J.antesDios;
@@ -1027,6 +1051,18 @@
         return;
       }
       case 'patrulla': // va y vuelve entre puntos, atacando lo que encuentre; con enc se añade otro punto
+        if (cmd.pts && cmd.pts.length) { // ruta entera, compartida por el grupo: cada unidad lleva su puesto en cada punto y todas van al paso de la más lenta
+          const us = propias(m, cmd).filter((u) => u.tipo !== 'cosechadora'), pts = cmd.pts.slice(0, 12), rutas = new Map();
+          let tope = Infinity; for (const u of us) tope = Math.min(tope, UNID[u.tipo].vel);
+          for (const q of pts) destinos(m, us, q.x, q.y, (u, x, y) => { let r = rutas.get(u.id); if (!r) rutas.set(u.id, r = []); r.push({ x, y }); });
+          for (const u of us) {
+            const r = rutas.get(u.id); if (!r || !r.length) continue;
+            limpiar(u); u.orden = 'nada'; u.obj = 0; u.ruta = null; u.pend = null;
+            if (UNID[u.tipo].aire) u.patrulla = pts.length === 1 ? { pts: [{ x: pts[0].x, y: pts[0].y }], i: 0 } : { pts: pts.map((q) => ({ x: q.x, y: q.y })), i: -1 };
+            else u.patrulla = r.length === 1 ? { pts: [{ x: u.x, y: u.y }, r[0]], i: 0, tope, g: us.length > 1 ? u.mision : 0 } : { pts: r, i: -1, tope, g: us.length > 1 ? u.mision : 0 };
+          }
+          return;
+        }
         destinos(m, propias(m, cmd).filter((u) => u.tipo !== 'cosechadora'), cmd.x, cmd.y, (u, x, y) => {
           if (cmd.enc && u.patrulla) { if (u.patrulla.pts.length < 12) u.patrulla.pts.push({ x, y }); return; }
           limpiar(u); u.orden = 'nada'; u.obj = 0; u.ruta = null; u.pend = null;
@@ -1657,6 +1693,7 @@
       if (u.orden === 'hackear') { tickHackear(m, u); return; }
       if (u.orden === 'murar') { tickMurar(m, u); return; }
       if (u.orden !== 'nada') { u.arregla = 0; if (avanzar(m, u) || (!u.ruta && !u.pend)) u.orden = 'nada'; return; }
+      if (d.tiende && u.auto && m.logistica !== false && (m.t + u.id) % 30 === 0 && m.t >= (u.autoT || 0)) autoConectar(m, u);
       if (d.repara || d.cura) tickIngeniero(m, u);
       return;
     }

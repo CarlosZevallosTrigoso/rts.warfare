@@ -171,7 +171,7 @@
       <div>clic / caja: seleccionar</div>
       <div>clic derecho: mover, atacar, cosechar</div>
       <div><kbd>Mayús</kbd>+clic derecho: encadenar órdenes</div>
-      <div><kbd>R</kbd> patrulla · <kbd>E</kbd> explorar sola · <kbd>F</kbd> formación</div>
+      <div><kbd>R</kbd> patrulla: marca los puntos con clic y cierra con clic derecho · <kbd>E</kbd> explorar sola · <kbd>F</kbd> formación</div>
       <div><kbd>L</kbd> vista de la red: cobertura (suministro y dónde construir) y qué está conectado</div>
       <div>ingeniero civil: muros, puertas y alambradas en línea recta; clic derecho con tropa sobre un muro enemigo lo ataca</div>
       <div><kbd>J</kbd> con un ingeniero civil: conectar edificios con líneas de servicio · <kbd>K</kbd> con la excavadora: camino militar</div>
@@ -186,7 +186,7 @@
       <div>tanques y torres giran la torreta, el resto gira entero</div>
       <div>vehículos: +25 % de daño por el costado, +50 % por la espalda</div>
       <div>aviones: 5 por aeródromo; salen, cumplen y vuelven a posarse;</div>
-      <div><kbd>R</kbd> patrulla aérea: dan vueltas, repostan solos y la retoman;</div>
+      <div><kbd>R</kbd> patrulla aérea: con un punto dan vueltas sobre él; repostan solos y la retoman;</div>
       <div>no se alejan más que su radio de vuelo; posados no se les ataca;</div>
       <div>solo les alcanzan fusil, cohete, torreta, antiaérea y caza</div>
       <div><b>!</b> pide apoyo · <b>✓</b> acude a la llamada</div>
@@ -275,6 +275,7 @@
     <div id="sel" class="tenue"></div>
     <div id="bMuro" hidden><h2 title="El ingeniero civil levanta muros en línea recta: toca dónde empieza y dónde acaba.">Muros</h2><div class="g3"><button type="button" class="grupo" data-m="muro">muro</button><button type="button" class="grupo" data-m="reforzado">reforzado</button><button type="button" class="grupo" data-m="puerta">puerta</button><button type="button" class="grupo" data-m="alambrada">alambrada</button><button type="button" class="grupo" data-m="quitar">quitar</button></div></div>
     <button type="button" id="conectar" class="btn" hidden title="El ingeniero civil une edificios tuyos con una línea de servicio: lleva la energía y los mete en tu red. Cruza cualquier terreno.">Conectar edificios</button>
+    <button type="button" id="autoCivil" class="btn" hidden title="En automático, el ingeniero civil busca solo los edificios tuyos que estén fuera de la red y los conecta. Cualquier orden a mano lo saca del automático."></button>
     <button type="button" id="trazar" class="btn" hidden title="La excavadora va hasta el punto que marques dejando camino. Camino militar: abre el bosque y tiende puentes sobre el agua (más caros). Solo tus vehículos corren por él. No lleva energía ni red: para eso está el ingeniero civil.">Trazar camino</button>
     <button type="button" id="descargar" class="btn" hidden></button>
     <button type="button" id="desplegar" class="btn" hidden title="Convierte el vehículo en su edificio, donde está: el patio móvil en un patio; el puesto móvil en un puesto de avanzada. No se puede replegar.">Desplegar</button>
