@@ -1,7 +1,7 @@
 // rts.warfare — estado del mundo, comandos y tick de simulación. No toca el DOM.
 (function () {
   const W = globalThis.W || (globalThis.W = {});
-  const EDIF = W.EDIF, UNID = W.UNID, ARMAS = W.ARMAS, ECON = W.ECON, T = W.TERRENO;
+  const EDIF = W.EDIF, UNID = W.UNID, ARMAS = W.ARMAS, ECON = W.ECON, T = W.TERRENO, TAU = Math.PI * 2;
 
   // Desplazamientos ordenados por distancia: reparten los destinos de un grupo.
   const ESPIRAL = [];
@@ -27,7 +27,7 @@
       ocup: new Int32Array(NN), paso: new Uint8Array(NN),
       jug: [nuevoJugador(op.inicio), nuevoJugador(op.inicio)],
       niebla: [new Uint8Array(NN), new Uint8Array(NN)],
-      cola: [], colaRutas: [], efectos: [], minas: [], raros: [], ganador: -1,
+      cola: [], colaRutas: [], efectos: [], proy: [], minas: [], raros: [], ganador: -1,
       ruta: W.crearRuta(N),
     };
     for (let i = 0; i < NN; i++) {
@@ -48,7 +48,7 @@
   // ---------- entidades ----------
   function crearEdificio(m, j, tipo, x, y) {
     const d = EDIF[tipo], N = m.N;
-    const e = { id: m.sigId++, j, tipo, edif: true, x, y, tam: d.tam, cx: x + d.tam / 2, cy: y + d.tam / 2, vida: d.vida, vidaMax: d.vida, recarga: 0, obj: 0, reunion: null, acum: 0 };
+    const e = { id: m.sigId++, j, tipo, edif: true, x, y, tam: d.tam, cx: x + d.tam / 2, cy: y + d.tam / 2, vida: d.vida, vidaMax: d.vida, recarga: 0, obj: 0, reunion: null, acum: 0, nace: m.t };
     for (let dy = 0; dy < d.tam; dy++) for (let dx = 0; dx < d.tam; dx++) { const i = (y + dy) * N + x + dx; m.ocup[i] = e.id; m.paso[i] = 0; }
     m.ents.push(e); m.porId.set(e.id, e);
     return e;
@@ -58,6 +58,7 @@
     const u = {
       id: m.sigId++, j, tipo, edif: false, x, y, px: x, py: y, vida: d.vida, vidaMax: d.vida,
       orden: 'nada', ruta: null, ri: 0, dest: null, meta: null, pend: null, fallo: false, obj: 0, recarga: 0, fijo: false,
+      ang: Math.atan2(N / 2 - y, N / 2 - x), v: 0, tReplan: -99, // rumbo, velocidad actual
       carga: 0, est: tipo === 'cosechadora' ? 'buscar' : '', celda: -1, ref: 0, espera: 0, pref: null,
       quiere: 1, cargaTipo: 1, // cosechadora: qué busca y qué lleva (1 minerales, 2 raros)
       cola: [], patrulla: null, explora: false, // órdenes encadenadas, ruta de patrulla, exploración automática
@@ -296,22 +297,59 @@
   }
 
   // ---------- movimiento ----------
+  // Avanza hacia el siguiente punto de la ruta: primero gira, luego acelera, y frena al llegar.
   function avanzar(m, u) {
-    if (!u.ruta) return false;
-    const N = m.N, d = UNID[u.tipo];
-    let vel = d.vel * (m.mapa.terreno[Math.floor(u.y) * N + Math.floor(u.x)] === T.BOSQUE ? 0.6 : 1);
-    while (vel > 0 && u.ri < u.ruta.length) {
-      const c = u.ruta[u.ri];
-      if (!m.paso[c]) { // alguien construyó encima: se recalcula
-        u.ruta = null;
-        if (u.meta) pedirRuta(m, u, u.meta.x, u.meta.y, u.meta.radio);
-        return false;
-      }
-      const tx = (c % N) + 0.5, ty = ((c / N) | 0) + 0.5, dx = tx - u.x, dy = ty - u.y, dd = Math.hypot(dx, dy);
-      if (dd <= vel) { u.x = tx; u.y = ty; vel -= dd; u.ri++; } else { u.x += (dx / dd) * vel; u.y += (dy / dd) * vel; vel = 0; }
+    if (!u.ruta) { u.v = 0; return false; }
+    if (u.ri >= u.ruta.length) { u.ruta = null; u.v = 0; return true; }
+    const N = m.N, d = UNID[u.tipo], c = u.ruta[u.ri];
+    const replantear = () => { u.ruta = null; u.v = 0; u.tReplan = m.t; if (u.meta) pedirRuta(m, u, u.meta.x, u.meta.y, u.meta.radio); };
+    if (!m.paso[c]) { replantear(); return false; } // alguien construyó en el punto de paso
+    const vmax = d.vel * (m.mapa.terreno[Math.floor(u.y) * N + Math.floor(u.x)] === T.BOSQUE ? 0.6 : 1);
+    const tx = (c % N) + 0.5, ty = ((c / N) | 0) + 0.5, dx = tx - u.x, dy = ty - u.y, dd = Math.hypot(dx, dy);
+    let alin = 1;
+    if (dd > 0.4) { // muy cerca del punto ya no exige alinearse: evita quedarse pivotando si lo empujan
+      const meta = Math.atan2(dy, dx);
+      let dif = ((meta - u.ang + Math.PI) % TAU + TAU) % TAU - Math.PI;
+      if (Math.abs(dif) <= d.giro) { u.ang = meta; dif = 0; } else { u.ang += Math.sign(dif) * d.giro; dif -= Math.sign(dif) * d.giro; }
+      alin = Math.cos(dif);
     }
-    if (u.ri >= u.ruta.length) { u.ruta = null; return true; }
+    const ultimo = u.ri === u.ruta.length - 1;
+    let obj = alin > 0.6 ? vmax * alin : 0; // muy desalineado: pivota en el sitio
+    if (ultimo) obj = Math.min(obj, 0.02 + dd * 0.12); // frena al llegar
+    u.v = u.v < obj ? Math.min(obj, u.v + d.acel) : Math.max(obj, u.v - d.acel * 2);
+    if (ultimo && dd <= 0.25) { u.ruta = null; u.v = 0; return true; } // en el destino basta con quedar cerca
+    if (dd <= Math.max(u.v, 0.02)) { u.x = tx; u.y = ty; u.ri++; return false; }
+    const nx = u.x + (dx / dd) * u.v, ny = u.y + (dy / dd) * u.v;
+    if (m.ocup[Math.floor(ny) * N + Math.floor(nx)] && m.t - u.tReplan > 10) { replantear(); return false; } // edificio nuevo en medio del tramo
+    u.x = nx; u.y = ny;
     return false;
+  }
+
+  // ¿Hay paso en línea recta, con el ancho de una unidad?
+  function despejado(m, x0, y0, x1, y1) {
+    const N = m.N, dx = x1 - x0, dy = y1 - y0, L = Math.hypot(dx, dy);
+    if (L < 1e-6) return true;
+    const n = Math.ceil(L / 0.25), ox = (-dy / L) * 0.3, oy = (dx / L) * 0.3;
+    for (let i = 0; i <= n; i++) {
+      const x = x0 + (dx * i) / n, y = y0 + (dy * i) / n;
+      if (!m.paso[(y | 0) * N + (x | 0)] || !m.paso[((y + oy) | 0) * N + ((x + ox) | 0)] || !m.paso[((y - oy) | 0) * N + ((x - ox) | 0)]) return false;
+    }
+    return true;
+  }
+  // Quita los zigzags de la rejilla: salta al punto más lejano que se alcanza en línea recta.
+  function suavizar(m, x, y, ruta) {
+    const N = m.N, out = [];
+    let ax = x, ay = y, i = 0;
+    while (i < ruta.length) {
+      let j = i;
+      const tope = Math.min(ruta.length - 1, i + 24);
+      for (let k = i + 1; k <= tope; k++) {
+        const c = ruta[k];
+        if (despejado(m, ax, ay, (c % N) + 0.5, ((c / N) | 0) + 0.5)) j = k; else if (k - j > 4) break;
+      }
+      out.push(ruta[j]); ax = (ruta[j] % N) + 0.5; ay = ((ruta[j] / N) | 0) + 0.5; i = j + 1;
+    }
+    return out;
   }
 
   function procesarRutas(m) {
@@ -322,7 +360,7 @@
       if (!u || !u.pend) continue;
       const p = u.pend; u.pend = null; n++;
       const camino = m.ruta(m.paso, m.mapa.terreno, Math.floor(u.x), Math.floor(u.y), p.x, p.y, p.radio);
-      if (camino) { u.ruta = camino; u.ri = 0; } else { u.ruta = null; u.fallo = true; }
+      if (camino) { u.ruta = suavizar(m, u.x, u.y, camino); u.ri = 0; } else { u.ruta = null; u.fallo = true; }
     }
   }
 
@@ -367,13 +405,31 @@
     return mejor;
   }
 
+  function herir(b, arma) { b.vida -= arma.dano * arma.vs[b.edif ? 'edificio' : UNID[b.tipo].blindaje]; }
+  // Los efectos son avisos para la interfaz (dibujo y sonido); la simulación no los lee.
   function disparar(m, a, b, arma) {
-    const blindaje = b.edif ? 'edificio' : UNID[b.tipo].blindaje;
-    b.vida -= arma.dano * arma.vs[blindaje];
+    const clave = a.edif ? EDIF[a.tipo].arma : UNID[a.tipo].arma, ax = posX(a), ay = posY(a), bx = posX(b), by = posY(b);
     a.recarga = arma.recarga;
-    m.efectos.push({ x1: posX(a), y1: posY(a), x2: posX(b), y2: posY(b), j: a.j, t: m.t, arma: a.edif ? EDIF[a.tipo].arma : UNID[a.tipo].arma });
-    m.jug[b.j].alerta = { x: posX(b), y: posY(b), t: m.t };
+    if (arma.vuelo) { // obús: vuela hasta donde estaba el blanco al disparar
+      m.proy.push({ x: ax, y: ay, px: ax, py: ay, tx: bx, ty: by, obj: b.id, j: a.j, arma: clave });
+      m.efectos.push({ tipo: 'boca', x1: ax, y1: ay, x2: bx, y2: by, j: a.j, t: m.t, arma: clave });
+    } else {
+      herir(b, arma);
+      m.efectos.push({ tipo: 'traza', x1: ax, y1: ay, x2: bx, y2: by, j: a.j, t: m.t, arma: clave });
+    }
+    m.jug[b.j].alerta = { x: bx, y: by, t: m.t };
     if (!b.edif && b.orden === 'nada' && !b.obj && UNID[b.tipo].arma) b.obj = a.id;
+  }
+  function tickProyectiles(m) {
+    for (let k = m.proy.length - 1; k >= 0; k--) {
+      const p = m.proy[k], arma = ARMAS[p.arma], dx = p.tx - p.x, dy = p.ty - p.y, dd = Math.hypot(dx, dy);
+      p.px = p.x; p.py = p.y;
+      if (dd > arma.vuelo) { p.x += (dx / dd) * arma.vuelo; p.y += (dy / dd) * arma.vuelo; continue; }
+      const o = m.porId.get(p.obj), acierto = !!o && o.vida > 0 && dist(p.tx, p.ty, o) <= 0.9; // si el blanco se apartó, falla
+      if (acierto) herir(o, arma);
+      m.efectos.push({ tipo: 'impacto', x1: p.x, y1: p.y, x2: p.tx, y2: p.ty, j: p.j, t: m.t, arma: p.arma, acierto });
+      m.proy[k] = m.proy[m.proy.length - 1]; m.proy.pop();
+    }
   }
 
   function tickTorreta(m, e) {
@@ -472,15 +528,14 @@
         u.celda = c; pedirRuta(m, u, (c % N) + 0.5, ((c / N) | 0) + 0.5, 0); u.est = 'ir';
         break;
       }
-      case 'ir':
+      case 'ir': {
         if (u.pend) break;
-        if (!u.ruta) {
-          const cerca = Math.hypot((u.celda % N) + 0.5 - u.x, ((u.celda / N) | 0) + 0.5 - u.y) < 0.9;
-          if (cerca) u.est = 'cosechar'; else { u.est = 'espera'; u.espera = 40; }
-          break;
-        }
+        const cerca = Math.hypot((u.celda % N) + 0.5 - u.x, ((u.celda / N) | 0) + 0.5 - u.y) < 0.9;
+        if (cerca) { u.ruta = null; u.v = 0; u.est = 'cosechar'; break; } // basta con estar junto a la celda
+        if (!u.ruta) { u.est = 'espera'; u.espera = 40; break; }
         avanzar(m, u);
         break;
+      }
       case 'cosechar': {
         u.fijo = true;
         const hay = m.mapa.mineral[u.celda];
@@ -502,10 +557,8 @@
         if (u.pend) break;
         const ref = m.porId.get(u.ref);
         if (!ref) { u.ruta = null; u.est = 'volver0'; break; }
-        if (!u.ruta) {
-          if (dist(u.x, u.y, ref) <= 1.3) u.est = 'descargar'; else { u.est = 'espera'; u.espera = 40; }
-          break;
-        }
+        if (dist(u.x, u.y, ref) <= 1.3) { u.ruta = null; u.v = 0; u.est = 'descargar'; break; }
+        if (!u.ruta) { u.est = 'espera'; u.espera = 40; break; }
         avanzar(m, u);
         break;
       }
@@ -605,12 +658,14 @@
       }
     }
     separar(m);
+    tickProyectiles(m);
 
     let muertos = false;
     for (let k = 0; k < m.ents.length; k++) {
       const e = m.ents[k];
       if (e.vida > 0) continue;
       muertos = true; m.porId.delete(e.id); m.jug[e.j].bajas++;
+      m.efectos.push({ tipo: 'muerte', x2: posX(e), y2: posY(e), edif: e.edif, tam: e.tam || 0, clase: e.tipo, ang: e.ang || 0, j: e.j, t: m.t });
       if (e.edif) {
         const N = m.N;
         for (let dy = 0; dy < e.tam; dy++) for (let dx = 0; dx < e.tam; dx++) { const i = (e.y + dy) * N + e.x + dx; m.ocup[i] = 0; m.paso[i] = 1; }

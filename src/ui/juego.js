@@ -140,6 +140,18 @@
       return NOMBRE_TERRENO[m.mapa.terreno[c]];
     }
 
+    // ---------- partículas y marcas en el suelo: solo dibujo, la simulación no las conoce ----------
+    const parts = [], suelo = [], azar = Math.random;
+    let dtCuadro = 16;
+    function parte(k, x, y, vx, vy, vida, s) { if (parts.length > 700) parts.shift(); parts.push({ k, x, y, vx, vy, v: 0, m: vida, s }); }
+    function marcaSuelo(k, x, y, s, ang, dur, clase) { if (suelo.length > 500) suelo.shift(); suelo.push({ k, x, y, s, ang, t0: performance.now(), dur, clase }); }
+    function estallido(x, y, tam) { // tam: 1 impacto, 2 unidad, 3 edificio
+      parte('fogonazo', x, y, 0, 0, 0.13, 0.28 + tam * 0.22);
+      parte('anillo', x, y, 0, 0, 0.28 + tam * 0.09, 0.5 + tam * 0.5);
+      for (let i = 0, n = 3 + tam * 3; i < n; i++) { const a = azar() * TAU, v = (1.5 + azar() * 3.5) * (0.6 + tam * 0.3); parte('chispa', x, y, Math.cos(a) * v, Math.sin(a) * v, 0.2 + azar() * 0.3, 0); }
+      for (let i = 0; i <= tam; i++) parte('humo', x + (azar() - 0.5) * tam * 0.4, y + (azar() - 0.5) * tam * 0.4, (azar() - 0.5) * 0.5, -0.4 - azar() * 0.6, 0.9 + azar() * 1.1, 0.22 + tam * 0.14);
+    }
+
     // Orientación visual de cada ficha: rumbo del casco (a) y de la torreta o el arma (t).
     const giros = new Map();
     const hacia = (a, b, k) => a + ((((b - a + Math.PI) % TAU) + TAU) % TAU - Math.PI) * k;
@@ -147,7 +159,7 @@
       const x = e.edif ? e.cx : e.x, y = e.edif ? e.cy : e.y;
       let g = giros.get(e.id);
       if (!g) { const a0 = Math.atan2(N / 2 - y, N / 2 - x); g = { a: a0, t: a0 }; giros.set(e.id, g); }
-      if (!e.edif) { const dx = e.x - e.px, dy = e.y - e.py; if (dx * dx + dy * dy > 1e-6) g.a = hacia(g.a, Math.atan2(dy, dx), 0.25); }
+      if (!e.edif) g.a = hacia(g.a, e.ang, 0.45); // el rumbo real lo lleva la simulación; aquí solo se suaviza
       const o = e.obj ? m.porId.get(e.obj) : null;
       g.t = hacia(g.t, o ? Math.atan2((o.edif ? o.cy : o.y) - y, (o.edif ? o.cx : o.x) - x) : g.a, 0.3);
       return g;
@@ -199,6 +211,35 @@
 
       const barras = [], tiempo = performance.now();
       const lod = z >= 16 ? 2 : z >= 8 ? 1 : 0; // nivel de detalle según el zoom
+      const so = z * 0.13; // desplazamiento de las sombras
+
+      // Marcas en el suelo: quemaduras, huellas de oruga, restos y ruinas, que se van borrando.
+      for (let i = suelo.length - 1; i >= 0; i--) {
+        const q = suelo[i], edad = (tiempo - q.t0) / q.dur;
+        if (edad >= 1) { suelo.splice(i, 1); continue; }
+        if (!lod || fuera(q.x, q.y) || !f[Math.floor(q.y) * N + Math.floor(q.x)]) continue;
+        const a = 1 - edad, sx = ox + q.x * z, sy = oy + q.y * z;
+        if (q.k === 'quemado') { ctx.globalAlpha = 0.26 * a; ctx.fillStyle = P.tinta; ctx.beginPath(); ctx.arc(sx, sy, z * q.s, 0, TAU); ctx.fill(); }
+        else if (q.k === 'huella') {
+          const c = Math.cos(q.ang), s = Math.sin(q.ang), w = q.s * z * 0.78, l = z * 0.26;
+          ctx.globalAlpha = 0.15 * a; ctx.strokeStyle = P.tinta; ctx.lineWidth = Math.max(1, z * 0.1); ctx.beginPath();
+          ctx.moveTo(sx - s * w - c * l, sy + c * w - s * l); ctx.lineTo(sx - s * w + c * l, sy + c * w + s * l);
+          ctx.moveTo(sx + s * w - c * l, sy - c * w - s * l); ctx.lineTo(sx + s * w + c * l, sy - c * w + s * l); ctx.stroke();
+        } else if (q.k === 'resto') {
+          const r = q.s * z;
+          ctx.globalAlpha = 0.6 * Math.min(1, a * 2.5); ctx.fillStyle = '#3a3a3a';
+          ctx.save(); ctx.translate(sx, sy); ctx.rotate(q.ang); ctx.beginPath();
+          if (q.clase === 'infanteria') ctx.ellipse(0, 0, r * 1.5, r * 0.8, 0, 0, TAU);
+          else { ctx.rect(-r * 1.3, -r * 0.9, r * 2.2, r * 1.8); ctx.rect(r * 0.5, -r * 0.3, r * 1.1, r * 0.5); }
+          ctx.fill(); ctx.restore();
+        } else { // ruina de edificio
+          const t = q.s * z;
+          ctx.globalAlpha = 0.42 * Math.min(1, a * 2.5); ctx.fillStyle = '#3a3a3a'; ctx.fillRect(sx - t / 2 + 2, sy - t / 2 + 2, t - 4, t - 4);
+          ctx.fillStyle = P.roca;
+          for (let k = 0; k < 6; k++) { const a2 = q.x * 3.1 + k * 1.9, d2 = t * (0.12 + ((k * 37) % 10) * 0.03); ctx.fillRect(sx + Math.cos(a2) * d2 - t * 0.06, sy + Math.sin(a2) * d2 - t * 0.05, t * 0.14, t * 0.1); }
+        }
+      }
+      ctx.globalAlpha = 1;
       const descargando = new Set();
       for (const e of m.ents) if (!e.edif && e.est === 'descargar') descargando.add(e.ref);
       for (const e of m.ents) {
@@ -208,7 +249,17 @@
         if (e.tipo === 'patio') est.activo = Je.obras.some((o) => !o.listo);
         else if (e.tipo === 'fabrica') est.activo = Je.colas.veh.lista.length > 0;
         else if (e.tipo === 'torreta') { est.ang = giro(e).t; est.retro = retroceso(e, 'bateria'); }
-        W.fichaEdificio(ctx, e, px, py, t, lod, e.j === YO ? COL.yo : COL.rival, est);
+        if (lod) { // sombra
+          ctx.fillStyle = 'rgba(0,0,0,0.17)';
+          if (e.tipo === 'torreta') { ctx.beginPath(); ctx.arc(px + t / 2 + so, py + t / 2 + so, t * 0.47, 0, TAU); ctx.fill(); } else ctx.fillRect(px + 1 + so, py + 1 + so, t - 2, t - 2);
+        }
+        const edadObra = e.nace > 0 ? (m.t - e.nace + alfa) / 30 : 1; // recién colocado: se levanta de abajo arriba
+        if (edadObra < 1) {
+          ctx.save(); ctx.beginPath(); ctx.rect(px - 2, py + t * (1 - edadObra), t + 4, t * edadObra + 2); ctx.clip();
+          W.fichaEdificio(ctx, e, px, py, t, lod, e.j === YO ? COL.yo : COL.rival, est);
+          ctx.restore();
+          ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.setLineDash([4, 3]); ctx.strokeRect(px + 1.5, py + 1.5, t - 3, t - 3); ctx.setLineDash([]);
+        } else W.fichaEdificio(ctx, e, px, py, t, lod, e.j === YO ? COL.yo : COL.rival, est);
         if (sel.has(e.id)) {
           const g = Math.max(4, t * 0.18), a = px - 2, b = py - 2, c2 = px + t + 2, d2 = py + t + 2; // escuadras de selección
           ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.beginPath();
@@ -275,6 +326,17 @@
         if (fuera(wx, wy)) continue;
         const d = UNID[e.tipo], px = ox + wx * z, py = oy + wy * z, r = Math.max(2, d.radio * z), g = giro(e);
         const anda = (e.x - e.px) ** 2 + (e.y - e.py) ** 2 > 1e-6;
+        if (lod) { // sombra
+          ctx.fillStyle = 'rgba(0,0,0,0.17)'; ctx.beginPath();
+          ctx.ellipse(px + so * 0.8, py + so * 0.8, r * (e.tipo === 'infanteria' ? 1.1 : 1.45), r * (e.tipo === 'infanteria' ? 1.1 : 1.1), g.a, 0, TAU); ctx.fill();
+          if (anda && e.tipo !== 'infanteria' && !pausa) { // los vehículos dejan huella y levantan polvo
+            g.d = (g.d || 0) + e.v * (dtCuadro / 50);
+            if (g.d > 0.5) {
+              g.d = 0; marcaSuelo('huella', e.x, e.y, d.radio, g.a, 22000);
+              if (azar() < 0.6) parte('polvo', e.x - Math.cos(g.a) * d.radio * 1.3, e.y - Math.sin(g.a) * d.radio * 1.3, (azar() - 0.5) * 0.4, (azar() - 0.5) * 0.4, 0.8, 0.22);
+            }
+          }
+        }
         ctx.save(); ctx.translate(px, py);
         W.fichaUnidad(ctx, e, r, lod, e.j === YO ? COL.yo : COL.rival, {
           ang: e.tipo === 'infanteria' && e.obj && !anda ? g.t : g.a, angT: g.t, retro: d.arma ? retroceso(e, d.arma) : 0,
@@ -285,13 +347,42 @@
         if (sel.has(e.id) || e.vida < e.vidaMax) barras.push([px - r * 1.3, py - r * 1.9 - 8, r * 2.6, e.vida / e.vidaMax]);
       }
 
-      ctx.lineWidth = Math.max(1, z * 0.07);
+      // Obuses en vuelo, con estela.
+      ctx.lineCap = 'round';
+      for (const p of m.proy) {
+        const x = p.px + (p.x - p.px) * alfa, y = p.py + (p.y - p.py) * alfa;
+        if (fuera(x, y) || !visible(x, y)) continue;
+        const a = Math.atan2(p.ty - p.y, p.tx - p.x), c = Math.cos(a), s = Math.sin(a), sx = ox + x * z, sy = oy + y * z;
+        ctx.strokeStyle = P.roca; ctx.globalAlpha = 0.45; ctx.lineWidth = Math.max(1, z * 0.06);
+        ctx.beginPath(); ctx.moveTo(sx - c * z * 1.3, sy - s * z * 1.3); ctx.lineTo(sx, sy); ctx.stroke();
+        ctx.strokeStyle = P.tinta; ctx.globalAlpha = 1; ctx.lineWidth = Math.max(2, z * 0.13);
+        ctx.beginPath(); ctx.moveTo(sx - c * z * 0.28, sy - s * z * 0.28); ctx.lineTo(sx, sy); ctx.stroke();
+      }
+      // Balas de fusil: un trazo corto que cruza hasta el blanco.
+      ctx.strokeStyle = '#d9882a'; ctx.lineWidth = Math.max(1, z * 0.06);
       for (const d of m.efectos) {
-        const edad = m.t - d.t;
-        if (edad > 3 || !(visible(d.x1, d.y1) || visible(d.x2, d.y2))) continue;
-        ctx.strokeStyle = d.j === YO ? P.yo : P.rival; ctx.globalAlpha = 1 - edad * 0.28;
-        ctx.beginPath(); ctx.moveTo(ox + d.x1 * z, oy + d.y1 * z); ctx.lineTo(ox + d.x2 * z, oy + d.y2 * z); ctx.stroke();
-        ctx.beginPath(); ctx.arc(ox + d.x2 * z, oy + d.y2 * z, z * 0.22, 0, TAU); ctx.stroke();
+        if (d.tipo !== 'traza') continue;
+        const f0 = (m.t - d.t + alfa - 1) / 1.6;
+        if (f0 < 0 || f0 > 1 || !(visible(d.x1, d.y1) || visible(d.x2, d.y2))) continue;
+        const f1 = Math.min(1, f0 + 0.35), dx = d.x2 - d.x1, dy = d.y2 - d.y1;
+        ctx.beginPath(); ctx.moveTo(ox + (d.x1 + dx * f0) * z, oy + (d.y1 + dy * f0) * z); ctx.lineTo(ox + (d.x1 + dx * f1) * z, oy + (d.y1 + dy * f1) * z); ctx.stroke();
+      }
+      ctx.lineCap = 'butt';
+      // Partículas: humo, polvo, chispas, anillos y fogonazos.
+      const ds = pausa ? 0 : dtCuadro / 1000;
+      for (let i = parts.length - 1; i >= 0; i--) {
+        const q = parts[i];
+        q.v += ds;
+        if (q.v >= q.m) { parts[i] = parts[parts.length - 1]; parts.pop(); continue; }
+        q.x += q.vx * ds; q.y += q.vy * ds;
+        const fr = q.v / q.m, sx = ox + q.x * z, sy = oy + q.y * z;
+        if (!lod || sx < -40 || sy < -40 || sx > cw + 40 || sy > ch + 40 || !visible(q.x, q.y)) continue;
+        ctx.globalAlpha = 1 - fr; ctx.beginPath();
+        if (q.k === 'humo') { ctx.globalAlpha = 0.34 * (1 - fr); ctx.fillStyle = P.roca; ctx.arc(sx, sy, z * q.s * (0.6 + fr * 1.3), 0, TAU); ctx.fill(); }
+        else if (q.k === 'polvo') { ctx.globalAlpha = 0.3 * (1 - fr); ctx.fillStyle = '#a3977f'; ctx.arc(sx, sy, z * q.s * (0.5 + fr), 0, TAU); ctx.fill(); }
+        else if (q.k === 'chispa') { q.vx *= 0.93; q.vy *= 0.93; ctx.strokeStyle = '#e8912d'; ctx.lineWidth = Math.max(1, z * 0.06); ctx.moveTo(sx, sy); ctx.lineTo(sx - q.vx * z * 0.07, sy - q.vy * z * 0.07); ctx.stroke(); }
+        else if (q.k === 'anillo') { ctx.globalAlpha = 0.8 * (1 - fr); ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.arc(sx, sy, z * q.s * (1 - (1 - fr) * (1 - fr)), 0, TAU); ctx.stroke(); }
+        else { ctx.fillStyle = '#f2c45c'; ctx.arc(sx, sy, z * q.s * (0.6 + fr * 0.6), 0, TAU); ctx.fill(); }
       }
       ctx.globalAlpha = 1;
 
@@ -378,13 +469,37 @@
         const dx = Math.abs(x - cam.x) / (cw / cam.z), dy = Math.abs(y - cam.y) / (ch / cam.z);
         return dx > 0.6 || dy > 0.6 ? 0 : 1 - Math.max(dx, dy);
       };
+      const paneo = (x) => Math.max(-1, Math.min(1, (x - cam.x) / (cw / cam.z / 2)));
       let n = 0;
-      for (const d of m.efectos) {
-        if (d.t < oido.t || n >= 5) continue;
-        const v = visible(d.x2, d.y2) || visible(d.x1, d.y1) ? cerca(d.x2, d.y2) : 0;
-        if (v > 0) { son.disparo(d.arma, v); n++; }
+      for (const d of m.efectos) { // cada aviso de la simulación se vuelve sonido y partículas, una sola vez
+        if (d.t < oido.t) continue;
+        const enVista = visible(d.x2, d.y2);
+        if (d.tipo === 'traza' || d.tipo === 'boca') {
+          if (!visible(d.x1, d.y1)) continue;
+          if (n++ < 6) son.disparo(d.arma, cerca(d.x1, d.y1), paneo(d.x1));
+          if (d.tipo === 'boca') parte('humo', d.x1, d.y1, (azar() - 0.5) * 0.4, -0.3, 0.6, 0.16);
+          else if (enVista) parte('chispa', d.x2, d.y2, (azar() - 0.5) * 3, (azar() - 0.5) * 3, 0.18, 0);
+        } else if (d.tipo === 'impacto') {
+          if (!enVista) continue;
+          estallido(d.x2, d.y2, 1); marcaSuelo('quemado', d.x2, d.y2, 0.42, 0, 15000);
+          if (n++ < 6) son.impacto(cerca(d.x2, d.y2), paneo(d.x2));
+        } else if (d.tipo === 'muerte') {
+          if (!enVista) continue;
+          if (d.edif) {
+            for (let k = 0; k < d.tam * 2; k++) estallido(d.x2 + (azar() - 0.5) * d.tam * 0.8, d.y2 + (azar() - 0.5) * d.tam * 0.8, 2);
+            estallido(d.x2, d.y2, 3); marcaSuelo('ruina', d.x2, d.y2, d.tam, 0, 45000);
+          } else {
+            estallido(d.x2, d.y2, d.clase === 'infanteria' ? 1 : 2);
+            marcaSuelo('quemado', d.x2, d.y2, UNID[d.clase].radio * 1.6, 0, 20000);
+            marcaSuelo('resto', d.x2, d.y2, UNID[d.clase].radio, d.ang, 25000, d.clase);
+          }
+          son.explosion(Math.max(0.12, cerca(d.x2, d.y2)), paneo(d.x2), d.edif);
+        }
       }
       oido.t = m.t;
+      let motores = 0; // rumor de motores según los vehículos que se mueven en pantalla
+      for (const e of m.ents) if (!e.edif && e.tipo !== 'infanteria' && e.v > 0.01 && veo(e)) motores += cerca(e.x, e.y) * 0.3;
+      son.motor(motores);
       const listas = J.obras.filter((o) => o.listo).length;
       if (listas > oido.listas) son.obraLista();
       oido.listas = listas;
@@ -394,9 +509,6 @@
       for (const tipo in EDIF) edificios += J.cuenta[tipo] || 0;
       if (edificios > oido.edificios && oido.edificios) son.colocar();
       oido.edificios = edificios;
-      const bajas = m.jug[0].bajas + m.jug[1].bajas;
-      if (bajas > oido.bajas) son.explosion(0.5);
-      oido.bajas = bajas;
       if (J.alerta && J.alerta.t > oido.alerta + 300) { oido.alerta = J.alerta.t; if (cerca(J.alerta.x, J.alerta.y) === 0) son.alerta(); }
     }
 
@@ -656,7 +768,7 @@
         case 'KeyS': { const ids = unidadesSel().map((u) => u.id); if (ids.length) W.orden(m, { t: 'detener', j: YO, ids }); break; }
         case 'KeyH': cam.x = m.mapa.bases[YO].x; cam.y = m.mapa.bases[YO].y; break;
         case 'Space': if (J.alerta) { cam.x = J.alerta.x; cam.y = J.alerta.y; } break;
-        case 'KeyP': pausa = !pausa; break;
+        case 'KeyP': pausa = !pausa; if (pausa) son.motor(0); break;
         case 'KeyM': deslizar = !deslizar; break;
         case 'KeyN': son.alternar(); break;
         case 'Equal': case 'NumpadAdd': raton.x = cw / 2; raton.y = ch / 2; zoom(1.25); break;
@@ -679,6 +791,7 @@
     let antes = performance.now(), acum = 0, finMostrado = false;
     function cuadro(ahora) {
       const dt = Math.min(250, ahora - antes); antes = ahora;
+      dtCuadro = dt;
       const v = (dt / 1000) * 420 / cam.z;
       if (teclas.has('ArrowLeft')) cam.x -= v; if (teclas.has('ArrowRight')) cam.x += v;
       if (teclas.has('ArrowUp')) cam.y -= v; if (teclas.has('ArrowDown')) cam.y += v;
