@@ -33,7 +33,7 @@
     const sel = new Set(), grupos = {}, teclas = new Set(), marcas = [];
     let modo = null; // null | 'colocar' | 'amover'
     let pausa = false, cuadros = 0, nieblaVista = -1;
-    const raton = { x: 0, y: 0, izq: false, x0: 0, y0: 0, medio: false, dentro: false };
+    const raton = { x: 0, y: 0, izq: false, x0: 0, y0: 0, medio: false, dentro: false, der: false, arrastre: false, xd: 0, yd: 0 };
 
     // ---------- capas pre-dibujadas ----------
     const cTerr = document.createElement('canvas'); cTerr.width = cTerr.height = N;
@@ -312,7 +312,10 @@
         raton.izq = true; raton.x0 = raton.x; raton.y0 = raton.y;
         return;
       }
-      if (ev.button === 2) {
+      if (ev.button === 2) { raton.der = true; raton.arrastre = false; raton.xd = raton.x; raton.yd = raton.y; }
+    });
+    // Clic derecho sin mover = orden; clic derecho arrastrando = desplazar el mapa (como en Red Alert).
+    function ordenar(wx, wy) {
         if (modo) { modo = null; return; }
         const us = unidadesSel();
         if (!us.length || wx < 0 || wy < 0 || wx >= N || wy >= N) return;
@@ -325,15 +328,21 @@
           if (resto.length) W.orden(m, { t: 'mover', j: YO, ids: resto, x: wx, y: wy });
         } else W.orden(m, { t: 'mover', j: YO, ids, x: wx, y: wy });
         marca(wx, wy, P.bien);
-      }
-    });
+    }
     window.addEventListener('mousemove', (ev) => {
       const ax = raton.x, ay = raton.y;
       posRaton(ev);
-      if (raton.medio) { cam.x -= (raton.x - ax) / cam.z; cam.y -= (raton.y - ay) / cam.z; limitarCam(); }
+      if (raton.der && !raton.arrastre && Math.hypot(raton.x - raton.xd, raton.y - raton.yd) > 5) raton.arrastre = true;
+      if (raton.medio || raton.arrastre) { cam.x -= (raton.x - ax) / cam.z; cam.y -= (raton.y - ay) / cam.z; limitarCam(); }
     });
     window.addEventListener('mouseup', (ev) => {
       if (ev.button === 1) { raton.medio = false; return; }
+      if (ev.button === 2 && raton.der) {
+        const fue = raton.arrastre;
+        raton.der = false; raton.arrastre = false;
+        if (!fue) ordenar(aMundoX(raton.x), aMundoY(raton.y));
+        return;
+      }
       if (ev.button !== 0 || !raton.izq) return;
       raton.izq = false;
       if (!ev.shiftKey) sel.clear();
@@ -388,7 +397,7 @@
       }
     });
     window.addEventListener('keyup', (ev) => teclas.delete(ev.code));
-    window.addEventListener('blur', () => { teclas.clear(); raton.izq = false; raton.medio = false; });
+    window.addEventListener('blur', () => { teclas.clear(); raton.izq = false; raton.medio = false; raton.der = false; raton.arrastre = false; });
     window.addEventListener('resize', ajustar);
 
     $('titulo').addEventListener('click', () => location.reload());
