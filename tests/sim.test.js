@@ -55,14 +55,15 @@ prueba('economía: construir, colocar, cosechar', () => {
   const patio = m.ents.find((e) => e.j === 0 && e.tipo === 'patio');
   assert.ok(patio);
   W.orden(m, { t: 'construir', j: 0, tipo: 'fabrica' }); avanza(1);
-  assert.strictEqual(m.jug[0].edif, null, 'aceptó un edificio sin prerrequisito');
+  assert.strictEqual(m.jug[0].obras.length, 0, 'aceptó un edificio sin prerrequisito');
   W.orden(m, { t: 'construir', j: 0, tipo: 'central' }); avanza(1);
   assert.ok(m.jug[0].minerales >= 2200 && m.jug[0].minerales <= 2202, 'no descontó el costo');
   avanza(W.EDIF.central.tiempo);
-  assert.ok(m.jug[0].edif.listo);
-  W.orden(m, { t: 'colocar', j: 0, x: patio.x, y: patio.y }); avanza(1);
-  assert.ok(m.jug[0].edif, 'colocó encima del patio');
-  W.orden(m, { t: 'colocar', j: 0, x: patio.x + 4, y: patio.y }); avanza(1);
+  assert.ok(m.jug[0].obras[0].listo);
+  W.orden(m, { t: 'colocar', j: 0, tipo: 'central', x: patio.x, y: patio.y }); avanza(1);
+  assert.strictEqual(m.jug[0].obras.length, 1, 'colocó encima del patio');
+  W.orden(m, { t: 'colocar', j: 0, tipo: 'central', x: patio.x + 4, y: patio.y }); avanza(1);
+  assert.strictEqual(m.jug[0].obras.length, 0);
   assert.strictEqual(m.jug[0].cuenta.central, 1);
   assert.strictEqual(m.jug[0].prod, 100);
   // el resto lo levanta la IA con los mismos comandos
@@ -70,6 +71,26 @@ prueba('economía: construir, colocar, cosechar', () => {
   for (let i = 0; i < 3000; i++) { W.iaTick(m, ia); W.tick(m); }
   assert.ok(m.jug[0].cuenta.refineria >= 1, 'sin refinería');
   assert.ok(m.jug[0].cosechado > antes + 1000, 'no cosechó: ' + m.jug[0].cosechado);
+});
+
+prueba('obras en paralelo: se reparten la velocidad y se cancelan con reembolso', () => {
+  const m = W.crearMundo(4242), J = m.jug[0], T = W.EDIF.central.tiempo;
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  J.minerales = 5000;
+  W.orden(m, { t: 'construir', j: 0, tipo: 'central' }); avanza(T + 2);
+  assert.ok(J.obras[0].listo, 'una sola obra debe ir a ritmo pleno');
+  W.orden(m, { t: 'colocar', j: 0, tipo: 'central', x: m.mapa.bases[0].x + 3, y: m.mapa.bases[0].y - 1 }); avanza(1);
+  assert.strictEqual(J.cuenta.central, 1);
+  W.orden(m, { t: 'construir', j: 0, tipo: 'central' }); W.orden(m, { t: 'construir', j: 0, tipo: 'cuartel' }); avanza(T + 2);
+  assert.strictEqual(J.obras.length, 2);
+  assert.ok(!J.obras[0].listo, 'dos obras a la vez no pueden tardar lo mismo que una');
+  assert.ok(Math.abs(J.obras[0].prog - (T + 1) / 2) <= 1, 'cada obra debe ir a la mitad: ' + J.obras[0].prog);
+  const antes = J.minerales;
+  W.orden(m, { t: 'cancelarEdif', j: 0, tipo: 'cuartel' }); avanza(1);
+  assert.strictEqual(J.obras.length, 1);
+  assert.ok(J.minerales >= antes + W.EDIF.cuartel.costo, 'cancelar no devolvió el costo');
+  const p = J.obras[0].prog; avanza(10);
+  assert.ok(Math.abs(J.obras[0].prog - p - 10) < 0.01, 'al quedar una sola obra debe volver al ritmo pleno');
 });
 
 prueba('determinismo: misma semilla, misma partida', () => {

@@ -71,11 +71,12 @@
     const urgente = cosech === 0 && J.cuenta.fabrica && J.cuenta.refineria;
 
     // Construcción
-    const plan = J.edif || urgente ? null : siguienteEdificio(m, j);
-    if (J.edif && J.edif.listo) {
-      const p = buscarSitio(m, j, J.edif.tipo, patio);
-      if (p) { W.orden(m, { t: 'colocar', j, x: p.x, y: p.y }); ia.fallos = 0; }
-      else if (++ia.fallos > 15) { W.orden(m, { t: 'cancelarEdif', j }); ia.fallos = 0; }
+    const obra = J.obras[0]; // la IA levanta un edificio a la vez
+    const plan = obra || urgente ? null : siguienteEdificio(m, j);
+    if (obra && obra.listo) {
+      const p = buscarSitio(m, j, obra.tipo, patio);
+      if (p) { W.orden(m, { t: 'colocar', j, tipo: obra.tipo, x: p.x, y: p.y }); ia.fallos = 0; }
+      else if (++ia.fallos > 15) { W.orden(m, { t: 'cancelarEdif', j, tipo: obra.tipo }); ia.fallos = 0; }
     } else if (plan && J.minerales >= EDIF[plan].costo) {
       W.orden(m, { t: 'construir', j, tipo: plan });
     }

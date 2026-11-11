@@ -32,6 +32,8 @@
     let tecleado = ''; // últimas letras escritas, para el código "god"
     const sel = new Set(), grupos = {}, teclas = new Set(), marcas = [];
     let modo = null; // null | 'colocar' | 'amover'
+    let tipoColocar = null; // edificio que se está colocando
+    const obraLista = (tipo) => J.obras.some((o) => o.listo && o.tipo === tipo);
     let pausa = false, cuadros = 0, nieblaVista = -1;
     const raton = { x: 0, y: 0, izq: false, x0: 0, y0: 0, medio: false, dentro: false, der: false, arrastre: false, xd: 0, yd: 0 };
 
@@ -195,8 +197,8 @@
       }
       ctx.globalAlpha = 1;
 
-      if (modo === 'colocar' && J.edif && J.edif.listo && raton.dentro) {
-        const p = esquinaColocar(J.edif.tipo), t = EDIF[J.edif.tipo].tam, vale = W.puedeColocar(m, YO, J.edif.tipo, p.x, p.y);
+      if (modo === 'colocar' && raton.dentro) {
+        const p = esquinaColocar(tipoColocar), t = EDIF[tipoColocar].tam, vale = W.puedeColocar(m, YO, tipoColocar, p.x, p.y);
         ctx.fillStyle = vale ? P.bien : P.mal; ctx.globalAlpha = 0.45;
         ctx.fillRect(ox + p.x * z, oy + p.y * z, t * z, t * z);
         ctx.globalAlpha = 1; ctx.strokeStyle = vale ? P.bien : P.mal; ctx.lineWidth = 1.5;
@@ -236,20 +238,22 @@
     function boton(cont, tipo, d, esEdif) {
       const b = document.createElement('button');
       b.className = 'btn'; b.type = 'button';
-      b.innerHTML = '<span class="n"></span><span class="c"></span>';
+      b.innerHTML = '<span class="n"></span><span class="d"><span class="c"></span><span class="x" title="Cancelar">×</span></span>';
       b.querySelector('.n').textContent = d.nombre;
       b.title = 'Requiere: ' + d.req.map((r) => EDIF[r].nombre).join(', ');
       b.addEventListener('click', () => {
         if (esEdif) {
-          if (J.edif && J.edif.tipo === tipo && J.edif.listo) modo = 'colocar';
-          else if (!J.edif) W.orden(m, { t: 'construir', j: YO, tipo });
+          if (obraLista(tipo)) { modo = 'colocar'; tipoColocar = tipo; }
+          else W.orden(m, { t: 'construir', j: YO, tipo });
         } else W.orden(m, { t: 'entrenar', j: YO, tipo });
       });
-      b.addEventListener('contextmenu', (ev) => {
-        ev.preventDefault();
-        if (esEdif) { if (J.edif && J.edif.tipo === tipo) { W.orden(m, { t: 'cancelarEdif', j: YO }); modo = null; } }
+      const cancelar = (ev) => {
+        ev.preventDefault(); ev.stopPropagation();
+        if (esEdif) { W.orden(m, { t: 'cancelarEdif', j: YO, tipo }); if (tipoColocar === tipo) modo = null; }
         else W.orden(m, { t: 'cancelarUnidad', j: YO, tipo });
-      });
+      };
+      b.addEventListener('contextmenu', cancelar);
+      b.querySelector('.x').addEventListener('click', cancelar);
       cont.appendChild(b);
       botones.push({ b, tipo, d, esEdif, c: b.querySelector('.c'), n: b.querySelector('.n') });
     }
@@ -264,14 +268,17 @@
         const d = o.d, req = W.tieneReq(m, YO, d.req);
         let clase = 'btn', txt = String(d.costo), p = 0, nombre = d.nombre;
         if (o.esEdif) {
-          const a = J.edif;
-          if (a && a.tipo === o.tipo) {
-            if (a.listo) { clase += ' listo'; txt = 'colocar'; } else { p = a.prog / d.tiempo; txt = Math.floor(p * 100) + '%'; }
-          } else if (!req || a) clase += ' no';
+          let n = 0, listas = 0, avance = 0;
+          for (const a of J.obras) if (a.tipo === o.tipo) { n++; if (a.listo) listas++; else avance = Math.max(avance, a.prog / d.tiempo); }
+          if (n > 1) nombre += ' ×' + n;
+          if (n) clase += ' con-x';
+          if (listas) { clase += ' listo'; txt = 'colocar'; }
+          else if (n) { p = avance; txt = Math.floor(p * 100) + '%'; }
+          else if (!req) clase += ' no';
           else if (J.minerales < d.costo) clase += ' caro';
         } else {
           const q = J.colas[d.cat], n = q.lista.filter((t) => t === o.tipo).length;
-          if (n) nombre += ' ×' + n;
+          if (n) { nombre += ' ×' + n; clase += ' con-x'; }
           if (q.lista[0] === o.tipo) p = q.prog / d.tiempo;
           if (!req) clase += ' no'; else if (J.minerales < d.costo) clase += ' caro';
         }
@@ -280,6 +287,9 @@
         if (o.n.textContent !== nombre) o.n.textContent = nombre;
         o.b.style.setProperty('--p', (p * 100).toFixed(1) + '%');
       }
+      const enCurso = J.obras.filter((a) => !a.listo).length;
+      const reparto = enCurso > 1 ? enCurso + ' obras a la vez: cada una a 1/' + enCurso + ' de velocidad' : '';
+      if ($('obras').textContent !== reparto) $('obras').textContent = reparto;
       let s = '';
       const vivos = [...sel].map((id) => m.porId.get(id)).filter(Boolean);
       if (vivos.length === 1) { const v = vivos[0]; s = (v.edif ? EDIF : UNID)[v.tipo].nombre + ' · ' + Math.ceil(v.vida) + ' / ' + v.vidaMax; }
@@ -299,9 +309,9 @@
       const wx = aMundoX(raton.x), wy = aMundoY(raton.y);
       if (ev.button === 1) { raton.medio = true; ev.preventDefault(); return; }
       if (ev.button === 0) {
-        if (modo === 'colocar' && J.edif && J.edif.listo) {
-          const p = esquinaColocar(J.edif.tipo);
-          if (W.puedeColocar(m, YO, J.edif.tipo, p.x, p.y)) { W.orden(m, { t: 'colocar', j: YO, x: p.x, y: p.y }); modo = null; }
+        if (modo === 'colocar') {
+          const p = esquinaColocar(tipoColocar);
+          if (W.puedeColocar(m, YO, tipoColocar, p.x, p.y)) { W.orden(m, { t: 'colocar', j: YO, tipo: tipoColocar, x: p.x, y: p.y }); modo = null; }
           return;
         }
         if (modo === 'amover') {
@@ -440,7 +450,7 @@
         if (n === 4) acum = 0;
       }
       for (const id of sel) if (!m.porId.has(id)) sel.delete(id);
-      if (modo === 'colocar' && !(J.edif && J.edif.listo)) modo = null;
+      if (modo === 'colocar' && !obraLista(tipoColocar)) modo = null;
       if (nieblaVista !== m.nieblaV) pintarNiebla();
       dibujar(pausa || m.ganador >= 0 ? 1 : Math.min(1, acum / PASO));
       if (cuadros % 6 === 0) { dibujarMini(); actualizarBarra(); }

@@ -29,6 +29,10 @@
   .btn.caro .c { color: var(--mal); }
   .btn.listo { border-color: var(--tinta); background: var(--tinta); color: var(--fondo); font-weight: 600; }
   .btn .c { font-variant-numeric: tabular-nums; }
+  .btn .x { display: none; margin: -5px -7px -5px 8px; padding: 5px 8px; border-left: 1px solid var(--linea); font-weight: 600; }
+  .btn.con-x .x { display: inline-block; }
+  .btn .x:hover { background: var(--mal); color: #fff; }
+  #obras { min-height: 16px; }
   #sel { min-height: 18px; }
   #ayuda { margin-top: auto; border-top: 1px solid var(--linea); padding-top: 9px; }
   #ayuda kbd { font: inherit; color: var(--tinta); }
@@ -51,7 +55,7 @@
       <div class="tenue" title="Visibles en el mapa; todavía no se explotan">petróleo · agua · raros · información —</div>
     </div>
     <canvas id="mini" width="208" height="208"></canvas>
-    <section><h2>Edificios</h2><div id="bEdif"></div></section>
+    <section><h2>Edificios</h2><div id="bEdif"></div><div id="obras" class="tenue"></div></section>
     <section><h2>Unidades</h2><div id="bUnid"></div></section>
     <div id="sel" class="tenue"></div>
     <div id="ayuda" class="tenue">
@@ -63,7 +67,7 @@
       <div>rueda o <kbd>+</kbd> <kbd>−</kbd>: zoom · <kbd>M</kbd> cambia rueda</div>
       <div><kbd>H</kbd> base · <kbd>espacio</kbd> alerta</div>
       <div><kbd>Mayús+1…9</kbd> guardar grupo · <kbd>1…9</kbd> llamarlo</div>
-      <div>clic derecho en botón: cancelar</div>
+      <div><kbd>×</kbd> o clic derecho en botón: cancelar</div>
       <div><kbd>P</kbd> pausa · <kbd>T</kbd> tema · <span id="semilla"></span></div>
       <div>escribe <kbd>god</kbd>: recursos infinitos</div>
     </div>
@@ -116,7 +120,7 @@
     bateria: { alcance: 6.5, dano: 30, recarga: 30, vs: { ligero: 0.8, pesado: 1,    edificio: 0.5 } },
   };
 
-  W.ECON = { inicio: 2500, cosecha: 5, descarga: 25, colaMax: 9, separacionColocar: 3, goteoCada: 5 };
+  W.ECON = { inicio: 2500, cosecha: 5, descarga: 25, colaMax: 9, separacionColocar: 3, goteoCada: 5, obrasMax: 8 };
 })();
 
 // ===== sim/mapa.js =====
@@ -335,7 +339,7 @@
   function nuevoJugador() {
     return {
       minerales: ECON.inicio, prod: 0, uso: 0, cuenta: {}, vivo: true, dios: false,
-      edif: null, // { tipo, prog, listo }
+      obras: [], // [{ tipo, prog, listo }]: varias a la vez, se reparten la velocidad
       colas: { inf: { lista: [], prog: 0 }, veh: { lista: [], prog: 0 } },
       alerta: null, cosechado: 0, bajas: 0, producidas: 0,
     };
@@ -479,17 +483,22 @@
         return;
       case 'construir': {
         const d = EDIF[cmd.tipo];
-        if (!d || cmd.tipo === 'patio' || J.edif || !W.tieneReq(m, cmd.j, d.req) || J.minerales < d.costo) return;
-        J.minerales -= d.costo; J.edif = { tipo: cmd.tipo, prog: 0, listo: false };
+        if (!d || cmd.tipo === 'patio' || J.obras.length >= ECON.obrasMax || !W.tieneReq(m, cmd.j, d.req) || J.minerales < d.costo) return;
+        J.minerales -= d.costo; J.obras.push({ tipo: cmd.tipo, prog: 0, listo: false });
         return;
       }
-      case 'cancelarEdif':
-        if (J.edif) { J.minerales += EDIF[J.edif.tipo].costo; J.edif = null; }
+      case 'cancelarEdif': { // cancela la obra más reciente de ese tipo (primero las que siguen en curso) y devuelve su costo
+        let i = -1;
+        for (let k = J.obras.length - 1; k >= 0; k--) if (J.obras[k].tipo === cmd.tipo && (i < 0 || (J.obras[i].listo && !J.obras[k].listo))) i = k;
+        if (i < 0) return;
+        J.minerales += EDIF[cmd.tipo].costo; J.obras.splice(i, 1);
         return;
+      }
       case 'colocar': {
-        if (!J.edif || !J.edif.listo || !W.puedeColocar(m, cmd.j, J.edif.tipo, cmd.x, cmd.y)) return;
-        const e = crearEdificio(m, cmd.j, J.edif.tipo, cmd.x, cmd.y);
-        J.edif = null;
+        const i = J.obras.findIndex((o) => o.listo && o.tipo === cmd.tipo);
+        if (i < 0 || !W.puedeColocar(m, cmd.j, cmd.tipo, cmd.x, cmd.y)) return;
+        const e = crearEdificio(m, cmd.j, cmd.tipo, cmd.x, cmd.y);
+        J.obras.splice(i, 1);
         if (e.tipo === 'refineria') crearUnidad(m, cmd.j, 'cosechadora', W.cercaLibre(m, e.cx, e.y + e.tam + 0.5));
         contar(m);
         return;
@@ -762,7 +771,10 @@
     if (!J.vivo) return;
     const factor = J.uso > J.prod ? 0.5 : 1; // déficit de energía: todo a media velocidad
     if (m.t % ECON.goteoCada === 0) J.minerales += 1; // ingreso mínimo del patio: evita el bloqueo total
-    if (J.edif && !J.edif.listo) { J.edif.prog += factor; if (J.edif.prog >= EDIF[J.edif.tipo].tiempo) J.edif.listo = true; }
+    // Las obras en curso se reparten la velocidad: una sola va a ritmo pleno, dos a la mitad cada una.
+    let activas = 0;
+    for (const o of J.obras) if (!o.listo) activas++;
+    for (const o of J.obras) if (!o.listo) { o.prog += factor / activas; if (o.prog >= EDIF[o.tipo].tiempo) o.listo = true; }
     for (const cat of ['inf', 'veh']) {
       const q = J.colas[cat];
       if (!q.lista.length) continue;
@@ -918,11 +930,12 @@
     const urgente = cosech === 0 && J.cuenta.fabrica && J.cuenta.refineria;
 
     // Construcción
-    const plan = J.edif || urgente ? null : siguienteEdificio(m, j);
-    if (J.edif && J.edif.listo) {
-      const p = buscarSitio(m, j, J.edif.tipo, patio);
-      if (p) { W.orden(m, { t: 'colocar', j, x: p.x, y: p.y }); ia.fallos = 0; }
-      else if (++ia.fallos > 15) { W.orden(m, { t: 'cancelarEdif', j }); ia.fallos = 0; }
+    const obra = J.obras[0]; // la IA levanta un edificio a la vez
+    const plan = obra || urgente ? null : siguienteEdificio(m, j);
+    if (obra && obra.listo) {
+      const p = buscarSitio(m, j, obra.tipo, patio);
+      if (p) { W.orden(m, { t: 'colocar', j, tipo: obra.tipo, x: p.x, y: p.y }); ia.fallos = 0; }
+      else if (++ia.fallos > 15) { W.orden(m, { t: 'cancelarEdif', j, tipo: obra.tipo }); ia.fallos = 0; }
     } else if (plan && J.minerales >= EDIF[plan].costo) {
       W.orden(m, { t: 'construir', j, tipo: plan });
     }
@@ -1001,6 +1014,8 @@
     let tecleado = ''; // últimas letras escritas, para el código "god"
     const sel = new Set(), grupos = {}, teclas = new Set(), marcas = [];
     let modo = null; // null | 'colocar' | 'amover'
+    let tipoColocar = null; // edificio que se está colocando
+    const obraLista = (tipo) => J.obras.some((o) => o.listo && o.tipo === tipo);
     let pausa = false, cuadros = 0, nieblaVista = -1;
     const raton = { x: 0, y: 0, izq: false, x0: 0, y0: 0, medio: false, dentro: false, der: false, arrastre: false, xd: 0, yd: 0 };
 
@@ -1164,8 +1179,8 @@
       }
       ctx.globalAlpha = 1;
 
-      if (modo === 'colocar' && J.edif && J.edif.listo && raton.dentro) {
-        const p = esquinaColocar(J.edif.tipo), t = EDIF[J.edif.tipo].tam, vale = W.puedeColocar(m, YO, J.edif.tipo, p.x, p.y);
+      if (modo === 'colocar' && raton.dentro) {
+        const p = esquinaColocar(tipoColocar), t = EDIF[tipoColocar].tam, vale = W.puedeColocar(m, YO, tipoColocar, p.x, p.y);
         ctx.fillStyle = vale ? P.bien : P.mal; ctx.globalAlpha = 0.45;
         ctx.fillRect(ox + p.x * z, oy + p.y * z, t * z, t * z);
         ctx.globalAlpha = 1; ctx.strokeStyle = vale ? P.bien : P.mal; ctx.lineWidth = 1.5;
@@ -1205,20 +1220,22 @@
     function boton(cont, tipo, d, esEdif) {
       const b = document.createElement('button');
       b.className = 'btn'; b.type = 'button';
-      b.innerHTML = '<span class="n"></span><span class="c"></span>';
+      b.innerHTML = '<span class="n"></span><span class="d"><span class="c"></span><span class="x" title="Cancelar">×</span></span>';
       b.querySelector('.n').textContent = d.nombre;
       b.title = 'Requiere: ' + d.req.map((r) => EDIF[r].nombre).join(', ');
       b.addEventListener('click', () => {
         if (esEdif) {
-          if (J.edif && J.edif.tipo === tipo && J.edif.listo) modo = 'colocar';
-          else if (!J.edif) W.orden(m, { t: 'construir', j: YO, tipo });
+          if (obraLista(tipo)) { modo = 'colocar'; tipoColocar = tipo; }
+          else W.orden(m, { t: 'construir', j: YO, tipo });
         } else W.orden(m, { t: 'entrenar', j: YO, tipo });
       });
-      b.addEventListener('contextmenu', (ev) => {
-        ev.preventDefault();
-        if (esEdif) { if (J.edif && J.edif.tipo === tipo) { W.orden(m, { t: 'cancelarEdif', j: YO }); modo = null; } }
+      const cancelar = (ev) => {
+        ev.preventDefault(); ev.stopPropagation();
+        if (esEdif) { W.orden(m, { t: 'cancelarEdif', j: YO, tipo }); if (tipoColocar === tipo) modo = null; }
         else W.orden(m, { t: 'cancelarUnidad', j: YO, tipo });
-      });
+      };
+      b.addEventListener('contextmenu', cancelar);
+      b.querySelector('.x').addEventListener('click', cancelar);
       cont.appendChild(b);
       botones.push({ b, tipo, d, esEdif, c: b.querySelector('.c'), n: b.querySelector('.n') });
     }
@@ -1233,14 +1250,17 @@
         const d = o.d, req = W.tieneReq(m, YO, d.req);
         let clase = 'btn', txt = String(d.costo), p = 0, nombre = d.nombre;
         if (o.esEdif) {
-          const a = J.edif;
-          if (a && a.tipo === o.tipo) {
-            if (a.listo) { clase += ' listo'; txt = 'colocar'; } else { p = a.prog / d.tiempo; txt = Math.floor(p * 100) + '%'; }
-          } else if (!req || a) clase += ' no';
+          let n = 0, listas = 0, avance = 0;
+          for (const a of J.obras) if (a.tipo === o.tipo) { n++; if (a.listo) listas++; else avance = Math.max(avance, a.prog / d.tiempo); }
+          if (n > 1) nombre += ' ×' + n;
+          if (n) clase += ' con-x';
+          if (listas) { clase += ' listo'; txt = 'colocar'; }
+          else if (n) { p = avance; txt = Math.floor(p * 100) + '%'; }
+          else if (!req) clase += ' no';
           else if (J.minerales < d.costo) clase += ' caro';
         } else {
           const q = J.colas[d.cat], n = q.lista.filter((t) => t === o.tipo).length;
-          if (n) nombre += ' ×' + n;
+          if (n) { nombre += ' ×' + n; clase += ' con-x'; }
           if (q.lista[0] === o.tipo) p = q.prog / d.tiempo;
           if (!req) clase += ' no'; else if (J.minerales < d.costo) clase += ' caro';
         }
@@ -1249,6 +1269,9 @@
         if (o.n.textContent !== nombre) o.n.textContent = nombre;
         o.b.style.setProperty('--p', (p * 100).toFixed(1) + '%');
       }
+      const enCurso = J.obras.filter((a) => !a.listo).length;
+      const reparto = enCurso > 1 ? enCurso + ' obras a la vez: cada una a 1/' + enCurso + ' de velocidad' : '';
+      if ($('obras').textContent !== reparto) $('obras').textContent = reparto;
       let s = '';
       const vivos = [...sel].map((id) => m.porId.get(id)).filter(Boolean);
       if (vivos.length === 1) { const v = vivos[0]; s = (v.edif ? EDIF : UNID)[v.tipo].nombre + ' · ' + Math.ceil(v.vida) + ' / ' + v.vidaMax; }
@@ -1268,9 +1291,9 @@
       const wx = aMundoX(raton.x), wy = aMundoY(raton.y);
       if (ev.button === 1) { raton.medio = true; ev.preventDefault(); return; }
       if (ev.button === 0) {
-        if (modo === 'colocar' && J.edif && J.edif.listo) {
-          const p = esquinaColocar(J.edif.tipo);
-          if (W.puedeColocar(m, YO, J.edif.tipo, p.x, p.y)) { W.orden(m, { t: 'colocar', j: YO, x: p.x, y: p.y }); modo = null; }
+        if (modo === 'colocar') {
+          const p = esquinaColocar(tipoColocar);
+          if (W.puedeColocar(m, YO, tipoColocar, p.x, p.y)) { W.orden(m, { t: 'colocar', j: YO, tipo: tipoColocar, x: p.x, y: p.y }); modo = null; }
           return;
         }
         if (modo === 'amover') {
@@ -1409,7 +1432,7 @@
         if (n === 4) acum = 0;
       }
       for (const id of sel) if (!m.porId.has(id)) sel.delete(id);
-      if (modo === 'colocar' && !(J.edif && J.edif.listo)) modo = null;
+      if (modo === 'colocar' && !obraLista(tipoColocar)) modo = null;
       if (nieblaVista !== m.nieblaV) pintarNiebla();
       dibujar(pausa || m.ganador >= 0 ? 1 : Math.min(1, acum / PASO));
       if (cuadros % 6 === 0) { dibujarMini(); actualizarBarra(); }

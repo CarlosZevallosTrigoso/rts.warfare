@@ -29,6 +29,10 @@
   .btn.caro .c { color: var(--mal); }
   .btn.listo { border-color: var(--tinta); background: var(--tinta); color: var(--fondo); font-weight: 600; }
   .btn .c { font-variant-numeric: tabular-nums; }
+  .btn .x { display: none; margin: -5px -7px -5px 8px; padding: 5px 8px; border-left: 1px solid var(--linea); font-weight: 600; }
+  .btn.con-x .x { display: inline-block; }
+  .btn .x:hover { background: var(--mal); color: #fff; }
+  #obras { min-height: 16px; }
   #sel { min-height: 18px; }
   #ayuda { margin-top: auto; border-top: 1px solid var(--linea); padding-top: 9px; }
   #ayuda kbd { font: inherit; color: var(--tinta); }
@@ -51,7 +55,7 @@
       <div class="tenue" title="Visibles en el mapa; todavía no se explotan">petróleo · agua · raros · información —</div>
     </div>
     <canvas id="mini" width="208" height="208"></canvas>
-    <section><h2>Edificios</h2><div id="bEdif"></div></section>
+    <section><h2>Edificios</h2><div id="bEdif"></div><div id="obras" class="tenue"></div></section>
     <section><h2>Unidades</h2><div id="bUnid"></div></section>
     <div id="sel" class="tenue"></div>
     <div id="ayuda" class="tenue">
@@ -63,7 +67,7 @@
       <div>rueda o <kbd>+</kbd> <kbd>−</kbd>: zoom · <kbd>M</kbd> cambia rueda</div>
       <div><kbd>H</kbd> base · <kbd>espacio</kbd> alerta</div>
       <div><kbd>Mayús+1…9</kbd> guardar grupo · <kbd>1…9</kbd> llamarlo</div>
-      <div>clic derecho en botón: cancelar</div>
+      <div><kbd>×</kbd> o clic derecho en botón: cancelar</div>
       <div><kbd>P</kbd> pausa · <kbd>T</kbd> tema · <span id="semilla"></span></div>
       <div>escribe <kbd>god</kbd>: recursos infinitos</div>
     </div>

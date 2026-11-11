@@ -11,7 +11,7 @@
   function nuevoJugador() {
     return {
       minerales: ECON.inicio, prod: 0, uso: 0, cuenta: {}, vivo: true, dios: false,
-      edif: null, // { tipo, prog, listo }
+      obras: [], // [{ tipo, prog, listo }]: varias a la vez, se reparten la velocidad
       colas: { inf: { lista: [], prog: 0 }, veh: { lista: [], prog: 0 } },
       alerta: null, cosechado: 0, bajas: 0, producidas: 0,
     };
@@ -155,17 +155,22 @@
         return;
       case 'construir': {
         const d = EDIF[cmd.tipo];
-        if (!d || cmd.tipo === 'patio' || J.edif || !W.tieneReq(m, cmd.j, d.req) || J.minerales < d.costo) return;
-        J.minerales -= d.costo; J.edif = { tipo: cmd.tipo, prog: 0, listo: false };
+        if (!d || cmd.tipo === 'patio' || J.obras.length >= ECON.obrasMax || !W.tieneReq(m, cmd.j, d.req) || J.minerales < d.costo) return;
+        J.minerales -= d.costo; J.obras.push({ tipo: cmd.tipo, prog: 0, listo: false });
         return;
       }
-      case 'cancelarEdif':
-        if (J.edif) { J.minerales += EDIF[J.edif.tipo].costo; J.edif = null; }
+      case 'cancelarEdif': { // cancela la obra más reciente de ese tipo (primero las que siguen en curso) y devuelve su costo
+        let i = -1;
+        for (let k = J.obras.length - 1; k >= 0; k--) if (J.obras[k].tipo === cmd.tipo && (i < 0 || (J.obras[i].listo && !J.obras[k].listo))) i = k;
+        if (i < 0) return;
+        J.minerales += EDIF[cmd.tipo].costo; J.obras.splice(i, 1);
         return;
+      }
       case 'colocar': {
-        if (!J.edif || !J.edif.listo || !W.puedeColocar(m, cmd.j, J.edif.tipo, cmd.x, cmd.y)) return;
-        const e = crearEdificio(m, cmd.j, J.edif.tipo, cmd.x, cmd.y);
-        J.edif = null;
+        const i = J.obras.findIndex((o) => o.listo && o.tipo === cmd.tipo);
+        if (i < 0 || !W.puedeColocar(m, cmd.j, cmd.tipo, cmd.x, cmd.y)) return;
+        const e = crearEdificio(m, cmd.j, cmd.tipo, cmd.x, cmd.y);
+        J.obras.splice(i, 1);
         if (e.tipo === 'refineria') crearUnidad(m, cmd.j, 'cosechadora', W.cercaLibre(m, e.cx, e.y + e.tam + 0.5));
         contar(m);
         return;
@@ -438,7 +443,10 @@
     if (!J.vivo) return;
     const factor = J.uso > J.prod ? 0.5 : 1; // déficit de energía: todo a media velocidad
     if (m.t % ECON.goteoCada === 0) J.minerales += 1; // ingreso mínimo del patio: evita el bloqueo total
-    if (J.edif && !J.edif.listo) { J.edif.prog += factor; if (J.edif.prog >= EDIF[J.edif.tipo].tiempo) J.edif.listo = true; }
+    // Las obras en curso se reparten la velocidad: una sola va a ritmo pleno, dos a la mitad cada una.
+    let activas = 0;
+    for (const o of J.obras) if (!o.listo) activas++;
+    for (const o of J.obras) if (!o.listo) { o.prog += factor / activas; if (o.prog >= EDIF[o.tipo].tiempo) o.listo = true; }
     for (const cat of ['inf', 'veh']) {
       const q = J.colas[cat];
       if (!q.lista.length) continue;

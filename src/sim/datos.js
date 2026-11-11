@@ -42,5 +42,5 @@
     bateria: { alcance: 6.5, dano: 30, recarga: 30, vs: { ligero: 0.8, pesado: 1,    edificio: 0.5 } },
   };
 
-  W.ECON = { inicio: 2500, cosecha: 5, descarga: 25, colaMax: 9, separacionColocar: 3, goteoCada: 5 };
+  W.ECON = { inicio: 2500, cosecha: 5, descarga: 25, colaMax: 9, separacionColocar: 3, goteoCada: 5, obrasMax: 8 };
 })();
