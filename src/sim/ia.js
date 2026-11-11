@@ -77,10 +77,11 @@
     const j = ia.j, J = m.jug[j];
     if (!J.vivo) return;
     let patio = null, objetivo = null, dObj = Infinity;
-    const soldados = [];
+    const soldados = [], aviones = [];
     for (const e of m.ents) {
       if (e.j === j) {
         if (e.tipo === 'patio') patio = e;
+        else if (!e.edif && UNID[e.tipo].aire) aviones.push(e); // la aviación no va con el ejército: patrulla sobre la base
         else if (!e.edif && UNID[e.tipo].arma) soldados.push(e);
       }
     }
@@ -146,6 +147,13 @@
         for (const cel of m.raros) { const d = Math.hypot((cel % m.N) - patio.cx, ((cel / m.N) | 0) - patio.cy); if (d < dv) { dv = d; veta = cel; } }
         if (cos && veta >= 0) { ia.rarera = cos.id; W.orden(m, { t: 'cosechar', j, ids: [cos.id], x: (veta % m.N) + 0.5, y: ((veta / m.N) | 0) + 0.5 }); }
       }
+    }
+
+    // Aviación: los aviones posados y sin tarea salen a patrullar por delante de la base, hacia el rival.
+    {
+      const riv = m.mapa.bases[1 - j], ax = riv.x - patio.cx, ay = riv.y - patio.cy, ad = Math.hypot(ax, ay) || 1;
+      const ids = aviones.filter((u) => u.enTierra && !u.repostando && !u.patrulla).map((u) => u.id);
+      if (ids.length) W.orden(m, { t: 'patrulla', j, ids, x: patio.cx + (ax / ad) * 16, y: patio.cy + (ay / ad) * 16 });
     }
 
     // Ejército

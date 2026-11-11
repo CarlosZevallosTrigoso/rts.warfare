@@ -82,7 +82,7 @@
       guardia: false, mision: 0, acude: 0, salto: 0, origen: null, previo: null, // colmena: modo fijo, misión, foco al que acude // rumbo, velocidad actual
       carga: 0, est: tipo === 'cosechadora' ? 'buscar' : '', celda: -1, ref: 0, espera: 0, pref: null,
       quiere: 1, cargaTipo: 1, // cosechadora: qué busca y qué lleva (1 minerales, 2 raros)
-      fuel: d.fuel || 0, repostando: false, // aviación
+      fuel: d.fuel || 0, repostando: false, casa: 0, enTierra: false, slot: 0, // aviación: su aeródromo y si está posado en él
       cola: [], patrulla: null, explora: false, // órdenes encadenadas, ruta de patrulla, exploración automática
     };
     m.ents.push(u); m.porId.set(u.id, u);
@@ -179,6 +179,8 @@
 
   function pedirRuta(m, u, x, y, radio) {
     if (UNID[u.tipo].aire) { // un avión no busca camino: va en línea recta
+      const casa = u.casa ? m.porId.get(u.casa) : null, rv = UNID[u.tipo].radioVuelo;
+      if (casa) { const ax = x - casa.cx, ay = y - casa.cy, ad = Math.hypot(ax, ay); if (ad > rv) { x = casa.cx + (ax / ad) * rv; y = casa.cy + (ay / ad) * rv; } } // no se aleja más que su radio de vuelo
       const N = m.N, cx = Math.max(0.5, Math.min(N - 0.5, x)), cy = Math.max(0.5, Math.min(N - 0.5, y));
       u.ruta = [Math.floor(cy) * N + Math.floor(cx)]; u.ri = 0; u.fin = { x: cx, y: cy }; u.pend = null; u.meta = { x, y, radio };
       return;
@@ -267,7 +269,10 @@
     while (u.cola.length) if (asignar(m, u, u.cola.shift())) return;
     if (u.patrulla) {
       const p = u.patrulla; p.i = (p.i + 1) % p.pts.length;
-      asignar(m, u, { t: 'amover', x: p.pts[p.i].x, y: p.pts[p.i].y });
+      if (UNID[u.tipo].aire && p.pts.length === 1) { // patrulla aérea sobre un punto: da vueltas a su alrededor
+        p.a = (p.a === undefined ? u.id * 2.4 : p.a) + 0.8; // cada avión entra en la órbita por un punto distinto, para no ir encimados
+        asignar(m, u, { t: 'amover', x: p.pts[0].x + Math.cos(p.a) * ECON.orbita, y: p.pts[0].y + Math.sin(p.a) * ECON.orbita });
+      } else asignar(m, u, { t: 'amover', x: p.pts[p.i].x, y: p.pts[p.i].y });
     } else if (u.explora) {
       const c = celdaSinExplorar(m, u);
       if (c < 0) u.explora = false; else asignar(m, u, { t: 'mover', x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 });
@@ -320,6 +325,7 @@
       case 'entrenar': {
         const d = UNID[cmd.tipo];
         if (!d || !W.disponible(m, cmd.j, d) || !W.puedePagar(J, d)) return;
+        if (d.aire) { const c = W.cupoAire(m, cmd.j); if (c.hay >= c.cupo) return; } // cada aeródromo aloja un número limitado de aviones
         const q = J.colas[cmd.tipo];
         if (q.n >= ECON.colaMax) return;
         cobrar(J, d); q.n++;
@@ -364,7 +370,7 @@
         return;
       }
       case 'guardia': // modo fijo: no se mueve ni para perseguir ni para acudir; dispara a lo que entre en su alcance
-        for (const u of propias(m, cmd)) if (UNID[u.tipo].arma) { limpiar(u); u.orden = 'nada'; u.obj = 0; u.ruta = null; u.pend = null; u.guardia = true; }
+        for (const u of propias(m, cmd)) if (UNID[u.tipo].arma && !UNID[u.tipo].aire) { limpiar(u); u.orden = 'nada'; u.obj = 0; u.ruta = null; u.pend = null; u.guardia = true; }
         return;
       case 'trinchera': // la infantería quieta cava una trinchera en su sitio y se queda en ella
         for (const u of propias(m, cmd)) if (UNID[u.tipo].cat === 'inf' && u.orden === 'nada') {
@@ -390,11 +396,11 @@
         destinos(m, propias(m, cmd).filter((u) => UNID[u.tipo].arma), cmd.x, cmd.y, (u, x, y) => {
           if (cmd.enc && u.patrulla) { if (u.patrulla.pts.length < 12) u.patrulla.pts.push({ x, y }); return; }
           limpiar(u); u.orden = 'nada'; u.obj = 0; u.ruta = null; u.pend = null;
-          u.patrulla = { pts: [{ x: u.x, y: u.y }, { x, y }], i: 0 };
+          u.patrulla = UNID[u.tipo].aire ? { pts: [{ x, y }], i: 0 } : { pts: [{ x: u.x, y: u.y }, { x, y }], i: 0 }; // el avión patrulla el punto, no el trayecto
         });
         return;
       case 'explorar': // recorre sola lo que aún no se ha visto
-        for (const u of propias(m, cmd)) if (u.tipo !== 'cosechadora') { limpiar(u); u.explora = true; u.orden = 'nada'; u.obj = 0; u.ruta = null; u.pend = null; }
+        for (const u of propias(m, cmd)) if (u.tipo !== 'cosechadora' && !UNID[u.tipo].aire) { limpiar(u); u.explora = true; u.orden = 'nada'; u.obj = 0; u.ruta = null; u.pend = null; }
         return;
       case 'reunion': { // punto de reunión de un cuartel o una fábrica
         const e = m.porId.get(cmd.id);
@@ -432,8 +438,10 @@
       alin = Math.cos(dif);
     }
     const ultimo = u.ri === u.ruta.length - 1;
-    let obj = alin > 0.6 ? vmax * alin : 0; // muy desalineado: pivota en el sitio
-    if (ultimo) obj = Math.min(obj, 0.02 + dd * 0.12); // frena al llegar
+    const planea = d.aire && !u.obj; // un avión en ruta no se detiene: vira en marcha y da por alcanzado el punto al pasar cerca
+    let obj = planea ? vmax * Math.max(0.6, alin) : alin > 0.6 ? vmax * alin : 0; // muy desalineado: pivota en el sitio
+    if (ultimo && !planea) obj = Math.min(obj, 0.02 + dd * 0.12); // frena al llegar
+    if (planea && ultimo && dd <= 1.5) { u.ruta = null; return true; }
     u.v = u.v < obj ? Math.min(obj, u.v + d.acel) : Math.max(obj, u.v - d.acel * 2);
     if (ultimo && dd <= 0.25) { u.ruta = null; u.v = 0; return true; } // en el destino basta con quedar cerca
     if (dd <= Math.max(u.v, 0.02)) { u.x = tx; u.y = ty; u.ri++; return false; }
@@ -496,6 +504,7 @@
       const A = us[a], ra = UNID[A.tipo].radio;
       for (let b = a + 1; b < us.length; b++) {
         const B = us[b];
+        if (A.enTierra || B.enTierra) continue; // los aviones posados tienen su sitio
         let dx = B.x - A.x; if (dx > 1 || dx < -1) continue;
         let dy = B.y - A.y; if (dy > 1 || dy < -1) continue;
         if (!UNID[A.tipo].aire !== !UNID[B.tipo].aire) continue; // los aviones pasan por encima de todo lo demás
@@ -522,7 +531,7 @@
 
   // ---------- combate ----------
   // ¿Puede esta arma dañar a ese blanco? (los cañones no alcanzan a los aviones; la antiaérea solo a ellos)
-  function puede(arma, b) { return !!arma && arma.vs[b.edif ? 'edificio' : UNID[b.tipo].blindaje] > 0; }
+  function puede(arma, b) { return !!arma && !b.enTierra && arma.vs[b.edif ? 'edificio' : UNID[b.tipo].blindaje] > 0; } // al avión posado lo cubre su aeródromo
   W.puedeAtacar = (a, b) => puede(ARMAS[a.edif ? EDIF[a.tipo].arma : UNID[a.tipo].arma], b);
   // ---------- frente, torreta y visión dirigida ----------
   const difAng = (a, b) => ((a - b + Math.PI) % TAU + TAU) % TAU - Math.PI;
@@ -718,24 +727,65 @@
     if (o && apuntar(m, e, o) && e.recarga <= 0) disparar(m, e, o, arma);
   }
 
-  // Aviación: gasta combustible en vuelo, reposta sobre un aeródromo propio y vuelve sola cuando le queda lo justo.
-  // Devuelve true si este tick lo dedica a volver a base.
+  // ---------- aviación ----------
+  // Cada avión pertenece a un aeródromo (su "casa"), con cupo limitado. Sale de él, vuela, y vuelve a posarse cuando
+  // termina su orden o cuando le queda el combustible justo. Posado reposta y nadie puede atacarlo. En patrulla,
+  // al llenar el depósito despega solo y la retoma. Si pierde su casa busca otra con sitio; si no hay, acaba cayendo.
+  const SLOTS = [[-0.9, -0.6], [0, -0.6], [0.9, -0.6], [-0.45, 0.6], [0.45, 0.6]];
+  function avionesDe(m, base) { let n = 0; for (const e of m.ents) if (!e.edif && e.casa === base.id && e.vida > 0) n++; return n; }
+  function aerodromoLibre(m, u) {
+    let mejor = null, md = Infinity;
+    for (const e of m.ents) {
+      if (!e.edif || e.j !== u.j || e.tipo !== 'aerodromo' || e.vida <= 0) continue;
+      const dd = Math.hypot(e.cx - u.x, e.cy - u.y);
+      if (dd < md && avionesDe(m, e) - (u.casa === e.id ? 1 : 0) < ECON.cupoAviones) { md = dd; mejor = e; }
+    }
+    return mejor;
+  }
+  function posar(m, u, base) {
+    const usados = new Set();
+    for (const e of m.ents) if (!e.edif && e !== u && e.casa === base.id && e.enTierra) usados.add(e.slot);
+    let s = 0; while (usados.has(s) && s < SLOTS.length - 1) s++;
+    u.casa = base.id; u.enTierra = true; u.slot = s; u.ruta = null; u.v = 0;
+    u.x = base.cx + SLOTS[s][0]; u.y = base.cy + SLOTS[s][1]; u.px = u.x; u.py = u.y; u.ang = u.angT = -Math.PI / 2;
+  }
+  // Aviones y cupo de un jugador (los que vuelan, los posados y los encargados).
+  W.cupoAire = function (m, j) {
+    const J = m.jug[j]; let hay = 0;
+    for (const t in UNID) if (UNID[t].aire) hay += (J.cuenta[t] || 0) + J.colas[t].n;
+    return { hay, cupo: ECON.cupoAviones * (J.cuenta.aerodromo || 0) };
+  };
+  // Devuelve true si este tick el avión lo pasa posado o volviendo a su aeródromo.
   function tickVuelo(m, u) {
     const d = UNID[u.tipo];
-    let base = null, md = Infinity;
-    for (const e of m.ents) if (e.edif && e.j === u.j && e.tipo === 'aerodromo') { const dd = Math.hypot(e.cx - u.x, e.cy - u.y); if (dd < md) { md = dd; base = e; } }
-    if (base && md <= 2.2) { u.fuel = Math.min(d.fuel, u.fuel + ECON.reposta); if (u.fuel >= d.fuel) u.repostando = false; }
-    else u.fuel--;
-    if (u.fuel <= 0) { u.fuel = 0; u.vida -= u.vidaMax / ECON.fuelCae; u.tDano = m.t; if (!base) return false; u.repostando = true; } // sin combustible, cae
-    if (!u.repostando && base && u.fuel < (md / d.vel) * 1.3 + 60) { // lo justo para volver: suelta lo que hace
-      u.repostando = true; limpiar(u); u.orden = 'nada'; u.obj = 0; u.ruta = null; u.guardia = false;
+    let base = u.casa ? m.porId.get(u.casa) : null;
+    if (base && base.vida <= 0) base = null;
+    if (!base) {
+      if (u.enTierra) { u.vida = 0; return true; } // estaba dentro del aeródromo destruido
+      base = aerodromoLibre(m, u); u.casa = base ? base.id : 0;
+    }
+    const conOrden = u.orden !== 'nada' || u.obj || u.cola.length > 0 || !!u.patrulla || u.acude;
+    if (u.enTierra) {
+      u.fuel = Math.min(d.fuel, u.fuel + ECON.reposta);
+      if (u.fuel >= d.fuel) u.repostando = false;
+      if (u.repostando) { u.orden = 'nada'; u.obj = 0; u.cola.length = 0; return true; } // hasta llenar el depósito no despega
+      if (conOrden && u.fuel >= d.fuel * 0.3) { u.enTierra = false; return false; } // despega
+      return true;
+    }
+    u.fuel--;
+    if (u.fuel <= 0) { u.fuel = 0; u.vida -= u.vidaMax / ECON.fuelCae; u.tDano = m.t; } // sin combustible, cae
+    if (!base) return false;
+    const md = Math.hypot(base.cx - u.x, base.cy - u.y);
+    if (!u.repostando && u.fuel < (md / d.vel) * 1.3 + 60) { // lo justo para volver: suelta lo que hace (la patrulla la retomará)
+      u.repostando = true; u.orden = 'nada'; u.obj = 0; u.ruta = null; u.cola.length = 0; u.acude = 0;
       m.efectos.push({ tipo: 'reposta', x1: u.x, y1: u.y, x2: base.cx, y2: base.cy, j: u.j, t: m.t });
     }
-    if (!u.repostando) return false;
-    if (!base) { u.repostando = false; return false; }
-    u.orden = 'nada'; u.obj = 0; u.cola.length = 0;
-    if (md > 1.2) { if (!u.ruta || u.meta.x !== base.cx || u.meta.y !== base.cy) pedirRuta(m, u, base.cx, base.cy, 0); avanzar(m, u); }
-    else { u.ruta = null; u.v = 0; }
+    if (u.repostando) { u.orden = 'nada'; u.obj = 0; u.cola.length = 0; }
+    else if (conOrden) return false;
+    // de vuelta a casa: por combustible o porque ya no tiene nada que hacer
+    if (md <= 1.7) { posar(m, u, base); return true; }
+    if (!u.ruta || !u.meta || u.meta.x !== base.cx || u.meta.y !== base.cy) pedirRuta(m, u, base.cx, base.cy, 0);
+    avanzar(m, u);
     return true;
   }
 
@@ -766,7 +816,11 @@
       return;
     }
     let o = u.obj ? m.porId.get(u.obj) : null;
-    if (u.obj && (!o || o.vida <= 0)) { o = null; u.obj = 0; u.ruta = null; if (u.orden === 'atacar') u.orden = 'nada'; }
+    if (u.obj && (!o || o.vida <= 0 || o.enTierra)) { o = null; u.obj = 0; u.ruta = null; if (u.orden === 'atacar') u.orden = 'nada'; }
+    if (o && d.aire && u.casa) { // no persigue más allá de su radio de vuelo
+      const casa = m.porId.get(u.casa);
+      if (casa && Math.hypot(posX(o) - casa.cx, posY(o) - casa.cy) > d.radioVuelo + alc) { o = null; u.obj = 0; u.ruta = null; if (u.orden === 'atacar') u.orden = 'nada'; }
+    }
     if (!o && (m.t + u.id) % 5 === 0) {
       o = buscarEnemigo(m, u, u.x, u.y, alc + (u.guardia ? 0 : 2));
       if (o) { u.obj = o.id; u.ruta = null; u.pend = null; }
@@ -940,10 +994,11 @@
       q.prog += (factor * W.ritmo(fabs.length)) / enCurso;
       if (q.prog < UNID[tipo].tiempo || J.aguaUso + (UNID[tipo].agua || 0) > J.aguaProd) continue;
       q.n--; q.prog = 0; J.aguaUso += UNID[tipo].agua || 0;
-      const u = crearUnidad(m, j, tipo, cat === 'aire' ? Math.floor(fab.cy) * m.N + Math.floor(fab.cx) : W.cercaLibre(m, fab.cx, fab.y + fab.tam + 0.5)); // el avión sale sobre su pista
+      const u = crearUnidad(m, j, tipo, cat === 'aire' ? Math.floor(fab.cy) * m.N + Math.floor(fab.cx) : W.cercaLibre(m, fab.cx, fab.y + fab.tam + 0.5));
+      if (cat === 'aire') { const casa = aerodromoLibre(m, u) || fab; posar(m, u, casa); } // el avión nace posado en un aeródromo con sitio
       if (fab.reunion) { // va al punto de reunión del edificio
         if (tipo === 'cosechadora') u.pref = { x: fab.reunion.x, y: fab.reunion.y };
-        else if (cat === 'aire') asignar(m, u, { t: 'mover', x: fab.reunion.x, y: fab.reunion.y });
+        else if (cat === 'aire') u.patrulla = { pts: [{ x: fab.reunion.x, y: fab.reunion.y }], i: 0 }; // el punto de reunión de un aeródromo es un punto de patrulla
         else { const c = W.cercaLibre(m, fab.reunion.x, fab.reunion.y); asignar(m, u, { t: 'mover', x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 }); }
       } else if (tipo !== 'cosechadora' && cat !== 'aire') { // se aparta de la puerta, hacia el centro del mapa
         const cx = m.N / 2 - fab.cx, cy = m.N / 2 - fab.cy, cd = Math.hypot(cx, cy) || 1;

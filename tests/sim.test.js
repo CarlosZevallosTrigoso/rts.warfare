@@ -488,31 +488,46 @@ prueba('trincheras y orientación al llegar', () => {
   assert.ok(g.every((u) => Math.abs(u.ang + Math.PI / 2) < 0.05), 'y todas mirar hacia arriba');
 });
 
-prueba('fase 3: aviación, combustible y defensa antiaérea', () => {
+prueba('fase 3: aviación con aeródromo, cupo, patrulla, radio de vuelo y antiaérea', () => {
   const m = W.crearMundo(777, { N: 128 }), N = m.N, J = m.jug[0];
   m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
-  for (let y = 40; y < 90; y++) for (let x = 30; x < 100; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; } }
+  for (let y = 40; y < 90; y++) for (let x = 30; x < 126; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; } }
   for (let y = 58; y < 64; y++) for (let x = 60; x < 66; x++) { m.mapa.terreno[y * N + x] = 2; m.paso[y * N + x] = 0; } // un lago en medio
-  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  const avanza = (n, fn) => { for (let i = 0; i < n; i++) { W.tick(m); if (fn) fn(); } };
   const cel = (x, y) => y * N + x;
+  const lejos = (u, x, y) => Math.hypot(u.x - x, u.y - y);
   J.dios = true; m.jug[1].dios = true;
-  // el aeródromo pide nivel 2
+  // el aeródromo pide nivel 2; el avión nace posado en él
   assert.ok(!W.disponible(m, 0, W.EDIF.aerodromo), 'el aeródromo no debía estar disponible en nivel 1');
   J.nivel = 2;
   const ae = W.crearEdificio(m, 0, 'aerodromo', 40, 60);
   avanza(1);
   W.orden(m, { t: 'entrenar', j: 0, tipo: 'caza' }); avanza(W.UNID.caza.tiempo + 5);
   const caza = m.ents.find((e) => e.tipo === 'caza');
-  assert.ok(caza, 'el aeródromo debía producir un caza');
+  assert.ok(caza && caza.enTierra && caza.casa === ae.id, 'el caza debía nacer posado en su aeródromo');
   W.orden(m, { t: 'entrenar', j: 0, tipo: 'bombardero' }); avanza(5);
   assert.strictEqual(J.colas.bombardero.n, 0, 'el bombardero pide nivel 3');
-  // vuela en línea recta sobre el agua y puede quedarse encima
-  W.orden(m, { t: 'mover', j: 0, ids: [caza.id], x: 63.5, y: 61.5 }); avanza(200);
-  assert.ok(Math.hypot(caza.x - 63.5, caza.y - 61.5) < 0.7, 'el caza debía quedar sobre el lago: ' + caza.x.toFixed(1) + ',' + caza.y.toFixed(1));
-  // un tanque no puede dispararle; la infantería y la antiaérea sí
+  avanza(200);
+  assert.ok(caza.enTierra && caza.fuel === W.UNID.caza.fuel, 'sin órdenes se queda en tierra y no gasta combustible');
+  // posado no se le puede atacar; en vuelo sí
+  const sol = W.crearUnidad(m, 1, 'infanteria', cel(44, 63)); sol.recarga = 99999; sol.guardia = true;
+  assert.ok(!W.puedeAtacar(sol, caza), 'al avión posado lo cubre su aeródromo');
+  sol.vida = 0; avanza(2);
+  // mover: va en línea recta sobre el agua, pasa por el punto y vuelve a posarse
+  let cerca = Infinity;
+  W.orden(m, { t: 'mover', j: 0, ids: [caza.id], x: 63.5, y: 61.5 });
+  avanza(400, () => { cerca = Math.min(cerca, lejos(caza, 63.5, 61.5)); });
+  assert.ok(cerca < 1.6, 'el caza debía pasar sobre el lago: ' + cerca.toFixed(2));
+  assert.ok(caza.enTierra && caza.orden === 'nada', 'y volver solo a su aeródromo');
+  // patrulla sobre un punto: da vueltas sin detenerse
+  W.orden(m, { t: 'patrulla', j: 0, ids: [caza.id], x: 63.5, y: 61.5 }); avanza(200);
+  let maxD = 0, minV = Infinity;
+  avanza(300, () => { maxD = Math.max(maxD, lejos(caza, 63.5, 61.5)); minV = Math.min(minV, caza.v); });
+  assert.ok(!caza.enTierra && maxD < W.ECON.orbita + 2.5 && minV > 0.05, 'debía orbitar el punto: ' + maxD.toFixed(1) + ' · ' + minV.toFixed(3));
+  // un tanque no puede dispararle; la antiaérea sí, y solo a aviones
   const tq = W.crearUnidad(m, 1, 'tanque', cel(68, 61)), v0 = caza.vida;
   assert.ok(!W.puedeAtacar(tq, caza) && W.puedeAtacar(caza, tq));
-  caza.recarga = 99999; avanza(120);
+  caza.recarga = 99999; tq.recarga = 99999; avanza(60);
   assert.strictEqual(caza.vida, v0, 'el cañón del tanque no alcanza a un avión');
   tq.vida = 0; avanza(2);
   const aa = W.crearEdificio(m, 1, 'antiaerea', 67, 61); m.jug[1].prod = 999;
@@ -521,29 +536,50 @@ prueba('fase 3: aviación, combustible y defensa antiaérea', () => {
   assert.ok(m.porId.has(caza.id) && caza.vida < v0, 'la antiaérea debía herir al caza');
   assert.strictEqual(t2.vida, vt, 'la antiaérea no dispara a tierra');
   aa.vida = 0; t2.vida = 0; avanza(2);
-  // combustible: baja en vuelo, vuelve sola a repostar y se llena
-  caza.vida = caza.vidaMax; caza.fuel = 400;
-  W.orden(m, { t: 'mover', j: 0, ids: [caza.id], x: 95.5, y: 61.5 }); avanza(260);
+  // combustible: con lo justo vuelve, reposta posado y retoma sola la patrulla
+  caza.vida = caza.vidaMax; caza.fuel = 150; avanza(30);
   assert.ok(caza.repostando, 'con el combustible justo debía volver a base');
-  avanza(700);
-  assert.ok(!caza.repostando && caza.fuel > W.UNID.caza.fuel * 0.9 && Math.hypot(caza.x - ae.cx, caza.y - ae.cy) < 2.5, 'debía repostar en el aeródromo: ' + caza.fuel);
-  // sin aeródromo y sin combustible, cae
-  const c2 = W.crearUnidad(m, 1, 'caza', cel(80, 80)); c2.fuel = 5;
-  avanza(W.ECON.fuelCae + 20);
-  assert.ok(!m.porId.has(c2.id), 'un avión sin combustible ni base debía caer');
-  // bombardero: nivel 3, bombardea en área lo que hay en tierra y no puede con otros aviones
+  avanza(120);
+  assert.ok(caza.enTierra && caza.patrulla, 'debía posarse a repostar sin olvidar la patrulla');
+  avanza(400);
+  assert.ok(!caza.enTierra && !caza.repostando && lejos(caza, 63.5, 61.5) < W.ECON.orbita + 2.5 && caza.fuel > W.UNID.caza.fuel * 0.7, 'y despegar de nuevo a patrullar: ' + caza.fuel);
+  // radio de vuelo: no se aleja de su aeródromo más de lo que le toca
+  let maxR = 0;
+  W.orden(m, { t: 'mover', j: 0, ids: [caza.id], x: 125.5, y: 61.5 });
+  avanza(900, () => { maxR = Math.max(maxR, lejos(caza, ae.cx, ae.cy)); });
+  assert.ok(maxR > W.UNID.caza.radioVuelo - 2 && maxR < W.UNID.caza.radioVuelo + 0.5, 'debía llegar hasta su radio y no más: ' + maxR.toFixed(1));
+  assert.ok(caza.enTierra, 'y volver');
+  // cupo: cinco aviones por aeródromo
+  const cupo = W.ECON.cupoAviones;
+  for (let k = 0; k < cupo - 1; k++) W.crearUnidad(m, 0, 'caza', cel(41, 61));
+  avanza(40);
+  assert.ok(m.ents.filter((e) => e.tipo === 'caza' && e.j === 0).every((e) => e.enTierra && e.casa === ae.id), 'los cinco debían posarse en el aeródromo');
+  assert.strictEqual(new Set(m.ents.filter((e) => e.tipo === 'caza' && e.j === 0).map((e) => e.slot)).size, cupo, 'cada uno en su sitio');
+  W.orden(m, { t: 'entrenar', j: 0, tipo: 'caza' }); avanza(2);
+  assert.strictEqual(J.colas.caza.n, 0, 'con el cupo lleno no se encargan más aviones');
+  // bombardero: nivel 3, bombardea en área lo que hay en tierra, no puede con otros aviones y vuelve al acabar
   J.nivel = 3;
-  const bo = W.crearUnidad(m, 0, 'bombardero', cel(45, 70));
+  const ae2 = W.crearEdificio(m, 0, 'aerodromo', 40, 70); avanza(1);
+  const bo = W.crearUnidad(m, 0, 'bombardero', cel(41, 71)); avanza(30);
+  assert.ok(bo.enTierra && bo.casa === ae2.id, 'con el primero lleno, el bombardero va al segundo aeródromo');
   const ed = W.crearEdificio(m, 1, 'central', 70, 70), inf = W.crearUnidad(m, 1, 'infanteria', cel(72, 71)); inf.recarga = 99999; inf.guardia = true;
-  const c3 = W.crearUnidad(m, 1, 'caza', cel(50, 80)); c3.recarga = 99999; c3.fuel = 99999;
-  assert.ok(!W.puedeAtacar(bo, c3) && W.puedeAtacar(c3, bo));
-  W.orden(m, { t: 'atacar', j: 0, ids: [bo.id], obj: ed.id }); avanza(400);
+  const c3 = W.crearUnidad(m, 1, 'caza', cel(50, 84)); c3.recarga = 99999; c3.fuel = 99999; c3.orden = 'mover'; // un avión sin base, en vuelo
+  assert.ok(!W.puedeAtacar(bo, c3) && !W.puedeAtacar(c3, bo), 'ni el bombardero puede con un caza ni el caza con un avión posado');
+  W.orden(m, { t: 'atacar', j: 0, ids: [bo.id], obj: ed.id }); avanza(500);
   assert.ok(!m.porId.has(ed.id) || ed.vida < W.EDIF.central.vida * 0.6, 'el bombardero debía dañar el edificio: ' + ed.vida);
   assert.ok(!m.porId.has(inf.id) || inf.vida < 60, 'la bomba daña en área');
-  // el caza derriba al bombardero
-  c3.recarga = 0; bo.recarga = 99999; bo.fuel = 99999; bo.vida = bo.vidaMax;
+  // el caza derriba al bombardero en vuelo
+  const ed2 = W.crearEdificio(m, 1, 'central', 74, 76); ed2.vida = ed2.vidaMax = 99999;
+  bo.recarga = 99999; bo.fuel = 99999; bo.vida = bo.vidaMax; c3.recarga = 0;
+  W.orden(m, { t: 'atacar', j: 0, ids: [bo.id], obj: ed2.id }); avanza(60);
+  assert.ok(!bo.enTierra, 'el bombardero debía despegar hacia su blanco');
   W.orden(m, { t: 'atacar', j: 1, ids: [c3.id], obj: bo.id }); avanza(500);
   assert.ok(!m.porId.has(bo.id), 'el caza debía derribar al bombardero: ' + bo.vida);
+  // sin base y sin combustible, cae; y los posados caen con su aeródromo
+  c3.fuel = 5; avanza(W.ECON.fuelCae + 20);
+  assert.ok(!m.porId.has(c3.id), 'un avión sin combustible ni base debía caer');
+  ae.vida = 0; avanza(3);
+  assert.strictEqual(m.ents.filter((e) => e.tipo === 'caza' && e.j === 0).length, 0, 'los aviones posados se pierden con su aeródromo');
 });
 
 prueba('frente: torreta, giro del cuerpo, flancos y visión en cono', () => {

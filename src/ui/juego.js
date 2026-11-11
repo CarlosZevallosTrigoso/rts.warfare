@@ -143,7 +143,8 @@
         let t = (e.edif ? EDIF : UNID)[e.tipo].nombre + (e.j === YO ? '' : ' rival') + ' · ' + Math.ceil(e.vida) + '/' + e.vidaMax;
         if (e.tipo === 'cosechadora' && e.j === YO) t += ' · carga ' + e.carga;
         if (e.cava > 0) t += ' · cavando'; else if (e.guardia && e.j === YO && !W.enTrinchera(m, e)) t += ' · en guardia';
-        if (UNID[e.tipo] && UNID[e.tipo].aire && e.j === YO) t += e.repostando ? ' · vuelve a repostar' : ' · combustible ' + Math.round(e.fuel / UNID[e.tipo].fuel * 100) + ' %';
+        if (UNID[e.tipo] && UNID[e.tipo].aire && e.j === YO) t += (e.enTierra ? ' · en tierra' : e.repostando ? ' · vuelve a repostar' : e.patrulla ? ' · patrulla' : '') + ' · combustible ' + Math.round(e.fuel / UNID[e.tipo].fuel * 100) + ' %';
+        if (e.tipo === 'aerodromo' && e.j === YO) t += ' · aviones ' + m.ents.filter((u) => !u.edif && u.casa === e.id).length + '/' + W.ECON.cupoAviones;
         const ef = efectos(e); if (ef) t += ' · ' + ef;
         return t;
       }
@@ -350,11 +351,11 @@
         if (!veo(e)) continue;
         const wx = e.px + (e.x - e.px) * alfa, wy = e.py + (e.y - e.py) * alfa;
         if (fuera(wx, wy)) continue;
-        const d = UNID[e.tipo], px = ox + wx * z, py = oy + wy * z, r = Math.max(2, d.radio * z), g = giro(e);
+        const d = UNID[e.tipo], px = ox + wx * z, py = oy + wy * z, r = Math.max(2, d.radio * z * (e.enTierra ? 0.72 : 1)), g = giro(e); // posado se ve más pequeño: está abajo
         const anda = (e.x - e.px) ** 2 + (e.y - e.py) ** 2 > 1e-6;
         if (lod) { // sombra
           ctx.fillStyle = 'rgba(0,0,0,0.17)'; ctx.beginPath();
-          const alto = d.aire ? r * 1.5 : 0; // la sombra de un avión cae lejos: vuela
+          const alto = d.aire && !e.enTierra ? r * 1.5 : 0; // la sombra de un avión cae lejos: vuela
           if (alto) ctx.fillStyle = 'rgba(0,0,0,0.12)';
           ctx.ellipse(px + so * 0.8 + alto, py + so * 0.8 + alto, r * (d.cat === 'inf' ? 1.1 : 1.45), r * 1.1, g.a, 0, TAU); ctx.fill();
           if (anda && d.cat === 'veh' && !pausa) { // los vehículos dejan huella y levantan polvo
@@ -454,6 +455,18 @@
           ctx.globalAlpha = 0.8; flecha(ox + g.x * z, oy + g.y * z, raton.x, raton.y, P.tinta); ctx.globalAlpha = 1;
           ctx.fillStyle = P.tinta; ctx.fillText('clic: mirar hacia aquí', raton.x + 14, raton.y - 8);
         }
+      }
+      { // radio de vuelo: alrededor del aeródromo de cada avión seleccionado, o del aeródromo seleccionado
+        const vistos = new Set();
+        const aro = (b, rv) => { const kk = b.id + ':' + rv; if (vistos.has(kk)) return; vistos.add(kk); ctx.beginPath(); ctx.arc(ox + b.cx * z, oy + b.cy * z, rv * z, 0, TAU); ctx.stroke(); };
+        ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.globalAlpha = 0.35; ctx.setLineDash([8, 7]);
+        for (const id of sel) {
+          const e = m.porId.get(id);
+          if (!e || e.j !== YO) continue;
+          if (e.edif) { if (e.tipo === 'aerodromo') for (const t in UNID) if (UNID[t].aire) aro(e, UNID[t].radioVuelo); }
+          else if (UNID[e.tipo].aire && e.casa && m.porId.has(e.casa)) aro(m.porId.get(e.casa), UNID[e.tipo].radioVuelo);
+        }
+        ctx.setLineDash([]); ctx.globalAlpha = 1;
       }
       for (const s of signos) { // ! pide apoyo, ✓ acude
         const k = 6 + (s[2] === '!' ? Math.sin(performance.now() * 0.012) * 1.5 : 0);
@@ -716,17 +729,26 @@
       const k = (t) => '<kbd>' + t + '</kbd>';
       if (us.length) {
         const armadas = us.some((u) => UNID[u.tipo].arma);
-        L.push('clic derecho: mover' + (armadas ? ' o atacar' : '') + ' · otro clic cerca: orientar');
+        const soloAire = us.every((u) => UNID[u.tipo].aire);
+        if (soloAire) L.push('clic derecho: ir y volver, o atacar · ' + k('S') + ' volver ya');
+        else L.push('clic derecho: mover' + (armadas ? ' o atacar' : '') + ' · otro clic cerca: orientar');
         if (us.some((u) => u.tipo === 'cosechadora')) L.push('clic derecho en una veta: cosechar');
-        L.push((armadas ? k('A') + ' atacar al avanzar · ' : '') + k('R') + ' patrulla · ' + k('E') + ' explorar');
-        L.push(k('S') + ' detener · ' + k('G') + ' guardia · ' + k('Mayús') + ' encadenar');
+        if (!soloAire) {
+          L.push((armadas ? k('A') + ' atacar al avanzar · ' : '') + k('R') + ' patrulla · ' + k('E') + ' explorar');
+          L.push(k('S') + ' detener · ' + k('G') + ' guardia · ' + k('Mayús') + ' encadenar');
+        }
         if (us.length > 1) L.push(k('F') + ' formación: ' + forma);
         if (paraCavar().length) L.push(k('Z') + ' atrincherarse');
         const n = {}; for (const u of us) { const ef = efectos(u); if (ef) n[ef] = (n[ef] || 0) + 1; }
         for (const ef in n) L.push('<b>' + (us.length > 1 ? n[ef] + ' en ' : 'en ') + ef + '</b>');
       }
-      if (us.some((u) => UNID[u.tipo].aire)) L.push('<b>aviones: vuelan sobre todo; repostan solos en el aeródromo</b>');
-      if (eds.some((e) => e.tipo === 'cuartel' || e.tipo === 'fabrica' || e.tipo === 'aerodromo') && !us.length) L.push('clic derecho: punto de reunión');
+      if (us.some((u) => UNID[u.tipo].aire)) {
+        L.push('<b>aviones: al acabar la orden vuelven a su aeródromo</b>');
+        L.push(k('R') + ' patrulla aérea: da vueltas sobre el punto; con ' + k('Mayús') + ', más puntos');
+        L.push('repostan solos y retoman la patrulla · círculo: radio de vuelo');
+      }
+      if (eds.some((e) => e.tipo === 'cuartel' || e.tipo === 'fabrica') && !us.length) L.push('clic derecho: punto de reunión');
+      if (eds.some((e) => e.tipo === 'aerodromo') && !us.length) L.push('clic derecho: punto que patrullarán los aviones nuevos · ' + W.ECON.cupoAviones + ' aviones por aeródromo');
       if (vendibles().length) L.push(k('Supr') + ' demoler y recuperar la mitad');
       if (L.length) L.push(k('Mayús+1…9') + ' guardar grupo · ' + k('Esc') + ' soltar');
       return L.map((t) => '<div>' + t + '</div>').join('');
@@ -831,6 +853,7 @@
           const q = J.colas[o.tipo], n = q.n;
           if (n) { nombre += ' ×' + n; clase += ' con-x'; }
           if (n) { p = q.prog / d.tiempo; if (q.sinAgua) txt = 'falta agua'; }
+          if (d.aire && J.cuenta.aerodromo) { const c = W.cupoAire(m, YO); if (c.hay >= c.cupo) { txt = 'cupo ' + c.hay + '/' + c.cupo; clase += ' caro'; } }
           if (!req) clase += ' no'; else if (caro || (n && q.sinAgua)) clase += ' caro';
         }
         if (o.b.className !== clase) o.b.className = clase;
@@ -926,6 +949,7 @@
           if (!us.some((u) => UNID[u.tipo].arma && W.puedeAtacar(u, o))) aviso(UNID[o.tipo] && UNID[o.tipo].aire ? 'Estas unidades no alcanzan a los aviones' : 'Estas unidades no pueden atacar eso');
           W.orden(m, { t: 'atacar', j: YO, ids, obj: o.id, enc }); marca(wx, wy, P.mal); return;
         }
+        if (us.some((u) => { const b = UNID[u.tipo].aire && u.casa ? m.porId.get(u.casa) : null; return b && Math.hypot(wx - b.cx, wy - b.cy) > UNID[u.tipo].radioVuelo; })) aviso('Fuera del radio de vuelo: el avión llegará hasta el límite');
         const cos = us.filter((u) => u.tipo === 'cosechadora').map((u) => u.id);
         if (cos.length && m.mapa.tipoMin[c] >= 1 && m.niebla[YO][c]) {
           W.orden(m, { t: 'cosechar', j: YO, ids: cos, x: wx, y: wy });
@@ -933,7 +957,7 @@
           if (resto.length) W.orden(m, { t: 'mover', j: YO, ids: resto, x: wx, y: wy, enc, forma });
         } else {
           W.orden(m, { t: 'mover', j: YO, ids, x: wx, y: wy, enc, forma });
-          if (!enc) giroPend = { tipo: 'mover', ids, x: wx, y: wy, forma, t0: performance.now() };
+          if (!enc && us.some((u) => !UNID[u.tipo].aire)) giroPend = { tipo: 'mover', ids, x: wx, y: wy, forma, t0: performance.now() }; // a un avión no se le orienta: vuelve a casa
         }
         marca(wx, wy, P.bien); son.orden();
     }
