@@ -2,17 +2,18 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
 <title>rts.warfare</title>
 <style>
   :root { --fondo: #e4e4e4; --panel: #f4f4f4; --tinta: #1a1a1a; --suave: #6e6e6e; --linea: #bdbdbd; --relleno: #cfcfcf; --mal: #b0362f; }
   body[data-tema="oscura"] { --fondo: #1c1c1c; --panel: #262626; --tinta: #e6e6e6; --suave: #9a9a9a; --linea: #444444; --relleno: #474747; --mal: #d0554a; }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
-  html, body { height: 100%; margin: 0; }
+  html, body { height: 100%; margin: 0; overscroll-behavior: none; touch-action: manipulation; }
   body { background: var(--fondo); color: var(--tinta); font: 12px/1.45 "Fira Code", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow: hidden; user-select: none; -webkit-user-select: none; }
   #app { display: grid; grid-template-columns: 1fr 236px; height: 100%; }
-  #lienzo { width: 100%; height: 100%; display: block; cursor: crosshair; min-width: 0; }
+  #lienzo { width: 100%; height: 100%; display: block; cursor: crosshair; min-width: 0; touch-action: none; }
   #barra { border-left: 1px solid var(--linea); padding: 12px 13px 0; overflow: hidden; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
   #panel { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; margin: 0 -13px; padding: 2px 13px 14px; border-top: 1px solid var(--linea); }
   #recursos, #mini, #titulo { flex: none; }
@@ -60,6 +61,18 @@
   #formas .grupo { justify-content: center; }
   #vender, #trinchera, #retiro { justify-content: center; margin-top: 4px; }
   .chip.debe { border-style: dashed; color: var(--suave); }
+  /* Táctil: botonera sobre el mapa para lo que con teclado son teclas, y controles más grandes. */
+  #tactil { position: fixed; left: 150px; right: 244px; bottom: 8px; z-index: 3; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; align-items: flex-end; pointer-events: none; }
+  #tactil button { pointer-events: auto; font: inherit; font-size: 12px; color: var(--tinta); background: var(--panel); border: 1px solid var(--linea); border-radius: 3px; min-height: 40px; padding: 6px 11px; opacity: 0.94; }
+  #tactil button:active { background: var(--tinta); color: var(--fondo); }
+  #tactil button.on { background: var(--tinta); color: var(--fondo); border-color: var(--tinta); }
+  #tactil .sep { flex-basis: 100%; height: 0; }
+  body.tactil #contexto { display: none; }
+  body.tactil .btn { padding: 10px 9px; margin-bottom: 6px; }
+  body.tactil .btn .x { margin: -10px -9px -10px 8px; padding: 10px 13px; }
+  body.tactil .chip { padding: 8px 9px; font-size: 12px; }
+  body.tactil .grupo { padding: 9px 10px; font-size: 12px; }
+  body.tactil #ayuda summary { padding: 8px 10px; }
   #abajo { position: fixed; left: 8px; bottom: 8px; z-index: 3; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; pointer-events: none; }
   #rend { border-collapse: collapse; background: var(--panel); border: 1px solid var(--linea); border-radius: 2px; font-size: 10px; line-height: 1.35; opacity: 0.92; pointer-events: auto; cursor: pointer; }
   #rend td { padding: 0 6px; } #rend td:last-child { text-align: right; color: var(--tinta); font-variant-numeric: tabular-nums; }
@@ -119,6 +132,8 @@
       <div><kbd>A</kbd> atacar al avanzar · <kbd>S</kbd> detener</div>
       <div>arrastrar con clic derecho, o flechas: cámara</div>
       <div>trackpad: dos dedos desplazan, pellizco zoom</div>
+      <div>táctil: toque elige; con tropa elegida, toque en el mapa ordena;</div>
+      <div>arrastrar un dedo: caja · dos dedos: mover y zoom</div>
       <div>rueda o <kbd>+</kbd> <kbd>−</kbd>: zoom · <kbd>M</kbd> cambia rueda</div>
       <div><kbd>H</kbd> base · <kbd>espacio</kbd> alerta</div>
       <div><kbd>Mayús+1…9</kbd> guardar grupo · <kbd>1…9</kbd> elegirlo, dos veces ir</div>
@@ -136,6 +151,11 @@
       <div id="semilla"></div>
       <div>escribe <kbd>god</kbd>: recursos infinitos</div>
   </details>
+  <div id="tactil" hidden>
+    <button type="button" data-c="KeyA" data-u>atacar al avanzar</button><button type="button" data-c="KeyR" data-u>patrulla</button><button type="button" data-c="KeyS" data-u>detener</button><button type="button" data-c="KeyG" data-u>guardia</button><button type="button" data-c="KeyF" data-u>formación</button><button type="button" data-c="KeyE" data-u>explorar</button>
+    <span class="sep"></span>
+    <button type="button" data-c="Escape">soltar</button><button type="button" data-c="KeyB">patio</button><button type="button" data-c="KeyQ">cuarteles</button><button type="button" data-c="KeyV">fábricas</button><button type="button" data-c="KeyX">aeródromos</button><button type="button" data-c="Space">alerta</button><button type="button" data-c="KeyP">pausa</button>
+  </div>
   <div id="abajo"><table id="rend" class="tenue" title="Rendimiento del último segundo. Clic para plegar."></table><div id="contexto" class="tenue" hidden></div></div>
   <aside id="barra">
     <h1 id="titulo" title="Recargar">rts<span>.</span>warfare<b id="dios" hidden>GOD</b><b id="sinColmena" hidden>SIN COLMENA</b></h1>

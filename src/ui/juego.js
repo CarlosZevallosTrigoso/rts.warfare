@@ -110,12 +110,12 @@
     const visible = (x, y) => x >= 0 && y >= 0 && x < N && y < N && m.niebla[YO][Math.floor(y) * N + Math.floor(x)] === 2;
     const veo = (e) => e.j === YO || visible(e.edif ? e.cx : e.x, e.edif ? e.cy : e.y);
 
-    function entEn(wx, wy) {
+    function entEn(wx, wy, holgura) { // holgura: margen extra (en celdas) para acertar con el dedo
       let mejor = null, md = Infinity;
       for (const e of m.ents) {
         if (!veo(e)) continue;
         if (e.edif) { if (wx >= e.x && wx < e.x + e.tam && wy >= e.y && wy < e.y + e.tam && md > 50) { mejor = e; md = 50; } }
-        else { const d = Math.hypot(e.x - wx, e.y - wy); if (d < UNID[e.tipo].radio + 0.3 && d < md) { mejor = e; md = d; } }
+        else { const d = Math.hypot(e.x - wx, e.y - wy); if (d < UNID[e.tipo].radio + 0.3 + (holgura || 0) && d < md) { mejor = e; md = d; } }
       }
       return mejor;
     }
@@ -558,7 +558,7 @@
         ctx.globalAlpha = 1;
       }
       // Etiqueta de lo que hay bajo el cursor.
-      if (raton.dentro && !raton.izq && !raton.arrastre && !raton.medio && !giroCerca) {
+      if (raton.dentro && !raton.izq && !raton.arrastre && !raton.medio && !giroCerca && !toque) {
         const txt = bajoCursor();
         if (txt) {
           const w = ctx.measureText(txt).width + 12, x = Math.min(raton.x + 14, cw - w - 4), y = Math.min(raton.y + 18, ch - 22);
@@ -905,7 +905,7 @@
       b.addEventListener('click', () => {
         son.activar();
         if (esEdif) {
-          if (obraLista(tipo)) { modo = 'colocar'; tipoColocar = tipo; }
+          if (obraLista(tipo)) { modo = 'colocar'; tipoColocar = tipo; if (tactil) aviso('Arrastra sobre el mapa y suelta para colocar'); }
           else W.orden(m, { t: 'construir', j: YO, tipo });
         } else W.orden(m, { t: 'entrenar', j: YO, tipo, ids: edificiosSel(LUGAR[d.cat]).map((e) => e.id) });
       });
@@ -966,7 +966,7 @@
         o.b.style.setProperty('--p', (p * 100).toFixed(1) + '%');
       }
       $('secUnid').hidden = !hayUnid;
-      listarGrupos(); actualizarTec();
+      listarGrupos(); actualizarTec(); actualizarTactil();
       const enCurso = new Set(J.obras.filter((a) => !a.listo).map((a) => a.tipo)).size;
       const reparto = enCurso > 1 ? enCurso + ' tipos a la vez: cada uno a 1/' + enCurso + ' de velocidad' : '';
       if ($('obras').textContent !== reparto) $('obras').textContent = reparto;
@@ -1125,9 +1125,86 @@
     lienzo.addEventListener('gesturechange', (ev) => { ev.preventDefault(); if (ev.scale > 0) { zoom(ev.scale / escalaGesto); escalaGesto = ev.scale; } });
     lienzo.addEventListener('gestureend', (ev) => ev.preventDefault());
 
+    // ---------- táctil (dedo o lápiz) ----------
+    // Los toques se traducen a los mismos gestos de ratón, para que todo siga un solo camino:
+    // toque sobre algo propio = clic (elegir); toque en el mapa con tropa elegida = clic derecho (ordenar);
+    // arrastrar un dedo = caja de selección; dos dedos = desplazar y hacer zoom. En un modo (colocar, patrulla…),
+    // arrastrar mueve el cursor y al soltar se confirma.
+    let tactil = false, toque = null;
+    function activarTactil() { if (tactil) return; tactil = true; document.body.classList.add('tactil'); $('tactil').hidden = false; }
+    if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) activarTactil();
+    window.addEventListener('touchstart', activarTactil, { passive: true });
+    const raton2 = (tipo, x, y, boton) => (tipo === 'mousedown' ? lienzo : window).dispatchEvent(new MouseEvent(tipo, { clientX: x, clientY: y, button: boton, bubbles: true }));
+    const entreDedos = (ts) => ({ d: Math.hypot(ts[0].clientX - ts[1].clientX, ts[0].clientY - ts[1].clientY), x: (ts[0].clientX + ts[1].clientX) / 2, y: (ts[0].clientY + ts[1].clientY) / 2 });
+    function tocar(x, y) {
+      posRaton({ clientX: x, clientY: y });
+      const wx = aMundoX(raton.x), wy = aMundoY(raton.y), e = entEn(wx, wy, 14 / cam.z);
+      const hayTropa = unidadesSel().length > 0, hayFabrica = edificiosSel().some((b) => b.tipo === 'cuartel' || b.tipo === 'fabrica' || b.tipo === 'aerodromo');
+      if (e && !e.edif) { const r = lienzo.getBoundingClientRect(); x = r.left + cw / 2 + (e.x - cam.x) * cam.z; y = r.top + ch / 2 + (e.y - cam.y) * cam.z; } // el toque se centra en la unidad
+      const boton = e && e.j === YO ? 0 : hayTropa || (hayFabrica && !e) ? 2 : 0;
+      raton2('mousedown', x, y, boton); raton2('mouseup', x, y, boton);
+    }
+    lienzo.addEventListener('touchstart', (ev) => {
+      ev.preventDefault(); activarTactil(); son.activar();
+      const ts = ev.touches;
+      if (ts.length === 1) {
+        toque = { x0: ts[0].clientX, y0: ts[0].clientY, x: ts[0].clientX, y: ts[0].clientY, caja: false, dos: false };
+        raton.dentro = true; raton2('mousemove', toque.x, toque.y, 0);
+      } else if (ts.length === 2) {
+        if (toque && toque.caja) { raton.izq = false; } // la caja a medias se descarta
+        toque = Object.assign({ dos: true }, entreDedos(ts));
+      }
+    }, { passive: false });
+    lienzo.addEventListener('touchmove', (ev) => {
+      ev.preventDefault();
+      const ts = ev.touches;
+      if (!toque) return;
+      if (toque.dos) {
+        if (ts.length < 2) return;
+        const g = entreDedos(ts);
+        cam.x -= (g.x - toque.x) / cam.z; cam.y -= (g.y - toque.y) / cam.z; limitarCam();
+        posRaton({ clientX: g.x, clientY: g.y });
+        if (toque.d > 0 && g.d > 0) zoom(g.d / toque.d);
+        toque.d = g.d; toque.x = g.x; toque.y = g.y;
+        return;
+      }
+      toque.x = ts[0].clientX; toque.y = ts[0].clientY;
+      if (!modo && !toque.caja && Math.hypot(toque.x - toque.x0, toque.y - toque.y0) > 12) { toque.caja = true; raton2('mousedown', toque.x0, toque.y0, 0); }
+      raton2('mousemove', toque.x, toque.y, 0);
+    }, { passive: false });
+    const finToque = (ev) => {
+      ev.preventDefault();
+      if (!toque) return;
+      if (toque.dos) { if (ev.touches.length === 0) { toque = null; raton.dentro = false; } return; }
+      const q = toque; toque = null;
+      if (q.caja) raton2('mouseup', q.x, q.y, 0);
+      else if (modo) { raton2('mousedown', q.x, q.y, 0); raton2('mouseup', q.x, q.y, 0); }
+      else tocar(q.x, q.y);
+      raton.dentro = false;
+    };
+    lienzo.addEventListener('touchend', finToque, { passive: false });
+    lienzo.addEventListener('touchcancel', (ev) => { ev.preventDefault(); if (toque && toque.caja) raton.izq = false; toque = null; raton.dentro = false; }, { passive: false });
+    // Botonera: cada botón hace lo mismo que su tecla.
+    $('tactil').addEventListener('click', (ev) => {
+      const b = ev.target.closest('button'); if (!b) return;
+      const c = b.dataset.c;
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: c, key: c.startsWith('Key') ? c.slice(3).toLowerCase() : c === 'Space' ? ' ' : c }));
+      window.dispatchEvent(new KeyboardEvent('keyup', { code: c }));
+    });
+    function actualizarTactil() {
+      if (!tactil) return;
+      const hay = unidadesSel().length > 0;
+      for (const b of $('tactil').children) {
+        if (b.dataset.u !== undefined && b.hidden === hay) b.hidden = !hay;
+        const on = (b.dataset.c === 'KeyA' && modo === 'amover') || (b.dataset.c === 'KeyR' && modo === 'patrulla') || (b.dataset.c === 'KeyP' && pausa);
+        if (b.classList.contains('on') !== on) b.classList.toggle('on', on);
+      }
+    }
+
     let miniAbajo = false;
     function irMini(ev) { const r = mini.getBoundingClientRect(); cam.x = ((ev.clientX - r.left) / r.width) * N; cam.y = ((ev.clientY - r.top) / r.height) * N; limitarCam(); }
     mini.addEventListener('mousedown', (ev) => { miniAbajo = true; irMini(ev); });
+    for (const tipo of ['touchstart', 'touchmove']) mini.addEventListener(tipo, (ev) => { ev.preventDefault(); if (ev.touches[0]) irMini(ev.touches[0]); }, { passive: false });
     window.addEventListener('mousemove', (ev) => { if (miniAbajo) irMini(ev); });
     window.addEventListener('mouseup', () => { miniAbajo = false; });
 
