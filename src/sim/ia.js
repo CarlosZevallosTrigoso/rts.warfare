@@ -142,10 +142,13 @@
     let donde = patio, planBase = null;
     if (segundo && !obra && !urgente) {
       const cerca = (tipo) => m.ents.some((e) => e.j === j && e.tipo === tipo && Math.hypot(e.cx - segundo.cx, e.cy - segundo.cy) < 16);
-      if (!cerca('refineria') && W.tieneReq(m, j, EDIF.refineria.req)) planBase = 'refineria'; else if (!cerca('torreta') && W.tieneReq(m, j, EDIF.torreta.req)) planBase = 'torreta';
+      if (!cerca('refineria') && W.tieneReq(m, j, EDIF.refineria.req)) planBase = 'refineria'; else if (m.logistica !== false && !cerca('central')) planBase = 'central'; /* su red es otra: necesita su propia central */ else if (!cerca('torreta') && W.tieneReq(m, j, EDIF.torreta.req)) planBase = 'torreta';
     }
-    if (obra && segundo && (obra.tipo === 'refineria' || obra.tipo === 'torreta') && !m.ents.some((e) => e.j === j && e.tipo === obra.tipo && Math.hypot(e.cx - segundo.cx, e.cy - segundo.cy) < 16)) donde = segundo;
-    const plan = obra || urgente ? null : planBase || siguienteEdificio(m, j, patio, ia.plan);
+    if (obra && segundo && (obra.tipo === 'refineria' || obra.tipo === 'torreta' || (obra.tipo === 'central' && m.logistica !== false)) && !m.ents.some((e) => e.j === j && e.tipo === obra.tipo && Math.hypot(e.cx - segundo.cx, e.cy - segundo.cy) < 16)) donde = segundo;
+    // La red: terminada su vía, levanta un depósito en la punta, para que la cobertura (suministro y territorio) llegue hasta allí.
+    const quiereDeposito = m.logistica !== false && ia.via && ia.viaFin && !J.cuenta.deposito && W.tieneReq(m, j, EDIF.deposito.req) && J.minerales > 900 && m.ents.some((e) => e.infra && e.j === j && e.conRed);
+    if (obra && obra.tipo === 'deposito' && ia.viaFin) donde = { cx: ia.viaFin.x, cy: ia.viaFin.y };
+    const plan = obra || urgente ? null : planBase || (quiereDeposito ? 'deposito' : siguienteEdificio(m, j, patio, ia.plan));
     if (obra && obra.listo) {
       const p = buscarSitio(m, j, obra.tipo, donde) || buscarSitio(m, j, obra.tipo, patio);
       if (p) { W.orden(m, { t: 'colocar', j, tipo: obra.tipo, x: p.x, y: p.y }); ia.fallos = 0; }
@@ -168,7 +171,13 @@
       }
       ia.campoCerrado = hay < 6000 && lejos >= 0 ? lejos : -1;
     }
-    if (ia.campoCerrado >= 0 && J.cuenta.fabrica) {
+    // La red: un extractor o una estación sin conexión rinde la mitad. La excavadora le lleva un camino desde donde esté (que es la red: su base o su vía).
+    const suelto = m.logistica !== false && J.cuenta.fabrica && J.minerales > 500 ? m.ents.find((e) => e.edif && !e.infra && e.j === j && !e.conRed && EDIF[e.tipo].da && m.t - e.nace > 40) : null;
+    if (suelto) {
+      const exc = sinArma.find((u) => u.tipo === 'excavadora');
+      if (!exc) { if (!J.colas.excavadora.n && W.puedePagar(J, UNID.excavadora)) W.orden(m, { t: 'entrenar', j, tipo: 'excavadora' }); }
+      else if (exc.orden === 'nada' && m.t % 40 === 0) { const c = W.cercaLibre(m, suelto.cx, suelto.y + suelto.tam + 1.5, true); W.orden(m, { t: 'trazar', j, ids: [exc.id], x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 }); }
+    } else if (ia.campoCerrado >= 0 && J.cuenta.fabrica) {
       const exc = sinArma.find((u) => u.tipo === 'excavadora');
       if (!exc) { if (!J.colas.excavadora.n && W.puedePagar(J, UNID.excavadora)) W.orden(m, { t: 'entrenar', j, tipo: 'excavadora' }); }
       else if (exc.orden === 'nada' && J.minerales > 300) { W.orden(m, { t: 'trazar', j, ids: [exc.id], x: (ia.campoCerrado % m.N) + 0.5, y: ((ia.campoCerrado / m.N) | 0) + 0.5 }); ia.campoCerrado = -1; }

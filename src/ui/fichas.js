@@ -388,6 +388,10 @@
       }
       c.fillStyle = tinta; c.beginPath(); c.arc(cx, cy, t * 0.05, 0, TAU); c.fill();
       if (lod === 2) { c.fillStyle = col.osc; c.fillRect(X(0.1), Y(0.76), t * 0.2, t * 0.12); c.fillRect(X(0.74), Y(0.1), t * 0.14, t * 0.14); }
+    } else if (e.tipo === 'deposito') { // cajas apiladas y, si está conectado, el rombo de la red encendido
+      c.lineWidth = lw; c.strokeStyle = col.luz; c.fillStyle = col.osc;
+      for (const [fx, fy] of [[0.14, 0.16], [0.52, 0.16], [0.14, 0.54]]) { c.fillRect(X(fx), Y(fy), t * 0.32, t * 0.3); c.strokeRect(X(fx), Y(fy), t * 0.32, t * 0.3); if (lod === 2) { c.beginPath(); c.moveTo(X(fx), Y(fy + 0.15)); c.lineTo(X(fx + 0.32), Y(fy + 0.15)); c.stroke(); } }
+      c.fillStyle = s.deficit ? col.mal : col.luz; c.beginPath(); c.moveTo(X(0.7), Y(0.56)); c.lineTo(X(0.84), Y(0.7)); c.lineTo(X(0.7), Y(0.84)); c.lineTo(X(0.56), Y(0.7)); c.closePath(); c.fill();
     }
     danos(c, cx, cy, t, col, s);
   };

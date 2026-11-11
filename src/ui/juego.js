@@ -18,7 +18,7 @@
     const $ = (id) => document.getElementById(id);
     const params = new URLSearchParams(location.search);
     try { if (localStorage.getItem('rts.tema') === 'oscura') document.body.dataset.tema = 'oscura'; } catch (e) { /* tema por defecto */ }
-    const op = { n: '512', min: '2500', ia: 'normal', est: 'azar' };
+    const op = { n: '512', min: '2500', ia: 'normal', est: 'azar', red: 'si' };
     for (const k in op) {
       const cont = $('op-' + k), v = params.get(k);
       if (v && cont.querySelector('[data-v="' + CSS.escape(v) + '"]')) op[k] = v;
@@ -30,12 +30,12 @@
     const empezar = () => {
       let semilla = parseInt($('op-s').value, 10);
       if (!Number.isFinite(semilla) || semilla < 0) semilla = Math.floor(Date.now() % 1000000);
-      const q = 's=' + semilla + '&n=' + op.n + '&min=' + op.min + '&ia=' + op.ia + '&est=' + op.est;
+      const q = 's=' + semilla + '&n=' + op.n + '&min=' + op.min + '&ia=' + op.ia + '&est=' + op.est + '&red=' + op.red;
       try { history.replaceState(null, '', location.pathname + '?' + q); } catch (e) { /* en file:// puede no dejar */ }
       $('menu').hidden = true;
       let rep = null; // ?rep=1: se vuelve a ver la partida apuntada en esta pestaña
       if (params.get('rep')) { try { const g = JSON.parse(sessionStorage.getItem('rts.rep')); if (g && g.q === q && Array.isArray(g.c)) rep = g; } catch (e) { /* sin repetición: partida normal */ } }
-      W.jugar({ semilla, N: +op.n, inicio: +op.min, ia: op.ia, estilo: op.est, consulta: q, repeticion: rep });
+      W.jugar({ semilla, N: +op.n, inicio: +op.min, ia: op.ia, estilo: op.est, red: op.red, consulta: q, repeticion: rep });
     };
     $('empezar').addEventListener('click', empezar);
     // Partida guardada: se ofrece continuarla, y con ?cargar=1 se entra directo (así funciona «cargar la guardada» desde dentro).
@@ -60,7 +60,7 @@
     const $ = (id) => document.getElementById(id);
     const semilla = op.semilla;
     const cargado = op.guardado || null; // partida guardada: el mundo y la IA vienen ya hechos
-    const m = cargado ? cargado.m : W.crearMundo(semilla, { N: op.N, inicio: op.inicio }), estilos = Object.keys(W.ESTILOS_IA);
+    const m = cargado ? cargado.m : W.crearMundo(semilla, { N: op.N, inicio: op.inicio, logistica: op.red !== 'no' }), estilos = Object.keys(W.ESTILOS_IA);
     const rep = op.repeticion ? op.repeticion.c : null, repFin = op.repeticion ? op.repeticion.fin : 0; // repetición: las órdenes apuntadas de una partida; se reproducen solas, sin rival que piense ni jugador que mande
     if (rep) m.soloRep = true; else if (!cargado) m.registro = [];
     let repI = 0, repVel = 1, repAvisado = false;
@@ -93,6 +93,13 @@
     // ---------- capas pre-dibujadas ----------
     const cTerr = document.createElement('canvas'); cTerr.width = cTerr.height = N;
     const xTerr = cTerr.getContext('2d');
+    const cRed = document.createElement('canvas'); cRed.width = cRed.height = N; // la cobertura de la red propia, para la vista de la red
+    const xRed = cRed.getContext('2d'), conRed = m.logistica !== false; let verRed = false, redVista = -1;
+    function pintarRed() {
+      const f = W.cobertura(m, YO), img = xRed.createImageData(N, N), d = img.data, c = hex(P.yo);
+      for (let i = 0; i < N * N; i++) if (f[i]) { d[i * 4] = c[0]; d[i * 4 + 1] = c[1]; d[i * 4 + 2] = c[2]; d[i * 4 + 3] = 46; }
+      xRed.putImageData(img, 0, 0); redVista = m.redV;
+    }
     const cNie = document.createElement('canvas'); cNie.width = cNie.height = N;
     const xNie = cNie.getContext('2d'), imgNie = xNie.createImageData(N, N);
     function pintarTerreno() {
@@ -138,7 +145,7 @@
 
     // Volumen: la vista sigue siendo cenital, pero cada cosa tiene altura. Los edificios muestran su pared sur y el tejado
     // se dibuja desplazado hacia arriba; las unidades llevan un canto; la roca y el agua, un escalón.
-    const ALTO = { patio: 0.3, central: 0.36, refineria: 0.32, bomba: 0.2, cuartel: 0.26, extractor: 0.3, fabrica: 0.34, torreta: 0.22, torreCanon: 0.36, aerodromo: 0.08, antiaerea: 0.22, estacion: 0.26 };
+    const ALTO = { patio: 0.3, central: 0.36, refineria: 0.32, bomba: 0.2, cuartel: 0.26, extractor: 0.3, fabrica: 0.34, torreta: 0.22, torreCanon: 0.36, aerodromo: 0.08, antiaerea: 0.22, estacion: 0.26, deposito: 0.22 };
     function entEn(wx, wy, holgura) { // holgura: margen extra (en celdas) para acertar con el dedo
       let mejor = null, md = Infinity;
       for (const e of m.ents) {
@@ -189,6 +196,7 @@
         if (!e.edif && UNID[e.tipo].mando && e.j === YO) t += e.sinInfo ? ' · sin información: apagado' : ' · mando activo';
         if (!e.edif && e.j === YO && W.oculta(m, e)) t += ' · oculta';
         if (e.retirando) t += ' · se retira a reparar'; else if (e.huye > m.t) t += ' · huye';
+        if (e.j === YO && conRed) { if (e.edif && !e.infra && !e.conRed) t += e.tipo === 'deposito' ? ' · sin conexión: llévale un camino desde tu base' : ' · fuera de la red'; if (e.infra && !e.conRed) t += ' · no llega a tu base'; if (e.sinLuz) t += ' · sin energía: a media marcha'; if (!e.edif && e.sinSum >= W.ECON.sinSum) t += ' · sin suministro: dispara más lento y no se repara'; }
         if (e.tipo === 'aerodromo' && e.j === YO) t += ' · aviones ' + m.ents.filter((u) => !u.edif && u.casa === e.id).length + '/' + W.ECON.cupoAviones;
         const ef = efectos(e); if (ef) t += ' · ' + ef;
         return t;
@@ -286,6 +294,7 @@
         ctx.fillStyle = COL.rocaLuz; ctx.fill(luz);
         ctx.fillStyle = COL.copa; ctx.fill(copas);
       }
+      if (conRed && (verRed || modo === 'colocar')) { if (redVista !== m.redV) pintarRed(); ctx.drawImage(cRed, ox, oy, N * z, N * z); } // la cobertura: dónde hay suministro y dónde se puede construir
       const tramos = m.ents.filter((e) => e.infra); // caminos: cada tramo es una pieza de infraestructura, dibujada como un carril continuo con su borde
       if (tramos.length) {
         const linea = (p) => { ctx.moveTo(ox + p[0] * z, oy + p[1] * z); if (p.length < 4) ctx.lineTo(ox + p[0] * z + 0.01, oy + p[1] * z); for (let k = 2; k < p.length; k += 2) ctx.lineTo(ox + p[k] * z, oy + p[k + 1] * z); };
@@ -314,6 +323,11 @@
             ctx.stroke();
           }
           ctx.globalAlpha = 1;
+        }
+        if (conRed && verRed) { // en la vista de la red, los caminos propios que no llegan a la base se marcan en rojo
+          ctx.strokeStyle = P.mal; ctx.lineWidth = Math.max(1.5, z * 0.12); ctx.setLineDash([6, 5]); ctx.beginPath();
+          for (const e of tramos) if (e.j === YO && !e.conRed) linea(e.pts);
+          ctx.stroke(); ctx.setLineDash([]);
         }
         for (const e of tramos) { // el tramo dañado se oscurece; el seleccionado se marca, con su barra de vida
           const dano = 1 - e.vida / e.vidaMax, elegido = sel.has(e.id);
@@ -455,7 +469,7 @@
       for (const e of m.ents) {
         if (!e.edif || e.infra || !veo(e) || fuera(e.cx, e.cy) && fuera(e.x, e.y)) continue;
         const px = ox + e.x * z, py = oy + e.y * z, t = e.tam * z, Je = m.jug[e.j];
-        const est = { tiempo, id: e.id, vida: e.vida / e.vidaMax, deficit: Je.uso > Je.prod, activo: false, descarga: descargando.has(e.id), ang: 0, retro: 0 };
+        const est = { tiempo, id: e.id, vida: e.vida / e.vidaMax, deficit: !!e.sinLuz || (e.tipo === 'deposito' && !e.conRed), activo: false, descarga: descargando.has(e.id), ang: 0, retro: 0 };
         if (e.tipo === 'patio') est.activo = Je.obras.some((o) => !o.listo);
         else if (e.tipo === 'fabrica') est.activo = e.cola.length > 0;
         else if (EDIF[e.tipo].arma) { est.ang = giro(e).t; est.retro = retroceso(e, EDIF[e.tipo].arma); }
@@ -622,6 +636,9 @@
         if (d.despliega && sel.has(e.id) && e.j === YO) { // dónde quedaría el patio: verde si cabe
           const bx = ox + (Math.floor(e.x) - 1) * z, by = oy + (Math.floor(e.y) - 1) * z;
           ctx.strokeStyle = W.puedeDesplegar(m, e) ? P.bien : P.mal; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.strokeRect(bx, by, z * 3, z * 3); ctx.setLineDash([]);
+        }
+        if (lod && e.j === YO && e.sinSum >= W.ECON.sinSum) { // sin suministro: un rombo hueco rojo sobre la unidad
+          const gx = px - r * 1.2 - 4, gy = py - r - 3; ctx.strokeStyle = P.mal; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(gx, gy - 4); ctx.lineTo(gx + 4, gy); ctx.lineTo(gx, gy + 4); ctx.lineTo(gx - 4, gy); ctx.closePath(); ctx.stroke();
         }
         if (e.rango && lod) { // galones de veteranía, junto a la unidad
           ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.2; ctx.beginPath();
@@ -889,6 +906,8 @@
           const area = W.ARMAS[d.arma].area || 0; // los obuses de área dejan un cráter mayor
           estallido(d.x2, d.y2, area ? 2 : 1); marcaSuelo('quemado', d.x2, d.y2, area || 0.42, 0, 15000);
           if (n++ < 6) son.impacto(cerca(d.x2, d.y2), paneo(d.x2));
+        } else if (d.tipo === 'explorado') {
+          if (d.j === YO && performance.now() - (avisoExpl || 0) > 3000) { avisoExpl = performance.now(); aviso(J.tr.mapa ? 'Nada que explorar: el mapa está revelado desde ADMIN' : 'No queda nada por explorar'); }
         } else if (d.tipo === 'sinCamino') {
           if (d.j === YO) aviso(d.corte ? 'La excavadora no encuentra por dónde seguir' : 'Sin minerales: la excavadora se detiene');
         } else if (d.tipo === 'captura') {
@@ -953,7 +972,7 @@
     // Textos que suben y se desvanecen sobre el mapa (flancos, ascensos, retiradas).
     const flotantes = [];
     function flotar(x, y, txt, color) { flotantes.push({ x, y, txt, color, t0: performance.now() }); if (flotantes.length > 40) flotantes.shift(); }
-    const avisos = [];
+    const avisos = []; let avisoExpl = 0;
     function aviso(txt) { avisos.push({ txt, t0: performance.now() }); if (avisos.length > 4) avisos.shift(); }
 
     // ---------- dibujos de las casillas ----------
@@ -1062,7 +1081,7 @@
     // Guardar y cargar: la partida entera va al almacenamiento del navegador (una sola, la última).
     function guardar() {
       try {
-        const txt = W.guardar(m, { ia, hist, cam, op: { semilla, N: op.N, inicio: op.inicio, ia: op.ia, estilo: op.estilo, consulta: op.consulta } });
+        const txt = W.guardar(m, { ia, hist, cam, op: { semilla, N: op.N, inicio: op.inicio, ia: op.ia, estilo: op.estilo, red: op.red, consulta: op.consulta } });
         localStorage.setItem('rts.guardado', txt);
         aviso('Partida guardada (' + Math.round(txt.length / 1024) + ' KB). Se continúa desde el menú inicial.');
       } catch (e) { aviso('No se pudo guardar: ' + (e && e.name === 'QuotaExceededError' ? 'no cabe en el almacenamiento del navegador' : 'el navegador no lo permite')); }
@@ -1310,7 +1329,7 @@
       const num = (v) => (J.dios ? '∞' : String(Math.floor(v)));
       $('rMin').textContent = num(J.minerales); $('rPet').textContent = num(J.petroleo); $('rRar').textContent = num(J.raros); $('rInf').textContent = num(J.info);
       { const otras = J.tr.requisitos || J.tr.libre || J.tr.vel > 1 || J.tr.mapa || J.tr.invulnerable || iaQuieta, t = otras ? 'ADMIN' : 'GOD'; $('dios').hidden = !J.dios && !otras; if ($('dios').textContent !== t) $('dios').textContent = t; } actualizarAdmin(); $('sinColmena').hidden = J.colmena;
-      const e = $('rEne'); e.textContent = J.uso + ' / ' + J.prod; e.className = J.uso > J.prod ? 'mal' : '';
+      const e = $('rEne'); { let sl = 0; for (const b of m.ents) if (b.edif && b.j === YO && b.sinLuz) sl++; e.textContent = J.uso + ' / ' + J.prod + (sl ? ' · ' + sl + ' sin luz' : ''); e.className = J.uso > J.prod || sl ? 'mal' : ''; }
       const ag = $('rAgu'); ag.textContent = J.aguaUso + ' / ' + (J.dios ? '∞' : J.aguaProd); ag.className = !J.dios && J.aguaUso >= J.aguaProd ? 'mal' : '';
       const eds = edificiosSel(), tipos = new Set(eds.map((e) => e.tipo)), patiosSel = new Set(eds.filter((e) => e.tipo === 'patio').map((e) => e.id));
       tiposSel = tipos;
@@ -1662,6 +1681,7 @@
         case 'KeyS': { const ids = unidadesSel().map((u) => u.id); if (ids.length) W.orden(m, { t: 'detener', j: YO, ids }); break; }
         case 'KeyH': cam.x = m.mapa.bases[YO].x; cam.y = m.mapa.bases[YO].y; break;
         case 'Space': if (J.alerta) { cam.x = J.alerta.x; cam.y = J.alerta.y; } break;
+        case 'KeyL': if (conRed) { verRed = !verRed; aviso(verRed ? 'Vista de la red: lo sombreado es tu cobertura (suministro y dónde construir)' : 'Vista de la red apagada'); } else aviso('Partida clásica: sin red'); break;
         case 'KeyP': pausa = !pausa; if (pausa) son.motor(0); break;
         case 'KeyM': deslizar = !deslizar; break;
         case 'KeyN': son.alternar(); break;

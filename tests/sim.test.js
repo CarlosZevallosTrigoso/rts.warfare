@@ -3,6 +3,9 @@ const assert = require('node:assert');
 const path = require('node:path');
 for (const f of ['datos', 'mapa', 'ruta', 'mundo', 'ia', 'guardar']) require(path.join(__dirname, '..', 'src', 'sim', f + '.js'));
 const W = globalThis.W, N = W.N;
+// Las pruebas de mecánicas anteriores a la red se hacen sin logística (las unidades no dependen de la cobertura);
+// las de la red y las partidas con IA la piden expresamente.
+{ const crear = W.crearMundo; W.crearMundo = (semilla, op) => crear(semilla, Object.assign({ logistica: false }, op)); }
 
 let ok = 0;
 function prueba(nombre, fn) { if (process.env.SOLO && !nombre.includes(process.env.SOLO)) return; fn(); ok++; console.log('  ok  ' + nombre); }
@@ -53,7 +56,7 @@ prueba('ruta: rodea obstáculos y detecta lo inalcanzable', () => {
 });
 
 prueba('economía: construir, colocar, cosechar', () => {
-  const m = W.crearMundo(12345), ia = W.iaCrear(0);
+  const m = W.crearMundo(12345, { logistica: true }), ia = W.iaCrear(0);
   const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
   const patio = m.ents.find((e) => e.j === 0 && e.tipo === 'patio');
   assert.ok(patio);
@@ -1128,7 +1131,7 @@ prueba('formación en marcha: el grupo se forma, avanza junto y llega formado', 
 });
 
 prueba('repetición: las órdenes apuntadas reproducen la misma partida', () => {
-  const m = W.crearMundo(555, { N: 128 }), ia = W.iaCrear(1, 'normal', 'equilibrado');
+  const m = W.crearMundo(555, { N: 128, logistica: true }), ia = W.iaCrear(1, 'normal', 'equilibrado');
   m.registro = [];
   const propias = () => m.ents.filter((e) => !e.edif && e.j === 0).map((e) => e.id);
   for (let i = 0; i < 5000; i++) {
@@ -1139,7 +1142,7 @@ prueba('repetición: las órdenes apuntadas reproducen la misma partida', () => 
     W.iaTick(m, ia); W.tick(m);
   }
   assert.ok(m.registro.length > 40, 'debía haber órdenes apuntadas: ' + m.registro.length / 2);
-  const txt = JSON.stringify(m.registro), rep = JSON.parse(txt), r = W.crearMundo(555, { N: 128 });
+  const txt = JSON.stringify(m.registro), rep = JSON.parse(txt), r = W.crearMundo(555, { N: 128, logistica: true });
   r.soloRep = true;
   let k = 0;
   for (let i = 0; i < 5000; i++) {
@@ -1188,6 +1191,60 @@ prueba('movimiento: los vehículos toman las curvas rodando y el grupo no arranc
   let ult = -1; for (let i = 0; i < 1500; i++) { W.tick(m); if (t1.tDisparo !== ult && t1.tDisparo !== undefined) { ult = t1.tDisparo; rec.add(t1.recarga); } }
   const base = W.ARMAS.canon.recarga;
   assert.ok(rec.size >= 3 && [...rec].every((r) => r >= base * 0.89 && r <= base * 1.11), 'recargas variadas, dentro de ±10 %: ' + [...rec].sort((p, q) => p - q) + ' (base ' + base + ')');
+});
+
+prueba('la red: cobertura, territorio, energía por red, depósito y suministro', () => {
+  const m = W.crearMundo(31, { N: 128, logistica: true }), N = m.N, J = m.jug[0], T = W.TERRENO;
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const cel = (x, y) => y * N + x, patio = m.ents.find((e) => e.j === 0 && e.tipo === 'patio'), px = Math.floor(patio.cx), py = Math.floor(patio.cy);
+  const dir = px < 64 ? 1 : -1, x0 = Math.min(px, px + dir * 60), x1 = Math.max(px, px + dir * 60); // un campo llano desde el patio hacia el centro
+  for (let y = py - 10; y <= py + 10; y++) for (let x = x0 - 2; x <= x1 + 2; x++) { const i = cel(x, y); if (x < 2 || y < 2 || x >= N - 2 || y >= N - 2 || m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.mapa.tipoMin[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  J.dios = false; J.minerales = 20000; J.petroleo = 5000;
+  const cob = () => W.cobertura(m, 0);
+  // cobertura alrededor del patio; lejos, no
+  const lejos = px + dir * 34, medio = px + dir * 22;
+  assert.ok(cob()[cel(px + dir * 8, py)] && !cob()[cel(lejos, py)], 'cobertura junto al patio y no a 34 celdas');
+  // territorio: dentro se construye; fuera no (salvo el depósito, que va donde haga falta)
+  assert.ok(W.puedeColocar(m, 0, 'central', px + dir * 6, py + 3), 'dentro de la cobertura se construye');
+  assert.ok(!W.puedeColocar(m, 0, 'central', lejos, py + 3), 'fuera de la cobertura no');
+  assert.ok(W.puedeColocar(m, 0, 'deposito', lejos, py + 3) || !m.niebla[0][cel(lejos, py + 3)], 'el depósito sí puede ir fuera (si está explorado)');
+  // energía por red: una torreta aislada con su central lejos no tiene luz; la de la base, sí
+  const central = W.crearEdificio(m, 0, 'central', px + dir * 5, py + 4), tBase = W.crearEdificio(m, 0, 'torreta', px + dir * 5, py - 4), tLejos = W.crearEdificio(m, 0, 'torreta', lejos, py - 4);
+  avanza(2);
+  assert.ok(central.conRed && tBase.conRed && !tBase.sinLuz, 'la torreta de la base está en la red y con energía');
+  assert.ok(!tLejos.conRed && tLejos.sinLuz, 'la torreta aislada no tiene red ni energía');
+  assert.ok(!cob()[cel(lejos, py)], 'un edificio suelto no da cobertura');
+  // un depósito suelto tampoco da cobertura…
+  const dep = W.crearEdificio(m, 0, 'deposito', lejos - dir * 4, py + 2); avanza(2);
+  assert.ok(!dep.conRed && !cob()[cel(lejos, py)], 'el depósito sin conexión no sirve');
+  // …hasta que un camino lo une a la base: entonces da cobertura, y la torreta de al lado recibe energía
+  const ex = W.crearUnidad(m, 0, 'excavadora', cel(px + dir * 7, py));
+  W.orden(m, { t: 'trazar', j: 0, ids: [ex.id], x: lejos - dir * 5 + 0.5, y: py + 0.5 }); avanza(2);
+  for (let i = 0; i < 8000 && ex.orden === 'trazar'; i++) W.tick(m);
+  avanza(3);
+  assert.ok(dep.conRed && tLejos.conRed && !tLejos.sinLuz, 'con el camino, depósito y torreta entran en la red y hay energía');
+  assert.ok(cob()[cel(lejos, py)] && cob()[cel(medio, py + 3)] && !cob()[cel(px + dir * 17, py + 10)], 'cobertura alrededor del depósito y a lo largo del camino, pero no lejos de él');
+  assert.ok(W.puedeColocar(m, 0, 'central', medio, py + 3), 'junto al camino conectado ya se puede construir');
+  // suministro: una unidad fuera de la cobertura acaba disparando más lento y no acude; dentro se recupera
+  const fuera = W.crearUnidad(m, 0, 'tanque', cel(px + dir * 17, py + 10)), dentro = W.crearUnidad(m, 0, 'tanque', cel(medio, py + 2));
+  avanza(450);
+  assert.ok(fuera.sinSum >= W.ECON.sinSum && !(dentro.sinSum > 0), 'fuera de la red se queda sin suministro; dentro no: ' + fuera.sinSum + ' / ' + dentro.sinSum);
+  const blanco = W.crearEdificio(m, 1, 'central', px + dir * 17 + 2, py + 8); blanco.vida = blanco.vidaMax = 99999;
+  W.orden(m, { t: 'atacar', j: 0, ids: [fuera.id, dentro.id], obj: blanco.id });
+  const rec = { f: 0, d: 0 }; let uf = -1, ud = -1;
+  for (let i = 0; i < 900; i++) { W.tick(m); if (fuera.tDisparo !== uf && fuera.tDisparo !== undefined) { uf = fuera.tDisparo; rec.f = Math.max(rec.f, fuera.recarga); } if (dentro.tDisparo !== ud && dentro.tDisparo !== undefined) { ud = dentro.tDisparo; if (!(dentro.sinSum >= W.ECON.sinSum)) rec.d = Math.max(rec.d, dentro.recarga); } }
+  assert.ok(rec.f >= W.ARMAS.canon.recarga * 1.3, 'sin suministro recarga más lento: ' + rec.f);
+  W.orden(m, { t: 'mover', j: 0, ids: [fuera.id], x: medio + 0.5, y: py + 1.5 }); avanza(500);
+  assert.ok(!(fuera.sinSum >= W.ECON.sinSum), 'de vuelta en la red, se recupera: ' + fuera.sinSum);
+  // cortar el camino deja otra vez aislado el extremo
+  const tramos = m.ents.filter((e) => e.infra).sort((a, b) => Math.abs(a.cx - medio) - Math.abs(b.cx - medio));
+  tramos.slice(0, 2).forEach((e) => { e.vida = 0; }); avanza(3);
+  assert.ok(!dep.conRed && tLejos.sinLuz && !cob()[cel(lejos, py)], 'cortado el camino, el depósito y su zona quedan fuera de la red');
+  // en partida clásica nada de esto aplica
+  const c = W.crearMundo(31, { N: 128 }), pc = c.ents.find((e) => e.j === 0 && e.tipo === 'patio'), suelta = W.crearEdificio(c, 0, 'torreta', Math.floor(pc.cx) + (pc.cx < 64 ? 30 : -30), Math.floor(pc.cy));
+  W.crearEdificio(c, 0, 'central', Math.floor(pc.cx) + 4, Math.floor(pc.cy) + 4); for (let i = 0; i < 3; i++) W.tick(c);
+  assert.ok(!suelta.sinLuz, 'en clásica la energía es global');
 });
 
 prueba('puentes: la excavadora cruza el agua, todos lo usan y al caer se cierra', () => {
@@ -1332,7 +1389,7 @@ prueba('panel ADMIN: cada interruptor por separado', () => {
 });
 
 prueba('guardar y cargar: la partida cargada sigue exactamente igual que la original', () => {
-  const m = W.crearMundo(2026, { N: 128 }), a = W.iaCrear(0), b = W.iaCrear(1, 'normal', 'asalto');
+  const m = W.crearMundo(2026, { N: 128, logistica: true }), a = W.iaCrear(0), b = W.iaCrear(1, 'normal', 'asalto');
   const paso = (mm, x, y) => { W.iaTick(mm, x); W.iaTick(mm, y); W.tick(mm); };
   for (let i = 0; i < 9000; i++) paso(m, a, b);
   const txt = W.guardar(m, { a, b });
@@ -1348,7 +1405,7 @@ prueba('guardar y cargar: la partida cargada sigue exactamente igual que la orig
 
 prueba('determinismo: misma semilla, misma partida', () => {
   const corre = () => {
-    const m = W.crearMundo(777), a = W.iaCrear(0), b = W.iaCrear(1);
+    const m = W.crearMundo(777, { logistica: true }), a = W.iaCrear(0), b = W.iaCrear(1);
     for (let i = 0; i < 4000; i++) { W.iaTick(m, a); W.iaTick(m, b); W.tick(m); }
     return W.huella(m);
   };
@@ -1358,7 +1415,7 @@ prueba('determinismo: misma semilla, misma partida', () => {
 if (!process.env.RAPIDO) prueba('fase 2c: los cinco estilos de rival juegan media hora y se comportan distinto', () => {
   const res = {};
   for (const estilo of Object.keys(W.ESTILOS_IA)) {
-    const m = W.crearMundo(555, { N: 256 }), a = W.iaCrear(0, 'normal', estilo), b = W.iaCrear(1, 'normal', 'equilibrado');
+    const m = W.crearMundo(555, { N: 256, logistica: true }), a = W.iaCrear(0, 'normal', estilo), b = W.iaCrear(1, 'normal', 'equilibrado');
     for (const J of m.jug) { J.nivel = 2; J.info = 500; J.minerales += 8000; J.petroleo += 600; } // con ventaja inicial, para que en media hora se vea el juego avanzado
     let aviones = 0, torres = 0, patios = 1, puestos = 0, primera = 0;
     while (m.ganador < 0 && m.t < 20 * 60 * 30) {
@@ -1385,7 +1442,7 @@ if (!process.env.RAPIDO) prueba('partidas completas IA contra IA', () => {
   const LIMITE = 20 * 60 * 90; // 90 minutos de juego
   let conGanador = 0;
   for (const s of [3, 101, 2026, 555]) {
-    const m = W.crearMundo(s), a = W.iaCrear(0), b = W.iaCrear(1);
+    const m = W.crearMundo(s, { logistica: true }), a = W.iaCrear(0), b = W.iaCrear(1);
     const t0 = Date.now();
     let maxEnts = 0;
     while (m.ganador < 0 && m.t < LIMITE) { W.iaTick(m, a); W.iaTick(m, b); W.tick(m); if (m.ents.length > maxEnts) maxEnts = m.ents.length; }

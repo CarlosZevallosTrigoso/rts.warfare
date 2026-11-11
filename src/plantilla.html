@@ -161,6 +161,7 @@
       <div>clic derecho: mover, atacar, cosechar</div>
       <div><kbd>Mayús</kbd>+clic derecho: encadenar órdenes</div>
       <div><kbd>R</kbd> patrulla · <kbd>E</kbd> explorar sola · <kbd>F</kbd> formación</div>
+      <div><kbd>L</kbd> vista de la red: cobertura (suministro y dónde construir) y qué está conectado</div>
       <div><kbd>Supr</kbd> demoler el edificio seleccionado</div>
       <div><kbd>G</kbd> guardia: la unidad queda fija · <kbd>C</kbd> colmena sí/no</div>
       <div><kbd>Z</kbd> atrincherarse (infantería quieta): recibe menos daño</div>
@@ -226,7 +227,7 @@
   <div id="tactil" hidden>
     <button type="button" data-c="KeyA" data-u>atacar al avanzar</button><button type="button" data-c="KeyR" data-u>patrulla</button><button type="button" data-c="KeyS" data-u>detener</button><button type="button" data-c="KeyG" data-u>guardia</button><button type="button" data-c="KeyF" data-u>formación</button><button type="button" data-c="KeyE" data-u>explorar</button><button type="button" data-c="KeyK" hidden>trazar camino</button>
     <span class="sep"></span>
-    <button type="button" data-c="Escape">soltar</button><button type="button" data-c="KeyB">patio</button><button type="button" data-c="KeyQ">cuarteles</button><button type="button" data-c="KeyV">fábricas</button><button type="button" data-c="KeyX">aeródromos</button><button type="button" data-c="Space">alerta</button><button type="button" data-c="KeyP">pausa</button>
+    <button type="button" data-c="Escape">soltar</button><button type="button" data-c="KeyB">patio</button><button type="button" data-c="KeyQ">cuarteles</button><button type="button" data-c="KeyV">fábricas</button><button type="button" data-c="KeyX">aeródromos</button><button type="button" data-c="Space">alerta</button><button type="button" data-c="KeyL">red</button><button type="button" data-c="KeyP">pausa</button>
   </div>
   <div id="abajo"><table id="rend" class="tenue" title="Rendimiento del último segundo. Clic para plegar."></table><div id="contexto" class="tenue" hidden></div></div>
   <div id="repBar" hidden><b>REPETICIÓN</b><span id="repT"></span><button type="button" data-v="0">❙❙</button><button type="button" data-v="1" class="on">×1</button><button type="button" data-v="2">×2</button><button type="button" data-v="4">×4</button><button type="button" data-v="8">×8</button><button type="button" data-v="16">×16</button><a id="repSalir" href="#">salir</a></div>
@@ -241,7 +242,7 @@
       <div id="espia" class="tenue"></div>
       <div class="fila" title="Nivel tecnológico. Se sube desde el patio."><span>nivel</span><b><span id="nivel">1</span><span id="hechas" class="tenue"></span></b></div>
       <div class="fila" title="De noche las unidades ven un 30 % menos; los edificios, igual."><span>hora</span><b id="rHora">día</b></div>
-      <div class="fila" title="Usada / disponible. En déficit todo va a media velocidad y las torretas se apagan."><span>energía</span><b id="rEne">0 / 0</b></div>
+      <div class="fila" title="Usada / disponible. La energía se reparte por red: un edificio sin conexión (por cercanía o por camino) a una central con energía de sobra va a media marcha, y las torretas se apagan."><span>energía</span><b id="rEne">0 / 0</b></div>
     </div>
     <canvas id="mini" width="208" height="208"></canvas>
     <div id="panel">
@@ -279,6 +280,8 @@
   <div><h2>Estilo del rival</h2><div class="ops" id="op-est">
     <button type="button" data-v="azar">al azar<small>sorpresa</small></button><button type="button" data-v="equilibrado">equilibrado</button><button type="button" data-v="blindado">blindado<small>muchos tanques</small></button>
     <button type="button" data-v="aereo">aéreo<small>aviación</small></button><button type="button" data-v="defensivo">defensivo<small>torres, ataca tarde</small></button><button type="button" data-v="asalto">de asalto<small>ataca pronto</small></button></div></div>
+  <div><h2>Infraestructura</h2><div class="ops" id="op-red">
+    <button type="button" data-v="si">completa<small>red: suministro, energía y territorio</small></button><button type="button" data-v="no">clásica<small>sin red</small></button></div></div>
   <div><h2>Semilla del mapa</h2><input id="op-s" inputmode="numeric" placeholder="al azar" autocomplete="off"></div>
   <button type="button" id="empezar">Empezar</button>
   <button type="button" id="continuar" hidden>Continuar la partida guardada</button>

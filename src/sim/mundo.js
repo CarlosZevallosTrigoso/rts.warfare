@@ -32,7 +32,8 @@
       ocup: new Int32Array(NN), paso: new Uint8Array(NN), pasoV: new Uint8Array(NN), hayCaminos: false, terrenoV: 0, carrilX: new Float32Array(NN), carrilY: new Float32Array(NN), tramoEn: new Int32Array(NN), // carrilX/Y: por cada celda de camino, el punto del carril que le toca (0 = ninguno); tramoEn: el tramo dueño de la celda
       jug: [nuevoJugador(op.inicio), nuevoJugador(op.inicio)],
       niebla: [new Uint8Array(NN), new Uint8Array(NN)],
-      cola: [], colaRutas: [], efectos: [], proy: [], barridos: [], trincheras: new Map(), focos: [[], []], sigFoco: 1, marchas: {}, sigMarcha: 1, sigMision: 1, minas: [], raros: [], ganador: -1, embarques: [],
+      cola: [], colaRutas: [], efectos: [], proy: [], barridos: [], trincheras: new Map(), focos: [[], []], sigFoco: 1, marchas: {}, sigMarcha: 1, logistica: op.logistica !== false, // logistica: las unidades necesitan la cobertura de su red (se puede apagar al crear la partida)
+      sigMision: 1, minas: [], raros: [], ganador: -1, embarques: [],
       puestos: mapa.puestos.map((p, i) => ({ id: i, tipo: p.tipo, x: p.x + 0.5, y: p.y + 0.5, dueno: -1, prog: 0, quien: -1 })), // puestos neutrales: los captura la infantería
       ruta: W.crearRuta(N),
     };
@@ -65,7 +66,7 @@
     const d = EDIF[tipo], N = m.N;
     const e = { id: m.sigId++, j, tipo, edif: true, x, y, tam: d.tam, cx: x + d.tam / 2, cy: y + d.tam / 2, vida: d.vida, vidaMax: d.vida, recarga: 0, obj: 0, reunion: null, acum: 0, nace: m.t, cola: [], pago: [], prog: 0, sinAgua: false, sinFondos: false, bucle: false, angT: Math.atan2(N / 2 - y, N / 2 - x) };
     for (let dy = 0; dy < d.tam; dy++) for (let dx = 0; dx < d.tam; dx++) { const i = (y + dy) * N + x + dx; m.ocup[i] = e.id; m.paso[i] = 0; m.pasoV[i] = 0; }
-    m.ents.push(e); m.porId.set(e.id, e);
+    m.ents.push(e); m.porId.set(e.id, e); m.redSucia = true;
     return e;
   }
   // Un tramo de camino: infraestructura con vida propia. Guarda su recorrido (pts), las celdas que abrió y lo que había antes en ellas.
@@ -174,18 +175,69 @@
       if (!agua) return false;
     }
     if (d.libre && !m.niebla[j][y * N + x]) return false; // solo en terreno explorado
-    let junto = !!d.libre || m.jug[j].tr.libre; // ADMIN: se construye en cualquier parte
+    // Territorio: se construye dentro de la cobertura de la red propia (cerca de un patio, de un depósito conectado, de los
+    // edificios de la base o junto a un camino conectado). Los edificios de extracción y el depósito van donde haga falta.
+    let junto = !!d.libre || m.jug[j].tr.libre || (m.logistica !== false && !!W.cobertura(m, j)[(y + (t >> 1)) * N + x + (t >> 1)]); // ADMIN: se construye en cualquier parte
     const s = ECON.separacionColocar;
     for (let k = 0; k < m.ents.length; k++) {
       const e = m.ents[k];
-      if (e.edif) {
-        if (e.j !== j || junto) continue;
+      if (e.edif) { // partida clásica (sin red): basta con estar junto a un edificio propio
+        if (m.logistica !== false || e.infra || e.j !== j || junto) continue;
         const gx = Math.max(e.x - (x + t), x - (e.x + e.tam), 0), gy = Math.max(e.y - (y + t), y - (e.y + e.tam), 0);
         if (Math.max(gx, gy) <= s) junto = true;
       } else if (e.x > x - 0.3 && e.x < x + t + 0.3 && e.y > y - 0.3 && e.y < y + t + 0.3) return false;
     }
     return junto;
   };
+
+  // ---------- la red ----------
+  // Patios, depósitos, edificios cercanos entre sí y caminos propios forman redes. La red que tiene un patio da cobertura:
+  // alrededor de sus nodos (patio y depósito), de sus edificios y a lo largo de sus caminos. Dentro de la cobertura hay
+  // suministro para las unidades y se puede construir; la energía se reparte dentro de cada red, no en todo el mapa.
+  // Se recalcula solo cuando algo cambia (m.redSucia) y, por si acaso, cada cinco segundos.
+  function calcularRed(m) {
+    const N = m.N, NN = N * N;
+    if (!m.cob) { m.cob = [new Uint8Array(NN), new Uint8Array(NN)]; m.redCel = new Int32Array(NN); }
+    m.cob[0].fill(0); m.cob[1].fill(0); m.redSucia = false; m.redT = m.t; m.redV = (m.redV || 0) + 1;
+    const its = []; for (const e of m.ents) if (e.edif && e.vida > 0) its.push(e);
+    const clasica = m.logistica === false, primero = [-1, -1]; // partida clásica: todo lo de un jugador es una sola red, como antes
+    const pad = its.map((e, i) => i), raiz = (i) => { while (pad[i] !== i) { pad[i] = pad[pad[i]]; i = pad[i]; } return i; }, une = (a, b) => { a = raiz(a); b = raiz(b); if (a !== b) pad[Math.max(a, b)] = Math.min(a, b); };
+    const cel = m.redCel, puestas = [];
+    for (let i = 0; i < its.length; i++) { const e = its[i]; if (e.infra) for (const c of e.celdas) if (m.tramoEn[c] === e.id) { cel[c] = i + 1; puestas.push(c); } }
+    for (const c of puestas) { // tramos que se tocan
+      const i = cel[c] - 1, x = c % N;
+      for (const d of [1, N, N + 1, N - 1]) { const n = c + d; if (n >= NN || (d !== N && Math.abs((n % N) - x) > 1)) continue; const k = cel[n] - 1; if (k >= 0 && k !== i && its[k].j === its[i].j) une(i, k); }
+    }
+    for (let i = 0; i < its.length; i++) { // edificios: con los caminos que les pasan cerca, y entre sí
+      const e = its[i]; if (clasica) { if (primero[e.j] < 0) primero[e.j] = i; else une(i, primero[e.j]); continue; }
+      if (e.infra) continue;
+      for (let y = Math.max(0, e.y - 3); y < Math.min(N, e.y + e.tam + 3); y++) for (let x = Math.max(0, e.x - 3); x < Math.min(N, e.x + e.tam + 3); x++) { const k = cel[y * N + x] - 1; if (k >= 0 && its[k].j === e.j) une(i, k); }
+      for (let k = i + 1; k < its.length; k++) {
+        const o = its[k]; if (o.infra || o.j !== e.j) continue;
+        if (Math.max(o.x - (e.x + e.tam), e.x - (o.x + o.tam), 0) <= ECON.enlace && Math.max(o.y - (e.y + e.tam), e.y - (o.y + o.tam), 0) <= ECON.enlace) une(i, k);
+      }
+    }
+    const red = new Map(); // por red: si tiene patio, cuánta energía da y cuánta pide
+    for (let i = 0; i < its.length; i++) {
+      const e = its[i], r = raiz(i); let g = red.get(r); if (!g) { g = { patio: false, prod: 0, uso: 0 }; red.set(r, g); }
+      if (e.infra) continue;
+      const en = EDIF[e.tipo].energia;
+      if (e.tipo === 'patio') g.patio = true;
+      if (en > 0) g.prod += en * (m.jug[e.j].mejoras.turbinas ? 1.5 : 1); else g.uso -= en;
+    }
+    const sella = (f, cx, cy, r) => { const R = Math.ceil(r), r2 = r * r; for (let dy = -R; dy <= R; dy++) { const y = cy + dy; if (y < 0 || y >= N) continue; for (let dx = -R; dx <= R; dx++) { const x = cx + dx; if (x >= 0 && x < N && dx * dx + dy * dy <= r2) f[y * N + x] = 1; } } };
+    for (let i = 0; i < its.length; i++) {
+      const e = its[i], g = red.get(raiz(i)), f = m.cob[e.j];
+      e.conRed = g.patio; e.red = its[raiz(i)].id;
+      if (e.infra) { if (g.patio) for (const c of e.celdas) if (m.tramoEn[c] === e.id) sella(f, c % N, (c / N) | 0, ECON.cobCamino); continue; }
+      e.deficit = g.uso > g.prod && !m.jug[e.j].dios; e.sinLuz = e.deficit && EDIF[e.tipo].energia < 0; // su red no da para todos: a media marcha
+      if (g.patio) sella(f, Math.floor(e.cx), Math.floor(e.cy), (e.tipo === 'patio' || e.tipo === 'deposito' ? ECON.cobNodo : ECON.cobEdif) + e.tam / 2);
+    }
+    for (const c of puestas) cel[c] = 0;
+  }
+  W.calcularRed = calcularRed;
+  W.cobertura = (m, j) => { if (!m.cob || m.redSucia) calcularRed(m); return m.cob[j]; };
+  const sinSuministro = (u) => u.sinSum >= ECON.sinSum; // lleva demasiado fuera de la cobertura de su red
 
   // Distancia de un punto a una entidad (al borde, si es edificio).
   function dist(x, y, e) {
@@ -377,7 +429,7 @@
       } else asignar(m, u, { t: 'amover', x: p.pts[p.i].x, y: p.pts[p.i].y });
     } else if (u.explora) {
       const c = celdaSinExplorar(m, u);
-      if (c < 0) u.explora = false; else asignar(m, u, { t: 'mover', x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 });
+      if (c < 0) { u.explora = false; m.efectos.push({ tipo: 'explorado', x1: u.x, y1: u.y, j: u.j, t: m.t }); } else asignar(m, u, { t: 'mover', x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 });
     }
   }
 
@@ -894,7 +946,7 @@
         for (const id of f.resp) { const u = m.porId.get(id); nodos.push({ x: u.x, y: u.y, r: 8, salto: u.salto }); }
         const cand = [];
         for (const u of m.ents) {
-          if (u.j !== j || u.edif || u.acude || u.guardia || u.retirando || u.vida <= 0 || vict.has(u.id) || !UNID[u.tipo].arma) continue;
+          if (u.j !== j || u.edif || u.acude || u.guardia || u.retirando || u.vida <= 0 || vict.has(u.id) || !UNID[u.tipo].arma || sinSuministro(u)) continue; // fuera de la red no llega la llamada
           const libre = (u.orden === 'nada' || u.orden === 'amover') && !u.obj;
           // Con una orden directa solo acude si atacan a una compañera que marcha en su misma misión.
           if (!libre && !(u.orden !== 'nada' && u.mision && f.victimas.some((v) => !v.edif && v.mision === u.mision && v.orden !== 'nada'))) continue;
@@ -921,7 +973,9 @@
   function disparar(m, a, b, arma) {
     const clave = a.edif ? EDIF[a.tipo].arma : UNID[a.tipo].arma, ax = posX(a), ay = posY(a), bx = posX(b), by = posY(b);
     const mult = (!a.edif && UNID[a.tipo].cat === 'inf' && m.jug[a.j].mejoras.perforante ? 1.25 : 1) * (a.edif ? 1 : 1 + ECON.rangoDano * a.rango);
-    a.recarga = arma.recarga >= 8 ? Math.round(arma.recarga * (0.9 + ((a.id * 31 + m.t * 17) % 21) / 100)) : arma.recarga; a.tDisparo = m.t; // cada arma lleva su compás, ±10 %: un grupo no dispara como un metrónomo
+    a.recarga = arma.recarga >= 8 ? Math.round(arma.recarga * (0.9 + ((a.id * 31 + m.t * 17) % 21) / 100)) : arma.recarga;
+    if (!a.edif && sinSuministro(a)) a.recarga = Math.round(a.recarga * ECON.sinSumRecarga); // sin suministro: dispara más despacio
+    a.tDisparo = m.t; // (cada arma lleva su compás, ±10 %: un grupo no dispara como un metrónomo)
     if (arma.vuelo) { // obús: vuela hasta donde estaba el blanco al disparar
       m.proy.push({ ox: ax, oy: ay, x: ax, y: ay, px: ax, py: ay, tx: bx, ty: by, obj: b.id, j: a.j, arma: clave, mult, de: a.id });
       for (let k = 1; k < (arma.rafaga || 1); k++) { // el resto de la salva cae repartido alrededor, un poco más tarde cada cohete
@@ -957,7 +1011,7 @@
   function tickTorreta(m, e) {
     const J = m.jug[e.j], arma = ARMAS[EDIF[e.tipo].arma], alc = alcance(m, e, arma);
     if (e.recarga > 0) e.recarga--;
-    if (J.uso > J.prod) { e.obj = 0; return; } // sin energía, apagada
+    if (e.sinLuz) { e.obj = 0; return; } // su red no le da energía: apagada
     let o = e.obj ? m.porId.get(e.obj) : null;
     if (o && (o.vida <= 0 || dist(e.cx, e.cy, o) > alc)) { o = null; e.obj = 0; }
     if (!o && (m.t + e.id) % 5 === 0) { o = buscarEnemigo(m, e, e.cx, e.cy, alc); if (o) e.obj = o.id; }
@@ -1037,7 +1091,7 @@
       if (J.minerales < precio) { u.orden = 'nada'; u.ruta = null; u.trazas = []; m.efectos.push({ tipo: 'sinCamino', x1: u.x, y1: u.y, j: u.j, t: m.t }); return; }
       let tr = u.tramo ? m.porId.get(u.tramo) : null; // el tramo en curso; si no hay (o ya mide lo suyo), empieza otro
       if (!tr || tr.vida <= 0) { const f = u.tramoFin, sigue = f && Math.hypot(f.x - u.x, f.y - u.y) < 3.5; tr = crearTramo(m, u.j, sigue ? f.x : u.x, sigue ? f.y : u.y); u.tramo = tr.id; const cc = terr[Math.floor(u.y) * N + Math.floor(u.x)]; tr.puente = cc === T.AGUA || cc === T.PUENTE; } // empieza donde acabó el anterior, para que el carril no se corte
-      tr.celdas.push(c); tr.antes.push(terr[c]); m.tramoEn[c] = tr.id;
+      tr.celdas.push(c); tr.antes.push(terr[c]); m.tramoEn[c] = tr.id; m.redSucia = true;
       J.minerales -= precio; terr[c] = agua ? T.PUENTE : T.CAMINO; m.paso[c] = 1; m.pasoV[c] = 1; m.hayCaminos = true; m.terrenoV++;
     }
     if (m.carrilX) for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) { // a cada celda de camino le toca el punto del carril más cercano a su centro
@@ -1316,7 +1370,7 @@
   function tickProduccion(m, j) {
     const J = m.jug[j];
     if (!J.vivo) return;
-    const factor = J.tr.vel * (J.uso > J.prod ? 0.5 : 1); // déficit de energía: todo a media velocidad (y el multiplicador de ADMIN)
+    const base = J.tr.vel, factor = base * (J.uso > J.prod ? 0.5 : 1); // el multiplicador de ADMIN; la investigación va a media velocidad si en conjunto falta energía, y cada edificio según su red
     if (m.t % ECON.goteoCada === 0) J.minerales += 1; // ingreso mínimo del patio: evita el bloqueo total
     // Investigaciones: avanzan en su edificio sin frenar obras ni unidades; si el edificio cae, se devuelve el costo.
     for (let k = J.inv.length - 1; k >= 0; k--) {
@@ -1343,7 +1397,7 @@
         let g = porPatio.get(o.patio); if (!g) { g = { vistos: new Set(), activas: [] }; porPatio.set(o.patio, g); }
         if (!g.vistos.has(o.tipo)) { g.vistos.add(o.tipo); g.activas.push(o); }
       }
-      for (const g of porPatio.values()) for (const o of g.activas) { o.prog += factor / g.activas.length; if (o.prog >= EDIF[o.tipo].tiempo) o.listo = true; }
+      for (const [idp, g] of porPatio) for (const o of g.activas) { const pt = m.porId.get(idp); o.prog += (base * (pt && pt.deficit ? 0.5 : 1)) / g.activas.length; if (o.prog >= EDIF[o.tipo].tiempo) o.listo = true; }
     }
     // Unidades: cada cuartel, fábrica y aeródromo tiene su propia cola y la despacha en orden, uno tras otro.
     // Dos edificios iguales producen a la vez. J.colas guarda el total encargado por tipo (para la IA y el cupo).
@@ -1360,7 +1414,7 @@
         if (fab.sinFondos) continue;
         cobrar(J, UNID[tipo]); fab.pago[0] = true;
       }
-      fab.prog += factor;
+      fab.prog += base * (fab.sinLuz ? 0.5 : 1);
       if (fab.prog > q.prog) q.prog = fab.prog;
       if (fab.prog < UNID[tipo].tiempo) continue;
       fab.cola.shift(); fab.pago.shift(); fab.prog = 0; q.n--; J.aguaUso += UNID[tipo].agua || 0;
@@ -1401,7 +1455,7 @@
         return true;
       };
       if (e.edif) { if (calma > 300) sanar(ECON.curaEdificio); continue; }
-      if (calma < 100) continue;
+      if (calma < 100 || sinSuministro(e)) continue; // sin suministro no hay reparación
       const quiere = LUGAR[UNID[e.tipo].cat];
       if (!UNID[e.tipo].aire && puestosTaller.some((p) => p.dueno === e.j && Math.hypot(p.x - e.x, p.y - e.y) <= ECON.tallerRadio)) { sanar(ECON.curaUnidad); continue; } // taller capturado: repara a cualquiera de los suyos
       for (const b of talleres[e.j]) {
@@ -1542,7 +1596,7 @@
       else if (EDIF[e.tipo].arma) tickTorreta(m, e);
       else if (EDIF[e.tipo].da) { // extracción continua; con déficit de energía rinde la mitad
         const da = EDIF[e.tipo].da, J = m.jug[e.j];
-        e.acum += (J.uso > J.prod ? 0.5 : 1) * (e.tipo === 'estacion' && J.mejoras.analisis ? 1.5 : 1);
+        e.acum += (e.sinLuz ? 0.5 : 1) * (e.tipo === 'estacion' && J.mejoras.analisis ? 1.5 : 1);
         if (e.acum >= da.cada) { e.acum -= da.cada; J[da.rec]++; if (da.rec === 'petroleo') J.extraido++; }
       }
     }
@@ -1551,6 +1605,10 @@
     tickProyectiles(m);
     if (m.t % 10 === 0) { curar(m); colmena(m); }
 
+    if (m.redSucia || !m.cob || m.t - m.redT >= 100) calcularRed(m);
+    if (m.t % 10 === 0 && m.logistica !== false) { // suministro: fuera de la cobertura el contador sube; dentro, baja rápido. Los aviones repostan en su base: no cuenta.
+      for (const u of m.ents) { if (u.edif || UNID[u.tipo].aire) continue; const dentro = m.cob[u.j][Math.floor(u.y) * m.N + Math.floor(u.x)] || m.jug[u.j].dios; u.sinSum = dentro ? Math.max(0, (u.sinSum || 0) - 40) : Math.min(ECON.sinSum + 200, (u.sinSum || 0) + 10); }
+    }
     let muertos = false;
     const apeados = [];
     for (let k = 0; k < m.ents.length; k++) {
@@ -1581,7 +1639,7 @@
       }
     }
     if (muertos) {
-      m.ents = m.ents.filter((e) => e.vida > 0);
+      m.ents = m.ents.filter((e) => e.vida > 0); m.redSucia = true;
       for (const [t, vivos] of apeados) apear(m, t, vivos);
       contar(m);
       for (const J of m.jug) if (!J.cuenta.patio && !J.cuenta.patioMovil) J.vivo = false; // se pierde al quedarse sin patios (ni patio móvil que desplegar)
