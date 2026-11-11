@@ -30,10 +30,12 @@
 
     // Devuelve la lista de celdas desde (x0,y0) hasta la primera cuyo centro
     // quede a `radio` o menos de (mx,my); [] si ya está ahí; null si no hay paso.
-    return function (paso, terreno, x0, y0, mx, my, radio) {
+    // kh: factor de la estimación (1 normal; 0,7 cuando hay caminos, para que el cálculo los encuentre y los prefiera).
+    return function (paso, terreno, x0, y0, mx, my, radio, kh) {
+      kh = kh || 1;
       gen++; hI.length = 0; hF.length = 0;
       const r2 = Math.max(radio, 0.75) ** 2, ini = y0 * N + x0;
-      const h = (x, y) => { const dx = Math.abs(x + 0.5 - mx), dy = Math.abs(y + 0.5 - my); return Math.max(dx, dy) + 0.4142 * Math.min(dx, dy); };
+      const h = (x, y) => { const dx = Math.abs(x + 0.5 - mx), dy = Math.abs(y + 0.5 - my); return (Math.max(dx, dy) + 0.4142 * Math.min(dx, dy)) * kh; };
       g[ini] = 0; padre[ini] = -1; visto[ini] = gen; mete(ini, h(x0, y0));
       while (hI.length) {
         const c = saca();
@@ -51,7 +53,7 @@
           const n = ny * N + nx;
           if (!paso[n] || cerrado[n] === gen) continue;
           if (d >= 4 && (!paso[cy * N + nx] || !paso[ny * N + cx])) continue;
-          const ng = g[c] + (d >= 4 ? 1.4142 : 1) * (terreno[n] === 3 ? 1.7 : 1);
+          const ng = g[c] + (d >= 4 ? 1.4142 : 1) * (terreno[n] === 3 ? 1.7 : terreno[n] === 4 ? 0.7 : 1);
           if (visto[n] !== gen || ng < g[n]) { visto[n] = gen; g[n] = ng; padre[n] = c; mete(n, ng + h(nx, ny)); }
         }
       }

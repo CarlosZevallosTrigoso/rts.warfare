@@ -59,7 +59,7 @@
   #ayuda kbd { font: inherit; color: var(--tinta); }
   #formas { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; }
   #formas .grupo { justify-content: center; }
-  #vender, #trinchera, #retiro, #desplegar, #descargar { justify-content: center; margin-top: 4px; }
+  #vender, #trinchera, #retiro, #desplegar, #descargar, #trazar { justify-content: center; margin-top: 4px; }
   .chip.debe { border-style: dashed; color: var(--suave); }
   /* Táctil: botonera sobre el mapa para lo que con teclado son teclas, y controles más grandes. */
   #tactil { position: fixed; left: 150px; right: 244px; bottom: 8px; z-index: 3; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; align-items: flex-end; pointer-events: none; }
@@ -73,6 +73,13 @@
   body.tactil .chip { padding: 8px 9px; font-size: 12px; }
   body.tactil .grupo { padding: 9px 10px; font-size: 12px; }
   body.tactil #ayuda summary { padding: 8px 10px; }
+  #admin { position: fixed; top: 44px; left: 8px; z-index: 4; width: 214px; display: flex; flex-direction: column; gap: 4px; padding: 8px; background: var(--panel); border: 1px solid var(--tinta); border-radius: 3px; }
+  #admin .cab { display: flex; justify-content: space-between; align-items: center; color: var(--mal); letter-spacing: .12em; }
+  #admin .cab button { font: inherit; border: 0; background: none; color: var(--tinta); cursor: pointer; padding: 0 4px; }
+  #admin .grupo { cursor: pointer; }
+  #admin .grupo::before { content: '○'; } #admin .grupo.on::before { content: '●'; }
+  #admin .fila2 { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; } #admin .fila2 span { flex-basis: 100%; font-size: 10px; color: var(--suave); margin-top: 3px; }
+  #admin .fila2 .grupo::before { content: none; }
   #abajo { position: fixed; left: 8px; bottom: 8px; z-index: 3; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; pointer-events: none; }
   #rend { border-collapse: collapse; background: var(--panel); border: 1px solid var(--linea); border-radius: 2px; font-size: 10px; line-height: 1.35; opacity: 0.92; pointer-events: auto; cursor: pointer; }
   #rend td { padding: 0 6px; } #rend td:last-child { text-align: right; color: var(--tinta); font-variant-numeric: tabular-nums; }
@@ -147,6 +154,7 @@
       <div>infantería quieta en el bosque: oculta hasta tenerla muy cerca</div>
       <div>los vehículos destruidos dejan chatarra para las cosechadoras</div>
       <div>transporte: clic derecho con infantería elegida para subir; <kbd>U</kbd> baja</div>
+      <div>los vehículos no entran al bosque; la excavadora (<kbd>K</kbd>) abre caminos</div>
       <div>chapa verde sobre el patio: tiene un edificio listo para colocar</div>
       <div>cazas y bombarderos atacan de pasada; el helicóptero se queda en el aire</div>
       <div>patio móvil (fábrica, nivel 2): <kbd>D</kbd> lo despliega como patio;</div>
@@ -157,10 +165,21 @@
       <div>clic en la cola, <kbd>×</kbd> o clic derecho en botón: cancelar</div>
       <div><kbd>P</kbd> pausa · <kbd>T</kbd> tema · <kbd>N</kbd> silenciar</div>
       <div id="semilla"></div>
-      <div>escribe <kbd>god</kbd>: recursos infinitos</div>
+      <div>escribe <kbd>god</kbd>: recursos infinitos · <kbd>admin</kbd>: panel de trampas</div>
   </details>
+  <div id="admin" hidden>
+    <div class="cab"><b>ADMIN</b><button type="button" data-t="cerrar" title="Cerrar (o escribe admin otra vez)">×</button></div>
+    <button type="button" class="grupo" data-t="recursos">recursos infinitos</button>
+    <button type="button" class="grupo" data-t="requisitos">sin requisitos ni nivel</button>
+    <button type="button" class="grupo" data-t="libre">construir donde sea</button>
+    <button type="button" class="grupo" data-t="mapa">mapa a la vista</button>
+    <button type="button" class="grupo" data-t="invulnerable">unidades invulnerables</button>
+    <button type="button" class="grupo" data-t="ia">rival detenido</button>
+    <div class="fila2"><span>producción</span><button type="button" class="grupo" data-t="vel" data-v="1">×1</button><button type="button" class="grupo" data-t="vel" data-v="2">×2</button><button type="button" class="grupo" data-t="vel" data-v="4">×4</button><button type="button" class="grupo" data-t="vel" data-v="10">×10</button></div>
+    <div class="fila2"><span>de un solo uso</span><button type="button" class="grupo" data-t="nivel3">nivel 3</button><button type="button" class="grupo" data-t="mejoras">todas las mejoras</button></div>
+  </div>
   <div id="tactil" hidden>
-    <button type="button" data-c="KeyA" data-u>atacar al avanzar</button><button type="button" data-c="KeyR" data-u>patrulla</button><button type="button" data-c="KeyS" data-u>detener</button><button type="button" data-c="KeyG" data-u>guardia</button><button type="button" data-c="KeyF" data-u>formación</button><button type="button" data-c="KeyE" data-u>explorar</button>
+    <button type="button" data-c="KeyA" data-u>atacar al avanzar</button><button type="button" data-c="KeyR" data-u>patrulla</button><button type="button" data-c="KeyS" data-u>detener</button><button type="button" data-c="KeyG" data-u>guardia</button><button type="button" data-c="KeyF" data-u>formación</button><button type="button" data-c="KeyE" data-u>explorar</button><button type="button" data-c="KeyK" hidden>trazar camino</button>
     <span class="sep"></span>
     <button type="button" data-c="Escape">soltar</button><button type="button" data-c="KeyB">patio</button><button type="button" data-c="KeyQ">cuarteles</button><button type="button" data-c="KeyV">fábricas</button><button type="button" data-c="KeyX">aeródromos</button><button type="button" data-c="Space">alerta</button><button type="button" data-c="KeyP">pausa</button>
   </div>
@@ -190,6 +209,7 @@
       <button type="button" class="grupo on" data-f="grupo">grupo</button><button type="button" class="grupo" data-f="linea">línea</button><button type="button" class="grupo" data-f="columna">columna</button>
       <button type="button" class="grupo" data-f="cuna">cuña</button><button type="button" class="grupo" data-f="cuadro">cuadro</button></div></section>
     <div id="sel" class="tenue"></div>
+    <button type="button" id="trazar" class="btn" hidden title="La excavadora va hasta el punto que marques dejando camino. Abre el bosque; por camino los vehículos van más rápido.">Trazar camino</button>
     <button type="button" id="descargar" class="btn" hidden></button>
     <button type="button" id="desplegar" class="btn" hidden title="Convierte el patio móvil en un patio, donde está. No se puede replegar.">Desplegar patio</button>
     <button type="button" id="retiro" class="btn" hidden title="Con poca vida, la unidad se va sola a reparar y luego vuelve a su puesto."></button>

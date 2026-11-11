@@ -11,6 +11,7 @@
   function nuevoJugador(inicio) {
     return {
       minerales: inicio || ECON.inicio, prod: 0, uso: 0, cuenta: {}, vivo: true, dios: false, admin: false,
+      tr: { requisitos: false, libre: false, vel: 1, mapa: false, invulnerable: false }, // interruptores del panel ADMIN (los recursos infinitos son 'dios')
       obras: [], // [{ tipo, prog, listo, patio }]: cada patio lleva las suyas; dentro de un patio, tipos distintos se reparten la velocidad
       patiosMax: 1, // cuántos patios ha llegado a tener a la vez
       retiro: false, // retirada automática por defecto para las unidades nuevas
@@ -28,7 +29,7 @@
     const mapa = W.generarMapa(semilla, op.N), N = mapa.N, NN = N * N;
     const m = {
       N, semilla, mapa, t: 0, ents: [], porId: new Map(), sigId: 1,
-      ocup: new Int32Array(NN), paso: new Uint8Array(NN),
+      ocup: new Int32Array(NN), paso: new Uint8Array(NN), pasoV: new Uint8Array(NN), hayCaminos: false, terrenoV: 0,
       jug: [nuevoJugador(op.inicio), nuevoJugador(op.inicio)],
       niebla: [new Uint8Array(NN), new Uint8Array(NN)],
       cola: [], colaRutas: [], efectos: [], proy: [], barridos: [], trincheras: new Map(), focos: [[], []], sigFoco: 1, sigMision: 1, minas: [], raros: [], ganador: -1, embarques: [],
@@ -36,7 +37,8 @@
       ruta: W.crearRuta(N),
     };
     for (let i = 0; i < NN; i++) {
-      m.paso[i] = mapa.terreno[i] === T.LLANO || mapa.terreno[i] === T.BOSQUE ? 1 : 0;
+      m.paso[i] = mapa.terreno[i] === T.LLANO || mapa.terreno[i] === T.BOSQUE || mapa.terreno[i] === T.CAMINO ? 1 : 0; // a pie
+      m.pasoV[i] = mapa.terreno[i] === T.LLANO || mapa.terreno[i] === T.CAMINO ? 1 : 0; // sobre ruedas u orugas: el bosque no
       if (mapa.tipoMin[i] === 1) m.minas.push(i); else if (mapa.tipoMin[i] === 2) m.raros.push(i);
     }
     for (let j = 0; j < 2; j++) {
@@ -62,7 +64,7 @@
   function crearEdificio(m, j, tipo, x, y) {
     const d = EDIF[tipo], N = m.N;
     const e = { id: m.sigId++, j, tipo, edif: true, x, y, tam: d.tam, cx: x + d.tam / 2, cy: y + d.tam / 2, vida: d.vida, vidaMax: d.vida, recarga: 0, obj: 0, reunion: null, acum: 0, nace: m.t, cola: [], pago: [], prog: 0, sinAgua: false, sinFondos: false, bucle: false, angT: Math.atan2(N / 2 - y, N / 2 - x) };
-    for (let dy = 0; dy < d.tam; dy++) for (let dx = 0; dx < d.tam; dx++) { const i = (y + dy) * N + x + dx; m.ocup[i] = e.id; m.paso[i] = 0; }
+    for (let dy = 0; dy < d.tam; dy++) for (let dx = 0; dx < d.tam; dx++) { const i = (y + dy) * N + x + dx; m.ocup[i] = e.id; m.paso[i] = 0; m.pasoV[i] = 0; }
     m.ents.push(e); m.porId.set(e.id, e);
     return e;
   }
@@ -89,6 +91,7 @@
       cola: [], patrulla: null, explora: false, // órdenes encadenadas, ruta de patrulla, exploración automática
       retira: m.jug[j].retiro, retirando: false, volver: null, tRet: 0, huye: 0, // retirada automática a reparar; cosechadora que huye
       bajas: 0, rango: 0, // veteranía
+      trazas: [], // excavadora: tramos de camino pendientes
       pasajeros: [], sube: 0, dentro: false, // transporte: quién va dentro; infantería: a qué transporte va a subir
     };
     m.ents.push(u); m.porId.set(u.id, u);
@@ -97,21 +100,22 @@
   }
   W.crearEdificio = crearEdificio; W.crearUnidad = crearUnidad;
 
-  W.cercaLibre = function (m, x, y) {
+  W.cercaLibre = function (m, x, y, veh) { // veh: celda libre para un vehículo (no vale el bosque)
+    const paso = veh ? m.pasoV : m.paso;
     const N = m.N, cx = Math.max(0, Math.min(N - 1, Math.floor(x))), cy = Math.max(0, Math.min(N - 1, Math.floor(y)));
     for (let k = 0; k < ESPIRAL.length; k++) {
       const xx = cx + ESPIRAL[k][0], yy = cy + ESPIRAL[k][1];
       if (xx < 0 || yy < 0 || xx >= N || yy >= N) continue;
-      if (m.paso[yy * N + xx]) return yy * N + xx;
+      if (paso[yy * N + xx]) return yy * N + xx;
     }
     return cy * N + cx;
   };
 
   // Disponible = tiene los edificios requeridos y el nivel tecnológico.
-  W.disponible = function (m, j, d) { return W.tieneReq(m, j, d.req) && (d.nivel || 1) <= m.jug[j].nivel; };
+  W.disponible = function (m, j, d) { return W.tieneReq(m, j, d.req) && ((d.nivel || 1) <= m.jug[j].nivel || m.jug[j].tr.requisitos); };
   W.tieneReq = function (m, j, req) {
     const c = m.jug[j].cuenta;
-    if (m.jug[j].admin) return true; // modo ADMIN: sin requisitos
+    if (m.jug[j].tr.requisitos) return true; // ADMIN: sin requisitos
     for (let k = 0; k < req.length; k++) if (!c[req[k]]) return false;
     return true;
   };
@@ -142,7 +146,7 @@
       if (!agua) return false;
     }
     if (d.libre && !m.niebla[j][y * N + x]) return false; // solo en terreno explorado
-    let junto = !!d.libre || m.jug[j].admin; // en modo ADMIN se construye en cualquier parte
+    let junto = !!d.libre || m.jug[j].tr.libre; // ADMIN: se construye en cualquier parte
     const s = ECON.separacionColocar;
     for (let k = 0; k < m.ents.length; k++) {
       const e = m.ents[k];
@@ -194,6 +198,8 @@
   // ---------- comandos ----------
   W.orden = function (m, cmd) { m.cola.push(cmd); };
 
+  // Por dónde puede pasar cada unidad: los vehículos no entran al bosque, salvo la excavadora mientras traza un camino.
+  const pasoDe = (m, u) => (UNID[u.tipo].cat === 'veh' && u.orden !== 'trazar' ? m.pasoV : m.paso);
   function pedirRuta(m, u, x, y, radio) {
     if (UNID[u.tipo].aire) { // un avión no busca camino: va en línea recta
       const casa = u.casa ? m.porId.get(u.casa) : null, rv = UNID[u.tipo].radioVuelo;
@@ -201,6 +207,9 @@
       const N = m.N, cx = Math.max(0.5, Math.min(N - 0.5, x)), cy = Math.max(0.5, Math.min(N - 0.5, y));
       u.ruta = [Math.floor(cy) * N + Math.floor(cx)]; u.ri = 0; u.fin = { x: cx, y: cy }; u.pend = null; u.meta = { x, y, radio };
       return;
+    }
+    if (radio === 0 && x >= 0 && y >= 0 && x < m.N && y < m.N && pasoDe(m, u) === m.pasoV && !m.pasoV[Math.floor(y) * m.N + Math.floor(x)] && m.paso[Math.floor(y) * m.N + Math.floor(x)]) {
+      const c = W.cercaLibre(m, x, y, true); x = (c % m.N) + 0.5; y = ((c / m.N) | 0) + 0.5; // un vehículo no entra al bosque: se queda en el borde
     }
     if (!u.pend) m.colaRutas.push(u.id);
     u.pend = { x, y, radio }; u.meta = u.pend;
@@ -296,6 +305,18 @@
     }
   }
 
+  // Interruptores del panel ADMIN. Los de un solo uso (nivel3, mejoras) no se deshacen.
+  function trampa(m, j, clave, valor) {
+    const J = m.jug[j];
+    if (clave === 'recursos') { if (!!valor !== J.dios) { J.dios = !!valor; if (J.dios) J.antesDios = [J.minerales, J.petroleo, J.raros, J.info]; else [J.minerales, J.petroleo, J.raros, J.info] = J.antesDios; } }
+    else if (clave === 'vel') J.tr.vel = [1, 2, 4, 10].includes(+valor) ? +valor : 1;
+    else if (clave === 'nivel3') J.nivel = 3;
+    else if (clave === 'mejoras') {
+      for (const k in TEC) if (!TEC[k].sube) J.mejoras[k] = true;
+      for (const e of m.ents) if (!e.edif && e.j === j) { const nueva = Math.round(vidaDe(J, e.tipo) * (1 + ECON.rangoVida * e.rango)); if (nueva !== e.vidaMax) { e.vida = e.vida * (nueva / e.vidaMax); e.vidaMax = nueva; } }
+    } else if (clave in J.tr) J.tr[clave] = !!valor;
+    J.admin = J.dios || J.tr.requisitos || J.tr.libre || J.tr.vel > 1 || J.tr.mapa || J.tr.invulnerable;
+  }
   function aplicar(m, cmd) {
     const J = m.jug[cmd.j];
     if (!J || !J.vivo) return;
@@ -308,15 +329,23 @@
         J.dios = !J.dios;
         if (J.dios) J.antesDios = [J.minerales, J.petroleo, J.raros, J.info]; else [J.minerales, J.petroleo, J.raros, J.info] = J.antesDios;
         return;
-      case 'admin': // modo ADMIN, para probar: todo lo de GOD más nivel 3, todas las mejoras, sin requisitos, todo cuatro veces más rápido (300 % más) y el mapa a la vista
+      case 'admin': // atajo: prende (o apaga) todo lo del panel ADMIN de una vez, con producción ×4
         J.admin = !J.admin;
-        if (J.admin !== J.dios) { J.dios = J.admin; if (J.dios) J.antesDios = [J.minerales, J.petroleo, J.raros, J.info]; else [J.minerales, J.petroleo, J.raros, J.info] = J.antesDios; }
-        if (J.admin) {
-          J.nivel = 3;
-          for (const k in TEC) if (!TEC[k].sube) J.mejoras[k] = true;
-          for (const e of m.ents) if (!e.edif && e.j === cmd.j) { const nueva = Math.round(vidaDe(J, e.tipo) * (1 + ECON.rangoVida * e.rango)); if (nueva !== e.vidaMax) { e.vida = e.vida * (nueva / e.vidaMax); e.vidaMax = nueva; } }
+        for (const [clave, valor] of [['recursos', J.admin], ['requisitos', J.admin], ['libre', J.admin], ['vel', J.admin ? 4 : 1], ['mapa', J.admin]]) trampa(m, cmd.j, clave, valor);
+        if (J.admin) { trampa(m, cmd.j, 'nivel3', true); trampa(m, cmd.j, 'mejoras', true); }
+        return;
+      case 'trampa': // un interruptor del panel ADMIN
+        trampa(m, cmd.j, cmd.clave, cmd.valor);
+        return;
+      case 'trazar': { // la excavadora va hasta el punto dejando camino (con enc, se añade otro tramo)
+        for (const u of propias(m, cmd)) {
+          if (!UNID[u.tipo].traza) continue;
+          if (cmd.enc && u.orden === 'trazar') { if (u.trazas.length < 12) u.trazas.push({ x: cmd.x, y: cmd.y }); continue; }
+          limpiar(u); u.obj = 0; u.trazas = []; u.orden = 'trazar'; u.dest = { x: cmd.x, y: cmd.y }; u.ruta = null; u.guardia = false;
+          pedirRuta(m, u, cmd.x, cmd.y, 0);
         }
         return;
+      }
       case 'construir': {
         const d = EDIF[cmd.tipo];
         if (!d || cmd.tipo === 'patio' || !W.disponible(m, cmd.j, d) || !W.puedePagar(J, d)) return;
@@ -503,9 +532,10 @@
     if (u.ri >= u.ruta.length) { u.ruta = null; u.v = 0; return true; }
     const N = m.N, d = UNID[u.tipo], c = u.ruta[u.ri];
     const replantear = () => { u.ruta = null; u.v = 0; u.tReplan = m.t; if (u.meta) pedirRuta(m, u, u.meta.x, u.meta.y, u.meta.radio); };
-    if (!d.aire && !m.paso[c]) { replantear(); return false; } // alguien construyó en el punto de paso
+    if (!d.aire && !pasoDe(m, u)[c] && pasoDe(m, u)[Math.floor(u.y) * N + Math.floor(u.x)]) { replantear(); return false; } // alguien construyó en el punto de paso
     const vel = d.vel * (d.cat === 'veh' && m.jug[u.j].mejoras.motores ? 1.15 : 1);
-    const vmax = (u.tope && u.tope < vel ? u.tope : vel) * (d.cat === 'veh' && m.mapa.terreno[Math.floor(u.y) * N + Math.floor(u.x)] === T.BOSQUE ? ECON.bosqueVeh : 1); // el bosque frena a los vehículos, no a la tropa a pie
+    const terr = m.mapa.terreno[Math.floor(u.y) * N + Math.floor(u.x)];
+    const vmax = (u.tope && u.tope < vel ? u.tope : vel) * (u.orden === 'trazar' ? ECON.trazaVel : d.cat === 'veh' && terr === T.CAMINO ? ECON.caminoVel : 1); // por camino los vehículos van más rápido; trazándolo, despacio
     const alFinal = u.ri === u.ruta.length - 1 && u.fin;
     const tx = alFinal ? u.fin.x : (c % N) + 0.5, ty = alFinal ? u.fin.y : ((c / N) | 0) + 0.5, dx = tx - u.x, dy = ty - u.y, dd = Math.hypot(dx, dy);
     let alin = 1;
@@ -530,18 +560,18 @@
   }
 
   // ¿Hay paso en línea recta, con el ancho de una unidad?
-  function despejado(m, x0, y0, x1, y1) {
+  function despejado(m, x0, y0, x1, y1, paso) {
     const N = m.N, dx = x1 - x0, dy = y1 - y0, L = Math.hypot(dx, dy);
     if (L < 1e-6) return true;
     const n = Math.ceil(L / 0.25), ox = (-dy / L) * 0.3, oy = (dx / L) * 0.3;
     for (let i = 0; i <= n; i++) {
       const x = x0 + (dx * i) / n, y = y0 + (dy * i) / n;
-      if (!m.paso[(y | 0) * N + (x | 0)] || !m.paso[((y + oy) | 0) * N + ((x + ox) | 0)] || !m.paso[((y - oy) | 0) * N + ((x - ox) | 0)]) return false;
+      if (!paso[(y | 0) * N + (x | 0)] || !paso[((y + oy) | 0) * N + ((x + ox) | 0)] || !paso[((y - oy) | 0) * N + ((x - ox) | 0)]) return false;
     }
     return true;
   }
   // Quita los zigzags de la rejilla: salta al punto más lejano que se alcanza en línea recta.
-  function suavizar(m, x, y, ruta) {
+  function suavizar(m, x, y, ruta, paso) {
     const N = m.N, out = [];
     let ax = x, ay = y, i = 0;
     while (i < ruta.length) {
@@ -549,7 +579,7 @@
       const tope = Math.min(ruta.length - 1, i + 24);
       for (let k = i + 1; k <= tope; k++) {
         const c = ruta[k];
-        if (despejado(m, ax, ay, (c % N) + 0.5, ((c / N) | 0) + 0.5)) j = k; else if (k - j > 4) break;
+        if (despejado(m, ax, ay, (c % N) + 0.5, ((c / N) | 0) + 0.5, paso)) j = k; else if (k - j > 4) break;
       }
       out.push(ruta[j]); ax = (ruta[j] % N) + 0.5; ay = ((ruta[j] / N) | 0) + 0.5; i = j + 1;
     }
@@ -563,14 +593,15 @@
       const u = m.porId.get(m.colaRutas.shift());
       if (!u || !u.pend) continue;
       const p = u.pend; u.pend = null; n++;
-      const camino = m.ruta(m.paso, m.mapa.terreno, Math.floor(u.x), Math.floor(u.y), p.x, p.y, p.radio);
+      const paso = pasoDe(m, u);
+      const camino = m.ruta(paso, m.mapa.terreno, Math.floor(u.x), Math.floor(u.y), p.x, p.y, p.radio, m.hayCaminos ? 0.7 : 1);
       if (camino) {
         u.fin = null;
         if (p.radio === 0) { // destino exacto: el último tramo va al punto pedido, no al centro de su celda
           const cf = Math.floor(p.y) * N + Math.floor(p.x);
-          if (p.x >= 0 && p.y >= 0 && p.x < N && p.y < N && m.paso[cf]) { if (camino[camino.length - 1] !== cf) camino.push(cf); u.fin = { x: p.x, y: p.y }; }
+          if (p.x >= 0 && p.y >= 0 && p.x < N && p.y < N && paso[cf]) { if (camino[camino.length - 1] !== cf) camino.push(cf); u.fin = { x: p.x, y: p.y }; }
         }
-        u.ruta = suavizar(m, u.x, u.y, camino); u.ri = 0;
+        u.ruta = m.hayCaminos && paso === m.pasoV ? camino : suavizar(m, u.x, u.y, camino, paso); u.ri = 0; // con caminos, los vehículos siguen la ruta tal cual, para no salirse de ellos
       } else { u.ruta = null; u.fallo = true; }
     }
   }
@@ -603,7 +634,7 @@
       if (!dx && !dy) return;
       const nx = u.x + dx, ny = u.y + dy;
       if (nx < 0.3 || ny < 0.3 || nx > N - 0.3 || ny > N - 0.3) return;
-      if (UNID[u.tipo].aire || m.paso[Math.floor(ny) * N + Math.floor(nx)]) { u.x = nx; u.y = ny; }
+      if (UNID[u.tipo].aire || pasoDe(m, u)[Math.floor(ny) * N + Math.floor(nx)]) { u.x = nx; u.y = ny; }
     }
   }
 
@@ -684,7 +715,7 @@
   W.enBosque = enBosque;
   // ox, oy: de dónde viene el tiro. A un vehículo le duele más por los costados y más aún por la espalda.
   function herir(m, b, arma, mult, de, ox, oy) {
-    if (!puede(arma, b)) return;
+    if (!puede(arma, b) || m.jug[b.j].tr.invulnerable) return; // ADMIN: invulnerables
     let fl = 1;
     if (ox !== undefined && !b.edif && UNID[b.tipo].cat === 'veh') { const s = W.sector(m, b, { x: ox, y: oy }); fl = s === 2 ? ECON.espalda : s === 1 ? ECON.flanco : 1; if (s && m.t - (b.tFlanco === undefined ? -99 : b.tFlanco) > 25) { b.tFlanco = m.t; m.efectos.push({ tipo: 'flanco', x1: b.x, y1: b.y, s, j: b.j, t: m.t }); } }
     b.vida -= fl * arma.dano * (mult || 1) * arma.vs[b.edif ? 'edificio' : UNID[b.tipo].blindaje] * (enTrinchera(m, b) ? ECON.trinchera : 1) * (enBosque(m, b) && UNID[b.tipo].cat === 'inf' ? ECON.bosqueCubre : 1);
@@ -907,6 +938,23 @@
     return true;
   }
 
+  // Excavadora trazando: convierte en camino las cuatro celdas que pisa (así el corredor tiene dos de ancho y los vehículos
+  // caben también en las diagonales). Talar bosque cuesta más que allanar. Sin minerales, se detiene.
+  function tickTraza(m, u) {
+    const N = m.N, J = m.jug[u.j], terr = m.mapa.terreno, x0 = Math.floor(u.x - 0.5), y0 = Math.floor(u.y - 0.5);
+    for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) {
+      const x = x0 + dx, y = y0 + dy, c = y * N + x;
+      if (x < 0 || y < 0 || x >= N || y >= N || (terr[c] !== T.LLANO && terr[c] !== T.BOSQUE) || m.ocup[c] || m.mapa.mineral[c] || m.mapa.sitioEn[c]) continue;
+      const precio = terr[c] === T.BOSQUE ? ECON.caminoBosque : ECON.caminoLlano;
+      if (J.minerales < precio) { u.orden = 'nada'; u.ruta = null; u.trazas = []; m.efectos.push({ tipo: 'sinCamino', x1: u.x, y1: u.y, j: u.j, t: m.t }); return; }
+      J.minerales -= precio; terr[c] = T.CAMINO; m.paso[c] = 1; m.pasoV[c] = 1; m.hayCaminos = true; m.terrenoV++;
+    }
+    if (u.fallo) { u.fallo = false; u.orden = 'nada'; u.trazas = []; m.efectos.push({ tipo: 'sinCamino', x1: u.x, y1: u.y, j: u.j, t: m.t, corte: true }); return; }
+    if (avanzar(m, u) || (!u.ruta && !u.pend)) {
+      const sig = u.trazas.shift();
+      if (sig) { u.dest = sig; pedirRuta(m, u, sig.x, sig.y, 0); } else u.orden = 'nada';
+    }
+  }
   // Ingeniero: cada medio segundo elige el vehículo o edificio propio dañado más cercano; va hasta él y lo repara, gratis
   // y también en pleno combate. En guardia (fijo) solo repara lo que tiene al alcance de la mano.
   function tickIngeniero(m, u) {
@@ -988,6 +1036,7 @@
     if (!d.aire && (u.retira || u.retirando)) retirada(m, u);
     if (!d.arma) { // sin arma: solo se mueve; el ingeniero, además, repara lo que tenga cerca
       if (u.orden === 'atacar') { u.orden = 'nada'; u.obj = 0; }
+      if (u.orden === 'trazar') { tickTraza(m, u); return; }
       if (u.orden !== 'nada') { u.arregla = 0; if (avanzar(m, u) || (!u.ruta && !u.pend)) u.orden = 'nada'; return; }
       if (d.repara) tickIngeniero(m, u);
       return;
@@ -1048,11 +1097,13 @@
   // ---------- cosecha ----------
   function minaCercana(m, u) {
     const N = m.N, rx = u.pref ? u.pref.x : u.x, ry = u.pref ? u.pref.y : u.y;
+    if (u.vetadas && m.t - u.tVeto > 2400) u.vetadas = null; // pasado un rato vuelve a probar: puede que ya haya camino
     if (u.quiere === 2 && !m.raros.length) u.quiere = 1; // se acabaron los raros: vuelve a los minerales
     const lista = u.quiere === 2 ? m.raros : m.minas;
     let mejor = -1, md = Infinity;
     for (let k = 0; k < lista.length; k++) {
       const c = lista[k];
+      if (u.vetadas && u.vetadas.has(c)) continue;
       const d = Math.hypot((c % N) + 0.5 - rx, ((c / N) | 0) + 0.5 - ry) + ((c * 7 + u.id * 13) % 5) * 0.3;
       if (d < md) { md = d; mejor = c; }
     }
@@ -1097,7 +1148,7 @@
         if (u.pend) break;
         const cerca = Math.hypot((u.celda % N) + 0.5 - u.x, ((u.celda / N) | 0) + 0.5 - u.y) < 0.9;
         if (cerca) { u.ruta = null; u.v = 0; u.est = 'cosechar'; break; } // basta con estar junto a la celda
-        if (!u.ruta) { u.est = 'espera'; u.espera = 40; break; }
+        if (!u.ruta) { (u.vetadas || (u.vetadas = new Set())).add(u.celda); u.tVeto = m.t; u.est = 'espera'; u.espera = 40; break; } // no llega a esa mina (bosque por medio): prueba otra
         avanzar(m, u);
         break;
       }
@@ -1153,7 +1204,7 @@
   function tickProduccion(m, j) {
     const J = m.jug[j];
     if (!J.vivo) return;
-    const factor = J.admin ? 4 : J.uso > J.prod ? 0.5 : 1; // déficit de energía: todo a media velocidad
+    const factor = J.tr.vel * (J.uso > J.prod ? 0.5 : 1); // déficit de energía: todo a media velocidad (y el multiplicador de ADMIN)
     if (m.t % ECON.goteoCada === 0) J.minerales += 1; // ingreso mínimo del patio: evita el bloqueo total
     // Investigaciones: avanzan en su edificio sin frenar obras ni unidades; si el edificio cae, se devuelve el costo.
     for (let k = J.inv.length - 1; k >= 0; k--) {
@@ -1202,15 +1253,15 @@
       if (fab.prog < UNID[tipo].tiempo) continue;
       fab.cola.shift(); fab.pago.shift(); fab.prog = 0; q.n--; J.aguaUso += UNID[tipo].agua || 0;
       if (fab.bucle && (cat !== 'aire' || W.cupoAire(m, j).hay + 1 < W.cupoAire(m, j).cupo)) { fab.cola.push(tipo); fab.pago.push(false); q.n++; }
-      const u = crearUnidad(m, j, tipo, cat === 'aire' ? Math.floor(fab.cy) * m.N + Math.floor(fab.cx) : W.cercaLibre(m, fab.cx, fab.y + fab.tam + 0.5));
+      const u = crearUnidad(m, j, tipo, cat === 'aire' ? Math.floor(fab.cy) * m.N + Math.floor(fab.cx) : W.cercaLibre(m, fab.cx, fab.y + fab.tam + 0.5, cat === 'veh'));
       if (cat === 'aire') { const casa = aerodromoLibre(m, u) || fab; posar(m, u, casa); } // el avión nace posado en un aeródromo con sitio
       if (fab.reunion) { // va al punto de reunión del edificio
         if (tipo === 'cosechadora') u.pref = { x: fab.reunion.x, y: fab.reunion.y };
         else if (cat === 'aire') u.patrulla = { pts: [{ x: fab.reunion.x, y: fab.reunion.y }], i: 0 }; // el punto de reunión de un aeródromo es un punto de patrulla
-        else { const c = W.cercaLibre(m, fab.reunion.x, fab.reunion.y); asignar(m, u, { t: 'mover', x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 }); }
+        else { const c = W.cercaLibre(m, fab.reunion.x, fab.reunion.y, cat === 'veh'); asignar(m, u, { t: 'mover', x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 }); }
       } else if (tipo !== 'cosechadora' && cat !== 'aire') { // se aparta de la puerta, hacia el centro del mapa
         const cx = m.N / 2 - fab.cx, cy = m.N / 2 - fab.cy, cd = Math.hypot(cx, cy) || 1;
-        const c = W.cercaLibre(m, fab.cx + (cx / cd) * (fab.tam + 2), fab.cy + (cy / cd) * (fab.tam + 2));
+        const c = W.cercaLibre(m, fab.cx + (cx / cd) * (fab.tam + 2), fab.cy + (cy / cd) * (fab.tam + 2), cat === 'veh');
         u.orden = 'mover'; u.dest = { x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 };
         pedirRuta(m, u, u.dest.x, u.dest.y, 0);
       }
@@ -1334,7 +1385,7 @@
         }
       }
     }
-    for (let j = 0; j < 2; j++) if (m.jug[j].admin) m.niebla[j].fill(2); // modo ADMIN: todo el mapa a la vista
+    for (let j = 0; j < 2; j++) if (m.jug[j].tr.mapa) m.niebla[j].fill(2); // ADMIN: todo el mapa a la vista
     for (const p of m.puestos) { // una antena capturada da visión de su zona
       if (p.tipo !== 'antena' || p.dueno < 0) continue;
       const f = m.niebla[p.dueno], R = ECON.antenaRadio, px = Math.floor(p.x), py = Math.floor(p.y);
@@ -1402,7 +1453,7 @@
         const N = m.N;
         e.cola.forEach((t, i) => { if (e.pago[i]) devolver(m.jug[e.j], UNID[t]); m.jug[e.j].colas[t].n--; }); // lo que tenía encargado (y pagado) se devuelve
         e.cola.length = 0;
-        for (let dy = 0; dy < e.tam; dy++) for (let dx = 0; dx < e.tam; dx++) { const i = (e.y + dy) * N + e.x + dx; m.ocup[i] = 0; m.paso[i] = 1; }
+        for (let dy = 0; dy < e.tam; dy++) for (let dx = 0; dx < e.tam; dx++) { const i = (e.y + dy) * N + e.x + dx; m.ocup[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
       }
     }
     if (muertos) {

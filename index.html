@@ -59,7 +59,7 @@
   #ayuda kbd { font: inherit; color: var(--tinta); }
   #formas { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; }
   #formas .grupo { justify-content: center; }
-  #vender, #trinchera, #retiro, #desplegar, #descargar { justify-content: center; margin-top: 4px; }
+  #vender, #trinchera, #retiro, #desplegar, #descargar, #trazar { justify-content: center; margin-top: 4px; }
   .chip.debe { border-style: dashed; color: var(--suave); }
   /* Táctil: botonera sobre el mapa para lo que con teclado son teclas, y controles más grandes. */
   #tactil { position: fixed; left: 150px; right: 244px; bottom: 8px; z-index: 3; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; align-items: flex-end; pointer-events: none; }
@@ -73,6 +73,13 @@
   body.tactil .chip { padding: 8px 9px; font-size: 12px; }
   body.tactil .grupo { padding: 9px 10px; font-size: 12px; }
   body.tactil #ayuda summary { padding: 8px 10px; }
+  #admin { position: fixed; top: 44px; left: 8px; z-index: 4; width: 214px; display: flex; flex-direction: column; gap: 4px; padding: 8px; background: var(--panel); border: 1px solid var(--tinta); border-radius: 3px; }
+  #admin .cab { display: flex; justify-content: space-between; align-items: center; color: var(--mal); letter-spacing: .12em; }
+  #admin .cab button { font: inherit; border: 0; background: none; color: var(--tinta); cursor: pointer; padding: 0 4px; }
+  #admin .grupo { cursor: pointer; }
+  #admin .grupo::before { content: '○'; } #admin .grupo.on::before { content: '●'; }
+  #admin .fila2 { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; } #admin .fila2 span { flex-basis: 100%; font-size: 10px; color: var(--suave); margin-top: 3px; }
+  #admin .fila2 .grupo::before { content: none; }
   #abajo { position: fixed; left: 8px; bottom: 8px; z-index: 3; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; pointer-events: none; }
   #rend { border-collapse: collapse; background: var(--panel); border: 1px solid var(--linea); border-radius: 2px; font-size: 10px; line-height: 1.35; opacity: 0.92; pointer-events: auto; cursor: pointer; }
   #rend td { padding: 0 6px; } #rend td:last-child { text-align: right; color: var(--tinta); font-variant-numeric: tabular-nums; }
@@ -147,6 +154,7 @@
       <div>infantería quieta en el bosque: oculta hasta tenerla muy cerca</div>
       <div>los vehículos destruidos dejan chatarra para las cosechadoras</div>
       <div>transporte: clic derecho con infantería elegida para subir; <kbd>U</kbd> baja</div>
+      <div>los vehículos no entran al bosque; la excavadora (<kbd>K</kbd>) abre caminos</div>
       <div>chapa verde sobre el patio: tiene un edificio listo para colocar</div>
       <div>cazas y bombarderos atacan de pasada; el helicóptero se queda en el aire</div>
       <div>patio móvil (fábrica, nivel 2): <kbd>D</kbd> lo despliega como patio;</div>
@@ -157,10 +165,21 @@
       <div>clic en la cola, <kbd>×</kbd> o clic derecho en botón: cancelar</div>
       <div><kbd>P</kbd> pausa · <kbd>T</kbd> tema · <kbd>N</kbd> silenciar</div>
       <div id="semilla"></div>
-      <div>escribe <kbd>god</kbd>: recursos infinitos</div>
+      <div>escribe <kbd>god</kbd>: recursos infinitos · <kbd>admin</kbd>: panel de trampas</div>
   </details>
+  <div id="admin" hidden>
+    <div class="cab"><b>ADMIN</b><button type="button" data-t="cerrar" title="Cerrar (o escribe admin otra vez)">×</button></div>
+    <button type="button" class="grupo" data-t="recursos">recursos infinitos</button>
+    <button type="button" class="grupo" data-t="requisitos">sin requisitos ni nivel</button>
+    <button type="button" class="grupo" data-t="libre">construir donde sea</button>
+    <button type="button" class="grupo" data-t="mapa">mapa a la vista</button>
+    <button type="button" class="grupo" data-t="invulnerable">unidades invulnerables</button>
+    <button type="button" class="grupo" data-t="ia">rival detenido</button>
+    <div class="fila2"><span>producción</span><button type="button" class="grupo" data-t="vel" data-v="1">×1</button><button type="button" class="grupo" data-t="vel" data-v="2">×2</button><button type="button" class="grupo" data-t="vel" data-v="4">×4</button><button type="button" class="grupo" data-t="vel" data-v="10">×10</button></div>
+    <div class="fila2"><span>de un solo uso</span><button type="button" class="grupo" data-t="nivel3">nivel 3</button><button type="button" class="grupo" data-t="mejoras">todas las mejoras</button></div>
+  </div>
   <div id="tactil" hidden>
-    <button type="button" data-c="KeyA" data-u>atacar al avanzar</button><button type="button" data-c="KeyR" data-u>patrulla</button><button type="button" data-c="KeyS" data-u>detener</button><button type="button" data-c="KeyG" data-u>guardia</button><button type="button" data-c="KeyF" data-u>formación</button><button type="button" data-c="KeyE" data-u>explorar</button>
+    <button type="button" data-c="KeyA" data-u>atacar al avanzar</button><button type="button" data-c="KeyR" data-u>patrulla</button><button type="button" data-c="KeyS" data-u>detener</button><button type="button" data-c="KeyG" data-u>guardia</button><button type="button" data-c="KeyF" data-u>formación</button><button type="button" data-c="KeyE" data-u>explorar</button><button type="button" data-c="KeyK" hidden>trazar camino</button>
     <span class="sep"></span>
     <button type="button" data-c="Escape">soltar</button><button type="button" data-c="KeyB">patio</button><button type="button" data-c="KeyQ">cuarteles</button><button type="button" data-c="KeyV">fábricas</button><button type="button" data-c="KeyX">aeródromos</button><button type="button" data-c="Space">alerta</button><button type="button" data-c="KeyP">pausa</button>
   </div>
@@ -190,6 +209,7 @@
       <button type="button" class="grupo on" data-f="grupo">grupo</button><button type="button" class="grupo" data-f="linea">línea</button><button type="button" class="grupo" data-f="columna">columna</button>
       <button type="button" class="grupo" data-f="cuna">cuña</button><button type="button" class="grupo" data-f="cuadro">cuadro</button></div></section>
     <div id="sel" class="tenue"></div>
+    <button type="button" id="trazar" class="btn" hidden title="La excavadora va hasta el punto que marques dejando camino. Abre el bosque; por camino los vehículos van más rápido.">Trazar camino</button>
     <button type="button" id="descargar" class="btn" hidden></button>
     <button type="button" id="desplegar" class="btn" hidden title="Convierte el patio móvil en un patio, donde está. No se puede replegar.">Desplegar patio</button>
     <button type="button" id="retiro" class="btn" hidden title="Con poca vida, la unidad se va sola a reparar y luego vuelve a su puesto."></button>
@@ -213,11 +233,11 @@
     <button type="button" data-v="aereo">aéreo<small>aviación</small></button><button type="button" data-v="defensivo">defensivo<small>torres, ataca tarde</small></button><button type="button" data-v="asalto">de asalto<small>ataca pronto</small></button></div></div>
   <div><h2>Semilla del mapa</h2><input id="op-s" inputmode="numeric" placeholder="al azar" autocomplete="off"></div>
   <button type="button" id="empezar">Empezar</button>
-  <div id="version">versión 37</div>
+  <div id="version">versión 38</div>
 </div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><p><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 37' };
+globalThis.W = { VERSION: 'versión 38' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -237,7 +257,7 @@ globalThis.W = { VERSION: 'versión 37' };
 
   W.N = 512; // lado del mapa en celdas (la cantidad de recursos se escala sola)
   W.TPS = 20; // ticks de simulación por segundo
-  W.TERRENO = { LLANO: 0, ROCA: 1, AGUA: 2, BOSQUE: 3 };
+  W.TERRENO = { LLANO: 0, ROCA: 1, AGUA: 2, BOSQUE: 3, CAMINO: 4 }; // el bosque solo lo cruza la infantería; el camino lo abre la excavadora
 
   // nivel: nivel tecnológico mínimo (1 si no se indica). raros / info: costo en esos recursos.
   // energia > 0 produce, < 0 consume. tiempo en ticks. costo en minerales; pet = petróleo.
@@ -289,6 +309,8 @@ globalThis.W = { VERSION: 'versión 37' };
     blindado:    { nombre: 'Blindado ligero', cat: 'veh', vida: 150, vel: 0.15, costo: 350, pet: 20, tiempo: 180, blindaje: 'pesado', arma: 'ametralladora', vision: 8, radio: 0.17, req: ['fabrica'], agua: 1, giro: 0.2, acel: 0.012, giroT: 0.3 },
     antiaereoMovil: { nombre: 'Antiaéreo móvil', cat: 'veh', vida: 220, vel: 0.09, costo: 700, pet: 40, tiempo: 300, blindaje: 'pesado', arma: 'flakMovil', vision: 8, radio: 0.20, req: ['fabrica'], agua: 2, giro: 0.12, acel: 0.006, giroT: 0.28, nivel: 2 },
     // Fase 2a. despliega: se convierte en un patio donde está (orden 'desplegar'); no hay vuelta atrás.
+    // traza: con la orden 'trazar' deja camino a su paso (y solo entonces entra al bosque, talándolo).
+    excavadora:  { nombre: 'Excavadora', cat: 'veh', vida: 300, vel: 0.07, costo: 500, pet: 20, tiempo: 240, blindaje: 'pesado', arma: null, vision: 6, radio: 0.24, req: ['fabrica'], agua: 1, giro: 0.12, acel: 0.006, traza: true },
     patioMovil:  { nombre: 'Patio móvil', cat: 'veh', vida: 600, vel: 0.05, costo: 2500, pet: 100, tiempo: 600, blindaje: 'pesado', arma: null, vision: 6, radio: 0.30, req: ['fabrica'], agua: 2, giro: 0.07, acel: 0.003, nivel: 2, despliega: true },
     // Fase 2b. sigilo: quieto, no se le ve hasta tenerlo muy cerca. plazas: lleva infantería dentro (órdenes 'cargar' y 'descargar').
     // mando: radio en el que los suyos ven en redondo y giran más rápido; gasta información mientras funciona.
@@ -350,7 +372,7 @@ globalThis.W = { VERSION: 'versión 37' };
     cartografia: { nombre: 'Cartografía', info: 200, nivel: 3, que: 'Revela el terreno de todo el mapa.' },
   };
 
-  W.ECON = { inicio: 2500, petInicio: 150, cosecha: 5, descarga: 25, colaMax: 9, separacionColocar: 3, goteoCada: 5, vistaInicial: 22, obrasMax: 8, curaUnidad: 0.01, curaEdificio: 0.0025, curaCosto: 0.15, venta: 0.5, trinchera: 0.45, arco: 0.14, arcoTrinchera: 1.05, visAd: 1.3, visLado: 0.75, visAt: 0.3, cono: 1.05, periferia: 1.83, flanco: 1.25, espalda: 1.5, bosqueVeh: 0.6, bosqueCubre: 0.7, reposta: 12, retiroBajo: 0.3, retiroAlto: 0.9, huida: 300, mandoCada: 40, mandoGiro: 1.5, captura: 600, capturaRadio: 2, antenaRadio: 12, depositoCada: 8, tallerRadio: 4, ocultaVe: 2.5, chatarra: 0.25, reparaRadio: 8, reparaVeh: 0.5, reparaEdif: 0.8, rangos: [2, 5, 10], rangoDano: 0.1, rangoVida: 0.1, cupoAviones: 5, pasada: 7, orbita: 3.5, fuelCae: 80, cavar: 80, aplasta: 10, bonoProd: 0.5, bonoMax: 2.5 };
+  W.ECON = { inicio: 2500, petInicio: 150, cosecha: 5, descarga: 25, colaMax: 9, separacionColocar: 3, goteoCada: 5, vistaInicial: 22, obrasMax: 8, curaUnidad: 0.01, curaEdificio: 0.0025, curaCosto: 0.15, venta: 0.5, trinchera: 0.45, arco: 0.14, arcoTrinchera: 1.05, visAd: 1.3, visLado: 0.75, visAt: 0.3, cono: 1.05, periferia: 1.83, flanco: 1.25, espalda: 1.5, bosqueVeh: 0.6, bosqueCubre: 0.7, reposta: 12, retiroBajo: 0.3, retiroAlto: 0.9, huida: 300, caminoVel: 1.3, trazaVel: 0.45, caminoLlano: 4, caminoBosque: 12, mandoCada: 40, mandoGiro: 1.5, captura: 600, capturaRadio: 2, antenaRadio: 12, depositoCada: 8, tallerRadio: 4, ocultaVe: 2.5, chatarra: 0.25, reparaRadio: 8, reparaVeh: 0.5, reparaEdif: 0.8, rangos: [2, 5, 10], rangoDano: 0.1, rangoVida: 0.1, cupoAviones: 5, pasada: 7, orbita: 3.5, fuelCae: 80, cavar: 80, aplasta: 10, bonoProd: 0.5, bonoMax: 2.5 };
 })();
 
 // ===== sim/mapa.js =====
@@ -508,6 +530,34 @@ globalThis.W = { VERSION: 'versión 37' };
       sitioEn[y * N + x] = 1; sitioEn[espejo(y * N + x)] = 1; n++;
     }
 
+    // Corredor para vehículos: el bosque solo lo cruza la infantería, así que entre las dos bases tiene que quedar al menos
+    // un paso de llano. Se busca el camino que menos bosque tala (búsqueda 0-1) y se abre con dos celdas de ancho, en espejo.
+    {
+      const INF = 1e9, coste = new Int32Array(NN).fill(INF), de = new Int32Array(NN).fill(-1), cola = new Int32Array(NN * 2 + 4);
+      let ini = NN, fin = NN; // cola doble: lo gratis entra por delante, lo que cuesta por detrás
+      const a0 = A.y * N + A.x, b0 = B.y * N + B.x;
+      coste[a0] = 0; cola[fin++] = a0;
+      while (ini < fin) {
+        const c = cola[ini++], cx = c % N, cy = (c / N) | 0;
+        if (c === b0) break;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const x = cx + dx, y = cy + dy;
+          if (x < 1 || y < 1 || x >= N - 1 || y >= N - 1) continue;
+          const n = y * N + x, t = terreno[n];
+          if (t === T.ROCA || t === T.AGUA) continue;
+          const w = t === T.BOSQUE ? 1 : 0, nc = coste[c] + w;
+          if (nc >= coste[n]) continue;
+          coste[n] = nc; de[n] = c;
+          if (w) { if (fin < cola.length) cola[fin++] = n; } else if (ini > 0) cola[--ini] = n;
+        }
+      }
+      if (coste[b0] < INF && coste[b0] > 0) {
+        for (let c = b0; c >= 0 && c !== a0; c = de[c]) {
+          for (const d of [0, 1, N, N + 1]) { const i = c + d; if (i < NN && terreno[i] === T.BOSQUE) terreno[i] = T.LLANO; const e = espejo(i); if (e >= 0 && e < NN && terreno[e] === T.BOSQUE) terreno[e] = T.LLANO; }
+        }
+      }
+    }
+
     const sitioTipo = new Map(sitios.map((s) => [s.y * N + s.x, s.tipo]));
     return { N, semilla, terreno, mineral, tipoMin, sitios, sitioEn, sitioTipo, bases, alcanzable, puestos };
   };
@@ -546,10 +596,12 @@ globalThis.W = { VERSION: 'versión 37' };
 
     // Devuelve la lista de celdas desde (x0,y0) hasta la primera cuyo centro
     // quede a `radio` o menos de (mx,my); [] si ya está ahí; null si no hay paso.
-    return function (paso, terreno, x0, y0, mx, my, radio) {
+    // kh: factor de la estimación (1 normal; 0,7 cuando hay caminos, para que el cálculo los encuentre y los prefiera).
+    return function (paso, terreno, x0, y0, mx, my, radio, kh) {
+      kh = kh || 1;
       gen++; hI.length = 0; hF.length = 0;
       const r2 = Math.max(radio, 0.75) ** 2, ini = y0 * N + x0;
-      const h = (x, y) => { const dx = Math.abs(x + 0.5 - mx), dy = Math.abs(y + 0.5 - my); return Math.max(dx, dy) + 0.4142 * Math.min(dx, dy); };
+      const h = (x, y) => { const dx = Math.abs(x + 0.5 - mx), dy = Math.abs(y + 0.5 - my); return (Math.max(dx, dy) + 0.4142 * Math.min(dx, dy)) * kh; };
       g[ini] = 0; padre[ini] = -1; visto[ini] = gen; mete(ini, h(x0, y0));
       while (hI.length) {
         const c = saca();
@@ -567,7 +619,7 @@ globalThis.W = { VERSION: 'versión 37' };
           const n = ny * N + nx;
           if (!paso[n] || cerrado[n] === gen) continue;
           if (d >= 4 && (!paso[cy * N + nx] || !paso[ny * N + cx])) continue;
-          const ng = g[c] + (d >= 4 ? 1.4142 : 1) * (terreno[n] === 3 ? 1.7 : 1);
+          const ng = g[c] + (d >= 4 ? 1.4142 : 1) * (terreno[n] === 3 ? 1.7 : terreno[n] === 4 ? 0.7 : 1);
           if (visto[n] !== gen || ng < g[n]) { visto[n] = gen; g[n] = ng; padre[n] = c; mete(n, ng + h(nx, ny)); }
         }
       }
@@ -590,6 +642,7 @@ globalThis.W = { VERSION: 'versión 37' };
   function nuevoJugador(inicio) {
     return {
       minerales: inicio || ECON.inicio, prod: 0, uso: 0, cuenta: {}, vivo: true, dios: false, admin: false,
+      tr: { requisitos: false, libre: false, vel: 1, mapa: false, invulnerable: false }, // interruptores del panel ADMIN (los recursos infinitos son 'dios')
       obras: [], // [{ tipo, prog, listo, patio }]: cada patio lleva las suyas; dentro de un patio, tipos distintos se reparten la velocidad
       patiosMax: 1, // cuántos patios ha llegado a tener a la vez
       retiro: false, // retirada automática por defecto para las unidades nuevas
@@ -607,7 +660,7 @@ globalThis.W = { VERSION: 'versión 37' };
     const mapa = W.generarMapa(semilla, op.N), N = mapa.N, NN = N * N;
     const m = {
       N, semilla, mapa, t: 0, ents: [], porId: new Map(), sigId: 1,
-      ocup: new Int32Array(NN), paso: new Uint8Array(NN),
+      ocup: new Int32Array(NN), paso: new Uint8Array(NN), pasoV: new Uint8Array(NN), hayCaminos: false, terrenoV: 0,
       jug: [nuevoJugador(op.inicio), nuevoJugador(op.inicio)],
       niebla: [new Uint8Array(NN), new Uint8Array(NN)],
       cola: [], colaRutas: [], efectos: [], proy: [], barridos: [], trincheras: new Map(), focos: [[], []], sigFoco: 1, sigMision: 1, minas: [], raros: [], ganador: -1, embarques: [],
@@ -615,7 +668,8 @@ globalThis.W = { VERSION: 'versión 37' };
       ruta: W.crearRuta(N),
     };
     for (let i = 0; i < NN; i++) {
-      m.paso[i] = mapa.terreno[i] === T.LLANO || mapa.terreno[i] === T.BOSQUE ? 1 : 0;
+      m.paso[i] = mapa.terreno[i] === T.LLANO || mapa.terreno[i] === T.BOSQUE || mapa.terreno[i] === T.CAMINO ? 1 : 0; // a pie
+      m.pasoV[i] = mapa.terreno[i] === T.LLANO || mapa.terreno[i] === T.CAMINO ? 1 : 0; // sobre ruedas u orugas: el bosque no
       if (mapa.tipoMin[i] === 1) m.minas.push(i); else if (mapa.tipoMin[i] === 2) m.raros.push(i);
     }
     for (let j = 0; j < 2; j++) {
@@ -641,7 +695,7 @@ globalThis.W = { VERSION: 'versión 37' };
   function crearEdificio(m, j, tipo, x, y) {
     const d = EDIF[tipo], N = m.N;
     const e = { id: m.sigId++, j, tipo, edif: true, x, y, tam: d.tam, cx: x + d.tam / 2, cy: y + d.tam / 2, vida: d.vida, vidaMax: d.vida, recarga: 0, obj: 0, reunion: null, acum: 0, nace: m.t, cola: [], pago: [], prog: 0, sinAgua: false, sinFondos: false, bucle: false, angT: Math.atan2(N / 2 - y, N / 2 - x) };
-    for (let dy = 0; dy < d.tam; dy++) for (let dx = 0; dx < d.tam; dx++) { const i = (y + dy) * N + x + dx; m.ocup[i] = e.id; m.paso[i] = 0; }
+    for (let dy = 0; dy < d.tam; dy++) for (let dx = 0; dx < d.tam; dx++) { const i = (y + dy) * N + x + dx; m.ocup[i] = e.id; m.paso[i] = 0; m.pasoV[i] = 0; }
     m.ents.push(e); m.porId.set(e.id, e);
     return e;
   }
@@ -668,6 +722,7 @@ globalThis.W = { VERSION: 'versión 37' };
       cola: [], patrulla: null, explora: false, // órdenes encadenadas, ruta de patrulla, exploración automática
       retira: m.jug[j].retiro, retirando: false, volver: null, tRet: 0, huye: 0, // retirada automática a reparar; cosechadora que huye
       bajas: 0, rango: 0, // veteranía
+      trazas: [], // excavadora: tramos de camino pendientes
       pasajeros: [], sube: 0, dentro: false, // transporte: quién va dentro; infantería: a qué transporte va a subir
     };
     m.ents.push(u); m.porId.set(u.id, u);
@@ -676,21 +731,22 @@ globalThis.W = { VERSION: 'versión 37' };
   }
   W.crearEdificio = crearEdificio; W.crearUnidad = crearUnidad;
 
-  W.cercaLibre = function (m, x, y) {
+  W.cercaLibre = function (m, x, y, veh) { // veh: celda libre para un vehículo (no vale el bosque)
+    const paso = veh ? m.pasoV : m.paso;
     const N = m.N, cx = Math.max(0, Math.min(N - 1, Math.floor(x))), cy = Math.max(0, Math.min(N - 1, Math.floor(y)));
     for (let k = 0; k < ESPIRAL.length; k++) {
       const xx = cx + ESPIRAL[k][0], yy = cy + ESPIRAL[k][1];
       if (xx < 0 || yy < 0 || xx >= N || yy >= N) continue;
-      if (m.paso[yy * N + xx]) return yy * N + xx;
+      if (paso[yy * N + xx]) return yy * N + xx;
     }
     return cy * N + cx;
   };
 
   // Disponible = tiene los edificios requeridos y el nivel tecnológico.
-  W.disponible = function (m, j, d) { return W.tieneReq(m, j, d.req) && (d.nivel || 1) <= m.jug[j].nivel; };
+  W.disponible = function (m, j, d) { return W.tieneReq(m, j, d.req) && ((d.nivel || 1) <= m.jug[j].nivel || m.jug[j].tr.requisitos); };
   W.tieneReq = function (m, j, req) {
     const c = m.jug[j].cuenta;
-    if (m.jug[j].admin) return true; // modo ADMIN: sin requisitos
+    if (m.jug[j].tr.requisitos) return true; // ADMIN: sin requisitos
     for (let k = 0; k < req.length; k++) if (!c[req[k]]) return false;
     return true;
   };
@@ -721,7 +777,7 @@ globalThis.W = { VERSION: 'versión 37' };
       if (!agua) return false;
     }
     if (d.libre && !m.niebla[j][y * N + x]) return false; // solo en terreno explorado
-    let junto = !!d.libre || m.jug[j].admin; // en modo ADMIN se construye en cualquier parte
+    let junto = !!d.libre || m.jug[j].tr.libre; // ADMIN: se construye en cualquier parte
     const s = ECON.separacionColocar;
     for (let k = 0; k < m.ents.length; k++) {
       const e = m.ents[k];
@@ -773,6 +829,8 @@ globalThis.W = { VERSION: 'versión 37' };
   // ---------- comandos ----------
   W.orden = function (m, cmd) { m.cola.push(cmd); };
 
+  // Por dónde puede pasar cada unidad: los vehículos no entran al bosque, salvo la excavadora mientras traza un camino.
+  const pasoDe = (m, u) => (UNID[u.tipo].cat === 'veh' && u.orden !== 'trazar' ? m.pasoV : m.paso);
   function pedirRuta(m, u, x, y, radio) {
     if (UNID[u.tipo].aire) { // un avión no busca camino: va en línea recta
       const casa = u.casa ? m.porId.get(u.casa) : null, rv = UNID[u.tipo].radioVuelo;
@@ -780,6 +838,9 @@ globalThis.W = { VERSION: 'versión 37' };
       const N = m.N, cx = Math.max(0.5, Math.min(N - 0.5, x)), cy = Math.max(0.5, Math.min(N - 0.5, y));
       u.ruta = [Math.floor(cy) * N + Math.floor(cx)]; u.ri = 0; u.fin = { x: cx, y: cy }; u.pend = null; u.meta = { x, y, radio };
       return;
+    }
+    if (radio === 0 && x >= 0 && y >= 0 && x < m.N && y < m.N && pasoDe(m, u) === m.pasoV && !m.pasoV[Math.floor(y) * m.N + Math.floor(x)] && m.paso[Math.floor(y) * m.N + Math.floor(x)]) {
+      const c = W.cercaLibre(m, x, y, true); x = (c % m.N) + 0.5; y = ((c / m.N) | 0) + 0.5; // un vehículo no entra al bosque: se queda en el borde
     }
     if (!u.pend) m.colaRutas.push(u.id);
     u.pend = { x, y, radio }; u.meta = u.pend;
@@ -875,6 +936,18 @@ globalThis.W = { VERSION: 'versión 37' };
     }
   }
 
+  // Interruptores del panel ADMIN. Los de un solo uso (nivel3, mejoras) no se deshacen.
+  function trampa(m, j, clave, valor) {
+    const J = m.jug[j];
+    if (clave === 'recursos') { if (!!valor !== J.dios) { J.dios = !!valor; if (J.dios) J.antesDios = [J.minerales, J.petroleo, J.raros, J.info]; else [J.minerales, J.petroleo, J.raros, J.info] = J.antesDios; } }
+    else if (clave === 'vel') J.tr.vel = [1, 2, 4, 10].includes(+valor) ? +valor : 1;
+    else if (clave === 'nivel3') J.nivel = 3;
+    else if (clave === 'mejoras') {
+      for (const k in TEC) if (!TEC[k].sube) J.mejoras[k] = true;
+      for (const e of m.ents) if (!e.edif && e.j === j) { const nueva = Math.round(vidaDe(J, e.tipo) * (1 + ECON.rangoVida * e.rango)); if (nueva !== e.vidaMax) { e.vida = e.vida * (nueva / e.vidaMax); e.vidaMax = nueva; } }
+    } else if (clave in J.tr) J.tr[clave] = !!valor;
+    J.admin = J.dios || J.tr.requisitos || J.tr.libre || J.tr.vel > 1 || J.tr.mapa || J.tr.invulnerable;
+  }
   function aplicar(m, cmd) {
     const J = m.jug[cmd.j];
     if (!J || !J.vivo) return;
@@ -887,15 +960,23 @@ globalThis.W = { VERSION: 'versión 37' };
         J.dios = !J.dios;
         if (J.dios) J.antesDios = [J.minerales, J.petroleo, J.raros, J.info]; else [J.minerales, J.petroleo, J.raros, J.info] = J.antesDios;
         return;
-      case 'admin': // modo ADMIN, para probar: todo lo de GOD más nivel 3, todas las mejoras, sin requisitos, todo cuatro veces más rápido (300 % más) y el mapa a la vista
+      case 'admin': // atajo: prende (o apaga) todo lo del panel ADMIN de una vez, con producción ×4
         J.admin = !J.admin;
-        if (J.admin !== J.dios) { J.dios = J.admin; if (J.dios) J.antesDios = [J.minerales, J.petroleo, J.raros, J.info]; else [J.minerales, J.petroleo, J.raros, J.info] = J.antesDios; }
-        if (J.admin) {
-          J.nivel = 3;
-          for (const k in TEC) if (!TEC[k].sube) J.mejoras[k] = true;
-          for (const e of m.ents) if (!e.edif && e.j === cmd.j) { const nueva = Math.round(vidaDe(J, e.tipo) * (1 + ECON.rangoVida * e.rango)); if (nueva !== e.vidaMax) { e.vida = e.vida * (nueva / e.vidaMax); e.vidaMax = nueva; } }
+        for (const [clave, valor] of [['recursos', J.admin], ['requisitos', J.admin], ['libre', J.admin], ['vel', J.admin ? 4 : 1], ['mapa', J.admin]]) trampa(m, cmd.j, clave, valor);
+        if (J.admin) { trampa(m, cmd.j, 'nivel3', true); trampa(m, cmd.j, 'mejoras', true); }
+        return;
+      case 'trampa': // un interruptor del panel ADMIN
+        trampa(m, cmd.j, cmd.clave, cmd.valor);
+        return;
+      case 'trazar': { // la excavadora va hasta el punto dejando camino (con enc, se añade otro tramo)
+        for (const u of propias(m, cmd)) {
+          if (!UNID[u.tipo].traza) continue;
+          if (cmd.enc && u.orden === 'trazar') { if (u.trazas.length < 12) u.trazas.push({ x: cmd.x, y: cmd.y }); continue; }
+          limpiar(u); u.obj = 0; u.trazas = []; u.orden = 'trazar'; u.dest = { x: cmd.x, y: cmd.y }; u.ruta = null; u.guardia = false;
+          pedirRuta(m, u, cmd.x, cmd.y, 0);
         }
         return;
+      }
       case 'construir': {
         const d = EDIF[cmd.tipo];
         if (!d || cmd.tipo === 'patio' || !W.disponible(m, cmd.j, d) || !W.puedePagar(J, d)) return;
@@ -1082,9 +1163,10 @@ globalThis.W = { VERSION: 'versión 37' };
     if (u.ri >= u.ruta.length) { u.ruta = null; u.v = 0; return true; }
     const N = m.N, d = UNID[u.tipo], c = u.ruta[u.ri];
     const replantear = () => { u.ruta = null; u.v = 0; u.tReplan = m.t; if (u.meta) pedirRuta(m, u, u.meta.x, u.meta.y, u.meta.radio); };
-    if (!d.aire && !m.paso[c]) { replantear(); return false; } // alguien construyó en el punto de paso
+    if (!d.aire && !pasoDe(m, u)[c] && pasoDe(m, u)[Math.floor(u.y) * N + Math.floor(u.x)]) { replantear(); return false; } // alguien construyó en el punto de paso
     const vel = d.vel * (d.cat === 'veh' && m.jug[u.j].mejoras.motores ? 1.15 : 1);
-    const vmax = (u.tope && u.tope < vel ? u.tope : vel) * (d.cat === 'veh' && m.mapa.terreno[Math.floor(u.y) * N + Math.floor(u.x)] === T.BOSQUE ? ECON.bosqueVeh : 1); // el bosque frena a los vehículos, no a la tropa a pie
+    const terr = m.mapa.terreno[Math.floor(u.y) * N + Math.floor(u.x)];
+    const vmax = (u.tope && u.tope < vel ? u.tope : vel) * (u.orden === 'trazar' ? ECON.trazaVel : d.cat === 'veh' && terr === T.CAMINO ? ECON.caminoVel : 1); // por camino los vehículos van más rápido; trazándolo, despacio
     const alFinal = u.ri === u.ruta.length - 1 && u.fin;
     const tx = alFinal ? u.fin.x : (c % N) + 0.5, ty = alFinal ? u.fin.y : ((c / N) | 0) + 0.5, dx = tx - u.x, dy = ty - u.y, dd = Math.hypot(dx, dy);
     let alin = 1;
@@ -1109,18 +1191,18 @@ globalThis.W = { VERSION: 'versión 37' };
   }
 
   // ¿Hay paso en línea recta, con el ancho de una unidad?
-  function despejado(m, x0, y0, x1, y1) {
+  function despejado(m, x0, y0, x1, y1, paso) {
     const N = m.N, dx = x1 - x0, dy = y1 - y0, L = Math.hypot(dx, dy);
     if (L < 1e-6) return true;
     const n = Math.ceil(L / 0.25), ox = (-dy / L) * 0.3, oy = (dx / L) * 0.3;
     for (let i = 0; i <= n; i++) {
       const x = x0 + (dx * i) / n, y = y0 + (dy * i) / n;
-      if (!m.paso[(y | 0) * N + (x | 0)] || !m.paso[((y + oy) | 0) * N + ((x + ox) | 0)] || !m.paso[((y - oy) | 0) * N + ((x - ox) | 0)]) return false;
+      if (!paso[(y | 0) * N + (x | 0)] || !paso[((y + oy) | 0) * N + ((x + ox) | 0)] || !paso[((y - oy) | 0) * N + ((x - ox) | 0)]) return false;
     }
     return true;
   }
   // Quita los zigzags de la rejilla: salta al punto más lejano que se alcanza en línea recta.
-  function suavizar(m, x, y, ruta) {
+  function suavizar(m, x, y, ruta, paso) {
     const N = m.N, out = [];
     let ax = x, ay = y, i = 0;
     while (i < ruta.length) {
@@ -1128,7 +1210,7 @@ globalThis.W = { VERSION: 'versión 37' };
       const tope = Math.min(ruta.length - 1, i + 24);
       for (let k = i + 1; k <= tope; k++) {
         const c = ruta[k];
-        if (despejado(m, ax, ay, (c % N) + 0.5, ((c / N) | 0) + 0.5)) j = k; else if (k - j > 4) break;
+        if (despejado(m, ax, ay, (c % N) + 0.5, ((c / N) | 0) + 0.5, paso)) j = k; else if (k - j > 4) break;
       }
       out.push(ruta[j]); ax = (ruta[j] % N) + 0.5; ay = ((ruta[j] / N) | 0) + 0.5; i = j + 1;
     }
@@ -1142,14 +1224,15 @@ globalThis.W = { VERSION: 'versión 37' };
       const u = m.porId.get(m.colaRutas.shift());
       if (!u || !u.pend) continue;
       const p = u.pend; u.pend = null; n++;
-      const camino = m.ruta(m.paso, m.mapa.terreno, Math.floor(u.x), Math.floor(u.y), p.x, p.y, p.radio);
+      const paso = pasoDe(m, u);
+      const camino = m.ruta(paso, m.mapa.terreno, Math.floor(u.x), Math.floor(u.y), p.x, p.y, p.radio, m.hayCaminos ? 0.7 : 1);
       if (camino) {
         u.fin = null;
         if (p.radio === 0) { // destino exacto: el último tramo va al punto pedido, no al centro de su celda
           const cf = Math.floor(p.y) * N + Math.floor(p.x);
-          if (p.x >= 0 && p.y >= 0 && p.x < N && p.y < N && m.paso[cf]) { if (camino[camino.length - 1] !== cf) camino.push(cf); u.fin = { x: p.x, y: p.y }; }
+          if (p.x >= 0 && p.y >= 0 && p.x < N && p.y < N && paso[cf]) { if (camino[camino.length - 1] !== cf) camino.push(cf); u.fin = { x: p.x, y: p.y }; }
         }
-        u.ruta = suavizar(m, u.x, u.y, camino); u.ri = 0;
+        u.ruta = m.hayCaminos && paso === m.pasoV ? camino : suavizar(m, u.x, u.y, camino, paso); u.ri = 0; // con caminos, los vehículos siguen la ruta tal cual, para no salirse de ellos
       } else { u.ruta = null; u.fallo = true; }
     }
   }
@@ -1182,7 +1265,7 @@ globalThis.W = { VERSION: 'versión 37' };
       if (!dx && !dy) return;
       const nx = u.x + dx, ny = u.y + dy;
       if (nx < 0.3 || ny < 0.3 || nx > N - 0.3 || ny > N - 0.3) return;
-      if (UNID[u.tipo].aire || m.paso[Math.floor(ny) * N + Math.floor(nx)]) { u.x = nx; u.y = ny; }
+      if (UNID[u.tipo].aire || pasoDe(m, u)[Math.floor(ny) * N + Math.floor(nx)]) { u.x = nx; u.y = ny; }
     }
   }
 
@@ -1263,7 +1346,7 @@ globalThis.W = { VERSION: 'versión 37' };
   W.enBosque = enBosque;
   // ox, oy: de dónde viene el tiro. A un vehículo le duele más por los costados y más aún por la espalda.
   function herir(m, b, arma, mult, de, ox, oy) {
-    if (!puede(arma, b)) return;
+    if (!puede(arma, b) || m.jug[b.j].tr.invulnerable) return; // ADMIN: invulnerables
     let fl = 1;
     if (ox !== undefined && !b.edif && UNID[b.tipo].cat === 'veh') { const s = W.sector(m, b, { x: ox, y: oy }); fl = s === 2 ? ECON.espalda : s === 1 ? ECON.flanco : 1; if (s && m.t - (b.tFlanco === undefined ? -99 : b.tFlanco) > 25) { b.tFlanco = m.t; m.efectos.push({ tipo: 'flanco', x1: b.x, y1: b.y, s, j: b.j, t: m.t }); } }
     b.vida -= fl * arma.dano * (mult || 1) * arma.vs[b.edif ? 'edificio' : UNID[b.tipo].blindaje] * (enTrinchera(m, b) ? ECON.trinchera : 1) * (enBosque(m, b) && UNID[b.tipo].cat === 'inf' ? ECON.bosqueCubre : 1);
@@ -1486,6 +1569,23 @@ globalThis.W = { VERSION: 'versión 37' };
     return true;
   }
 
+  // Excavadora trazando: convierte en camino las cuatro celdas que pisa (así el corredor tiene dos de ancho y los vehículos
+  // caben también en las diagonales). Talar bosque cuesta más que allanar. Sin minerales, se detiene.
+  function tickTraza(m, u) {
+    const N = m.N, J = m.jug[u.j], terr = m.mapa.terreno, x0 = Math.floor(u.x - 0.5), y0 = Math.floor(u.y - 0.5);
+    for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) {
+      const x = x0 + dx, y = y0 + dy, c = y * N + x;
+      if (x < 0 || y < 0 || x >= N || y >= N || (terr[c] !== T.LLANO && terr[c] !== T.BOSQUE) || m.ocup[c] || m.mapa.mineral[c] || m.mapa.sitioEn[c]) continue;
+      const precio = terr[c] === T.BOSQUE ? ECON.caminoBosque : ECON.caminoLlano;
+      if (J.minerales < precio) { u.orden = 'nada'; u.ruta = null; u.trazas = []; m.efectos.push({ tipo: 'sinCamino', x1: u.x, y1: u.y, j: u.j, t: m.t }); return; }
+      J.minerales -= precio; terr[c] = T.CAMINO; m.paso[c] = 1; m.pasoV[c] = 1; m.hayCaminos = true; m.terrenoV++;
+    }
+    if (u.fallo) { u.fallo = false; u.orden = 'nada'; u.trazas = []; m.efectos.push({ tipo: 'sinCamino', x1: u.x, y1: u.y, j: u.j, t: m.t, corte: true }); return; }
+    if (avanzar(m, u) || (!u.ruta && !u.pend)) {
+      const sig = u.trazas.shift();
+      if (sig) { u.dest = sig; pedirRuta(m, u, sig.x, sig.y, 0); } else u.orden = 'nada';
+    }
+  }
   // Ingeniero: cada medio segundo elige el vehículo o edificio propio dañado más cercano; va hasta él y lo repara, gratis
   // y también en pleno combate. En guardia (fijo) solo repara lo que tiene al alcance de la mano.
   function tickIngeniero(m, u) {
@@ -1567,6 +1667,7 @@ globalThis.W = { VERSION: 'versión 37' };
     if (!d.aire && (u.retira || u.retirando)) retirada(m, u);
     if (!d.arma) { // sin arma: solo se mueve; el ingeniero, además, repara lo que tenga cerca
       if (u.orden === 'atacar') { u.orden = 'nada'; u.obj = 0; }
+      if (u.orden === 'trazar') { tickTraza(m, u); return; }
       if (u.orden !== 'nada') { u.arregla = 0; if (avanzar(m, u) || (!u.ruta && !u.pend)) u.orden = 'nada'; return; }
       if (d.repara) tickIngeniero(m, u);
       return;
@@ -1627,11 +1728,13 @@ globalThis.W = { VERSION: 'versión 37' };
   // ---------- cosecha ----------
   function minaCercana(m, u) {
     const N = m.N, rx = u.pref ? u.pref.x : u.x, ry = u.pref ? u.pref.y : u.y;
+    if (u.vetadas && m.t - u.tVeto > 2400) u.vetadas = null; // pasado un rato vuelve a probar: puede que ya haya camino
     if (u.quiere === 2 && !m.raros.length) u.quiere = 1; // se acabaron los raros: vuelve a los minerales
     const lista = u.quiere === 2 ? m.raros : m.minas;
     let mejor = -1, md = Infinity;
     for (let k = 0; k < lista.length; k++) {
       const c = lista[k];
+      if (u.vetadas && u.vetadas.has(c)) continue;
       const d = Math.hypot((c % N) + 0.5 - rx, ((c / N) | 0) + 0.5 - ry) + ((c * 7 + u.id * 13) % 5) * 0.3;
       if (d < md) { md = d; mejor = c; }
     }
@@ -1676,7 +1779,7 @@ globalThis.W = { VERSION: 'versión 37' };
         if (u.pend) break;
         const cerca = Math.hypot((u.celda % N) + 0.5 - u.x, ((u.celda / N) | 0) + 0.5 - u.y) < 0.9;
         if (cerca) { u.ruta = null; u.v = 0; u.est = 'cosechar'; break; } // basta con estar junto a la celda
-        if (!u.ruta) { u.est = 'espera'; u.espera = 40; break; }
+        if (!u.ruta) { (u.vetadas || (u.vetadas = new Set())).add(u.celda); u.tVeto = m.t; u.est = 'espera'; u.espera = 40; break; } // no llega a esa mina (bosque por medio): prueba otra
         avanzar(m, u);
         break;
       }
@@ -1732,7 +1835,7 @@ globalThis.W = { VERSION: 'versión 37' };
   function tickProduccion(m, j) {
     const J = m.jug[j];
     if (!J.vivo) return;
-    const factor = J.admin ? 4 : J.uso > J.prod ? 0.5 : 1; // déficit de energía: todo a media velocidad
+    const factor = J.tr.vel * (J.uso > J.prod ? 0.5 : 1); // déficit de energía: todo a media velocidad (y el multiplicador de ADMIN)
     if (m.t % ECON.goteoCada === 0) J.minerales += 1; // ingreso mínimo del patio: evita el bloqueo total
     // Investigaciones: avanzan en su edificio sin frenar obras ni unidades; si el edificio cae, se devuelve el costo.
     for (let k = J.inv.length - 1; k >= 0; k--) {
@@ -1781,15 +1884,15 @@ globalThis.W = { VERSION: 'versión 37' };
       if (fab.prog < UNID[tipo].tiempo) continue;
       fab.cola.shift(); fab.pago.shift(); fab.prog = 0; q.n--; J.aguaUso += UNID[tipo].agua || 0;
       if (fab.bucle && (cat !== 'aire' || W.cupoAire(m, j).hay + 1 < W.cupoAire(m, j).cupo)) { fab.cola.push(tipo); fab.pago.push(false); q.n++; }
-      const u = crearUnidad(m, j, tipo, cat === 'aire' ? Math.floor(fab.cy) * m.N + Math.floor(fab.cx) : W.cercaLibre(m, fab.cx, fab.y + fab.tam + 0.5));
+      const u = crearUnidad(m, j, tipo, cat === 'aire' ? Math.floor(fab.cy) * m.N + Math.floor(fab.cx) : W.cercaLibre(m, fab.cx, fab.y + fab.tam + 0.5, cat === 'veh'));
       if (cat === 'aire') { const casa = aerodromoLibre(m, u) || fab; posar(m, u, casa); } // el avión nace posado en un aeródromo con sitio
       if (fab.reunion) { // va al punto de reunión del edificio
         if (tipo === 'cosechadora') u.pref = { x: fab.reunion.x, y: fab.reunion.y };
         else if (cat === 'aire') u.patrulla = { pts: [{ x: fab.reunion.x, y: fab.reunion.y }], i: 0 }; // el punto de reunión de un aeródromo es un punto de patrulla
-        else { const c = W.cercaLibre(m, fab.reunion.x, fab.reunion.y); asignar(m, u, { t: 'mover', x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 }); }
+        else { const c = W.cercaLibre(m, fab.reunion.x, fab.reunion.y, cat === 'veh'); asignar(m, u, { t: 'mover', x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 }); }
       } else if (tipo !== 'cosechadora' && cat !== 'aire') { // se aparta de la puerta, hacia el centro del mapa
         const cx = m.N / 2 - fab.cx, cy = m.N / 2 - fab.cy, cd = Math.hypot(cx, cy) || 1;
-        const c = W.cercaLibre(m, fab.cx + (cx / cd) * (fab.tam + 2), fab.cy + (cy / cd) * (fab.tam + 2));
+        const c = W.cercaLibre(m, fab.cx + (cx / cd) * (fab.tam + 2), fab.cy + (cy / cd) * (fab.tam + 2), cat === 'veh');
         u.orden = 'mover'; u.dest = { x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 };
         pedirRuta(m, u, u.dest.x, u.dest.y, 0);
       }
@@ -1913,7 +2016,7 @@ globalThis.W = { VERSION: 'versión 37' };
         }
       }
     }
-    for (let j = 0; j < 2; j++) if (m.jug[j].admin) m.niebla[j].fill(2); // modo ADMIN: todo el mapa a la vista
+    for (let j = 0; j < 2; j++) if (m.jug[j].tr.mapa) m.niebla[j].fill(2); // ADMIN: todo el mapa a la vista
     for (const p of m.puestos) { // una antena capturada da visión de su zona
       if (p.tipo !== 'antena' || p.dueno < 0) continue;
       const f = m.niebla[p.dueno], R = ECON.antenaRadio, px = Math.floor(p.x), py = Math.floor(p.y);
@@ -1981,7 +2084,7 @@ globalThis.W = { VERSION: 'versión 37' };
         const N = m.N;
         e.cola.forEach((t, i) => { if (e.pago[i]) devolver(m.jug[e.j], UNID[t]); m.jug[e.j].colas[t].n--; }); // lo que tenía encargado (y pagado) se devuelve
         e.cola.length = 0;
-        for (let dy = 0; dy < e.tam; dy++) for (let dx = 0; dx < e.tam; dx++) { const i = (e.y + dy) * N + e.x + dx; m.ocup[i] = 0; m.paso[i] = 1; }
+        for (let dy = 0; dy < e.tam; dy++) for (let dx = 0; dx < e.tam; dx++) { const i = (e.y + dy) * N + e.x + dx; m.ocup[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
       }
     }
     if (muertos) {
@@ -2050,6 +2153,20 @@ globalThis.W = { VERSION: 'versión 37' };
     return { j, estilo: e, plan: planDe(e), oleada: Math.max(3, Math.round((nivel === 'tranquilo' ? 12 : nivel === 'agresivo' ? 4 : 6) * ESTILOS[e].oleada)), atacantes: new Set(), reunidos: new Set(), capturan: new Set(), puesto: -1, tPuesto: 0, lado: 1, fallos: 0 };
   };
 
+  // Hasta dónde llegan los vehículos desde un punto (el bosque no lo cruzan): relleno por inundación sobre el paso de vehículos.
+  function alcanceVehiculos(m, x, y) {
+    const N = m.N, visto = new Uint8Array(N * N), cola = new Int32Array(N * N), ini = W.cercaLibre(m, x, y, true);
+    let a = 0, b = 0;
+    visto[ini] = 1; cola[b++] = ini;
+    while (a < b) {
+      const c = cola[a++], cx = c % N;
+      if (cx > 0 && !visto[c - 1] && m.pasoV[c - 1]) { visto[c - 1] = 1; cola[b++] = c - 1; }
+      if (cx < N - 1 && !visto[c + 1] && m.pasoV[c + 1]) { visto[c + 1] = 1; cola[b++] = c + 1; }
+      if (c >= N && !visto[c - N] && m.pasoV[c - N]) { visto[c - N] = 1; cola[b++] = c - N; }
+      if (c < N * N - N && !visto[c + N] && m.pasoV[c + N]) { visto[c + N] = 1; cola[b++] = c + N; }
+    }
+    return visto;
+  }
   function siguienteEdificio(m, j, patio, plan) {
     const J = m.jug[j];
     const conEnergia = (tipo) => (tipo !== 'central' && J.prod - J.uso + EDIF[tipo].energia < 0 ? 'central' : tipo);
@@ -2158,12 +2275,32 @@ globalThis.W = { VERSION: 'versión 37' };
       W.orden(m, { t: 'construir', j, tipo: plan });
     }
 
+    // Caminos: si a sus vehículos ya casi no les quedan minerales a los que llegar (el resto está tras el bosque),
+    // encarga una excavadora y abre camino hasta el campo cerrado más cercano.
+    if (m.t % 600 === ia.j * 20) {
+      const alc = alcanceVehiculos(m, patio.cx, patio.cy + 2.5);
+      let hay = 0, lejos = -1, dl = Infinity;
+      for (let k = 0; k < m.minas.length; k += 3) {
+        const cel = m.minas[k];
+        if (m.mapa.tipoMin[cel] !== 1) continue;
+        if (alc[cel]) { hay += m.mapa.mineral[cel] * 3; continue; }
+        const d0 = Math.hypot((cel % m.N) - patio.cx, ((cel / m.N) | 0) - patio.cy);
+        if (d0 < dl && Math.hypot((cel % m.N) - m.mapa.bases[1 - j].x, ((cel / m.N) | 0) - m.mapa.bases[1 - j].y) > 30) { dl = d0; lejos = cel; }
+      }
+      ia.campoCerrado = hay < 6000 && lejos >= 0 ? lejos : -1;
+    }
+    if (ia.campoCerrado >= 0 && J.cuenta.fabrica) {
+      const exc = sinArma.find((u) => u.tipo === 'excavadora');
+      if (!exc) { if (!J.colas.excavadora.n && W.puedePagar(J, UNID.excavadora)) W.orden(m, { t: 'entrenar', j, tipo: 'excavadora' }); }
+      else if (exc.orden === 'nada' && J.minerales > 300) { W.orden(m, { t: 'trazar', j, ids: [exc.id], x: (ia.campoCerrado % m.N) + 0.5, y: ((ia.campoCerrado / m.N) | 0) + 0.5 }); ia.campoCerrado = -1; }
+    }
+
     // Segunda base: pasado un rato, con nivel 2 y un solo patio, ahorra para un patio móvil (deja de comprar otros vehículos,
     // aviones, mejoras y edificios que no sean urgentes). Si en tres minutos no lo consigue, lo deja para más tarde.
     const quiereBase = J.nivel >= 2 && J.cuenta.fabrica && patios.length < 2 && !moviles.length && !J.colas.patioMovil.n && m.t > 12000 && (J.cuenta.cosechadora || 0) >= 2 && m.t > (ia.sinBaseHasta || 0);
     if (quiereBase && !ia.tAhorro) ia.tAhorro = m.t;
     if (!quiereBase) ia.tAhorro = 0;
-    else if (m.t - ia.tAhorro > 3600) { ia.sinBaseHasta = m.t + 6000; ia.tAhorro = 0; }
+    else if (m.t - ia.tAhorro > 4800) { ia.sinBaseHasta = m.t + 6000; ia.tAhorro = 0; }
     const ahorra = quiereBase && ia.tAhorro > 0;
 
     // Unidades
@@ -2200,7 +2337,7 @@ globalThis.W = { VERSION: 'versión 37' };
       else if (J.nivel >= 2 && (c.ingeniero || 0) + J.colas.ingeniero.n < (ia.estilo === 'defensivo' ? 2 : 1)) inf = 'ingeniero'; // repara la base él solo
       else if (J.nivel >= 2 && (c.francotirador || 0) < 3 && (c.francotirador || 0) * 5 < (c.infanteria || 0)) inf = 'francotirador';
       const topeInf = E.infMax && (c.infanteria || 0) + (c.antitanque || 0) >= E.infMax && (inf === 'infanteria' || inf === 'antitanque');
-      if (c.cuartel && !topeInf && J.colas.infanteria.n + J.colas.antitanque.n + J.colas.explorador.n + J.colas.ingeniero.n + J.colas.francotirador.n < 2 && dinero >= UNID[inf].costo && W.puedePagar(J, UNID[inf])) { W.orden(m, { t: 'entrenar', j, tipo: inf }); dinero -= UNID[inf].costo; }
+      if (c.cuartel && !topeInf && !(ahorra && soldados.length >= 6) && J.colas.infanteria.n + J.colas.antitanque.n + J.colas.explorador.n + J.colas.ingeniero.n + J.colas.francotirador.n < 2 && dinero >= UNID[inf].costo && W.puedePagar(J, UNID[inf])) { W.orden(m, { t: 'entrenar', j, tipo: inf }); dinero -= UNID[inf].costo; }
     }
 
     // Tecnología: la primera pendiente de la lista que se pueda empezar y pagar sin dejar la caja vacía.
@@ -2261,10 +2398,13 @@ globalThis.W = { VERSION: 'versión 37' };
     for (const u of moviles) {
       if (u.orden !== 'nada') continue;
       if (!ia.expansion) {
+        if (!ia.alcV || m.t - ia.tAlc > 1200) { ia.alcV = alcanceVehiculos(m, u.x, u.y); ia.tAlc = m.t; } // solo campos a los que el patio móvil pueda llegar
         let mejor = -1, md = Infinity;
         for (let k = 0; k < m.minas.length; k += 5) {
           const cel = m.minas[k], x = cel % m.N, y = (cel / m.N) | 0, d0 = Math.hypot(x - patio.cx, y - patio.cy);
           if (m.mapa.tipoMin[cel] !== 1 || d0 < 28 || d0 >= md || Math.hypot(x - rival.x, y - rival.y) < 40) continue;
+          const kk = 6 / d0, tx = Math.floor(x + (patio.cx - x) * kk), ty = Math.floor(y + (patio.cy - y) * kk);
+          if (!ia.alcV[W.cercaLibre(m, tx, ty, true)] || Math.hypot((W.cercaLibre(m, tx, ty, true) % m.N) - tx, ((W.cercaLibre(m, tx, ty, true) / m.N) | 0) - ty) > 4) continue;
           md = d0; mejor = cel;
         }
         if (mejor < 0) break;
@@ -2275,7 +2415,7 @@ globalThis.W = { VERSION: 'versión 37' };
       if (Math.hypot(u.x - ex.x, u.y - ex.y) < 4 && W.puedeDesplegar(m, u)) { W.orden(m, { t: 'desplegar', j, ids: [u.id] }); ia.expansion = null; }
       else { // aún lejos, o aquí no cabe: prueba un poco más allá, en espiral
         const a = ex.n * 2.4, r = Math.min(8, ex.n * 0.8); ex.n++;
-        const c = W.cercaLibre(m, ex.x + Math.cos(a) * r, ex.y + Math.sin(a) * r);
+        const c = W.cercaLibre(m, ex.x + Math.cos(a) * r, ex.y + Math.sin(a) * r, true);
         W.orden(m, { t: 'mover', j, ids: [u.id], x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 });
         if (ex.n > 40) ia.expansion = null;
       }
@@ -2606,6 +2746,14 @@ globalThis.W = { VERSION: 'versión 37' };
       c.fillStyle = col.osc; c.fillRect(-w * 0.1 - rec, -w * 0.12, L * 2.1, w * 0.24); c.fillRect(L * 1.85 - rec, -w * 0.21, L * 0.2, w * 0.42); // tubo largo
       c.fillStyle = col.base; c.strokeStyle = col.luz; c.lineWidth = Math.max(1, r * 0.14); c.beginPath(); c.rect(-w * 0.55, -w * 0.42, w * 0.95, w * 0.84); c.fill(); c.stroke();
       if (e.retro > 0.6) { c.fillStyle = col.fuego; c.beginPath(); c.arc(L * 2.3, 0, w * 0.45, 0, TAU); c.fill(); }
+    } else if (u.tipo === 'excavadora') { // orugas anchas, cabina atrás y una pala delante
+      const L = r * 1.35, w = r * 0.95;
+      c.fillStyle = col.osc; c.fillRect(-L, -w, L * 1.7, w * 0.42); c.fillRect(-L, w * 0.58, L * 1.7, w * 0.42); // orugas
+      c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.rect(-L * 0.9, -w * 0.6, L * 1.45, w * 1.2); c.fill(); c.stroke();
+      c.fillStyle = col.osc; c.fillRect(-L * 0.8, -w * 0.42, L * 0.5, w * 0.84); // cabina
+      if (lod === 2) { c.fillStyle = col.luz; c.fillRect(-L * 0.42, -w * 0.32, L * 0.08, w * 0.64); }
+      c.strokeStyle = col.osc; c.lineWidth = Math.max(1, r * 0.16); c.beginPath(); c.moveTo(L * 0.55, -w * 0.45); c.lineTo(L * 0.95, -w * 0.45); c.moveTo(L * 0.55, w * 0.45); c.lineTo(L * 0.95, w * 0.45); c.stroke(); // brazos
+      c.fillStyle = col.luz; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.moveTo(L * 0.95, -w * 1.15); c.lineTo(L * 1.2, -w * 1.0); c.lineTo(L * 1.2, w * 1.0); c.lineTo(L * 0.95, w * 1.15); c.closePath(); c.fill(); c.stroke(); // pala
     } else if (u.tipo === 'transporte') { // caja blindada de ocho ruedas con rampa trasera
       const L = r * 1.45, w = r * 0.9;
       c.fillStyle = col.osc;
@@ -2887,8 +3035,8 @@ globalThis.W = { VERSION: 'versión 37' };
   // Toda la paleta vive aquí: cambiar de tema no cuesta nada.
   const PALETAS = {
     // Grises para todo lo que es interfaz y terreno; el color queda para bandos y recursos.
-    clara:  { fondo: '#ededed', llano: '#f5f5f5', roca: '#5a5a5a', agua: '#aebfcc', bosque: '#c6cfbd', tinta: '#1a1a1a', mineral: '#4d7a38', raro: '#7d5aa6', niebla: [178, 178, 178], velo: 150, yo: '#3b6ea5', yoOsc: '#22466b', rival: '#c9622b', rivalOsc: '#853d15', bien: '#4d7a38', mal: '#b0362f' },
-    oscura: { fondo: '#1c1c1c', llano: '#2c2c2c', roca: '#666666', agua: '#27353f', bosque: '#343d2f', tinta: '#e6e6e6', mineral: '#8fb574', raro: '#b08ad6', niebla: [8, 8, 8],       velo: 140, yo: '#6aa0d8', yoOsc: '#35597f', rival: '#e08a4f', rivalOsc: '#96552a', bien: '#8fb574', mal: '#d0554a' },
+    clara:  { fondo: '#ededed', llano: '#f5f5f5', camino: '#d9d2c2', roca: '#5a5a5a', agua: '#aebfcc', bosque: '#c6cfbd', tinta: '#1a1a1a', mineral: '#4d7a38', raro: '#7d5aa6', niebla: [178, 178, 178], velo: 150, yo: '#3b6ea5', yoOsc: '#22466b', rival: '#c9622b', rivalOsc: '#853d15', bien: '#4d7a38', mal: '#b0362f' },
+    oscura: { fondo: '#1c1c1c', llano: '#2c2c2c', camino: '#4b463c', roca: '#666666', agua: '#27353f', bosque: '#343d2f', tinta: '#e6e6e6', mineral: '#8fb574', raro: '#b08ad6', niebla: [8, 8, 8],       velo: 140, yo: '#6aa0d8', yoOsc: '#35597f', rival: '#e08a4f', rivalOsc: '#96552a', bien: '#8fb574', mal: '#d0554a' },
   };
   const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
 
@@ -2946,7 +3094,7 @@ globalThis.W = { VERSION: 'versión 37' };
     let forma = 'grupo'; // formación con la que llegan los grupos a su destino
     let tipoColocar = null; // edificio que se está colocando
     const obraLista = (tipo) => J.obras.some((o) => o.listo && o.tipo === tipo);
-    let pausa = false, cuadros = 0, nieblaVista = -1;
+    let pausa = false, cuadros = 0, nieblaVista = -1, terrVisto = 0, iaQuieta = false;
     const raton = { x: 0, y: 0, izq: false, x0: 0, y0: 0, medio: false, dentro: false, der: false, arrastre: false, xd: 0, yd: 0 };
 
     // ---------- capas pre-dibujadas ----------
@@ -2955,7 +3103,7 @@ globalThis.W = { VERSION: 'versión 37' };
     const cNie = document.createElement('canvas'); cNie.width = cNie.height = N;
     const xNie = cNie.getContext('2d'), imgNie = xNie.createImageData(N, N);
     function pintarTerreno() {
-      const img = xTerr.createImageData(N, N), cols = [P.llano, P.roca, P.agua, P.bosque].map(hex);
+      const img = xTerr.createImageData(N, N), cols = [P.llano, P.roca, P.agua, P.bosque, P.camino].map(hex);
       for (let i = 0; i < N * N; i++) { const c = cols[m.mapa.terreno[i]]; img.data[i * 4] = c[0]; img.data[i * 4 + 1] = c[1]; img.data[i * 4 + 2] = c[2]; img.data[i * 4 + 3] = 255; }
       xTerr.putImageData(img, 0, 0);
     }
@@ -3009,7 +3157,7 @@ globalThis.W = { VERSION: 'versión 37' };
     const unidadesSel = () => { const out = []; for (const id of sel) { const e = m.porId.get(id); if (e && !e.edif) out.push(e); } return out; };
     const esquinaColocar = (tipo) => { const t = EDIF[tipo].tam; return { x: Math.round(aMundoX(raton.x) - t / 2), y: Math.round(aMundoY(raton.y) - t / 2) }; };
 
-    const NOMBRE_TERRENO = ['Llano', 'Roca · no se puede pasar', 'Agua · no se puede pasar', 'Bosque · cubre a la infantería, frena a los vehículos'];
+    const NOMBRE_TERRENO = ['Llano', 'Roca · no se puede pasar', 'Agua · no se puede pasar', 'Bosque · cubre y esconde a la infantería; los vehículos no pasan', 'Camino · los vehículos van más rápido'];
     const sitioPorCelda = new Map(m.mapa.sitios.map((s) => [s.y * N + s.x, s.tipo]));
     // Lo que el terreno (o la trinchera) le da o le quita a una unidad, en texto.
     const pct = (k) => Math.round(Math.abs(1 - k) * 100) + ' %';
@@ -3017,7 +3165,8 @@ globalThis.W = { VERSION: 'versión 37' };
       if (e.edif || UNID[e.tipo].aire) return '';
       const inf = UNID[e.tipo].cat === 'inf', out = [];
       if (W.enTrinchera(m, e)) out.push('trinchera: −' + pct(W.ECON.trinchera) + ' daño, no la atropellan');
-      if (W.enBosque(m, e)) out.push(inf ? 'bosque: −' + pct(W.ECON.bosqueCubre) + ' daño' : 'bosque: −' + pct(W.ECON.bosqueVeh) + ' velocidad');
+      if (W.enBosque(m, e)) out.push(inf ? 'bosque: −' + pct(W.ECON.bosqueCubre) + ' daño' : 'abriendo bosque');
+      if (!inf && !UNID[e.tipo].aire && m.mapa.terreno[Math.floor(e.y) * N + Math.floor(e.x)] === 4) out.push('camino: +' + Math.round((W.ECON.caminoVel - 1) * 100) + ' % velocidad');
       return out.join(' · ');
     }
     const NOMBRE_PUESTO = { antena: 'Antena (da visión de la zona)', deposito: 'Depósito (da petróleo)', taller: 'Taller (repara a los tuyos cerca)' };
@@ -3104,7 +3253,7 @@ globalThis.W = { VERSION: 'versión 37' };
           } else if (t === 2) {
             if (y > 0 && T[i - N] !== 2) orilla.rect(sx, sy, z, z * 0.2);
             if (x > 0 && T[i - 1] !== 2) orilla.rect(sx, sy, z * 0.1, z);
-          } else if (lod === 2) { // bosque: un par de copas por celda, siempre en el mismo sitio
+          } else if (t === 3 && lod === 2) { // bosque: un par de copas por celda, siempre en el mismo sitio
             for (let k = 0; k < 2; k++) {
               const a = i * 2.39996 + k * 3.1, qx = sx + z * (0.5 + Math.cos(a) * 0.27), qy = sy + z * (0.5 + Math.sin(a * 1.3) * 0.27), rr = z * (0.2 + ((i * 7 + k * 3) % 5) * 0.022);
               sCopas.moveTo(qx + z * 0.1 + rr, qy + z * 0.12); sCopas.arc(qx + z * 0.1, qy + z * 0.12, rr, 0, TAU);
@@ -3549,6 +3698,21 @@ globalThis.W = { VERSION: 'versión 37' };
         ctx.fillStyle = P.tinta;
         ctx.fillText(pausa ? 'pausa' : modo === 'amover' ? 'atacar al avanzar: elige destino' : modo === 'barrido' ? 'barrido: elige la zona a revelar' : 'patrulla: elige el punto (con Mayús añades más)', 12, ch - 14);
       }
+      if (modo === 'trazar' && raton.dentro) { // por dónde irá el camino y cuánto costará, a ojo: en rojo si el destino no vale
+        const ex = unidadesSel().find((u) => UNID[u.tipo].traza);
+        if (ex) {
+          const x0 = trazaDesde ? trazaDesde.x : ex.x, y0 = trazaDesde ? trazaDesde.y : ex.y, wx = aMundoX(raton.x), wy = aMundoY(raton.y), L = Math.hypot(wx - x0, wy - y0);
+          let costo = 0, mal = wx < 0 || wy < 0 || wx >= N || wy >= N;
+          for (let i = 0, n = Math.ceil(L * 2); i <= n && !mal; i++) {
+            const t = m.mapa.terreno[Math.floor(y0 + ((wy - y0) * i) / (n || 1)) * N + Math.floor(x0 + ((wx - x0) * i) / (n || 1))];
+            if (i === n && (t === 1 || t === 2)) mal = true;
+            costo += t === 3 ? W.ECON.caminoBosque : t === 0 ? W.ECON.caminoLlano : 0; // dos muestras por celda y dos celdas de ancho: sale la cuenta
+          }
+          ctx.strokeStyle = mal ? P.mal : P.bien; ctx.lineWidth = Math.max(3, z * 0.9); ctx.globalAlpha = 0.28; ctx.lineCap = 'round';
+          ctx.beginPath(); ctx.moveTo(ox + x0 * z, oy + y0 * z); ctx.lineTo(raton.x, raton.y); ctx.stroke(); ctx.globalAlpha = 1; ctx.lineCap = 'butt';
+          ctx.fillStyle = mal ? P.mal : P.tinta; ctx.fillText(mal ? 'ahí no llega un camino' : 'camino: unos ' + Math.round(costo) + ' minerales · Mayús: más tramos', raton.x + 14, raton.y - 8);
+        }
+      }
       if (modo === 'barrido' && raton.dentro) { // zona que revelará el barrido
         ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.setLineDash([6, 4]); ctx.beginPath(); ctx.arc(raton.x, raton.y, W.INTEL.barrido.radio * z, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
       }
@@ -3635,6 +3799,8 @@ globalThis.W = { VERSION: 'versión 37' };
           const area = W.ARMAS[d.arma].area || 0; // los obuses de área dejan un cráter mayor
           estallido(d.x2, d.y2, area ? 2 : 1); marcaSuelo('quemado', d.x2, d.y2, area || 0.42, 0, 15000);
           if (n++ < 6) son.impacto(cerca(d.x2, d.y2), paneo(d.x2));
+        } else if (d.tipo === 'sinCamino') {
+          if (d.j === YO) aviso(d.corte ? 'La excavadora no encuentra por dónde seguir' : 'Sin minerales: la excavadora se detiene');
         } else if (d.tipo === 'captura') {
           const que = d.clase === 'antena' ? 'una antena' : d.clase === 'deposito' ? 'un depósito' : 'un taller';
           if (d.j === YO) { son.obraLista(); aviso('Has capturado ' + que); } else if (visible(d.x2, d.y2) || m.puestos.some((p) => p.x === d.x2 && p.y === d.y2)) aviso('El rival ha capturado ' + que);
@@ -3777,9 +3943,30 @@ globalThis.W = { VERSION: 'versión 37' };
     const paraCavar = () => unidadesSel().filter((u) => u.j === YO && UNID[u.tipo].cat === 'inf' && u.orden === 'nada' && !(u.cava > 0) && !W.enTrinchera(m, u));
     function atrincherar() { const ids = paraCavar().map((u) => u.id); if (ids.length) { W.orden(m, { t: 'trinchera', j: YO, ids }); son.colocar(); } }
     $('trinchera').addEventListener('click', atrincherar);
+    // Panel ADMIN: cada trampa se prende y se apaga por separado, como en un trainer.
+    $('admin').addEventListener('click', (ev) => {
+      const b = ev.target.closest('button'); if (!b) return;
+      const c = b.dataset.t;
+      if (c === 'cerrar') $('admin').hidden = true;
+      else if (c === 'ia') iaQuieta = !iaQuieta;
+      else if (c === 'vel') W.orden(m, { t: 'trampa', j: YO, clave: 'vel', valor: +b.dataset.v });
+      else if (c === 'nivel3' || c === 'mejoras') { W.orden(m, { t: 'trampa', j: YO, clave: c, valor: true }); aviso(c === 'nivel3' ? 'Nivel 3 alcanzado' : 'Todas las mejoras investigadas'); }
+      else if (c === 'recursos') W.orden(m, { t: 'trampa', j: YO, clave: c, valor: !J.dios });
+      else W.orden(m, { t: 'trampa', j: YO, clave: c, valor: !J.tr[c] });
+    });
+    function actualizarAdmin() {
+      if ($('admin').hidden) return;
+      for (const b of $('admin').querySelectorAll('button[data-t]')) {
+        const c = b.dataset.t;
+        const on = c === 'recursos' ? J.dios : c === 'ia' ? iaQuieta : c === 'vel' ? J.tr.vel === +b.dataset.v : c === 'nivel3' ? J.nivel >= 3 : c === 'mejoras' ? Object.keys(W.TEC).every((q) => W.TEC[q].sube || J.mejoras[q]) : !!J.tr[c];
+        if (b.classList.contains('on') !== on) b.classList.toggle('on', on);
+      }
+    }
     const conCarga = () => unidadesSel().filter((u) => UNID[u.tipo].plazas && u.pasajeros.length);
     function descargar() { const us = conCarga(); if (us.length) { W.orden(m, { t: 'descargar', j: YO, ids: us.map((u) => u.id) }); son.orden(); } }
     $('descargar').addEventListener('click', descargar);
+    function trazar() { if (unidadesSel().some((u) => UNID[u.tipo].traza)) { modo = 'trazar'; trazaDesde = null; if (tactil) aviso('Arrastra hasta donde debe llegar el camino y suelta'); } }
+    $('trazar').addEventListener('click', trazar);
     const paraDesplegar = () => unidadesSel().filter((u) => UNID[u.tipo].despliega);
     function desplegar() {
       const us = paraDesplegar(); if (!us.length) return;
@@ -3794,6 +3981,7 @@ globalThis.W = { VERSION: 'versión 37' };
     // Segundo clic derecho tras ordenar mover: fija hacia dónde queda mirando la unidad (o el frente de la formación).
     let giroPend = null, giroCerca = false;
     const ultClic = { id: 0, t: 0 };
+    let trazaDesde = null; // último punto del camino que se está marcando (para encadenar tramos)
     const mismaSel = (ids) => { const a = unidadesSel(); return a.length === ids.length && a.every((u) => ids.includes(u.id)); };
     function flecha(x1, y1, x2, y2, color) {
       const a = Math.atan2(y2 - y1, x2 - x1), k = 9;
@@ -3809,6 +3997,7 @@ globalThis.W = { VERSION: 'versión 37' };
       if (us.length) {
         const armadas = us.some((u) => UNID[u.tipo].arma);
         const soloAire = us.every((u) => UNID[u.tipo].aire);
+        if (us.some((u) => UNID[u.tipo].traza)) L.push('<b>excavadora: ' + k('K') + ' trazar camino hasta un punto (abre el bosque; por camino los vehículos corren más)</b>');
         if (us.some((u) => UNID[u.tipo].plazas)) L.push('<b>transporte: la infantería sube con clic derecho sobre él · ' + k('U') + ' descargar</b>');
         if (us.some((u) => UNID[u.tipo].mando)) L.push('<b>mando: los tuyos en su radio ven en redondo y giran más rápido; gasta información</b>');
         if (us.some((u) => UNID[u.tipo].despliega)) L.push('<b>patio móvil: ' + k('D') + ' lo despliega aquí como patio nuevo (no se repliega)</b>');
@@ -3963,7 +4152,7 @@ globalThis.W = { VERSION: 'versión 37' };
     function actualizarBarra() {
       const num = (v) => (J.dios ? '∞' : String(Math.floor(v)));
       $('rMin').textContent = num(J.minerales); $('rPet').textContent = num(J.petroleo); $('rRar').textContent = num(J.raros); $('rInf').textContent = num(J.info);
-      $('dios').hidden = !J.dios; { const t = J.admin ? 'ADMIN' : 'GOD'; if ($('dios').textContent !== t) $('dios').textContent = t; } $('sinColmena').hidden = J.colmena;
+      { const otras = J.tr.requisitos || J.tr.libre || J.tr.vel > 1 || J.tr.mapa || J.tr.invulnerable || iaQuieta, t = otras ? 'ADMIN' : 'GOD'; $('dios').hidden = !J.dios && !otras; if ($('dios').textContent !== t) $('dios').textContent = t; } actualizarAdmin(); $('sinColmena').hidden = J.colmena;
       const e = $('rEne'); e.textContent = J.uso + ' / ' + J.prod; e.className = J.uso > J.prod ? 'mal' : '';
       const ag = $('rAgu'); ag.textContent = J.aguaUso + ' / ' + (J.dios ? '∞' : J.aguaProd); ag.className = !J.dios && J.aguaUso >= J.aguaProd ? 'mal' : '';
       const eds = edificiosSel(), tipos = new Set(eds.map((e) => e.tipo)), patiosSel = new Set(eds.filter((e) => e.tipo === 'patio').map((e) => e.id));
@@ -4020,6 +4209,7 @@ globalThis.W = { VERSION: 'versión 37' };
       const cav = paraCavar().length, bt = $('trinchera');
       bt.hidden = !cav;
       $('desplegar').hidden = !paraDesplegar().length;
+      { const hay = unidadesSel().some((u) => UNID[u.tipo].traza), bz = $('trazar'); bz.hidden = !hay; bz.classList.toggle('listo', modo === 'trazar'); }
       { const us = conCarga(), bd = $('descargar'); bd.hidden = !us.length; if (us.length) { const t = 'Descargar · ' + us.reduce((a, u) => a + u.pasajeros.length, 0) + ' dentro'; if (bd.textContent !== t) bd.textContent = t; } }
       { const us = paraRetiro(), br = $('retiro'); br.hidden = !us.length;
         if (us.length) { const t = 'Retirada automática: ' + (us.every((u) => u.retira) ? 'sí' : us.some((u) => u.retira) ? 'algunas' : 'no'); if (br.textContent !== t) br.textContent = t; } }
@@ -4049,6 +4239,13 @@ globalThis.W = { VERSION: 'versión 37' };
           return;
         }
         if (modo === 'barrido') { W.orden(m, { t: 'intel', j: YO, clave: 'barrido', x: wx, y: wy }); son.orden(); modo = null; return; }
+        if (modo === 'trazar') { // destino del camino; con Mayús se siguen añadiendo tramos
+          const ids = unidadesSel().filter((u) => UNID[u.tipo].traza).map((u) => u.id), t = m.mapa.terreno[Math.floor(wy) * N + Math.floor(wx)];
+          if (t === 1 || t === 2 || wx < 0 || wy < 0 || wx >= N || wy >= N) { aviso('Ahí no se puede llevar un camino'); return; }
+          if (ids.length) { W.orden(m, { t: 'trazar', j: YO, ids, x: wx, y: wy, enc: ev.shiftKey }); trazaDesde = { x: wx, y: wy }; marca(wx, wy, P.bien); son.orden(); }
+          if (!ev.shiftKey) { modo = null; trazaDesde = null; }
+          return;
+        }
         if (modo === 'amover' || modo === 'patrulla') {
           const ids = unidadesSel().map((u) => u.id);
           if (ids.length) {
@@ -4244,7 +4441,8 @@ globalThis.W = { VERSION: 'versión 37' };
       const hay = unidadesSel().length > 0;
       for (const b of $('tactil').children) {
         if (b.dataset.u !== undefined && b.hidden === hay) b.hidden = !hay;
-        const on = (b.dataset.c === 'KeyA' && modo === 'amover') || (b.dataset.c === 'KeyR' && modo === 'patrulla') || (b.dataset.c === 'KeyP' && pausa);
+        if (b.dataset.c === 'KeyK') b.hidden = !unidadesSel().some((u) => UNID[u.tipo].traza);
+        const on = (b.dataset.c === 'KeyK' && modo === 'trazar') || (b.dataset.c === 'KeyA' && modo === 'amover') || (b.dataset.c === 'KeyR' && modo === 'patrulla') || (b.dataset.c === 'KeyP' && pausa);
         if (b.classList.contains('on') !== on) b.classList.toggle('on', on);
       }
     }
@@ -4263,10 +4461,9 @@ globalThis.W = { VERSION: 'versión 37' };
       if (ev.key.length === 1) {
         tecleado = (tecleado + ev.key.toLowerCase()).slice(-5);
         if (tecleado.endsWith('god')) { W.orden(m, { t: 'dios', j: YO }); tecleado = ''; }
-        if (tecleado === 'admin') {
-          W.orden(m, { t: 'admin', j: YO }); tecleado = '';
-          modo = null; deslizar = !deslizar; // deshace lo que las letras a y m hicieron por el camino (la n no llega a actuar)
-          aviso(J.admin ? 'Modo ADMIN desactivado' : 'Modo ADMIN: recursos infinitos, nivel 3, todas las mejoras, sin requisitos, todo 300 % más rápido y mapa a la vista');
+        if (tecleado === 'admin') { // abre o cierra el panel de interruptores; no activa nada por sí solo
+          tecleado = ''; modo = null; deslizar = !deslizar; // deshace lo que las letras a y m hicieron por el camino (la n no llega a actuar)
+          $('admin').hidden = !$('admin').hidden; actualizarAdmin();
           return;
         }
       }
@@ -4286,6 +4483,7 @@ globalThis.W = { VERSION: 'versión 37' };
         case 'KeyR': if (unidadesSel().length) modo = 'patrulla'; break;
         case 'KeyZ': atrincherar(); break;
         case 'KeyD': desplegar(); break;
+        case 'KeyK': trazar(); break;
         case 'KeyU': descargar(); break;
         case 'KeyB': elegirEdificios('patio'); break;
         case 'KeyQ': elegirEdificios('cuartel'); break;
@@ -4349,7 +4547,7 @@ globalThis.W = { VERSION: 'versión 37' };
         acum += dt;
         let n = 0;
         const t0 = performance.now();
-        while (acum >= PASO && n < 4) { if (ia) W.iaTick(m, ia); W.tick(m); acum -= PASO; n++; }
+        while (acum >= PASO && n < 4) { if (ia && !iaQuieta) W.iaTick(m, ia); W.tick(m); acum -= PASO; n++; }
         R.sim += performance.now() - t0; R.ticks += n;
         if (n === 4) acum = 0;
         if (n) sonar();
@@ -4357,6 +4555,7 @@ globalThis.W = { VERSION: 'versión 37' };
       for (const id of sel) if (!m.porId.has(id)) sel.delete(id);
       if (modo === 'colocar' && !obraLista(tipoColocar)) modo = null;
       const td = performance.now();
+      if (terrVisto !== m.terrenoV) { terrVisto = m.terrenoV; pintarTerreno(); } // un camino nuevo cambia el terreno
       if (nieblaVista !== m.nieblaV) pintarNiebla();
       dibujar(pausa || m.ganador >= 0 ? 1 : Math.min(1, acum / PASO));
       if (cuadros % 6 === 0) { dibujarMini(); actualizarBarra(); }

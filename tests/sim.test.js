@@ -126,7 +126,7 @@ prueba('contraataque, disparo en marcha, curación y atropello', () => {
   const nuevo = () => { const m = W.crearMundo(4242, { N: 128 }); m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m); return m; };
   const avanza = (m, n) => { for (let i = 0; i < n; i++) W.tick(m); };
   // Campo abierto para las pruebas: se limpia una franja del mapa.
-  const franja = (m) => { const N = m.N; for (let y = 56; y < 72; y++) for (let x = 30; x < 100; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; } } };
+  const franja = (m) => { const N = m.N; for (let y = 56; y < 72; y++) for (let x = 30; x < 100; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; } } };
   const en = (m, x, y) => y * m.N + x;
 
   // disparo en marcha: un tanque que solo se mueve hiere al enemigo que le queda a tiro
@@ -336,7 +336,7 @@ prueba('demoler devuelve parte del costo y las formaciones ordenan al grupo', ()
   assert.ok(Math.abs(J.minerales - antes - W.EDIF.cuartel.costo * W.ECON.venta * 0.5) <= 1, 'con media vida devuelve la mitad de la parte recuperable');
   assert.strictEqual(m.paso[(b.y - 1) * N + b.x + 4], 1, 'la celda debía quedar libre');
   // formaciones en campo abierto
-  for (let y = 50; y < 80; y++) for (let x = 30; x < 100; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; } }
+  for (let y = 50; y < 80; y++) for (let x = 30; x < 100; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; } }
   const us = [];
   for (let k = 0; k < 5; k++) us.push(W.crearUnidad(m, 0, k < 3 ? 'tanque' : 'infanteria', (60 + k) * N + 40));
   const ids = us.map((u) => u.id);
@@ -393,7 +393,7 @@ prueba('fase 2: niveles, mejoras, unidades nuevas e inteligencia', () => {
   const e0 = J.prod; J.mejoras.turbinas = true; avanza(1);
   assert.strictEqual(J.prod, e0 * 1.5, 'turbinas: +50 % de energía');
   // artillería: daño en área y alcance mínimo
-  for (let y = 56; y < 72; y++) for (let x = 30; x < 110; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; } }
+  for (let y = 56; y < 72; y++) for (let x = 30; x < 110; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; } }
   const art = W.crearUnidad(m, 0, 'artilleria', 64 * N + 40);
   const v1 = W.crearUnidad(m, 1, 'infanteria', 64 * N + 49), v2 = W.crearUnidad(m, 1, 'infanteria', 65 * N + 49), lejos = W.crearUnidad(m, 1, 'infanteria', 64 * N + 56);
   for (const v of [v1, v2, lejos]) { v.orden = 'mover'; v.recarga = 99999; } // blancos quietos y mudos
@@ -421,7 +421,7 @@ prueba('fase 2: niveles, mejoras, unidades nuevas e inteligencia', () => {
 });
 
 prueba('colmena: llamada, red, necesidad, modo fijo y misiones', () => {
-  const nuevo = () => { const m = W.crearMundo(4242, { N: 128 }); m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m); const N = m.N; for (let y = 40; y < 90; y++) for (let x = 20; x < 110; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; } } return m; };
+  const nuevo = () => { const m = W.crearMundo(4242, { N: 128 }); m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m); const N = m.N; for (let y = 40; y < 90; y++) for (let x = 20; x < 110; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; } } return m; };
   const avanza = (m, n) => { for (let i = 0; i < n; i++) W.tick(m); };
   const en = (m, x, y) => y * m.N + x;
   // Un tanque solo, atacado por dos. Hay una compañera a 12 celdas, otra 7 más atrás (solo oye por la red),
@@ -469,7 +469,7 @@ prueba('colmena: llamada, red, necesidad, modo fijo y misiones', () => {
 prueba('trincheras y orientación al llegar', () => {
   const m = W.crearMundo(4242, { N: 128 }), N = m.N;
   m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
-  for (let y = 50; y < 80; y++) for (let x = 30; x < 100; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; } }
+  for (let y = 50; y < 80; y++) for (let x = 30; x < 100; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; } }
   const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
   const cel = (x, y) => y * N + x;
   // dos soldados iguales bajo el mismo fuego: el atrincherado aguanta bastante más
@@ -507,8 +507,8 @@ prueba('trincheras y orientación al llegar', () => {
 prueba('fase 3: aviación con aeródromo, cupo, patrulla, radio de vuelo y antiaérea', () => {
   const m = W.crearMundo(777, { N: 128 }), N = m.N, J = m.jug[0];
   m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
-  for (let y = 40; y < 90; y++) for (let x = 30; x < 126; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; } }
-  for (let y = 58; y < 64; y++) for (let x = 60; x < 66; x++) { m.mapa.terreno[y * N + x] = 2; m.paso[y * N + x] = 0; } // un lago en medio
+  for (let y = 40; y < 90; y++) for (let x = 30; x < 126; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; } }
+  for (let y = 58; y < 64; y++) for (let x = 60; x < 66; x++) { m.mapa.terreno[y * N + x] = 2; m.paso[y * N + x] = 0; m.pasoV[y * N + x] = 0; } // un lago en medio
   const avanza = (n, fn) => { for (let i = 0; i < n; i++) { W.tick(m); if (fn) fn(); } };
   const cel = (x, y) => y * N + x;
   const lejos = (u, x, y) => Math.hypot(u.x - x, u.y - y);
@@ -601,7 +601,7 @@ prueba('fase 3: aviación con aeródromo, cupo, patrulla, radio de vuelo y antia
 prueba('frente: torreta, giro del cuerpo, flancos y visión en cono', () => {
   const m = W.crearMundo(99, { N: 128 }), N = m.N;
   m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
-  for (let y = 40; y < 100; y++) for (let x = 30; x < 110; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; } }
+  for (let y = 40; y < 100; y++) for (let x = 30; x < 110; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; } }
   const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
   const cel = (x, y) => y * N + x;
   const mudo = (u) => { u.recarga = 99999; u.guardia = true; return u; };
@@ -675,7 +675,7 @@ prueba('fase 1a y 1b: bucle, retirada, cosechadora que huye, veteranía, observa
   const m = W.crearMundo(4242, { N: 128 }), N = m.N, J = m.jug[0], b = m.mapa.bases[0];
   const avanza = (n, fn) => { for (let i = 0; i < n; i++) { W.tick(m); if (fn) fn(); } };
   const cel = (x, y) => y * N + x;
-  for (let y = 20; y < 60; y++) for (let x = 60; x < 120; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; m.mapa.mineral[i] = 0; } }
+  for (let y = 20; y < 60; y++) for (let x = 60; x < 120; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; m.mapa.mineral[i] = 0; } }
   J.dios = true; m.jug[1].dios = true;
   W.crearEdificio(m, 0, 'central', b.x + 3, b.y - 1); const cu = W.crearEdificio(m, 0, 'cuartel', b.x - 5, b.y - 6); avanza(1);
   // bucle: cada soldado que sale se vuelve a encargar solo
@@ -743,7 +743,7 @@ prueba('fase 1a y 1b: bucle, retirada, cosechadora que huye, veteranía, observa
 prueba('fase 1c: explorador, blindado ligero, ingeniero, antiaéreo móvil y dron', () => {
   const m = W.crearMundo(31, { N: 128 }), N = m.N, J = m.jug[0];
   m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
-  for (let y = 30; y < 100; y++) for (let x = 30; x < 110; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; } }
+  for (let y = 30; y < 100; y++) for (let x = 30; x < 110; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; } }
   const avanza = (n, fn) => { for (let i = 0; i < n; i++) { W.tick(m); if (fn) fn(); } };
   const cel = (x, y) => y * N + x;
   const mudo = (u) => { u.recarga = 99999; u.guardia = true; return u; };
@@ -819,7 +819,7 @@ prueba('fase 2a: patio móvil, segundas bases, obras por patio y derrota al perd
   const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
   const cel = (x, y) => y * N + x;
   const lejos = { x: b.x < N / 2 ? b.x + 30 : b.x - 30, y: b.y < N / 2 ? b.y + 30 : b.y - 30 };
-  for (let y = lejos.y - 8; y < lejos.y + 8; y++) for (let x = lejos.x - 8; x < lejos.x + 8; x++) { const i = y * N + x; m.mapa.terreno[i] = 0; m.paso[i] = 1; m.mapa.mineral[i] = 0; m.mapa.sitioEn[i] = 0; }
+  for (let y = lejos.y - 8; y < lejos.y + 8; y++) for (let x = lejos.x - 8; x < lejos.x + 8; x++) { const i = y * N + x; m.mapa.terreno[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; m.mapa.mineral[i] = 0; m.mapa.sitioEn[i] = 0; }
   J.dios = true;
   const p1 = m.ents.find((e) => e.tipo === 'patio' && e.j === 0);
   // un patio: dos centrales van una tras otra
@@ -898,7 +898,7 @@ prueba('fase 2b: puestos neutrales, escondite en el bosque y chatarra', () => {
   assert.ok(herido.vida > 140, 'el taller capturado repara: ' + herido.vida);
   J.dios = true;
   // escondite: infantería quieta en el bosque no es atacada hasta tenerla muy cerca; si dispara, se delata
-  for (let y = 60; y < 70; y++) for (let x = 40; x < 60; x++) { const i = cel(x, y); if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; m.mapa.mineral[i] = 0; } }
+  for (let y = 60; y < 70; y++) for (let x = 40; x < 60; x++) { const i = cel(x, y); if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; m.mapa.mineral[i] = 0; } }
   for (let x = 48; x < 52; x++) m.mapa.terreno[cel(x, 64)] = 3;
   const esc = W.crearUnidad(m, 1, 'infanteria', cel(50, 64)); esc.recarga = 99999; esc.guardia = true; esc.ang = Math.PI;
   const tq = W.crearUnidad(m, 0, 'tanque', cel(46, 64)); tq.ang = tq.angT = 0; tq.guardia = true;
@@ -924,7 +924,7 @@ prueba('fase 2b: puestos neutrales, escondite en el bosque y chatarra', () => {
 prueba('fase 2b: francotirador, transporte, lanzacohetes, vehículo de mando y helicóptero', () => {
   const m = W.crearMundo(31, { N: 128 }), N = m.N, J = m.jug[0];
   m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
-  for (let y = 30; y < 100; y++) for (let x = 30; x < 110; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; m.mapa.mineral[i] = 0; } }
+  for (let y = 30; y < 100; y++) for (let x = 30; x < 110; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; m.mapa.mineral[i] = 0; } }
   const avanza = (n, fn) => { for (let i = 0; i < n; i++) { W.tick(m); if (fn) fn(); } };
   const cel = (x, y) => y * N + x;
   const mudo = (u) => { u.recarga = 99999; u.guardia = true; return u; };
@@ -994,7 +994,7 @@ prueba('fase 2b: francotirador, transporte, lanzacohetes, vehículo de mando y h
 prueba('aviones: el caza y el bombardero atacan de pasada; el helicóptero se queda en el aire', () => {
   const m = W.crearMundo(31, { N: 128 }), N = m.N, J = m.jug[0];
   m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
-  for (let y = 30; y < 100; y++) for (let x = 30; x < 110; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; m.mapa.mineral[i] = 0; } }
+  for (let y = 30; y < 100; y++) for (let x = 30; x < 110; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; m.mapa.mineral[i] = 0; } }
   const avanza = (n, fn) => { for (let i = 0; i < n; i++) { W.tick(m); if (fn) fn(); } };
   const cel = (x, y) => y * N + x;
   J.dios = true; m.jug[1].dios = true; J.nivel = 3;
@@ -1013,6 +1013,105 @@ prueba('aviones: el caza y el bombardero atacan de pasada; el helicóptero se qu
   assert.ok(caza.quieto < 25 && caza.minD < 1.6 && caza.maxD > 5 && caza.dano > 100, 'el caza debía pasar una y otra vez sobre el blanco sin detenerse: ' + JSON.stringify(caza));
   assert.ok(bomb.quieto < 25 && bomb.minD < 1.6 && bomb.maxD > 5 && bomb.dano > 100, 'el bombardero suelta sus bombas de pasada: ' + JSON.stringify(bomb));
   assert.ok(heli.quieto > 300 && heli.maxD < W.ARMAS.coheteAire.alcance + 1 && heli.dano > 100, 'el helicóptero se queda en el aire frente al blanco: ' + JSON.stringify(heli));
+});
+
+prueba('bosque cerrado a los vehículos, excavadora y caminos', () => {
+  // en cualquier mapa queda un corredor de llano entre las dos bases
+  for (let semilla = 1; semilla <= 12; semilla++) {
+    const mp = W.generarMapa(semilla, 128), N = mp.N, visto = new Uint8Array(N * N), cola = [mp.bases[0].y * N + mp.bases[0].x];
+    visto[cola[0]] = 1;
+    while (cola.length) { const c = cola.pop(); for (const d of [1, -1, N, -N]) { const n = c + d; if (n >= 0 && n < N * N && !visto[n] && mp.terreno[n] === 0 && Math.abs((n % N) - (c % N)) <= 1) { visto[n] = 1; cola.push(n); } } }
+    assert.ok(visto[mp.bases[1].y * N + mp.bases[1].x], 'sin corredor para vehículos, semilla ' + semilla);
+  }
+  const m = W.crearMundo(31, { N: 128 }), N = m.N, J = m.jug[0], T = W.TERRENO;
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const cel = (x, y) => y * N + x;
+  const pon = (x, y, t) => { const i = cel(x, y); m.mapa.terreno[i] = t; m.mapa.mineral[i] = 0; m.paso[i] = t === 1 || t === 2 ? 0 : 1; m.pasoV[i] = t === 0 || t === 4 ? 1 : 0; };
+  for (let y = 40; y < 80; y++) for (let x = 30; x < 100; x++) if (!m.ocup[cel(x, y)]) pon(x, y, 0);
+  for (let y = 40; y < 80; y++) for (let x = 58; x < 64; x++) pon(x, y, 3); // una franja de bosque de lado a lado
+  for (let x = 30; x < 100; x++) { pon(x, 39, 1); pon(x, 80, 1); } for (let y = 39; y <= 80; y++) { pon(29, y, 1); pon(100, y, 1); } // y roca alrededor: no hay rodeo
+  const avanza = (n, fn) => { for (let i = 0; i < n; i++) { W.tick(m); if (fn) fn(); } };
+  const terr = (u) => m.mapa.terreno[cel(Math.floor(u.x), Math.floor(u.y))];
+  J.dios = false; J.minerales = 3000;
+  // el tanque no entra al bosque ni lo cruza; la infantería sí
+  const tq = W.crearUnidad(m, 0, 'tanque', cel(50, 60)), so = W.crearUnidad(m, 0, 'infanteria', cel(50, 62));
+  let piso = false;
+  W.orden(m, { t: 'mover', j: 0, ids: [tq.id, so.id], x: 75.5, y: 60.5 });
+  avanza(700, () => { if (terr(tq) === T.BOSQUE) piso = true; });
+  assert.ok(!piso && tq.x < 58.2, 'el tanque no debía entrar al bosque: ' + tq.x.toFixed(1));
+  assert.ok(so.x > 70, 'la infantería sí lo cruza: ' + so.x.toFixed(1));
+  // si el destino está dentro del bosque, el vehículo se queda en el borde
+  W.orden(m, { t: 'mover', j: 0, ids: [tq.id], x: 60.5, y: 50.5 }); avanza(400);
+  assert.ok(terr(tq) !== T.BOSQUE && Math.hypot(tq.x - 60.5, tq.y - 50.5) < 5, 'debía quedarse junto al bosque');
+  // la excavadora, moviéndose normal, ni entra ni deja camino
+  const ex = W.crearUnidad(m, 0, 'excavadora', cel(52, 70)); const min0 = J.minerales;
+  W.orden(m, { t: 'mover', j: 0, ids: [ex.id], x: 75.5, y: 70.5 }); avanza(400);
+  assert.ok(ex.x < 58.2 && !m.hayCaminos && J.minerales >= min0, 'sin la orden de trazar no abre nada');
+  // trazando, tala el bosque, deja camino de dos de ancho y lo cobra
+  J.minerales = 1000; W.orden(m, { t: 'trazar', j: 0, ids: [ex.id], x: 70.5, y: 70.5 }); avanza(20);
+  assert.ok(J.minerales < 1000, 'trazar cuesta minerales');
+  J.minerales = 3000; avanza(1500);
+  assert.ok(ex.x > 69 && ex.orden === 'nada', 'la excavadora debía llegar al otro lado: ' + ex.x.toFixed(1));
+  let camino = 0; for (let x = 58; x < 64; x++) for (let y = 68; y < 73; y++) if (m.mapa.terreno[cel(x, y)] === T.CAMINO) camino++;
+  assert.ok(camino >= 10 && m.hayCaminos, 'debía quedar camino a través del bosque: ' + camino + ' celdas');
+  // ahora el tanque cruza por el camino, y por camino va más rápido que por llano
+  W.orden(m, { t: 'mover', j: 0, ids: [tq.id], x: 75.5, y: 70.5 }); avanza(900);
+  assert.ok(tq.x > 74, 'por el camino el tanque sí pasa: ' + tq.x.toFixed(1));
+  const carrera = (y, conCamino) => {
+    if (conCamino) { const e2 = W.crearUnidad(m, 0, 'excavadora', cel(66, y)); W.orden(m, { t: 'trazar', j: 0, ids: [e2.id], x: 96.5, y: y + 0.5 }); avanza(1600); e2.vida = 0; avanza(2); }
+    const t = W.crearUnidad(m, 0, 'tanque', cel(67, y)); t.ang = 0;
+    W.orden(m, { t: 'mover', j: 0, ids: [t.id], x: 95.5, y: y + 0.5 });
+    let n = 0; while (t.x < 94 && n < 2000) { W.tick(m); n++; }
+    t.vida = 0; avanza(2);
+    return n;
+  };
+  const llano = carrera(45, false), pista = carrera(55, true);
+  assert.ok(pista < llano * 0.85, 'por la pista debía tardar menos: ' + pista + ' frente a ' + llano);
+  // sin minerales, la excavadora se para
+  J.minerales = 0; const e3 = W.crearUnidad(m, 0, 'excavadora', cel(40, 45));
+  W.orden(m, { t: 'trazar', j: 0, ids: [e3.id], x: 50.5, y: 45.5 }); avanza(60);
+  assert.ok(e3.orden === 'nada' && e3.x < 42, 'sin minerales no hay camino');
+});
+
+prueba('panel ADMIN: cada interruptor por separado', () => {
+  const m = W.crearMundo(5, { N: 128 }), J = m.jug[0], b = m.mapa.bases[0];
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  const pon = (clave, valor) => { W.orden(m, { t: 'trampa', j: 0, clave, valor }); avanza(1); };
+  // sin requisitos: solo eso
+  assert.ok(!W.disponible(m, 0, W.EDIF.aerodromo));
+  pon('requisitos', true);
+  assert.ok(W.disponible(m, 0, W.EDIF.aerodromo) && !J.dios && J.nivel === 1 && J.admin, 'sin requisitos, pero ni recursos ni nivel');
+  pon('requisitos', false);
+  assert.ok(!W.disponible(m, 0, W.EDIF.aerodromo) && !J.admin);
+  // velocidad
+  J.minerales = 5000; pon('vel', 10);
+  W.orden(m, { t: 'construir', j: 0, tipo: 'central' }); avanza(W.EDIF.central.tiempo / 10 + 3);
+  assert.ok(J.obras[0].listo, 'a ×10 la obra debía estar lista');
+  pon('vel', 1);
+  // construir en cualquier parte
+  const lejos = W.cercaLibre(m, b.x < 64 ? b.x + 30 : b.x - 30, b.y), lx = lejos % m.N, ly = (lejos / m.N) | 0;
+  let sitio = null; for (let d = 0; d < 12 && !sitio; d++) for (const [dx, dy] of [[d, 0], [0, d], [-d, 0], [0, -d]]) { pon('libre', true); if (W.puedeColocar(m, 0, 'central', lx + dx, ly + dy)) { sitio = [lx + dx, ly + dy]; break; } }
+  assert.ok(sitio, 'con el interruptor debía poder colocar lejos de la base');
+  pon('libre', false);
+  assert.ok(!W.puedeColocar(m, 0, 'central', sitio[0], sitio[1]), 'y sin él, no');
+  // invulnerables
+  const u = W.crearUnidad(m, 0, 'infanteria', W.cercaLibre(m, b.x + 5, b.y + 5, true)), malo = W.crearUnidad(m, 1, 'tanque', W.cercaLibre(m, u.x + 2, u.y, true)); malo.guardia = true; malo.ang = malo.angT = Math.atan2(u.y - malo.y, u.x - malo.x);
+  u.guardia = true; u.recarga = 99999; pon('invulnerable', true); avanza(200);
+  assert.ok(malo.obj === u.id, 'el tanque debía estar disparándole');
+  assert.strictEqual(u.vida, u.vidaMax, 'no debía recibir daño');
+  pon('invulnerable', false); avanza(200);
+  assert.ok(u.vida < u.vidaMax || !m.porId.has(u.id), 'y al apagarlo, sí');
+  // mapa a la vista y recursos
+  pon('mapa', true); avanza(4);
+  assert.ok(m.niebla[0].every((v) => v === 2), 'todo el mapa visible');
+  pon('mapa', false);
+  const antes = J.minerales; pon('recursos', true);
+  assert.ok(J.dios && J.minerales > 900000);
+  pon('recursos', false);
+  assert.ok(!J.dios && J.minerales <= antes + 5, 'al apagar los recursos vuelve el saldo');
+  // de un solo uso
+  pon('nivel3', true); pon('mejoras', true);
+  assert.ok(J.nivel === 3 && J.mejoras.canonLargo && !J.admin, 'nivel y mejoras quedan puestos');
 });
 
 prueba('determinismo: misma semilla, misma partida', () => {
@@ -1035,7 +1134,7 @@ if (!process.env.RAPIDO) prueba('fase 2c: los cinco estilos de rival juegan medi
       if (m.t % 200 === 0) {
         const c = m.jug[0].cuenta;
         aviones = Math.max(aviones, (c.caza || 0) + (c.bombardero || 0) + (c.helicoptero || 0) + (c.dron || 0));
-        torres = Math.max(torres, (c.torreta || 0) + (c.torreCanon || 0)); patios = Math.max(patios, c.patio || 0);
+        torres = Math.max(torres, (c.torreta || 0) + (c.torreCanon || 0)); patios = Math.max(patios, c.patio || 0, m.jug[1].cuenta.patio || 0); // de cualquiera de los dos
         puestos = Math.max(puestos, m.puestos.filter((p) => p.dueno === 0).length);
         if (!primera && a.atacantes.size) primera = m.t;
       }

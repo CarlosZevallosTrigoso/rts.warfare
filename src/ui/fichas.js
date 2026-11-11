@@ -127,6 +127,14 @@
       c.fillStyle = col.osc; c.fillRect(-w * 0.1 - rec, -w * 0.12, L * 2.1, w * 0.24); c.fillRect(L * 1.85 - rec, -w * 0.21, L * 0.2, w * 0.42); // tubo largo
       c.fillStyle = col.base; c.strokeStyle = col.luz; c.lineWidth = Math.max(1, r * 0.14); c.beginPath(); c.rect(-w * 0.55, -w * 0.42, w * 0.95, w * 0.84); c.fill(); c.stroke();
       if (e.retro > 0.6) { c.fillStyle = col.fuego; c.beginPath(); c.arc(L * 2.3, 0, w * 0.45, 0, TAU); c.fill(); }
+    } else if (u.tipo === 'excavadora') { // orugas anchas, cabina atrás y una pala delante
+      const L = r * 1.35, w = r * 0.95;
+      c.fillStyle = col.osc; c.fillRect(-L, -w, L * 1.7, w * 0.42); c.fillRect(-L, w * 0.58, L * 1.7, w * 0.42); // orugas
+      c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.rect(-L * 0.9, -w * 0.6, L * 1.45, w * 1.2); c.fill(); c.stroke();
+      c.fillStyle = col.osc; c.fillRect(-L * 0.8, -w * 0.42, L * 0.5, w * 0.84); // cabina
+      if (lod === 2) { c.fillStyle = col.luz; c.fillRect(-L * 0.42, -w * 0.32, L * 0.08, w * 0.64); }
+      c.strokeStyle = col.osc; c.lineWidth = Math.max(1, r * 0.16); c.beginPath(); c.moveTo(L * 0.55, -w * 0.45); c.lineTo(L * 0.95, -w * 0.45); c.moveTo(L * 0.55, w * 0.45); c.lineTo(L * 0.95, w * 0.45); c.stroke(); // brazos
+      c.fillStyle = col.luz; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.moveTo(L * 0.95, -w * 1.15); c.lineTo(L * 1.2, -w * 1.0); c.lineTo(L * 1.2, w * 1.0); c.lineTo(L * 0.95, w * 1.15); c.closePath(); c.fill(); c.stroke(); // pala
     } else if (u.tipo === 'transporte') { // caja blindada de ocho ruedas con rampa trasera
       const L = r * 1.45, w = r * 0.9;
       c.fillStyle = col.osc;

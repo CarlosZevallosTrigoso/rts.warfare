@@ -7,8 +7,8 @@
   // Toda la paleta vive aquí: cambiar de tema no cuesta nada.
   const PALETAS = {
     // Grises para todo lo que es interfaz y terreno; el color queda para bandos y recursos.
-    clara:  { fondo: '#ededed', llano: '#f5f5f5', roca: '#5a5a5a', agua: '#aebfcc', bosque: '#c6cfbd', tinta: '#1a1a1a', mineral: '#4d7a38', raro: '#7d5aa6', niebla: [178, 178, 178], velo: 150, yo: '#3b6ea5', yoOsc: '#22466b', rival: '#c9622b', rivalOsc: '#853d15', bien: '#4d7a38', mal: '#b0362f' },
-    oscura: { fondo: '#1c1c1c', llano: '#2c2c2c', roca: '#666666', agua: '#27353f', bosque: '#343d2f', tinta: '#e6e6e6', mineral: '#8fb574', raro: '#b08ad6', niebla: [8, 8, 8],       velo: 140, yo: '#6aa0d8', yoOsc: '#35597f', rival: '#e08a4f', rivalOsc: '#96552a', bien: '#8fb574', mal: '#d0554a' },
+    clara:  { fondo: '#ededed', llano: '#f5f5f5', camino: '#d9d2c2', roca: '#5a5a5a', agua: '#aebfcc', bosque: '#c6cfbd', tinta: '#1a1a1a', mineral: '#4d7a38', raro: '#7d5aa6', niebla: [178, 178, 178], velo: 150, yo: '#3b6ea5', yoOsc: '#22466b', rival: '#c9622b', rivalOsc: '#853d15', bien: '#4d7a38', mal: '#b0362f' },
+    oscura: { fondo: '#1c1c1c', llano: '#2c2c2c', camino: '#4b463c', roca: '#666666', agua: '#27353f', bosque: '#343d2f', tinta: '#e6e6e6', mineral: '#8fb574', raro: '#b08ad6', niebla: [8, 8, 8],       velo: 140, yo: '#6aa0d8', yoOsc: '#35597f', rival: '#e08a4f', rivalOsc: '#96552a', bien: '#8fb574', mal: '#d0554a' },
   };
   const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
 
@@ -66,7 +66,7 @@
     let forma = 'grupo'; // formación con la que llegan los grupos a su destino
     let tipoColocar = null; // edificio que se está colocando
     const obraLista = (tipo) => J.obras.some((o) => o.listo && o.tipo === tipo);
-    let pausa = false, cuadros = 0, nieblaVista = -1;
+    let pausa = false, cuadros = 0, nieblaVista = -1, terrVisto = 0, iaQuieta = false;
     const raton = { x: 0, y: 0, izq: false, x0: 0, y0: 0, medio: false, dentro: false, der: false, arrastre: false, xd: 0, yd: 0 };
 
     // ---------- capas pre-dibujadas ----------
@@ -75,7 +75,7 @@
     const cNie = document.createElement('canvas'); cNie.width = cNie.height = N;
     const xNie = cNie.getContext('2d'), imgNie = xNie.createImageData(N, N);
     function pintarTerreno() {
-      const img = xTerr.createImageData(N, N), cols = [P.llano, P.roca, P.agua, P.bosque].map(hex);
+      const img = xTerr.createImageData(N, N), cols = [P.llano, P.roca, P.agua, P.bosque, P.camino].map(hex);
       for (let i = 0; i < N * N; i++) { const c = cols[m.mapa.terreno[i]]; img.data[i * 4] = c[0]; img.data[i * 4 + 1] = c[1]; img.data[i * 4 + 2] = c[2]; img.data[i * 4 + 3] = 255; }
       xTerr.putImageData(img, 0, 0);
     }
@@ -129,7 +129,7 @@
     const unidadesSel = () => { const out = []; for (const id of sel) { const e = m.porId.get(id); if (e && !e.edif) out.push(e); } return out; };
     const esquinaColocar = (tipo) => { const t = EDIF[tipo].tam; return { x: Math.round(aMundoX(raton.x) - t / 2), y: Math.round(aMundoY(raton.y) - t / 2) }; };
 
-    const NOMBRE_TERRENO = ['Llano', 'Roca · no se puede pasar', 'Agua · no se puede pasar', 'Bosque · cubre a la infantería, frena a los vehículos'];
+    const NOMBRE_TERRENO = ['Llano', 'Roca · no se puede pasar', 'Agua · no se puede pasar', 'Bosque · cubre y esconde a la infantería; los vehículos no pasan', 'Camino · los vehículos van más rápido'];
     const sitioPorCelda = new Map(m.mapa.sitios.map((s) => [s.y * N + s.x, s.tipo]));
     // Lo que el terreno (o la trinchera) le da o le quita a una unidad, en texto.
     const pct = (k) => Math.round(Math.abs(1 - k) * 100) + ' %';
@@ -137,7 +137,8 @@
       if (e.edif || UNID[e.tipo].aire) return '';
       const inf = UNID[e.tipo].cat === 'inf', out = [];
       if (W.enTrinchera(m, e)) out.push('trinchera: −' + pct(W.ECON.trinchera) + ' daño, no la atropellan');
-      if (W.enBosque(m, e)) out.push(inf ? 'bosque: −' + pct(W.ECON.bosqueCubre) + ' daño' : 'bosque: −' + pct(W.ECON.bosqueVeh) + ' velocidad');
+      if (W.enBosque(m, e)) out.push(inf ? 'bosque: −' + pct(W.ECON.bosqueCubre) + ' daño' : 'abriendo bosque');
+      if (!inf && !UNID[e.tipo].aire && m.mapa.terreno[Math.floor(e.y) * N + Math.floor(e.x)] === 4) out.push('camino: +' + Math.round((W.ECON.caminoVel - 1) * 100) + ' % velocidad');
       return out.join(' · ');
     }
     const NOMBRE_PUESTO = { antena: 'Antena (da visión de la zona)', deposito: 'Depósito (da petróleo)', taller: 'Taller (repara a los tuyos cerca)' };
@@ -224,7 +225,7 @@
           } else if (t === 2) {
             if (y > 0 && T[i - N] !== 2) orilla.rect(sx, sy, z, z * 0.2);
             if (x > 0 && T[i - 1] !== 2) orilla.rect(sx, sy, z * 0.1, z);
-          } else if (lod === 2) { // bosque: un par de copas por celda, siempre en el mismo sitio
+          } else if (t === 3 && lod === 2) { // bosque: un par de copas por celda, siempre en el mismo sitio
             for (let k = 0; k < 2; k++) {
               const a = i * 2.39996 + k * 3.1, qx = sx + z * (0.5 + Math.cos(a) * 0.27), qy = sy + z * (0.5 + Math.sin(a * 1.3) * 0.27), rr = z * (0.2 + ((i * 7 + k * 3) % 5) * 0.022);
               sCopas.moveTo(qx + z * 0.1 + rr, qy + z * 0.12); sCopas.arc(qx + z * 0.1, qy + z * 0.12, rr, 0, TAU);
@@ -669,6 +670,21 @@
         ctx.fillStyle = P.tinta;
         ctx.fillText(pausa ? 'pausa' : modo === 'amover' ? 'atacar al avanzar: elige destino' : modo === 'barrido' ? 'barrido: elige la zona a revelar' : 'patrulla: elige el punto (con Mayús añades más)', 12, ch - 14);
       }
+      if (modo === 'trazar' && raton.dentro) { // por dónde irá el camino y cuánto costará, a ojo: en rojo si el destino no vale
+        const ex = unidadesSel().find((u) => UNID[u.tipo].traza);
+        if (ex) {
+          const x0 = trazaDesde ? trazaDesde.x : ex.x, y0 = trazaDesde ? trazaDesde.y : ex.y, wx = aMundoX(raton.x), wy = aMundoY(raton.y), L = Math.hypot(wx - x0, wy - y0);
+          let costo = 0, mal = wx < 0 || wy < 0 || wx >= N || wy >= N;
+          for (let i = 0, n = Math.ceil(L * 2); i <= n && !mal; i++) {
+            const t = m.mapa.terreno[Math.floor(y0 + ((wy - y0) * i) / (n || 1)) * N + Math.floor(x0 + ((wx - x0) * i) / (n || 1))];
+            if (i === n && (t === 1 || t === 2)) mal = true;
+            costo += t === 3 ? W.ECON.caminoBosque : t === 0 ? W.ECON.caminoLlano : 0; // dos muestras por celda y dos celdas de ancho: sale la cuenta
+          }
+          ctx.strokeStyle = mal ? P.mal : P.bien; ctx.lineWidth = Math.max(3, z * 0.9); ctx.globalAlpha = 0.28; ctx.lineCap = 'round';
+          ctx.beginPath(); ctx.moveTo(ox + x0 * z, oy + y0 * z); ctx.lineTo(raton.x, raton.y); ctx.stroke(); ctx.globalAlpha = 1; ctx.lineCap = 'butt';
+          ctx.fillStyle = mal ? P.mal : P.tinta; ctx.fillText(mal ? 'ahí no llega un camino' : 'camino: unos ' + Math.round(costo) + ' minerales · Mayús: más tramos', raton.x + 14, raton.y - 8);
+        }
+      }
       if (modo === 'barrido' && raton.dentro) { // zona que revelará el barrido
         ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.setLineDash([6, 4]); ctx.beginPath(); ctx.arc(raton.x, raton.y, W.INTEL.barrido.radio * z, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
       }
@@ -755,6 +771,8 @@
           const area = W.ARMAS[d.arma].area || 0; // los obuses de área dejan un cráter mayor
           estallido(d.x2, d.y2, area ? 2 : 1); marcaSuelo('quemado', d.x2, d.y2, area || 0.42, 0, 15000);
           if (n++ < 6) son.impacto(cerca(d.x2, d.y2), paneo(d.x2));
+        } else if (d.tipo === 'sinCamino') {
+          if (d.j === YO) aviso(d.corte ? 'La excavadora no encuentra por dónde seguir' : 'Sin minerales: la excavadora se detiene');
         } else if (d.tipo === 'captura') {
           const que = d.clase === 'antena' ? 'una antena' : d.clase === 'deposito' ? 'un depósito' : 'un taller';
           if (d.j === YO) { son.obraLista(); aviso('Has capturado ' + que); } else if (visible(d.x2, d.y2) || m.puestos.some((p) => p.x === d.x2 && p.y === d.y2)) aviso('El rival ha capturado ' + que);
@@ -897,9 +915,30 @@
     const paraCavar = () => unidadesSel().filter((u) => u.j === YO && UNID[u.tipo].cat === 'inf' && u.orden === 'nada' && !(u.cava > 0) && !W.enTrinchera(m, u));
     function atrincherar() { const ids = paraCavar().map((u) => u.id); if (ids.length) { W.orden(m, { t: 'trinchera', j: YO, ids }); son.colocar(); } }
     $('trinchera').addEventListener('click', atrincherar);
+    // Panel ADMIN: cada trampa se prende y se apaga por separado, como en un trainer.
+    $('admin').addEventListener('click', (ev) => {
+      const b = ev.target.closest('button'); if (!b) return;
+      const c = b.dataset.t;
+      if (c === 'cerrar') $('admin').hidden = true;
+      else if (c === 'ia') iaQuieta = !iaQuieta;
+      else if (c === 'vel') W.orden(m, { t: 'trampa', j: YO, clave: 'vel', valor: +b.dataset.v });
+      else if (c === 'nivel3' || c === 'mejoras') { W.orden(m, { t: 'trampa', j: YO, clave: c, valor: true }); aviso(c === 'nivel3' ? 'Nivel 3 alcanzado' : 'Todas las mejoras investigadas'); }
+      else if (c === 'recursos') W.orden(m, { t: 'trampa', j: YO, clave: c, valor: !J.dios });
+      else W.orden(m, { t: 'trampa', j: YO, clave: c, valor: !J.tr[c] });
+    });
+    function actualizarAdmin() {
+      if ($('admin').hidden) return;
+      for (const b of $('admin').querySelectorAll('button[data-t]')) {
+        const c = b.dataset.t;
+        const on = c === 'recursos' ? J.dios : c === 'ia' ? iaQuieta : c === 'vel' ? J.tr.vel === +b.dataset.v : c === 'nivel3' ? J.nivel >= 3 : c === 'mejoras' ? Object.keys(W.TEC).every((q) => W.TEC[q].sube || J.mejoras[q]) : !!J.tr[c];
+        if (b.classList.contains('on') !== on) b.classList.toggle('on', on);
+      }
+    }
     const conCarga = () => unidadesSel().filter((u) => UNID[u.tipo].plazas && u.pasajeros.length);
     function descargar() { const us = conCarga(); if (us.length) { W.orden(m, { t: 'descargar', j: YO, ids: us.map((u) => u.id) }); son.orden(); } }
     $('descargar').addEventListener('click', descargar);
+    function trazar() { if (unidadesSel().some((u) => UNID[u.tipo].traza)) { modo = 'trazar'; trazaDesde = null; if (tactil) aviso('Arrastra hasta donde debe llegar el camino y suelta'); } }
+    $('trazar').addEventListener('click', trazar);
     const paraDesplegar = () => unidadesSel().filter((u) => UNID[u.tipo].despliega);
     function desplegar() {
       const us = paraDesplegar(); if (!us.length) return;
@@ -914,6 +953,7 @@
     // Segundo clic derecho tras ordenar mover: fija hacia dónde queda mirando la unidad (o el frente de la formación).
     let giroPend = null, giroCerca = false;
     const ultClic = { id: 0, t: 0 };
+    let trazaDesde = null; // último punto del camino que se está marcando (para encadenar tramos)
     const mismaSel = (ids) => { const a = unidadesSel(); return a.length === ids.length && a.every((u) => ids.includes(u.id)); };
     function flecha(x1, y1, x2, y2, color) {
       const a = Math.atan2(y2 - y1, x2 - x1), k = 9;
@@ -929,6 +969,7 @@
       if (us.length) {
         const armadas = us.some((u) => UNID[u.tipo].arma);
         const soloAire = us.every((u) => UNID[u.tipo].aire);
+        if (us.some((u) => UNID[u.tipo].traza)) L.push('<b>excavadora: ' + k('K') + ' trazar camino hasta un punto (abre el bosque; por camino los vehículos corren más)</b>');
         if (us.some((u) => UNID[u.tipo].plazas)) L.push('<b>transporte: la infantería sube con clic derecho sobre él · ' + k('U') + ' descargar</b>');
         if (us.some((u) => UNID[u.tipo].mando)) L.push('<b>mando: los tuyos en su radio ven en redondo y giran más rápido; gasta información</b>');
         if (us.some((u) => UNID[u.tipo].despliega)) L.push('<b>patio móvil: ' + k('D') + ' lo despliega aquí como patio nuevo (no se repliega)</b>');
@@ -1083,7 +1124,7 @@
     function actualizarBarra() {
       const num = (v) => (J.dios ? '∞' : String(Math.floor(v)));
       $('rMin').textContent = num(J.minerales); $('rPet').textContent = num(J.petroleo); $('rRar').textContent = num(J.raros); $('rInf').textContent = num(J.info);
-      $('dios').hidden = !J.dios; { const t = J.admin ? 'ADMIN' : 'GOD'; if ($('dios').textContent !== t) $('dios').textContent = t; } $('sinColmena').hidden = J.colmena;
+      { const otras = J.tr.requisitos || J.tr.libre || J.tr.vel > 1 || J.tr.mapa || J.tr.invulnerable || iaQuieta, t = otras ? 'ADMIN' : 'GOD'; $('dios').hidden = !J.dios && !otras; if ($('dios').textContent !== t) $('dios').textContent = t; } actualizarAdmin(); $('sinColmena').hidden = J.colmena;
       const e = $('rEne'); e.textContent = J.uso + ' / ' + J.prod; e.className = J.uso > J.prod ? 'mal' : '';
       const ag = $('rAgu'); ag.textContent = J.aguaUso + ' / ' + (J.dios ? '∞' : J.aguaProd); ag.className = !J.dios && J.aguaUso >= J.aguaProd ? 'mal' : '';
       const eds = edificiosSel(), tipos = new Set(eds.map((e) => e.tipo)), patiosSel = new Set(eds.filter((e) => e.tipo === 'patio').map((e) => e.id));
@@ -1140,6 +1181,7 @@
       const cav = paraCavar().length, bt = $('trinchera');
       bt.hidden = !cav;
       $('desplegar').hidden = !paraDesplegar().length;
+      { const hay = unidadesSel().some((u) => UNID[u.tipo].traza), bz = $('trazar'); bz.hidden = !hay; bz.classList.toggle('listo', modo === 'trazar'); }
       { const us = conCarga(), bd = $('descargar'); bd.hidden = !us.length; if (us.length) { const t = 'Descargar · ' + us.reduce((a, u) => a + u.pasajeros.length, 0) + ' dentro'; if (bd.textContent !== t) bd.textContent = t; } }
       { const us = paraRetiro(), br = $('retiro'); br.hidden = !us.length;
         if (us.length) { const t = 'Retirada automática: ' + (us.every((u) => u.retira) ? 'sí' : us.some((u) => u.retira) ? 'algunas' : 'no'); if (br.textContent !== t) br.textContent = t; } }
@@ -1169,6 +1211,13 @@
           return;
         }
         if (modo === 'barrido') { W.orden(m, { t: 'intel', j: YO, clave: 'barrido', x: wx, y: wy }); son.orden(); modo = null; return; }
+        if (modo === 'trazar') { // destino del camino; con Mayús se siguen añadiendo tramos
+          const ids = unidadesSel().filter((u) => UNID[u.tipo].traza).map((u) => u.id), t = m.mapa.terreno[Math.floor(wy) * N + Math.floor(wx)];
+          if (t === 1 || t === 2 || wx < 0 || wy < 0 || wx >= N || wy >= N) { aviso('Ahí no se puede llevar un camino'); return; }
+          if (ids.length) { W.orden(m, { t: 'trazar', j: YO, ids, x: wx, y: wy, enc: ev.shiftKey }); trazaDesde = { x: wx, y: wy }; marca(wx, wy, P.bien); son.orden(); }
+          if (!ev.shiftKey) { modo = null; trazaDesde = null; }
+          return;
+        }
         if (modo === 'amover' || modo === 'patrulla') {
           const ids = unidadesSel().map((u) => u.id);
           if (ids.length) {
@@ -1364,7 +1413,8 @@
       const hay = unidadesSel().length > 0;
       for (const b of $('tactil').children) {
         if (b.dataset.u !== undefined && b.hidden === hay) b.hidden = !hay;
-        const on = (b.dataset.c === 'KeyA' && modo === 'amover') || (b.dataset.c === 'KeyR' && modo === 'patrulla') || (b.dataset.c === 'KeyP' && pausa);
+        if (b.dataset.c === 'KeyK') b.hidden = !unidadesSel().some((u) => UNID[u.tipo].traza);
+        const on = (b.dataset.c === 'KeyK' && modo === 'trazar') || (b.dataset.c === 'KeyA' && modo === 'amover') || (b.dataset.c === 'KeyR' && modo === 'patrulla') || (b.dataset.c === 'KeyP' && pausa);
         if (b.classList.contains('on') !== on) b.classList.toggle('on', on);
       }
     }
@@ -1383,10 +1433,9 @@
       if (ev.key.length === 1) {
         tecleado = (tecleado + ev.key.toLowerCase()).slice(-5);
         if (tecleado.endsWith('god')) { W.orden(m, { t: 'dios', j: YO }); tecleado = ''; }
-        if (tecleado === 'admin') {
-          W.orden(m, { t: 'admin', j: YO }); tecleado = '';
-          modo = null; deslizar = !deslizar; // deshace lo que las letras a y m hicieron por el camino (la n no llega a actuar)
-          aviso(J.admin ? 'Modo ADMIN desactivado' : 'Modo ADMIN: recursos infinitos, nivel 3, todas las mejoras, sin requisitos, todo 300 % más rápido y mapa a la vista');
+        if (tecleado === 'admin') { // abre o cierra el panel de interruptores; no activa nada por sí solo
+          tecleado = ''; modo = null; deslizar = !deslizar; // deshace lo que las letras a y m hicieron por el camino (la n no llega a actuar)
+          $('admin').hidden = !$('admin').hidden; actualizarAdmin();
           return;
         }
       }
@@ -1406,6 +1455,7 @@
         case 'KeyR': if (unidadesSel().length) modo = 'patrulla'; break;
         case 'KeyZ': atrincherar(); break;
         case 'KeyD': desplegar(); break;
+        case 'KeyK': trazar(); break;
         case 'KeyU': descargar(); break;
         case 'KeyB': elegirEdificios('patio'); break;
         case 'KeyQ': elegirEdificios('cuartel'); break;
@@ -1469,7 +1519,7 @@
         acum += dt;
         let n = 0;
         const t0 = performance.now();
-        while (acum >= PASO && n < 4) { if (ia) W.iaTick(m, ia); W.tick(m); acum -= PASO; n++; }
+        while (acum >= PASO && n < 4) { if (ia && !iaQuieta) W.iaTick(m, ia); W.tick(m); acum -= PASO; n++; }
         R.sim += performance.now() - t0; R.ticks += n;
         if (n === 4) acum = 0;
         if (n) sonar();
@@ -1477,6 +1527,7 @@
       for (const id of sel) if (!m.porId.has(id)) sel.delete(id);
       if (modo === 'colocar' && !obraLista(tipoColocar)) modo = null;
       const td = performance.now();
+      if (terrVisto !== m.terrenoV) { terrVisto = m.terrenoV; pintarTerreno(); } // un camino nuevo cambia el terreno
       if (nieblaVista !== m.nieblaV) pintarNiebla();
       dibujar(pausa || m.ganador >= 0 ? 1 : Math.min(1, acum / PASO));
       if (cuadros % 6 === 0) { dibujarMini(); actualizarBarra(); }

@@ -32,6 +32,20 @@
     return { j, estilo: e, plan: planDe(e), oleada: Math.max(3, Math.round((nivel === 'tranquilo' ? 12 : nivel === 'agresivo' ? 4 : 6) * ESTILOS[e].oleada)), atacantes: new Set(), reunidos: new Set(), capturan: new Set(), puesto: -1, tPuesto: 0, lado: 1, fallos: 0 };
   };
 
+  // Hasta dónde llegan los vehículos desde un punto (el bosque no lo cruzan): relleno por inundación sobre el paso de vehículos.
+  function alcanceVehiculos(m, x, y) {
+    const N = m.N, visto = new Uint8Array(N * N), cola = new Int32Array(N * N), ini = W.cercaLibre(m, x, y, true);
+    let a = 0, b = 0;
+    visto[ini] = 1; cola[b++] = ini;
+    while (a < b) {
+      const c = cola[a++], cx = c % N;
+      if (cx > 0 && !visto[c - 1] && m.pasoV[c - 1]) { visto[c - 1] = 1; cola[b++] = c - 1; }
+      if (cx < N - 1 && !visto[c + 1] && m.pasoV[c + 1]) { visto[c + 1] = 1; cola[b++] = c + 1; }
+      if (c >= N && !visto[c - N] && m.pasoV[c - N]) { visto[c - N] = 1; cola[b++] = c - N; }
+      if (c < N * N - N && !visto[c + N] && m.pasoV[c + N]) { visto[c + N] = 1; cola[b++] = c + N; }
+    }
+    return visto;
+  }
   function siguienteEdificio(m, j, patio, plan) {
     const J = m.jug[j];
     const conEnergia = (tipo) => (tipo !== 'central' && J.prod - J.uso + EDIF[tipo].energia < 0 ? 'central' : tipo);
@@ -140,12 +154,32 @@
       W.orden(m, { t: 'construir', j, tipo: plan });
     }
 
+    // Caminos: si a sus vehículos ya casi no les quedan minerales a los que llegar (el resto está tras el bosque),
+    // encarga una excavadora y abre camino hasta el campo cerrado más cercano.
+    if (m.t % 600 === ia.j * 20) {
+      const alc = alcanceVehiculos(m, patio.cx, patio.cy + 2.5);
+      let hay = 0, lejos = -1, dl = Infinity;
+      for (let k = 0; k < m.minas.length; k += 3) {
+        const cel = m.minas[k];
+        if (m.mapa.tipoMin[cel] !== 1) continue;
+        if (alc[cel]) { hay += m.mapa.mineral[cel] * 3; continue; }
+        const d0 = Math.hypot((cel % m.N) - patio.cx, ((cel / m.N) | 0) - patio.cy);
+        if (d0 < dl && Math.hypot((cel % m.N) - m.mapa.bases[1 - j].x, ((cel / m.N) | 0) - m.mapa.bases[1 - j].y) > 30) { dl = d0; lejos = cel; }
+      }
+      ia.campoCerrado = hay < 6000 && lejos >= 0 ? lejos : -1;
+    }
+    if (ia.campoCerrado >= 0 && J.cuenta.fabrica) {
+      const exc = sinArma.find((u) => u.tipo === 'excavadora');
+      if (!exc) { if (!J.colas.excavadora.n && W.puedePagar(J, UNID.excavadora)) W.orden(m, { t: 'entrenar', j, tipo: 'excavadora' }); }
+      else if (exc.orden === 'nada' && J.minerales > 300) { W.orden(m, { t: 'trazar', j, ids: [exc.id], x: (ia.campoCerrado % m.N) + 0.5, y: ((ia.campoCerrado / m.N) | 0) + 0.5 }); ia.campoCerrado = -1; }
+    }
+
     // Segunda base: pasado un rato, con nivel 2 y un solo patio, ahorra para un patio móvil (deja de comprar otros vehículos,
     // aviones, mejoras y edificios que no sean urgentes). Si en tres minutos no lo consigue, lo deja para más tarde.
     const quiereBase = J.nivel >= 2 && J.cuenta.fabrica && patios.length < 2 && !moviles.length && !J.colas.patioMovil.n && m.t > 12000 && (J.cuenta.cosechadora || 0) >= 2 && m.t > (ia.sinBaseHasta || 0);
     if (quiereBase && !ia.tAhorro) ia.tAhorro = m.t;
     if (!quiereBase) ia.tAhorro = 0;
-    else if (m.t - ia.tAhorro > 3600) { ia.sinBaseHasta = m.t + 6000; ia.tAhorro = 0; }
+    else if (m.t - ia.tAhorro > 4800) { ia.sinBaseHasta = m.t + 6000; ia.tAhorro = 0; }
     const ahorra = quiereBase && ia.tAhorro > 0;
 
     // Unidades
@@ -182,7 +216,7 @@
       else if (J.nivel >= 2 && (c.ingeniero || 0) + J.colas.ingeniero.n < (ia.estilo === 'defensivo' ? 2 : 1)) inf = 'ingeniero'; // repara la base él solo
       else if (J.nivel >= 2 && (c.francotirador || 0) < 3 && (c.francotirador || 0) * 5 < (c.infanteria || 0)) inf = 'francotirador';
       const topeInf = E.infMax && (c.infanteria || 0) + (c.antitanque || 0) >= E.infMax && (inf === 'infanteria' || inf === 'antitanque');
-      if (c.cuartel && !topeInf && J.colas.infanteria.n + J.colas.antitanque.n + J.colas.explorador.n + J.colas.ingeniero.n + J.colas.francotirador.n < 2 && dinero >= UNID[inf].costo && W.puedePagar(J, UNID[inf])) { W.orden(m, { t: 'entrenar', j, tipo: inf }); dinero -= UNID[inf].costo; }
+      if (c.cuartel && !topeInf && !(ahorra && soldados.length >= 6) && J.colas.infanteria.n + J.colas.antitanque.n + J.colas.explorador.n + J.colas.ingeniero.n + J.colas.francotirador.n < 2 && dinero >= UNID[inf].costo && W.puedePagar(J, UNID[inf])) { W.orden(m, { t: 'entrenar', j, tipo: inf }); dinero -= UNID[inf].costo; }
     }
 
     // Tecnología: la primera pendiente de la lista que se pueda empezar y pagar sin dejar la caja vacía.
@@ -243,10 +277,13 @@
     for (const u of moviles) {
       if (u.orden !== 'nada') continue;
       if (!ia.expansion) {
+        if (!ia.alcV || m.t - ia.tAlc > 1200) { ia.alcV = alcanceVehiculos(m, u.x, u.y); ia.tAlc = m.t; } // solo campos a los que el patio móvil pueda llegar
         let mejor = -1, md = Infinity;
         for (let k = 0; k < m.minas.length; k += 5) {
           const cel = m.minas[k], x = cel % m.N, y = (cel / m.N) | 0, d0 = Math.hypot(x - patio.cx, y - patio.cy);
           if (m.mapa.tipoMin[cel] !== 1 || d0 < 28 || d0 >= md || Math.hypot(x - rival.x, y - rival.y) < 40) continue;
+          const kk = 6 / d0, tx = Math.floor(x + (patio.cx - x) * kk), ty = Math.floor(y + (patio.cy - y) * kk);
+          if (!ia.alcV[W.cercaLibre(m, tx, ty, true)] || Math.hypot((W.cercaLibre(m, tx, ty, true) % m.N) - tx, ((W.cercaLibre(m, tx, ty, true) / m.N) | 0) - ty) > 4) continue;
           md = d0; mejor = cel;
         }
         if (mejor < 0) break;
@@ -257,7 +294,7 @@
       if (Math.hypot(u.x - ex.x, u.y - ex.y) < 4 && W.puedeDesplegar(m, u)) { W.orden(m, { t: 'desplegar', j, ids: [u.id] }); ia.expansion = null; }
       else { // aún lejos, o aquí no cabe: prueba un poco más allá, en espiral
         const a = ex.n * 2.4, r = Math.min(8, ex.n * 0.8); ex.n++;
-        const c = W.cercaLibre(m, ex.x + Math.cos(a) * r, ex.y + Math.sin(a) * r);
+        const c = W.cercaLibre(m, ex.x + Math.cos(a) * r, ex.y + Math.sin(a) * r, true);
         W.orden(m, { t: 'mover', j, ids: [u.id], x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 });
         if (ex.n > 40) ia.expansion = null;
       }
