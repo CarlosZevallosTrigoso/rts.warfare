@@ -31,7 +31,8 @@
     // Devuelve la lista de celdas desde (x0,y0) hasta la primera cuyo centro
     // quede a `radio` o menos de (mx,my); [] si ya está ahí; null si no hay paso.
     // kh: factor de la estimación (1 normal; 0,62 cuando hay caminos, para que el cálculo los encuentre y los prefiera).
-    return function (paso, terreno, x0, y0, mx, my, radio, kh) {
+    // via: las celdas de camino propias (solo esas abaratan la ruta: el camino ajeno se cruza, pero no se busca).
+    return function (paso, terreno, x0, y0, mx, my, radio, kh, via) {
       kh = kh || 1;
       gen++; hI.length = 0; hF.length = 0;
       const r2 = Math.max(radio, 0.75) ** 2, ini = y0 * N + x0;
@@ -53,7 +54,7 @@
           const n = ny * N + nx;
           if (!paso[n] || cerrado[n] === gen) continue;
           if (d >= 4 && (!paso[cy * N + nx] || !paso[ny * N + cx])) continue;
-          const ng = g[c] + (d >= 4 ? 1.4142 : 1) * (terreno[n] === 3 ? 1.7 : terreno[n] >= 4 ? 0.62 : terreno[n] === 2 ? 3 : 1); // camino y puente, baratos; el agua solo la cruza la excavadora tendiendo un puente, y le sale cara
+          const ng = g[c] + (d >= 4 ? 1.4142 : 1) * (via && via[n] ? 0.62 : terreno[n] === 3 ? 1.7 : terreno[n] === 2 ? 3 : 1); // camino y puente, baratos; el agua solo la cruza la excavadora tendiendo un puente, y le sale cara
           if (visto[n] !== gen || ng < g[n]) { visto[n] = gen; g[n] = ng; padre[n] = c; mete(n, ng + h(nx, ny)); }
         }
       }

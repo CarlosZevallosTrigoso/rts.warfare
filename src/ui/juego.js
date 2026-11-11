@@ -174,7 +174,7 @@
       const inf = UNID[e.tipo].cat === 'inf', out = [];
       if (W.enTrinchera(m, e)) out.push('trinchera: −' + pct(W.ECON.trinchera) + ' daño, no la atropellan');
       if (W.enBosque(m, e)) out.push(inf ? 'bosque: −' + pct(W.ECON.bosqueCubre) + ' daño' : 'abriendo bosque');
-      if (!inf && !UNID[e.tipo].aire && m.mapa.terreno[Math.floor(e.y) * N + Math.floor(e.x)] >= 4) out.push('camino: +' + Math.round((W.ECON.caminoVel - 1) * 100) + ' % velocidad');
+      if (!inf && !UNID[e.tipo].aire && m.via && m.via[e.j][Math.floor(e.y) * N + Math.floor(e.x)]) out.push('camino: +' + Math.round((W.ECON.caminoVel - 1) * 100) + ' % velocidad');
       return out.join(' · ');
     }
     const NOMBRE_PUESTO = { antena: 'Antena (da visión de la zona)', deposito: 'Depósito (da petróleo)', taller: 'Taller (repara a los tuyos cerca)' };
@@ -653,6 +653,7 @@
       // Obuses en vuelo, con estela.
       ctx.lineCap = 'round';
       for (const p of m.proy) {
+        if (p.sale > m.t) continue; // aún no ha salido del tubo
         const x = p.px + (p.x - p.px) * alfa, y = p.py + (p.y - p.py) * alfa;
         if (fuera(x, y) || !visible(x, y)) continue;
         const a = Math.atan2(p.ty - p.y, p.tx - p.x), c = Math.cos(a), s = Math.sin(a), sx = ox + x * z, sy = oy + y * z;
@@ -696,6 +697,7 @@
         if (q.k === 'humo') { ctx.globalAlpha = 0.34 * (1 - fr); ctx.fillStyle = P.roca; ctx.arc(sx, sy, z * q.s * (0.6 + fr * 1.3), 0, TAU); ctx.fill(); }
         else if (q.k === 'polvo') { ctx.globalAlpha = 0.3 * (1 - fr); ctx.fillStyle = '#a3977f'; ctx.arc(sx, sy, z * q.s * (0.5 + fr), 0, TAU); ctx.fill(); }
         else if (q.k === 'chispa') { q.vx *= 0.93; q.vy *= 0.93; ctx.strokeStyle = '#e8912d'; ctx.lineWidth = Math.max(1, z * 0.06); ctx.moveTo(sx, sy); ctx.lineTo(sx - q.vx * z * 0.07, sy - q.vy * z * 0.07); ctx.stroke(); }
+        else if (q.k === 'alma') { ctx.globalAlpha = 0.85 * (1 - fr) * (1 - fr); ctx.fillStyle = P.tinta; ctx.arc(sx, sy, Math.max(1.5, z * q.s * (1 - fr * 0.5)), 0, TAU); ctx.fill(); }
         else if (q.k === 'anillo') { ctx.globalAlpha = 0.8 * (1 - fr); ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.arc(sx, sy, z * q.s * (1 - (1 - fr) * (1 - fr)), 0, TAU); ctx.stroke(); }
         else { ctx.fillStyle = '#f2c45c'; ctx.arc(sx, sy, z * q.s * (0.6 + fr * 0.6), 0, TAU); ctx.fill(); }
       }
@@ -924,11 +926,15 @@
             for (let k = 0; k < d.tam * 2; k++) estallido(d.x2 + (azar() - 0.5) * d.tam * 0.8, d.y2 + (azar() - 0.5) * d.tam * 0.8, 2);
             estallido(d.x2, d.y2, 3); marcaSuelo('ruina', d.x2, d.y2, d.tam, 0, 45000);
           } else {
-            estallido(d.x2, d.y2, UNID[d.clase].cat === 'inf' ? 1 : 2);
-            marcaSuelo('quemado', d.x2, d.y2, UNID[d.clase].radio * 1.6, 0, 20000);
+            if (UNID[d.clase].cat === 'inf') parte('alma', d.x2, d.y2, (azar() - 0.5) * 0.15, -0.75, 1.5, 0.07); // la infantería no estalla: un puntito que sube y se apaga
+            else { // el vehículo se queda en chatarra humeante, sin estallido
+              for (let k = 0; k < 4; k++) parte('humo', d.x2 + (azar() - 0.5) * 0.3, d.y2 + (azar() - 0.5) * 0.3, (azar() - 0.5) * 0.3, -0.35 - azar() * 0.5, 1.2 + azar() * 1.2, 0.2 + azar() * 0.12);
+              marcaSuelo('quemado', d.x2, d.y2, UNID[d.clase].radio * 1.6, 0, 20000);
+            }
             marcaSuelo('resto', d.x2, d.y2, UNID[d.clase].radio, d.ang, 25000, d.clase);
           }
-          son.explosion(Math.max(0.12, cerca(d.x2, d.y2)), paneo(d.x2), d.edif);
+          if (d.edif) son.explosion(Math.max(0.12, cerca(d.x2, d.y2)), paneo(d.x2), true);
+          else if (UNID[d.clase].cat !== 'inf') son.explosion(Math.max(0.12, cerca(d.x2, d.y2)) * 0.35, paneo(d.x2), false); // un golpe sordo, no una explosión
         } else if (d.tipo === 'llama') { // onda de la llamada: solo se ve y se oye la propia
           if (d.j !== YO) continue;
           senales.push({ k: 'onda', x: d.x2, y: d.y2, r: d.r, t0: performance.now(), dur: 900 });
@@ -1172,6 +1178,7 @@
         if (us.some((u) => UNID[u.tipo].plazas)) L.push('<b>transporte: la infantería sube con clic derecho sobre él · ' + k('U') + ' descargar</b>');
         if (us.some((u) => UNID[u.tipo].mando)) L.push('<b>mando: los tuyos en su radio ven en redondo y giran más rápido; gasta información</b>');
         if (us.some((u) => UNID[u.tipo].despliega)) L.push('<b>patio móvil: ' + k('D') + ' lo despliega aquí como patio nuevo (no se repliega)</b>');
+        if (us.some((u) => UNID[u.tipo].cura)) L.push('<b>médico: cura solo a la infantería herida que tenga cerca</b>');
         if (us.some((u) => UNID[u.tipo].repara)) L.push('<b>ingeniero: repara solo los vehículos y edificios cercanos</b>');
         if (soloAire) L.push('clic derecho: ir y volver, o atacar · ' + k('S') + ' volver ya');
         else L.push('clic derecho: mover' + (armadas ? ' o atacar' : '') + ' · otro clic cerca: orientar');

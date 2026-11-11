@@ -1247,6 +1247,35 @@ prueba('la red: cobertura, territorio, energía por red, depósito y suministro'
   assert.ok(!suelta.sinLuz, 'en clásica la energía es global');
 });
 
+prueba('tanda 1: cohetes uno tras otro, el camino solo sirve a su dueño y el médico cura', () => {
+  const m = W.crearMundo(4242, { N: 128 }), N = m.N, J = m.jug[0];
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  for (let y = 40; y < 90; y++) for (let x = 20; x < 110; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; } }
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  J.minerales = 9000; m.jug[1].minerales = 9000;
+  // lanzacohetes: la salva sale escalonada
+  const lc = W.crearUnidad(m, 0, 'lanzacohetes', 50 * N + 30), blanco = W.crearEdificio(m, 1, 'central', 40, 49); blanco.vida = blanco.vidaMax = 99999;
+  lc.ang = 0; W.orden(m, { t: 'atacar', j: 0, ids: [lc.id], obj: blanco.id });
+  let enVuelo = [], salidas = new Set();
+  for (let i = 0; i < 400 && salidas.size < 4; i++) { W.tick(m); for (const f of m.efectos) if (f.tipo === 'boca' && f.arma === 'salva') salidas.add(f.t); }
+  const ts = [...salidas].sort((a, b) => a - b);
+  assert.ok(ts.length === 4 && ts[1] - ts[0] >= 6 && ts[3] - ts[0] >= 20, 'cuatro cohetes, uno tras otro: ' + ts.map((t) => t - ts[0]));
+  // camino: el dueño corre por él; el rival lo pisa a su paso normal y su ruta no lo busca
+  const ex = W.crearUnidad(m, 0, 'excavadora', 70 * N + 30);
+  W.orden(m, { t: 'trazar', j: 0, ids: [ex.id], x: 80.5, y: 70.5 }); avanza(2);
+  for (let i = 0; i < 6000 && ex.orden === 'trazar'; i++) W.tick(m);
+  ex.vida = 0; avanza(2);
+  const mio = W.crearUnidad(m, 0, 'tanque', 70 * N + 31), suyo = W.crearUnidad(m, 1, 'tanque', 71 * N + 31);
+  W.orden(m, { t: 'mover', j: 0, ids: [mio.id], x: 79.5, y: 70.5 }); W.orden(m, { t: 'mover', j: 1, ids: [suyo.id], x: 79.5, y: 71.5 });
+  let vm = 0, vs = 0; for (let i = 0; i < 300; i++) { W.tick(m); vm = Math.max(vm, mio.v); vs = Math.max(vs, suyo.v); }
+  assert.ok(vm > W.UNID.tanque.vel * 1.4 && vs <= W.UNID.tanque.vel * 1.01, 'el dueño va a ' + vm.toFixed(3) + ' y el rival a ' + vs.toFixed(3));
+  // médico: cura a la infantería herida cercana, no a los vehículos
+  const med = W.crearUnidad(m, 0, 'medico', 55 * N + 60), herido = W.crearUnidad(m, 0, 'infanteria', 57 * N + 62), tq = W.crearUnidad(m, 0, 'tanque', 55 * N + 63);
+  herido.vida = 20; tq.vida = 100; avanza(400);
+  assert.ok(herido.vida === herido.vidaMax, 'el médico debía curar al soldado: ' + herido.vida);
+  assert.ok(tq.vida <= 110, 'pero no repara tanques: ' + tq.vida);
+});
+
 prueba('puentes: la excavadora cruza el agua, todos lo usan y al caer se cierra', () => {
   const m = W.crearMundo(31, { N: 128 }), N = m.N, J = m.jug[0], T = W.TERRENO;
   m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);

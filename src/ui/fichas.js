@@ -8,7 +8,7 @@
   // El contexto llega trasladado al centro de la unidad. r = radio en píxeles.
   // e = { ang, angT, retro (0..1), anda, tiempo, carga (0..1), cosecha }
   W.fichaUnidad = function (c, u, r, lod, col, e) {
-    const inf = W.UNID[u.tipo].cat === 'inf', at = u.tipo === 'antitanque', pesado = u.tipo === 'pesado', expl = u.tipo === 'explorador', ing = u.tipo === 'ingeniero', franco = u.tipo === 'francotirador';
+    const inf = W.UNID[u.tipo].cat === 'inf', at = u.tipo === 'antitanque', pesado = u.tipo === 'pesado', expl = u.tipo === 'explorador', ing = u.tipo === 'ingeniero', med = u.tipo === 'medico', franco = u.tipo === 'francotirador';
     if (lod === 0) {
       c.fillStyle = col.base; c.beginPath();
       if (inf) c.arc(0, 0, r, 0, TAU);
@@ -23,6 +23,8 @@
       c.strokeStyle = col.osc; c.lineCap = at ? 'butt' : 'round'; c.lineWidth = Math.max(1.4, R * (at ? 0.55 : 0.3)); // fusil, o tubo lanzacohetes al hombro
       if (ing) { // sin arma: lleva una llave inglesa por delante
         c.lineWidth = Math.max(1.2, R * 0.26); c.beginPath(); c.moveTo(R * 0.3, R * 0.45); c.lineTo(R * 1.25, R * 0.45); c.moveTo(R * 1.25, R * 0.15); c.lineTo(R * 1.25, R * 0.75); c.stroke();
+      } else if (med) { // sin arma: un maletín por delante
+        c.fillStyle = col.luz; c.fillRect(R * 0.75, R * 0.2, R * 0.6, R * 0.5); c.lineWidth = 1; c.strokeRect(R * 0.75, R * 0.2, R * 0.6, R * 0.5);
       } else if (expl) { // pistola corta
         c.beginPath(); c.moveTo(R * 0.3, R * 0.5); c.lineTo(R * (1.05 - e.retro * 0.2), R * 0.5); c.stroke();
       } else if (franco) { // rifle largo y fino, con mira
@@ -35,6 +37,7 @@
       c.strokeStyle = col.osc; c.lineWidth = 1; c.stroke();
       c.fillStyle = at ? col.osc : col.luz; c.strokeStyle = at ? col.luz : col.osc; c.beginPath(); c.arc(R * 0.08, 0, R * 0.42, 0, TAU); c.fill(); c.stroke(); // casco
       if (franco) { c.fillStyle = col.osc; c.beginPath(); c.arc(R * 0.08, 0, R * 0.42, Math.PI * 0.5, Math.PI * 1.5); c.fill(); } // capucha
+      if (med) { c.strokeStyle = col.mal; c.lineWidth = Math.max(1.2, R * 0.2); c.beginPath(); c.moveTo(R * 0.08 - R * 0.28, 0); c.lineTo(R * 0.08 + R * 0.28, 0); c.moveTo(R * 0.08, -R * 0.28); c.lineTo(R * 0.08, R * 0.28); c.stroke(); } // cruz en el casco
       if (ing) { c.strokeStyle = col.osc; c.lineWidth = Math.max(1, R * 0.2); c.beginPath(); c.moveTo(R * 0.08 - R * 0.42, 0); c.lineTo(R * 0.08 + R * 0.42, 0); c.stroke(); } // franja del casco
       if (expl) { c.fillStyle = col.osc; c.fillRect(R * 0.3, -R * 0.3, R * 0.35, R * 0.6); } // prismáticos
       if (e.retro > 0.5) { c.fillStyle = col.fuego; c.beginPath(); c.arc(R * 1.75, R * 0.5, R * 0.3, 0, TAU); c.fill(); }
