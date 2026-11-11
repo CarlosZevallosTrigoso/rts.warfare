@@ -468,6 +468,10 @@
           const o = m.porId.get(e.arregla);
           if (o && W.dist(e.x, e.y, o) <= 1.7) { ctx.strokeStyle = P.bien; ctx.lineWidth = 1.5; ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(ox + (o.edif ? o.cx : o.x) * z, oy + (o.edif ? o.cy : o.y) * z); ctx.stroke(); ctx.setLineDash([]); }
         }
+        if (d.despliega && sel.has(e.id) && e.j === YO) { // dónde quedaría el patio: verde si cabe
+          const bx = ox + (Math.floor(e.x) - 1) * z, by = oy + (Math.floor(e.y) - 1) * z;
+          ctx.strokeStyle = W.puedeDesplegar(m, e) ? P.bien : P.mal; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.strokeRect(bx, by, z * 3, z * 3); ctx.setLineDash([]);
+        }
         if (e.rango && lod) { // galones de veteranía, junto a la unidad
           ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.2; ctx.beginPath();
           for (let g2 = 0; g2 < e.rango; g2++) { const gx = px + r * 1.2 + 3, gy = py - r - g2 * 4; ctx.moveTo(gx - 3, gy + 2); ctx.lineTo(gx, gy - 1); ctx.lineTo(gx + 3, gy + 2); }
@@ -655,6 +659,15 @@
       }
       mctx.imageSmoothingEnabled = true;
       mctx.drawImage(cNie, 0, 0, MS, MS);
+      { // patios: los propios, con un aro; del rival, su último patio (o patio móvil) queda a la vista cuando ya ha perdido alguno
+        const R = m.jug[1 - YO], delata = R.patiosMax > 1 && (R.cuenta.patio || 0) <= 1;
+        mctx.lineWidth = 1.5;
+        for (const e of m.ents) {
+          if (e.tipo !== 'patio' && e.tipo !== 'patioMovil') continue;
+          if (e.j === YO) { if (e.edif) { mctx.strokeStyle = P.yo; mctx.beginPath(); mctx.arc(e.cx * k, e.cy * k, 5, 0, TAU); mctx.stroke(); } }
+          else if (delata && (e.edif || !R.cuenta.patio)) { mctx.strokeStyle = P.rival; mctx.beginPath(); mctx.arc((e.edif ? e.cx : e.x) * k, (e.edif ? e.cy : e.y) * k, 5 + ((m.t >> 3) % 3), 0, TAU); mctx.stroke(); }
+        }
+      }
       if (J.alerta && m.t - J.alerta.t < 60 && (m.t >> 2) % 2) { mctx.strokeStyle = P.mal; mctx.lineWidth = 2; mctx.beginPath(); mctx.arc(J.alerta.x * k, J.alerta.y * k, 7, 0, TAU); mctx.stroke(); }
       mctx.strokeStyle = P.tinta; mctx.lineWidth = 1;
       mctx.strokeRect((cam.x - cw / 2 / cam.z) * k + 0.5, (cam.y - ch / 2 / cam.z) * k + 0.5, (cw / cam.z) * k, (ch / cam.z) * k);
@@ -687,7 +700,11 @@
           const area = W.ARMAS[d.arma].area || 0; // los obuses de área dejan un cráter mayor
           estallido(d.x2, d.y2, area ? 2 : 1); marcaSuelo('quemado', d.x2, d.y2, area || 0.42, 0, 15000);
           if (n++ < 6) son.impacto(cerca(d.x2, d.y2), paneo(d.x2));
+        } else if (d.tipo === 'despliega') {
+          if (d.j === YO) { son.colocar(); aviso('Patio desplegado: ya puedes construir a su alrededor'); }
         } else if (d.tipo === 'muerte') {
+          if (d.edif && d.clase === 'patio' && d.j === YO && m.ganador < 0) aviso('¡Has perdido un patio!');
+          else if (d.edif && d.clase === 'patio' && m.ganador < 0) aviso('Patio enemigo destruido');
           if (!enVista) continue;
           if (d.edif) {
             for (let k = 0; k < d.tam * 2; k++) estallido(d.x2 + (azar() - 0.5) * d.tam * 0.8, d.y2 + (azar() - 0.5) * d.tam * 0.8, 2);
@@ -822,6 +839,14 @@
     const paraCavar = () => unidadesSel().filter((u) => u.j === YO && UNID[u.tipo].cat === 'inf' && u.orden === 'nada' && !(u.cava > 0) && !W.enTrinchera(m, u));
     function atrincherar() { const ids = paraCavar().map((u) => u.id); if (ids.length) { W.orden(m, { t: 'trinchera', j: YO, ids }); son.colocar(); } }
     $('trinchera').addEventListener('click', atrincherar);
+    const paraDesplegar = () => unidadesSel().filter((u) => UNID[u.tipo].despliega);
+    function desplegar() {
+      const us = paraDesplegar(); if (!us.length) return;
+      const ok = us.filter((u) => W.puedeDesplegar(m, u));
+      if (!ok.length) { aviso(us.some((u) => u.orden !== 'nada') ? 'El patio móvil tiene que estar detenido' : 'Aquí no cabe un patio: hacen falta 3×3 celdas de llano libre'); return; }
+      W.orden(m, { t: 'desplegar', j: YO, ids: ok.map((u) => u.id) });
+    }
+    $('desplegar').addEventListener('click', desplegar);
     W.orden(m, { t: 'retiro', j: YO, on: true }); // por defecto, las unidades propias muy dañadas se retiran solas a reparar
     const paraRetiro = () => unidadesSel().filter((u) => !UNID[u.tipo].aire && u.tipo !== 'cosechadora');
     $('retiro').addEventListener('click', () => { const us = paraRetiro(); if (us.length) W.orden(m, { t: 'retiro', j: YO, ids: us.map((u) => u.id), on: !us.every((u) => u.retira) }); });
@@ -843,6 +868,7 @@
       if (us.length) {
         const armadas = us.some((u) => UNID[u.tipo].arma);
         const soloAire = us.every((u) => UNID[u.tipo].aire);
+        if (us.some((u) => UNID[u.tipo].despliega)) L.push('<b>patio móvil: ' + k('D') + ' lo despliega aquí como patio nuevo (no se repliega)</b>');
         if (us.some((u) => UNID[u.tipo].repara)) L.push('<b>ingeniero: repara solo los vehículos y edificios cercanos</b>');
         if (soloAire) L.push('clic derecho: ir y volver, o atacar · ' + k('S') + ' volver ya');
         else L.push('clic derecho: mover' + (armadas ? ' o atacar' : '') + ' · otro clic cerca: orientar');
@@ -975,12 +1001,12 @@
         son.activar();
         if (esEdif) {
           if (obraLista(tipo)) { modo = 'colocar'; tipoColocar = tipo; if (tactil) aviso('Arrastra sobre el mapa y suelta para colocar'); }
-          else W.orden(m, { t: 'construir', j: YO, tipo });
+          else W.orden(m, { t: 'construir', j: YO, tipo, ids: edificiosSel('patio').map((e) => e.id) });
         } else W.orden(m, { t: 'entrenar', j: YO, tipo, ids: edificiosSel(LUGAR[d.cat]).map((e) => e.id) });
       });
       const cancelar = (ev) => {
         ev.preventDefault(); ev.stopPropagation();
-        if (esEdif) { W.orden(m, { t: 'cancelarEdif', j: YO, tipo }); if (tipoColocar === tipo) modo = null; }
+        if (esEdif) { W.orden(m, { t: 'cancelarEdif', j: YO, tipo, ids: edificiosSel('patio').map((e) => e.id) }); if (tipoColocar === tipo) modo = null; }
         else W.orden(m, { t: 'cancelarUnidad', j: YO, tipo, ids: edificiosSel(LUGAR[d.cat]).map((e) => e.id) });
       };
       b.addEventListener('contextmenu', cancelar);
@@ -997,7 +1023,7 @@
       $('dios').hidden = !J.dios; { const t = J.admin ? 'ADMIN' : 'GOD'; if ($('dios').textContent !== t) $('dios').textContent = t; } $('sinColmena').hidden = J.colmena;
       const e = $('rEne'); e.textContent = J.uso + ' / ' + J.prod; e.className = J.uso > J.prod ? 'mal' : '';
       const ag = $('rAgu'); ag.textContent = J.aguaUso + ' / ' + (J.dios ? '∞' : J.aguaProd); ag.className = !J.dios && J.aguaUso >= J.aguaProd ? 'mal' : '';
-      const eds = edificiosSel(), tipos = new Set(eds.map((e) => e.tipo));
+      const eds = edificiosSel(), tipos = new Set(eds.map((e) => e.tipo)), patiosSel = new Set(eds.filter((e) => e.tipo === 'patio').map((e) => e.id));
       tiposSel = tipos;
       let hayUnid = false;
       $('secEdif').hidden = !tipos.has('patio');
@@ -1013,7 +1039,7 @@
         const caro = !W.puedePagar(J, d);
         if (o.esEdif) {
           let n = 0, listas = 0, activa = null; // cada tipo tiene su cola: avanza la primera sin terminar
-          for (const a of J.obras) if (a.tipo === o.tipo) { n++; if (a.listo) listas++; else if (!activa) activa = a; }
+          for (const a of J.obras) if (a.tipo === o.tipo && (a.listo || patiosSel.has(a.patio))) { n++; if (a.listo) listas++; else if (!activa) activa = a; } // lo de los patios elegidos, y lo ya listo de cualquiera
           if (n > 1) nombre += ' ×' + n;
           if (n) clase += ' con-x';
           if (listas) { clase += ' listo'; txt = 'colocar' + (activa ? ' · ' + Math.floor((activa.prog / d.tiempo) * 100) + '%' : ''); }
@@ -1036,8 +1062,9 @@
       }
       $('secUnid').hidden = !hayUnid;
       listarGrupos(); actualizarTec(); actualizarTactil();
-      const enCurso = new Set(J.obras.filter((a) => !a.listo).map((a) => a.tipo)).size;
-      const reparto = enCurso > 1 ? enCurso + ' tipos a la vez: cada uno a 1/' + enCurso + ' de velocidad' : '';
+      let enCurso = 0; // en el patio más cargado de los elegidos
+      for (const id of patiosSel) enCurso = Math.max(enCurso, new Set(J.obras.filter((a) => !a.listo && a.patio === id).map((a) => a.tipo)).size);
+      const reparto = (enCurso > 1 ? enCurso + ' tipos a la vez en un patio: cada uno a 1/' + enCurso + ' de velocidad' : '') + ((J.cuenta.patio || 0) > 1 ? (enCurso > 1 ? ' · ' : '') + J.cuenta.patio + ' patios: cada uno lleva sus obras' : '');
       if ($('obras').textContent !== reparto) $('obras').textContent = reparto;
       let s = '';
       const vivos = [...sel].map((id) => m.porId.get(id)).filter(Boolean);
@@ -1049,6 +1076,7 @@
       const dem = vendibles(), bv = $('vender');
       const cav = paraCavar().length, bt = $('trinchera');
       bt.hidden = !cav;
+      $('desplegar').hidden = !paraDesplegar().length;
       { const us = paraRetiro(), br = $('retiro'); br.hidden = !us.length;
         if (us.length) { const t = 'Retirada automática: ' + (us.every((u) => u.retira) ? 'sí' : us.some((u) => u.retira) ? 'algunas' : 'no'); if (br.textContent !== t) br.textContent = t; } }
       if (cav) { const t = 'Atrincherarse · ' + cav + (cav === 1 ? ' soldado' : ' soldados'); if (bt.textContent !== t) bt.textContent = t; }
@@ -1306,6 +1334,7 @@
         case 'KeyA': if (unidadesSel().length) modo = 'amover'; break;
         case 'KeyR': if (unidadesSel().length) modo = 'patrulla'; break;
         case 'KeyZ': atrincherar(); break;
+        case 'KeyD': desplegar(); break;
         case 'KeyB': elegirEdificios('patio'); break;
         case 'KeyQ': elegirEdificios('cuartel'); break;
         case 'KeyV': elegirEdificios('fabrica'); break;

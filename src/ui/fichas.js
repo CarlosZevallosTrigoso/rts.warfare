@@ -123,6 +123,20 @@
       c.fillStyle = col.osc; c.fillRect(-w * 0.1 - rec, -w * 0.12, L * 2.1, w * 0.24); c.fillRect(L * 1.85 - rec, -w * 0.21, L * 0.2, w * 0.42); // tubo largo
       c.fillStyle = col.base; c.strokeStyle = col.luz; c.lineWidth = Math.max(1, r * 0.14); c.beginPath(); c.rect(-w * 0.55, -w * 0.42, w * 0.95, w * 0.84); c.fill(); c.stroke();
       if (e.retro > 0.6) { c.fillStyle = col.fuego; c.beginPath(); c.arc(L * 2.3, 0, w * 0.45, 0, TAU); c.fill(); }
+    } else if (u.tipo === 'patioMovil') { // camión largo de seis ruedas con el patio plegado encima
+      const L = r * 1.5, w = r * 0.95;
+      c.fillStyle = col.osc;
+      for (const x of [-L * 0.85, -L * 0.2, L * 0.45]) { c.fillRect(x, -w * 1.06, L * 0.4, w * 0.3); c.fillRect(x, w * 0.76, L * 0.4, w * 0.3); } // ruedas
+      c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1;
+      c.beginPath(); c.rect(-L, -w * 0.8, L * 2, w * 1.6); c.fill(); c.stroke();
+      c.fillStyle = col.osc; c.fillRect(L * 0.62, -w * 0.6, L * 0.3, w * 1.2); // cabina
+      if (lod === 2) { c.fillStyle = col.luz; c.fillRect(L * 0.8, -w * 0.45, L * 0.07, w * 0.9); }
+      c.strokeStyle = col.luz; c.lineWidth = Math.max(1, r * 0.16); c.beginPath(); // el emblema del patio: escuadras y brazo de grúa
+      const a = L * 0.5, bq = w * 0.5, g = w * 0.22, cxp = -L * 0.25;
+      c.moveTo(cxp - a, -bq + g); c.lineTo(cxp - a, -bq); c.lineTo(cxp - a + g, -bq); c.moveTo(cxp + a - g, -bq); c.lineTo(cxp + a, -bq); c.lineTo(cxp + a, -bq + g);
+      c.moveTo(cxp + a, bq - g); c.lineTo(cxp + a, bq); c.lineTo(cxp + a - g, bq); c.moveTo(cxp - a + g, bq); c.lineTo(cxp - a, bq); c.lineTo(cxp - a, bq - g);
+      c.moveTo(cxp - a * 0.4, bq * 0.4); c.lineTo(cxp + a * 0.4, -bq * 0.4); c.stroke();
+      c.fillStyle = col.luz; c.beginPath(); c.arc(cxp - a * 0.4, bq * 0.4, w * 0.16, 0, TAU); c.fill();
     } else { // cosechadora
       const L = r * 1.45, w = r * 0.95;
       const mand = e.cosecha ? Math.sin(e.tiempo * 0.012) * w * 0.14 : 0;

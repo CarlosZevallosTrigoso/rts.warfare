@@ -814,6 +814,55 @@ prueba('fase 1c: explorador, blindado ligero, ingeniero, antiaéreo móvil y dro
   assert.ok(e4.vida === e4.vidaMax && m.porId.has(dr.id), 'el dron no ataca');
 });
 
+prueba('fase 2a: patio móvil, segundas bases, obras por patio y derrota al perder todos los patios', () => {
+  const m = W.crearMundo(77, { N: 128 }), N = m.N, J = m.jug[0], b = m.mapa.bases[0];
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  const cel = (x, y) => y * N + x;
+  const lejos = { x: b.x < N / 2 ? b.x + 30 : b.x - 30, y: b.y < N / 2 ? b.y + 30 : b.y - 30 };
+  for (let y = lejos.y - 8; y < lejos.y + 8; y++) for (let x = lejos.x - 8; x < lejos.x + 8; x++) { const i = y * N + x; m.mapa.terreno[i] = 0; m.paso[i] = 1; m.mapa.mineral[i] = 0; m.mapa.sitioEn[i] = 0; }
+  J.dios = true;
+  const p1 = m.ents.find((e) => e.tipo === 'patio' && e.j === 0);
+  // un patio: dos centrales van una tras otra
+  const T = W.EDIF.central.tiempo;
+  W.orden(m, { t: 'construir', j: 0, tipo: 'central' }); W.orden(m, { t: 'construir', j: 0, tipo: 'central' }); avanza(T + 3);
+  assert.ok(J.obras[0].listo && !J.obras[1].listo && J.obras.every((o) => o.patio === p1.id), 'con un patio, en fila');
+  W.orden(m, { t: 'cancelarEdif', j: 0, tipo: 'central' }); W.orden(m, { t: 'cancelarEdif', j: 0, tipo: 'central' }); avanza(1);
+  // el patio móvil pide nivel 2; se despliega en llano libre y deja de existir como vehículo
+  W.crearEdificio(m, 0, 'fabrica', b.x - 8, b.y + 4); avanza(1);
+  W.orden(m, { t: 'entrenar', j: 0, tipo: 'patioMovil' }); avanza(1);
+  assert.strictEqual(J.colas.patioMovil.n, 0, 'el patio móvil pide nivel 2');
+  J.nivel = 2;
+  const pm = W.crearUnidad(m, 0, 'patioMovil', cel(lejos.x, lejos.y)), bajas = J.bajas;
+  W.orden(m, { t: 'mover', j: 0, ids: [pm.id], x: lejos.x + 3.5, y: lejos.y + 0.5 }); avanza(3);
+  assert.ok(!W.puedeDesplegar(m, pm), 'en marcha no se despliega');
+  avanza(300);
+  const estorbo = W.crearUnidad(m, 0, 'infanteria', cel(Math.floor(pm.x) + 1, Math.floor(pm.y)));
+  W.orden(m, { t: 'desplegar', j: 0, ids: [pm.id] }); avanza(2);
+  const p2 = m.ents.find((e) => e.tipo === 'patio' && e.j === 0 && e.id !== p1.id);
+  assert.ok(p2 && !m.porId.has(pm.id) && J.cuenta.patio === 2 && J.bajas === bajas, 'debía quedar un segundo patio en su lugar, sin contar como baja');
+  assert.ok(!(estorbo.x > p2.x && estorbo.x < p2.x + 3 && estorbo.y > p2.y && estorbo.y < p2.y + 3), 'quien estaba en medio se aparta');
+  // sobre roca no
+  const pm2 = W.crearUnidad(m, 0, 'patioMovil', cel(lejos.x - 6, lejos.y - 6)); m.mapa.terreno[cel(lejos.x - 7, lejos.y - 6)] = 1; avanza(1);
+  assert.ok(!W.puedeDesplegar(m, pm2), 'necesita 3×3 de llano');
+  // dos patios: dos centrales a la vez; y se puede construir junto al patio nuevo
+  W.orden(m, { t: 'construir', j: 0, tipo: 'central' }); W.orden(m, { t: 'construir', j: 0, tipo: 'central' }); avanza(T + 3);
+  assert.ok(J.obras.length === 2 && J.obras.every((o) => o.listo) && J.obras[0].patio !== J.obras[1].patio, 'con dos patios, a la vez y una en cada uno');
+  assert.ok(W.puedeColocar(m, 0, 'central', p2.x, p2.y + 4), 'el patio nuevo permite construir a su alrededor');
+  W.orden(m, { t: 'colocar', j: 0, tipo: 'central', x: p2.x, y: p2.y + 4 }); avanza(1);
+  // con ids, la obra va al patio indicado
+  W.orden(m, { t: 'construir', j: 0, tipo: 'cuartel', ids: [p2.id] }); avanza(50);
+  assert.strictEqual(J.obras.find((o) => o.tipo === 'cuartel').patio, p2.id);
+  // perder un patio no es perder la partida; la obra en curso pasa al otro
+  p2.vida = 0; avanza(2);
+  assert.ok(m.ganador < 0 && J.vivo && J.cuenta.patio === 1, 'con un patio en pie se sigue jugando');
+  assert.strictEqual(J.obras.find((o) => o.tipo === 'cuartel').patio, p1.id, 'la obra se la queda el patio que resta');
+  // sin patios pero con un patio móvil, tampoco
+  p1.vida = 0; avanza(2);
+  assert.ok(m.ganador < 0 && J.vivo, 'queda un patio móvil por desplegar');
+  pm2.vida = 0; avanza(2);
+  assert.strictEqual(m.ganador, 1, 'sin patios ni patio móvil, derrota');
+});
+
 prueba('determinismo: misma semilla, misma partida', () => {
   const corre = () => {
     const m = W.crearMundo(777), a = W.iaCrear(0), b = W.iaCrear(1);

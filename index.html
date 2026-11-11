@@ -59,7 +59,7 @@
   #ayuda kbd { font: inherit; color: var(--tinta); }
   #formas { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; }
   #formas .grupo { justify-content: center; }
-  #vender, #trinchera, #retiro { justify-content: center; margin-top: 4px; }
+  #vender, #trinchera, #retiro, #desplegar { justify-content: center; margin-top: 4px; }
   .chip.debe { border-style: dashed; color: var(--suave); }
   /* Táctil: botonera sobre el mapa para lo que con teclado son teclas, y controles más grandes. */
   #tactil { position: fixed; left: 150px; right: 244px; bottom: 8px; z-index: 3; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; align-items: flex-end; pointer-events: none; }
@@ -143,6 +143,8 @@
       <div>muy dañadas, se retiran solas a reparar (se puede apagar)</div>
       <div>galones: veteranía por bajas, +10 % de daño y vida cada uno</div>
       <div>la artillería tira a lo que vea cualquier unidad propia</div>
+      <div>patio móvil (fábrica, nivel 2): <kbd>D</kbd> lo despliega como patio;</div>
+      <div>cada patio lleva sus obras; pierdes al quedarte sin patios</div>
       <div>explorador y dron ven lejos; el ingeniero repara solo;</div>
       <div>el antiaéreo móvil solo dispara a aviones</div>
       <div><kbd>B</kbd> patio · <kbd>Q</kbd> cuarteles · <kbd>V</kbd> fábricas · <kbd>X</kbd> aeródromos</div>
@@ -182,6 +184,7 @@
       <button type="button" class="grupo on" data-f="grupo">grupo</button><button type="button" class="grupo" data-f="linea">línea</button><button type="button" class="grupo" data-f="columna">columna</button>
       <button type="button" class="grupo" data-f="cuna">cuña</button><button type="button" class="grupo" data-f="cuadro">cuadro</button></div></section>
     <div id="sel" class="tenue"></div>
+    <button type="button" id="desplegar" class="btn" hidden title="Convierte el patio móvil en un patio, donde está. No se puede replegar.">Desplegar patio</button>
     <button type="button" id="retiro" class="btn" hidden title="Con poca vida, la unidad se va sola a reparar y luego vuelve a su puesto."></button>
     <button type="button" id="trinchera" class="btn" hidden></button>
     <button type="button" id="vender" class="btn" hidden></button>
@@ -200,11 +203,11 @@
     <button type="button" data-v="normal">normal</button><button type="button" data-v="agresivo">agresivo<small>ataca pronto</small></button></div></div>
   <div><h2>Semilla del mapa</h2><input id="op-s" inputmode="numeric" placeholder="al azar" autocomplete="off"></div>
   <button type="button" id="empezar">Empezar</button>
-  <div id="version">versión 34</div>
+  <div id="version">versión 35</div>
 </div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><p><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 34' };
+globalThis.W = { VERSION: 'versión 35' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -273,6 +276,8 @@ globalThis.W = { VERSION: 'versión 34' };
     ingeniero:   { nombre: 'Ingeniero',   cat: 'inf', vida: 60,  vel: 0.06, costo: 200, tiempo: 160, blindaje: 'ligero', arma: null, vision: 6, radio: 0.11, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, repara: true, cavaRapido: true },
     blindado:    { nombre: 'Blindado ligero', cat: 'veh', vida: 150, vel: 0.15, costo: 350, pet: 20, tiempo: 180, blindaje: 'pesado', arma: 'ametralladora', vision: 8, radio: 0.17, req: ['fabrica'], agua: 1, giro: 0.2, acel: 0.012, giroT: 0.3 },
     antiaereoMovil: { nombre: 'Antiaéreo móvil', cat: 'veh', vida: 220, vel: 0.09, costo: 700, pet: 40, tiempo: 300, blindaje: 'pesado', arma: 'flakMovil', vision: 8, radio: 0.20, req: ['fabrica'], agua: 2, giro: 0.12, acel: 0.006, giroT: 0.28, nivel: 2 },
+    // Fase 2a. despliega: se convierte en un patio donde está (orden 'desplegar'); no hay vuelta atrás.
+    patioMovil:  { nombre: 'Patio móvil', cat: 'veh', vida: 600, vel: 0.05, costo: 2500, pet: 100, tiempo: 600, blindaje: 'pesado', arma: null, vision: 6, radio: 0.30, req: ['fabrica'], agua: 2, giro: 0.07, acel: 0.003, nivel: 2, despliega: true },
     caza:        { nombre: 'Caza',        cat: 'aire', aire: true, vida: 160, vel: 0.22, costo: 900, pet: 120, tiempo: 360, blindaje: 'aire', arma: 'misil', vision: 9, radio: 0.25, req: ['aerodromo'], agua: 1, giro: 0.16, acel: 0.012, nivel: 2, fuel: 1800, arco: 0.3, radioVuelo: 70 },
     bombardero:  { nombre: 'Bombardero',  cat: 'aire', aire: true, vida: 260, vel: 0.15, costo: 1600, pet: 200, raros: 40, tiempo: 520, blindaje: 'aire', arma: 'bomba', vision: 8, radio: 0.38, req: ['aerodromo'], agua: 2, giro: 0.09, acel: 0.008, nivel: 3, fuel: 2400, radioVuelo: 90 },
     dron:        { nombre: 'Dron', cat: 'aire', aire: true, vida: 50, vel: 0.16, costo: 250, info: 40, tiempo: 200, blindaje: 'aire', arma: null, vision: 12, radio: 0.14, req: ['aerodromo'], agua: 0, giro: 0.2, acel: 0.01, nivel: 2, fuel: 4200, radioVuelo: 110, cono: Math.PI },
@@ -553,7 +558,8 @@ globalThis.W = { VERSION: 'versión 34' };
   function nuevoJugador(inicio) {
     return {
       minerales: inicio || ECON.inicio, prod: 0, uso: 0, cuenta: {}, vivo: true, dios: false, admin: false,
-      obras: [], // [{ tipo, prog, listo }]: varias a la vez, se reparten la velocidad
+      obras: [], // [{ tipo, prog, listo, patio }]: cada patio lleva las suyas; dentro de un patio, tipos distintos se reparten la velocidad
+      patiosMax: 1, // cuántos patios ha llegado a tener a la vez
       retiro: false, // retirada automática por defecto para las unidades nuevas
       colas: Object.fromEntries(Object.keys(UNID).map((t) => [t, { n: 0, prog: 0, sinAgua: false }])), // total encargado por tipo; las colas de verdad están en cada edificio (e.cola)
       alerta: null, cosechado: 0, bajas: 0, producidas: 0,
@@ -655,6 +661,16 @@ globalThis.W = { VERSION: 'versión 34' };
     return true;
   };
 
+  // ¿Puede desplegarse aquí un patio móvil? Necesita 3×3 de llano libre a su alrededor (lo que hay debajo de otras unidades no cuenta).
+  W.puedeDesplegar = function (m, u) {
+    const N = m.N, x = Math.floor(u.x) - 1, y = Math.floor(u.y) - 1;
+    if (u.orden !== 'nada' || x < 0 || y < 0 || x + 3 > N || y + 3 > N) return false;
+    for (let dy = 0; dy < 3; dy++) for (let dx = 0; dx < 3; dx++) {
+      const i = (y + dy) * N + x + dx;
+      if (m.mapa.terreno[i] !== T.LLANO || m.ocup[i] || m.mapa.mineral[i] || m.mapa.sitioEn[i]) return false;
+    }
+    return true;
+  };
   W.puedeColocar = function (m, j, tipo, x, y) {
     const d = EDIF[tipo], N = m.N, t = d.tam;
     if (x < 0 || y < 0 || x + t > N || y + t > N) return false;
@@ -707,6 +723,7 @@ globalThis.W = { VERSION: 'versión 34' };
     }
     for (let j = 0; j < 2; j++) {
       const J = m.jug[j];
+      if ((J.cuenta.patio || 0) > J.patiosMax) J.patiosMax = J.cuenta.patio;
       if (!J.dios) continue;
       J.minerales = J.petroleo = J.raros = J.info = 999999;
       if (J.prod < J.uso) J.prod = J.uso;
@@ -847,13 +864,21 @@ globalThis.W = { VERSION: 'versión 34' };
         return;
       case 'construir': {
         const d = EDIF[cmd.tipo];
-        if (!d || cmd.tipo === 'patio' || J.obras.length >= ECON.obrasMax || !W.disponible(m, cmd.j, d) || !W.puedePagar(J, d)) return;
-        cobrar(J, d); J.obras.push({ tipo: cmd.tipo, prog: 0, listo: false });
+        if (!d || cmd.tipo === 'patio' || !W.disponible(m, cmd.j, d) || !W.puedePagar(J, d)) return;
+        // La obra va a un patio: de los indicados (cmd.ids) o de todos, el que menos tenga entre manos.
+        let patio = null, carga = Infinity;
+        for (const e of m.ents) {
+          if (!e.edif || e.j !== cmd.j || e.tipo !== 'patio' || e.vida <= 0 || (cmd.ids && !cmd.ids.includes(e.id))) continue;
+          let n = 0, pend = 0; for (const o of J.obras) if (o.patio === e.id) { n++; if (!o.listo) pend++; }
+          if (n < ECON.obrasMax && pend < carga) { carga = pend; patio = e; }
+        }
+        if (!patio) return;
+        cobrar(J, d); J.obras.push({ tipo: cmd.tipo, prog: 0, listo: false, patio: patio.id });
         return;
       }
       case 'cancelarEdif': { // cancela la obra más reciente de ese tipo (primero las que siguen en curso) y devuelve su costo
         let i = -1;
-        for (let k = J.obras.length - 1; k >= 0; k--) if (J.obras[k].tipo === cmd.tipo && (i < 0 || (J.obras[i].listo && !J.obras[k].listo))) i = k;
+        for (let k = J.obras.length - 1; k >= 0; k--) if (J.obras[k].tipo === cmd.tipo && (!cmd.ids || cmd.ids.includes(J.obras[k].patio)) && (i < 0 || (J.obras[i].listo && !J.obras[k].listo))) i = k;
         if (i < 0) return;
         devolver(J, EDIF[cmd.tipo]); J.obras.splice(i, 1);
         return;
@@ -864,6 +889,20 @@ globalThis.W = { VERSION: 'versión 34' };
         const e = crearEdificio(m, cmd.j, cmd.tipo, cmd.x, cmd.y);
         J.obras.splice(i, 1);
         if (e.tipo === 'refineria') crearUnidad(m, cmd.j, 'cosechadora', W.cercaLibre(m, e.cx, e.y + e.tam + 0.5));
+        contar(m);
+        return;
+      }
+      case 'desplegar': { // el patio móvil se convierte en un patio donde está; no hay vuelta atrás
+        for (const u of propias(m, cmd)) {
+          if (!UNID[u.tipo].despliega || u.vida <= 0 || !W.puedeDesplegar(m, u)) continue;
+          const x = Math.floor(u.x) - 1, y = Math.floor(u.y) - 1;
+          u.vida = 0; u.desplegado = true;
+          for (const e of m.ents) if (!e.edif && e !== u && e.vida > 0 && !UNID[e.tipo].aire && e.x > x - 0.4 && e.x < x + 3.4 && e.y > y - 0.4 && e.y < y + 3.4) { // quien esté en medio se aparta
+            const c = W.cercaLibre(m, e.x < x + 1.5 ? x - 1 : x + 4, e.y); e.x = e.px = (c % m.N) + 0.5; e.y = e.py = ((c / m.N) | 0) + 0.5; e.ruta = null;
+          }
+          const p = crearEdificio(m, cmd.j, 'patio', x, y); p.nace = m.t;
+          m.efectos.push({ tipo: 'despliega', x2: p.cx, y2: p.cy, j: cmd.j, t: m.t });
+        }
         contar(m);
         return;
       }
@@ -1609,7 +1648,7 @@ globalThis.W = { VERSION: 'versión 34' };
     for (let k = 0; k < m.ents.length; k++) if (m.ents[k].j === j && m.ents[k].tipo === tipo) out.push(m.ents[k]);
     return out;
   }
-  // Varios patios aceleran las obras: +50 % por cada uno extra, hasta ×2,5. (Las unidades no: cada edificio tiene su cola.)
+  // (Escala de bonificación que se usó para las colas compartidas; hoy cada edificio y cada patio lleva su propia cola.)
   W.ritmo = function (n) { return n < 1 ? 0 : Math.min(1 + ECON.bonoProd * (n - 1), ECON.bonoMax); };
   function tickProduccion(m, j) {
     const J = m.jug[j];
@@ -1631,10 +1670,18 @@ globalThis.W = { VERSION: 'versión 34' };
     }
     // Cada tipo de edificio tiene su propia cola: dos del mismo tipo van uno tras otro.
     // Tipos distintos avanzan a la vez, repartiéndose la velocidad entre los que están en curso.
-    const vistos = new Set(), activas = [];
-    for (const o of J.obras) if (!o.listo && !vistos.has(o.tipo)) { vistos.add(o.tipo); activas.push(o); }
-    const ritmoObras = (factor * W.ritmo(J.cuenta.patio || 0)) / (activas.length || 1);
-    for (const o of activas) { o.prog += ritmoObras; if (o.prog >= EDIF[o.tipo].tiempo) o.listo = true; }
+    // Y cada patio lleva sus propias obras: dos patios construyen a la vez.
+    if (J.obras.length) {
+      let primero = 0;
+      for (const o of J.obras) { const p = o.patio ? m.porId.get(o.patio) : null; if (!p || p.vida <= 0) { if (!primero) { const q = m.ents.find((e) => e.edif && e.j === j && e.tipo === 'patio' && e.vida > 0); primero = q ? q.id : -1; } o.patio = primero > 0 ? primero : 0; } } // sin su patio, la obra pasa a otro
+      const porPatio = new Map();
+      for (const o of J.obras) {
+        if (o.listo || !o.patio) continue;
+        let g = porPatio.get(o.patio); if (!g) { g = { vistos: new Set(), activas: [] }; porPatio.set(o.patio, g); }
+        if (!g.vistos.has(o.tipo)) { g.vistos.add(o.tipo); g.activas.push(o); }
+      }
+      for (const g of porPatio.values()) for (const o of g.activas) { o.prog += factor / g.activas.length; if (o.prog >= EDIF[o.tipo].tiempo) o.listo = true; }
+    }
     // Unidades: cada cuartel, fábrica y aeródromo tiene su propia cola y la despacha en orden, uno tras otro.
     // Dos edificios iguales producen a la vez. J.colas guarda el total encargado por tipo (para la IA y el cupo).
     for (const t in J.colas) { J.colas[t].prog = 0; J.colas[t].sinAgua = false; }
@@ -1789,19 +1836,21 @@ globalThis.W = { VERSION: 'versión 34' };
     for (let k = 0; k < m.ents.length; k++) {
       const e = m.ents[k];
       if (e.vida > 0) continue;
-      muertos = true; m.porId.delete(e.id); m.jug[e.j].bajas++;
+      muertos = true; m.porId.delete(e.id);
+      if (e.desplegado) continue; // el patio móvil no muere: se ha convertido en patio
+      m.jug[e.j].bajas++;
       m.efectos.push({ tipo: e.vendido ? 'venta' : 'muerte', x2: posX(e), y2: posY(e), edif: e.edif, tam: e.tam || 0, clase: e.tipo, ang: e.ang || 0, j: e.j, t: m.t });
       if (e.edif) {
         const N = m.N;
         e.cola.forEach((t, i) => { if (e.pago[i]) devolver(m.jug[e.j], UNID[t]); m.jug[e.j].colas[t].n--; }); // lo que tenía encargado (y pagado) se devuelve
         e.cola.length = 0;
         for (let dy = 0; dy < e.tam; dy++) for (let dx = 0; dx < e.tam; dx++) { const i = (e.y + dy) * N + e.x + dx; m.ocup[i] = 0; m.paso[i] = 1; }
-        if (e.tipo === 'patio') m.jug[e.j].vivo = false;
       }
     }
     if (muertos) {
       m.ents = m.ents.filter((e) => e.vida > 0);
       contar(m);
+      for (const J of m.jug) if (!J.cuenta.patio && !J.cuenta.patioMovil) J.vivo = false; // se pierde al quedarse sin patios (ni patio móvil que desplegar)
       if (!m.jug[0].vivo || !m.jug[1].vivo) m.ganador = m.jug[0].vivo ? 0 : m.jug[1].vivo ? 1 : 2;
     }
     if (m.efectos.length && m.efectos[0].t < m.t - 4) m.efectos = m.efectos.filter((f) => f.t >= m.t - 4);
@@ -2286,6 +2335,20 @@ globalThis.W = { VERSION: 'versión 34' };
       c.fillStyle = col.osc; c.fillRect(-w * 0.1 - rec, -w * 0.12, L * 2.1, w * 0.24); c.fillRect(L * 1.85 - rec, -w * 0.21, L * 0.2, w * 0.42); // tubo largo
       c.fillStyle = col.base; c.strokeStyle = col.luz; c.lineWidth = Math.max(1, r * 0.14); c.beginPath(); c.rect(-w * 0.55, -w * 0.42, w * 0.95, w * 0.84); c.fill(); c.stroke();
       if (e.retro > 0.6) { c.fillStyle = col.fuego; c.beginPath(); c.arc(L * 2.3, 0, w * 0.45, 0, TAU); c.fill(); }
+    } else if (u.tipo === 'patioMovil') { // camión largo de seis ruedas con el patio plegado encima
+      const L = r * 1.5, w = r * 0.95;
+      c.fillStyle = col.osc;
+      for (const x of [-L * 0.85, -L * 0.2, L * 0.45]) { c.fillRect(x, -w * 1.06, L * 0.4, w * 0.3); c.fillRect(x, w * 0.76, L * 0.4, w * 0.3); } // ruedas
+      c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1;
+      c.beginPath(); c.rect(-L, -w * 0.8, L * 2, w * 1.6); c.fill(); c.stroke();
+      c.fillStyle = col.osc; c.fillRect(L * 0.62, -w * 0.6, L * 0.3, w * 1.2); // cabina
+      if (lod === 2) { c.fillStyle = col.luz; c.fillRect(L * 0.8, -w * 0.45, L * 0.07, w * 0.9); }
+      c.strokeStyle = col.luz; c.lineWidth = Math.max(1, r * 0.16); c.beginPath(); // el emblema del patio: escuadras y brazo de grúa
+      const a = L * 0.5, bq = w * 0.5, g = w * 0.22, cxp = -L * 0.25;
+      c.moveTo(cxp - a, -bq + g); c.lineTo(cxp - a, -bq); c.lineTo(cxp - a + g, -bq); c.moveTo(cxp + a - g, -bq); c.lineTo(cxp + a, -bq); c.lineTo(cxp + a, -bq + g);
+      c.moveTo(cxp + a, bq - g); c.lineTo(cxp + a, bq); c.lineTo(cxp + a - g, bq); c.moveTo(cxp - a + g, bq); c.lineTo(cxp - a, bq); c.lineTo(cxp - a, bq - g);
+      c.moveTo(cxp - a * 0.4, bq * 0.4); c.lineTo(cxp + a * 0.4, -bq * 0.4); c.stroke();
+      c.fillStyle = col.luz; c.beginPath(); c.arc(cxp - a * 0.4, bq * 0.4, w * 0.16, 0, TAU); c.fill();
     } else { // cosechadora
       const L = r * 1.45, w = r * 0.95;
       const mand = e.cosecha ? Math.sin(e.tiempo * 0.012) * w * 0.14 : 0;
@@ -2976,6 +3039,10 @@ globalThis.W = { VERSION: 'versión 34' };
           const o = m.porId.get(e.arregla);
           if (o && W.dist(e.x, e.y, o) <= 1.7) { ctx.strokeStyle = P.bien; ctx.lineWidth = 1.5; ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(ox + (o.edif ? o.cx : o.x) * z, oy + (o.edif ? o.cy : o.y) * z); ctx.stroke(); ctx.setLineDash([]); }
         }
+        if (d.despliega && sel.has(e.id) && e.j === YO) { // dónde quedaría el patio: verde si cabe
+          const bx = ox + (Math.floor(e.x) - 1) * z, by = oy + (Math.floor(e.y) - 1) * z;
+          ctx.strokeStyle = W.puedeDesplegar(m, e) ? P.bien : P.mal; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.strokeRect(bx, by, z * 3, z * 3); ctx.setLineDash([]);
+        }
         if (e.rango && lod) { // galones de veteranía, junto a la unidad
           ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.2; ctx.beginPath();
           for (let g2 = 0; g2 < e.rango; g2++) { const gx = px + r * 1.2 + 3, gy = py - r - g2 * 4; ctx.moveTo(gx - 3, gy + 2); ctx.lineTo(gx, gy - 1); ctx.lineTo(gx + 3, gy + 2); }
@@ -3163,6 +3230,15 @@ globalThis.W = { VERSION: 'versión 34' };
       }
       mctx.imageSmoothingEnabled = true;
       mctx.drawImage(cNie, 0, 0, MS, MS);
+      { // patios: los propios, con un aro; del rival, su último patio (o patio móvil) queda a la vista cuando ya ha perdido alguno
+        const R = m.jug[1 - YO], delata = R.patiosMax > 1 && (R.cuenta.patio || 0) <= 1;
+        mctx.lineWidth = 1.5;
+        for (const e of m.ents) {
+          if (e.tipo !== 'patio' && e.tipo !== 'patioMovil') continue;
+          if (e.j === YO) { if (e.edif) { mctx.strokeStyle = P.yo; mctx.beginPath(); mctx.arc(e.cx * k, e.cy * k, 5, 0, TAU); mctx.stroke(); } }
+          else if (delata && (e.edif || !R.cuenta.patio)) { mctx.strokeStyle = P.rival; mctx.beginPath(); mctx.arc((e.edif ? e.cx : e.x) * k, (e.edif ? e.cy : e.y) * k, 5 + ((m.t >> 3) % 3), 0, TAU); mctx.stroke(); }
+        }
+      }
       if (J.alerta && m.t - J.alerta.t < 60 && (m.t >> 2) % 2) { mctx.strokeStyle = P.mal; mctx.lineWidth = 2; mctx.beginPath(); mctx.arc(J.alerta.x * k, J.alerta.y * k, 7, 0, TAU); mctx.stroke(); }
       mctx.strokeStyle = P.tinta; mctx.lineWidth = 1;
       mctx.strokeRect((cam.x - cw / 2 / cam.z) * k + 0.5, (cam.y - ch / 2 / cam.z) * k + 0.5, (cw / cam.z) * k, (ch / cam.z) * k);
@@ -3195,7 +3271,11 @@ globalThis.W = { VERSION: 'versión 34' };
           const area = W.ARMAS[d.arma].area || 0; // los obuses de área dejan un cráter mayor
           estallido(d.x2, d.y2, area ? 2 : 1); marcaSuelo('quemado', d.x2, d.y2, area || 0.42, 0, 15000);
           if (n++ < 6) son.impacto(cerca(d.x2, d.y2), paneo(d.x2));
+        } else if (d.tipo === 'despliega') {
+          if (d.j === YO) { son.colocar(); aviso('Patio desplegado: ya puedes construir a su alrededor'); }
         } else if (d.tipo === 'muerte') {
+          if (d.edif && d.clase === 'patio' && d.j === YO && m.ganador < 0) aviso('¡Has perdido un patio!');
+          else if (d.edif && d.clase === 'patio' && m.ganador < 0) aviso('Patio enemigo destruido');
           if (!enVista) continue;
           if (d.edif) {
             for (let k = 0; k < d.tam * 2; k++) estallido(d.x2 + (azar() - 0.5) * d.tam * 0.8, d.y2 + (azar() - 0.5) * d.tam * 0.8, 2);
@@ -3330,6 +3410,14 @@ globalThis.W = { VERSION: 'versión 34' };
     const paraCavar = () => unidadesSel().filter((u) => u.j === YO && UNID[u.tipo].cat === 'inf' && u.orden === 'nada' && !(u.cava > 0) && !W.enTrinchera(m, u));
     function atrincherar() { const ids = paraCavar().map((u) => u.id); if (ids.length) { W.orden(m, { t: 'trinchera', j: YO, ids }); son.colocar(); } }
     $('trinchera').addEventListener('click', atrincherar);
+    const paraDesplegar = () => unidadesSel().filter((u) => UNID[u.tipo].despliega);
+    function desplegar() {
+      const us = paraDesplegar(); if (!us.length) return;
+      const ok = us.filter((u) => W.puedeDesplegar(m, u));
+      if (!ok.length) { aviso(us.some((u) => u.orden !== 'nada') ? 'El patio móvil tiene que estar detenido' : 'Aquí no cabe un patio: hacen falta 3×3 celdas de llano libre'); return; }
+      W.orden(m, { t: 'desplegar', j: YO, ids: ok.map((u) => u.id) });
+    }
+    $('desplegar').addEventListener('click', desplegar);
     W.orden(m, { t: 'retiro', j: YO, on: true }); // por defecto, las unidades propias muy dañadas se retiran solas a reparar
     const paraRetiro = () => unidadesSel().filter((u) => !UNID[u.tipo].aire && u.tipo !== 'cosechadora');
     $('retiro').addEventListener('click', () => { const us = paraRetiro(); if (us.length) W.orden(m, { t: 'retiro', j: YO, ids: us.map((u) => u.id), on: !us.every((u) => u.retira) }); });
@@ -3351,6 +3439,7 @@ globalThis.W = { VERSION: 'versión 34' };
       if (us.length) {
         const armadas = us.some((u) => UNID[u.tipo].arma);
         const soloAire = us.every((u) => UNID[u.tipo].aire);
+        if (us.some((u) => UNID[u.tipo].despliega)) L.push('<b>patio móvil: ' + k('D') + ' lo despliega aquí como patio nuevo (no se repliega)</b>');
         if (us.some((u) => UNID[u.tipo].repara)) L.push('<b>ingeniero: repara solo los vehículos y edificios cercanos</b>');
         if (soloAire) L.push('clic derecho: ir y volver, o atacar · ' + k('S') + ' volver ya');
         else L.push('clic derecho: mover' + (armadas ? ' o atacar' : '') + ' · otro clic cerca: orientar');
@@ -3483,12 +3572,12 @@ globalThis.W = { VERSION: 'versión 34' };
         son.activar();
         if (esEdif) {
           if (obraLista(tipo)) { modo = 'colocar'; tipoColocar = tipo; if (tactil) aviso('Arrastra sobre el mapa y suelta para colocar'); }
-          else W.orden(m, { t: 'construir', j: YO, tipo });
+          else W.orden(m, { t: 'construir', j: YO, tipo, ids: edificiosSel('patio').map((e) => e.id) });
         } else W.orden(m, { t: 'entrenar', j: YO, tipo, ids: edificiosSel(LUGAR[d.cat]).map((e) => e.id) });
       });
       const cancelar = (ev) => {
         ev.preventDefault(); ev.stopPropagation();
-        if (esEdif) { W.orden(m, { t: 'cancelarEdif', j: YO, tipo }); if (tipoColocar === tipo) modo = null; }
+        if (esEdif) { W.orden(m, { t: 'cancelarEdif', j: YO, tipo, ids: edificiosSel('patio').map((e) => e.id) }); if (tipoColocar === tipo) modo = null; }
         else W.orden(m, { t: 'cancelarUnidad', j: YO, tipo, ids: edificiosSel(LUGAR[d.cat]).map((e) => e.id) });
       };
       b.addEventListener('contextmenu', cancelar);
@@ -3505,7 +3594,7 @@ globalThis.W = { VERSION: 'versión 34' };
       $('dios').hidden = !J.dios; { const t = J.admin ? 'ADMIN' : 'GOD'; if ($('dios').textContent !== t) $('dios').textContent = t; } $('sinColmena').hidden = J.colmena;
       const e = $('rEne'); e.textContent = J.uso + ' / ' + J.prod; e.className = J.uso > J.prod ? 'mal' : '';
       const ag = $('rAgu'); ag.textContent = J.aguaUso + ' / ' + (J.dios ? '∞' : J.aguaProd); ag.className = !J.dios && J.aguaUso >= J.aguaProd ? 'mal' : '';
-      const eds = edificiosSel(), tipos = new Set(eds.map((e) => e.tipo));
+      const eds = edificiosSel(), tipos = new Set(eds.map((e) => e.tipo)), patiosSel = new Set(eds.filter((e) => e.tipo === 'patio').map((e) => e.id));
       tiposSel = tipos;
       let hayUnid = false;
       $('secEdif').hidden = !tipos.has('patio');
@@ -3521,7 +3610,7 @@ globalThis.W = { VERSION: 'versión 34' };
         const caro = !W.puedePagar(J, d);
         if (o.esEdif) {
           let n = 0, listas = 0, activa = null; // cada tipo tiene su cola: avanza la primera sin terminar
-          for (const a of J.obras) if (a.tipo === o.tipo) { n++; if (a.listo) listas++; else if (!activa) activa = a; }
+          for (const a of J.obras) if (a.tipo === o.tipo && (a.listo || patiosSel.has(a.patio))) { n++; if (a.listo) listas++; else if (!activa) activa = a; } // lo de los patios elegidos, y lo ya listo de cualquiera
           if (n > 1) nombre += ' ×' + n;
           if (n) clase += ' con-x';
           if (listas) { clase += ' listo'; txt = 'colocar' + (activa ? ' · ' + Math.floor((activa.prog / d.tiempo) * 100) + '%' : ''); }
@@ -3544,8 +3633,9 @@ globalThis.W = { VERSION: 'versión 34' };
       }
       $('secUnid').hidden = !hayUnid;
       listarGrupos(); actualizarTec(); actualizarTactil();
-      const enCurso = new Set(J.obras.filter((a) => !a.listo).map((a) => a.tipo)).size;
-      const reparto = enCurso > 1 ? enCurso + ' tipos a la vez: cada uno a 1/' + enCurso + ' de velocidad' : '';
+      let enCurso = 0; // en el patio más cargado de los elegidos
+      for (const id of patiosSel) enCurso = Math.max(enCurso, new Set(J.obras.filter((a) => !a.listo && a.patio === id).map((a) => a.tipo)).size);
+      const reparto = (enCurso > 1 ? enCurso + ' tipos a la vez en un patio: cada uno a 1/' + enCurso + ' de velocidad' : '') + ((J.cuenta.patio || 0) > 1 ? (enCurso > 1 ? ' · ' : '') + J.cuenta.patio + ' patios: cada uno lleva sus obras' : '');
       if ($('obras').textContent !== reparto) $('obras').textContent = reparto;
       let s = '';
       const vivos = [...sel].map((id) => m.porId.get(id)).filter(Boolean);
@@ -3557,6 +3647,7 @@ globalThis.W = { VERSION: 'versión 34' };
       const dem = vendibles(), bv = $('vender');
       const cav = paraCavar().length, bt = $('trinchera');
       bt.hidden = !cav;
+      $('desplegar').hidden = !paraDesplegar().length;
       { const us = paraRetiro(), br = $('retiro'); br.hidden = !us.length;
         if (us.length) { const t = 'Retirada automática: ' + (us.every((u) => u.retira) ? 'sí' : us.some((u) => u.retira) ? 'algunas' : 'no'); if (br.textContent !== t) br.textContent = t; } }
       if (cav) { const t = 'Atrincherarse · ' + cav + (cav === 1 ? ' soldado' : ' soldados'); if (bt.textContent !== t) bt.textContent = t; }
@@ -3814,6 +3905,7 @@ globalThis.W = { VERSION: 'versión 34' };
         case 'KeyA': if (unidadesSel().length) modo = 'amover'; break;
         case 'KeyR': if (unidadesSel().length) modo = 'patrulla'; break;
         case 'KeyZ': atrincherar(); break;
+        case 'KeyD': desplegar(); break;
         case 'KeyB': elegirEdificios('patio'); break;
         case 'KeyQ': elegirEdificios('cuartel'); break;
         case 'KeyV': elegirEdificios('fabrica'); break;

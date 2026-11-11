@@ -11,7 +11,8 @@
   function nuevoJugador(inicio) {
     return {
       minerales: inicio || ECON.inicio, prod: 0, uso: 0, cuenta: {}, vivo: true, dios: false, admin: false,
-      obras: [], // [{ tipo, prog, listo }]: varias a la vez, se reparten la velocidad
+      obras: [], // [{ tipo, prog, listo, patio }]: cada patio lleva las suyas; dentro de un patio, tipos distintos se reparten la velocidad
+      patiosMax: 1, // cuántos patios ha llegado a tener a la vez
       retiro: false, // retirada automática por defecto para las unidades nuevas
       colas: Object.fromEntries(Object.keys(UNID).map((t) => [t, { n: 0, prog: 0, sinAgua: false }])), // total encargado por tipo; las colas de verdad están en cada edificio (e.cola)
       alerta: null, cosechado: 0, bajas: 0, producidas: 0,
@@ -113,6 +114,16 @@
     return true;
   };
 
+  // ¿Puede desplegarse aquí un patio móvil? Necesita 3×3 de llano libre a su alrededor (lo que hay debajo de otras unidades no cuenta).
+  W.puedeDesplegar = function (m, u) {
+    const N = m.N, x = Math.floor(u.x) - 1, y = Math.floor(u.y) - 1;
+    if (u.orden !== 'nada' || x < 0 || y < 0 || x + 3 > N || y + 3 > N) return false;
+    for (let dy = 0; dy < 3; dy++) for (let dx = 0; dx < 3; dx++) {
+      const i = (y + dy) * N + x + dx;
+      if (m.mapa.terreno[i] !== T.LLANO || m.ocup[i] || m.mapa.mineral[i] || m.mapa.sitioEn[i]) return false;
+    }
+    return true;
+  };
   W.puedeColocar = function (m, j, tipo, x, y) {
     const d = EDIF[tipo], N = m.N, t = d.tam;
     if (x < 0 || y < 0 || x + t > N || y + t > N) return false;
@@ -165,6 +176,7 @@
     }
     for (let j = 0; j < 2; j++) {
       const J = m.jug[j];
+      if ((J.cuenta.patio || 0) > J.patiosMax) J.patiosMax = J.cuenta.patio;
       if (!J.dios) continue;
       J.minerales = J.petroleo = J.raros = J.info = 999999;
       if (J.prod < J.uso) J.prod = J.uso;
@@ -305,13 +317,21 @@
         return;
       case 'construir': {
         const d = EDIF[cmd.tipo];
-        if (!d || cmd.tipo === 'patio' || J.obras.length >= ECON.obrasMax || !W.disponible(m, cmd.j, d) || !W.puedePagar(J, d)) return;
-        cobrar(J, d); J.obras.push({ tipo: cmd.tipo, prog: 0, listo: false });
+        if (!d || cmd.tipo === 'patio' || !W.disponible(m, cmd.j, d) || !W.puedePagar(J, d)) return;
+        // La obra va a un patio: de los indicados (cmd.ids) o de todos, el que menos tenga entre manos.
+        let patio = null, carga = Infinity;
+        for (const e of m.ents) {
+          if (!e.edif || e.j !== cmd.j || e.tipo !== 'patio' || e.vida <= 0 || (cmd.ids && !cmd.ids.includes(e.id))) continue;
+          let n = 0, pend = 0; for (const o of J.obras) if (o.patio === e.id) { n++; if (!o.listo) pend++; }
+          if (n < ECON.obrasMax && pend < carga) { carga = pend; patio = e; }
+        }
+        if (!patio) return;
+        cobrar(J, d); J.obras.push({ tipo: cmd.tipo, prog: 0, listo: false, patio: patio.id });
         return;
       }
       case 'cancelarEdif': { // cancela la obra más reciente de ese tipo (primero las que siguen en curso) y devuelve su costo
         let i = -1;
-        for (let k = J.obras.length - 1; k >= 0; k--) if (J.obras[k].tipo === cmd.tipo && (i < 0 || (J.obras[i].listo && !J.obras[k].listo))) i = k;
+        for (let k = J.obras.length - 1; k >= 0; k--) if (J.obras[k].tipo === cmd.tipo && (!cmd.ids || cmd.ids.includes(J.obras[k].patio)) && (i < 0 || (J.obras[i].listo && !J.obras[k].listo))) i = k;
         if (i < 0) return;
         devolver(J, EDIF[cmd.tipo]); J.obras.splice(i, 1);
         return;
@@ -322,6 +342,20 @@
         const e = crearEdificio(m, cmd.j, cmd.tipo, cmd.x, cmd.y);
         J.obras.splice(i, 1);
         if (e.tipo === 'refineria') crearUnidad(m, cmd.j, 'cosechadora', W.cercaLibre(m, e.cx, e.y + e.tam + 0.5));
+        contar(m);
+        return;
+      }
+      case 'desplegar': { // el patio móvil se convierte en un patio donde está; no hay vuelta atrás
+        for (const u of propias(m, cmd)) {
+          if (!UNID[u.tipo].despliega || u.vida <= 0 || !W.puedeDesplegar(m, u)) continue;
+          const x = Math.floor(u.x) - 1, y = Math.floor(u.y) - 1;
+          u.vida = 0; u.desplegado = true;
+          for (const e of m.ents) if (!e.edif && e !== u && e.vida > 0 && !UNID[e.tipo].aire && e.x > x - 0.4 && e.x < x + 3.4 && e.y > y - 0.4 && e.y < y + 3.4) { // quien esté en medio se aparta
+            const c = W.cercaLibre(m, e.x < x + 1.5 ? x - 1 : x + 4, e.y); e.x = e.px = (c % m.N) + 0.5; e.y = e.py = ((c / m.N) | 0) + 0.5; e.ruta = null;
+          }
+          const p = crearEdificio(m, cmd.j, 'patio', x, y); p.nace = m.t;
+          m.efectos.push({ tipo: 'despliega', x2: p.cx, y2: p.cy, j: cmd.j, t: m.t });
+        }
         contar(m);
         return;
       }
@@ -1067,7 +1101,7 @@
     for (let k = 0; k < m.ents.length; k++) if (m.ents[k].j === j && m.ents[k].tipo === tipo) out.push(m.ents[k]);
     return out;
   }
-  // Varios patios aceleran las obras: +50 % por cada uno extra, hasta ×2,5. (Las unidades no: cada edificio tiene su cola.)
+  // (Escala de bonificación que se usó para las colas compartidas; hoy cada edificio y cada patio lleva su propia cola.)
   W.ritmo = function (n) { return n < 1 ? 0 : Math.min(1 + ECON.bonoProd * (n - 1), ECON.bonoMax); };
   function tickProduccion(m, j) {
     const J = m.jug[j];
@@ -1089,10 +1123,18 @@
     }
     // Cada tipo de edificio tiene su propia cola: dos del mismo tipo van uno tras otro.
     // Tipos distintos avanzan a la vez, repartiéndose la velocidad entre los que están en curso.
-    const vistos = new Set(), activas = [];
-    for (const o of J.obras) if (!o.listo && !vistos.has(o.tipo)) { vistos.add(o.tipo); activas.push(o); }
-    const ritmoObras = (factor * W.ritmo(J.cuenta.patio || 0)) / (activas.length || 1);
-    for (const o of activas) { o.prog += ritmoObras; if (o.prog >= EDIF[o.tipo].tiempo) o.listo = true; }
+    // Y cada patio lleva sus propias obras: dos patios construyen a la vez.
+    if (J.obras.length) {
+      let primero = 0;
+      for (const o of J.obras) { const p = o.patio ? m.porId.get(o.patio) : null; if (!p || p.vida <= 0) { if (!primero) { const q = m.ents.find((e) => e.edif && e.j === j && e.tipo === 'patio' && e.vida > 0); primero = q ? q.id : -1; } o.patio = primero > 0 ? primero : 0; } } // sin su patio, la obra pasa a otro
+      const porPatio = new Map();
+      for (const o of J.obras) {
+        if (o.listo || !o.patio) continue;
+        let g = porPatio.get(o.patio); if (!g) { g = { vistos: new Set(), activas: [] }; porPatio.set(o.patio, g); }
+        if (!g.vistos.has(o.tipo)) { g.vistos.add(o.tipo); g.activas.push(o); }
+      }
+      for (const g of porPatio.values()) for (const o of g.activas) { o.prog += factor / g.activas.length; if (o.prog >= EDIF[o.tipo].tiempo) o.listo = true; }
+    }
     // Unidades: cada cuartel, fábrica y aeródromo tiene su propia cola y la despacha en orden, uno tras otro.
     // Dos edificios iguales producen a la vez. J.colas guarda el total encargado por tipo (para la IA y el cupo).
     for (const t in J.colas) { J.colas[t].prog = 0; J.colas[t].sinAgua = false; }
@@ -1247,19 +1289,21 @@
     for (let k = 0; k < m.ents.length; k++) {
       const e = m.ents[k];
       if (e.vida > 0) continue;
-      muertos = true; m.porId.delete(e.id); m.jug[e.j].bajas++;
+      muertos = true; m.porId.delete(e.id);
+      if (e.desplegado) continue; // el patio móvil no muere: se ha convertido en patio
+      m.jug[e.j].bajas++;
       m.efectos.push({ tipo: e.vendido ? 'venta' : 'muerte', x2: posX(e), y2: posY(e), edif: e.edif, tam: e.tam || 0, clase: e.tipo, ang: e.ang || 0, j: e.j, t: m.t });
       if (e.edif) {
         const N = m.N;
         e.cola.forEach((t, i) => { if (e.pago[i]) devolver(m.jug[e.j], UNID[t]); m.jug[e.j].colas[t].n--; }); // lo que tenía encargado (y pagado) se devuelve
         e.cola.length = 0;
         for (let dy = 0; dy < e.tam; dy++) for (let dx = 0; dx < e.tam; dx++) { const i = (e.y + dy) * N + e.x + dx; m.ocup[i] = 0; m.paso[i] = 1; }
-        if (e.tipo === 'patio') m.jug[e.j].vivo = false;
       }
     }
     if (muertos) {
       m.ents = m.ents.filter((e) => e.vida > 0);
       contar(m);
+      for (const J of m.jug) if (!J.cuenta.patio && !J.cuenta.patioMovil) J.vivo = false; // se pierde al quedarse sin patios (ni patio móvil que desplegar)
       if (!m.jug[0].vivo || !m.jug[1].vivo) m.ganador = m.jug[0].vivo ? 0 : m.jug[1].vivo ? 1 : 2;
     }
     if (m.efectos.length && m.efectos[0].t < m.t - 4) m.efectos = m.efectos.filter((f) => f.t >= m.t - 4);

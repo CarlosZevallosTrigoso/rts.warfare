@@ -59,7 +59,7 @@
   #ayuda kbd { font: inherit; color: var(--tinta); }
   #formas { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; }
   #formas .grupo { justify-content: center; }
-  #vender, #trinchera, #retiro { justify-content: center; margin-top: 4px; }
+  #vender, #trinchera, #retiro, #desplegar { justify-content: center; margin-top: 4px; }
   .chip.debe { border-style: dashed; color: var(--suave); }
   /* Táctil: botonera sobre el mapa para lo que con teclado son teclas, y controles más grandes. */
   #tactil { position: fixed; left: 150px; right: 244px; bottom: 8px; z-index: 3; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; align-items: flex-end; pointer-events: none; }
@@ -143,6 +143,8 @@
       <div>muy dañadas, se retiran solas a reparar (se puede apagar)</div>
       <div>galones: veteranía por bajas, +10 % de daño y vida cada uno</div>
       <div>la artillería tira a lo que vea cualquier unidad propia</div>
+      <div>patio móvil (fábrica, nivel 2): <kbd>D</kbd> lo despliega como patio;</div>
+      <div>cada patio lleva sus obras; pierdes al quedarte sin patios</div>
       <div>explorador y dron ven lejos; el ingeniero repara solo;</div>
       <div>el antiaéreo móvil solo dispara a aviones</div>
       <div><kbd>B</kbd> patio · <kbd>Q</kbd> cuarteles · <kbd>V</kbd> fábricas · <kbd>X</kbd> aeródromos</div>
@@ -182,6 +184,7 @@
       <button type="button" class="grupo on" data-f="grupo">grupo</button><button type="button" class="grupo" data-f="linea">línea</button><button type="button" class="grupo" data-f="columna">columna</button>
       <button type="button" class="grupo" data-f="cuna">cuña</button><button type="button" class="grupo" data-f="cuadro">cuadro</button></div></section>
     <div id="sel" class="tenue"></div>
+    <button type="button" id="desplegar" class="btn" hidden title="Convierte el patio móvil en un patio, donde está. No se puede replegar.">Desplegar patio</button>
     <button type="button" id="retiro" class="btn" hidden title="Con poca vida, la unidad se va sola a reparar y luego vuelve a su puesto."></button>
     <button type="button" id="trinchera" class="btn" hidden></button>
     <button type="button" id="vender" class="btn" hidden></button>
