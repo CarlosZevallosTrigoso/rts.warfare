@@ -437,10 +437,12 @@
         else { ctx.globalAlpha = 0.7 * (1 - fr); ctx.setLineDash([2, 4]); ctx.beginPath(); ctx.moveTo(ox + q.x * z, oy + q.y * z); ctx.lineTo(ox + q.x2 * z, oy + q.y2 * z); ctx.stroke(); ctx.setLineDash([]); }
       }
       ctx.globalAlpha = 1;
+      giroCerca = false;
       if (giroPend) { // tras ordenar mover: la flecha sigue al cursor y un segundo clic derecho fija la orientación
         const g = giroPend, wx = aMundoX(raton.x), wy = aMundoY(raton.y), d = Math.hypot(wx - g.x, wy - g.y);
-        if (performance.now() - g.t0 > 3000 || !mismaSel(g.ids)) giroPend = null;
+        if (performance.now() - g.t0 > 15000 || !mismaSel(g.ids)) giroPend = null;
         else if (raton.dentro && d > 0.4 && d < 9) {
+          giroCerca = true;
           ctx.globalAlpha = 0.8; flecha(ox + g.x * z, oy + g.y * z, raton.x, raton.y, P.tinta); ctx.globalAlpha = 1;
           ctx.fillStyle = P.tinta; ctx.fillText('clic derecho: mirar hacia aquí', raton.x + 14, raton.y - 8);
         }
@@ -510,7 +512,7 @@
         ctx.globalAlpha = 1;
       }
       // Etiqueta de lo que hay bajo el cursor.
-      if (raton.dentro && !raton.izq && !raton.arrastre && !raton.medio && !giroPend) {
+      if (raton.dentro && !raton.izq && !raton.arrastre && !raton.medio && !giroCerca) {
         const txt = bajoCursor();
         if (txt) {
           const w = ctx.measureText(txt).width + 12, x = Math.min(raton.x + 14, cw - w - 4), y = Math.min(raton.y + 18, ch - 22);
@@ -691,7 +693,7 @@
     function atrincherar() { const ids = paraCavar().map((u) => u.id); if (ids.length) { W.orden(m, { t: 'trinchera', j: YO, ids }); son.colocar(); } }
     $('trinchera').addEventListener('click', atrincherar);
     // Segundo clic derecho tras ordenar mover: fija hacia dónde queda mirando la unidad (o el frente de la formación).
-    let giroPend = null;
+    let giroPend = null, giroCerca = false;
     const mismaSel = (ids) => { const a = unidadesSel(); return a.length === ids.length && a.every((u) => ids.includes(u.id)); };
     function flecha(x1, y1, x2, y2, color) {
       const a = Math.atan2(y2 - y1, x2 - x1), k = 9;
@@ -891,7 +893,7 @@
     function ordenar(wx, wy, enc) {
         if (modo) { modo = null; return; }
         if (wx < 0 || wy < 0 || wx >= N || wy >= N) return;
-        if (giroPend && !enc && performance.now() - giroPend.t0 < 3000 && mismaSel(giroPend.ids)) {
+        if (giroPend && !enc && performance.now() - giroPend.t0 < 15000 && mismaSel(giroPend.ids)) {
           const g = giroPend, d = Math.hypot(wx - g.x, wy - g.y), en = entEn(wx, wy);
           if (d > 0.4 && d < 9 && !(en && en.j !== YO)) { // clic cerca del destino: es la orientación, no otra orden
             const rumbo = Math.atan2(wy - g.y, wx - g.x);
