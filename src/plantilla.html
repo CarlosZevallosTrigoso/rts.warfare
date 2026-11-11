@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>rts.warfare</title>
 <style>
-  :root { --fondo: #ffffff; --tinta: #111111; --suave: #6b6b63; --linea: #d9d7cf; --musgo: #586a45; --acero: #4f6b82; --naranja: #b06a36; --relleno: #e4ead9; --mal: #b0362f; }
-  body[data-tema="oscura"] { --fondo: #16170f; --tinta: #e8e4d6; --suave: #9a978a; --linea: #3a3b30; --musgo: #8fa676; --acero: #6f93b0; --naranja: #d0854a; --relleno: #2f3a26; --mal: #d0554a; }
+  :root { --fondo: #e4e4e4; --panel: #f4f4f4; --tinta: #1a1a1a; --suave: #6e6e6e; --linea: #bdbdbd; --relleno: #cfcfcf; --mal: #b0362f; }
+  body[data-tema="oscura"] { --fondo: #1c1c1c; --panel: #262626; --tinta: #e6e6e6; --suave: #9a9a9a; --linea: #444444; --relleno: #474747; --mal: #d0554a; }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
   body { background: var(--fondo); color: var(--tinta); font: 12px/1.45 "Fira Code", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow: hidden; user-select: none; -webkit-user-select: none; }
@@ -22,12 +22,12 @@
   .tenue { color: var(--suave); font-size: 11px; }
   #mini { width: 208px; height: 208px; border: 1px solid var(--linea); border-radius: 2px; display: block; cursor: pointer; }
   .btn { display: flex; justify-content: space-between; width: 100%; margin: 0 0 4px; padding: 5px 7px; font: inherit; color: var(--tinta); text-align: left; cursor: pointer; border: 1px solid var(--linea); border-radius: 2px;
-    background: linear-gradient(to right, var(--relleno) var(--p, 0%), transparent var(--p, 0%)); }
+    background: linear-gradient(to right, var(--relleno) var(--p, 0%), var(--panel) var(--p, 0%)); }
   .btn:hover { border-color: var(--tinta); }
-  .btn.no { color: var(--suave); border-style: dashed; cursor: default; }
+  .btn.no { color: var(--suave); border-style: dashed; cursor: default; background: transparent; }
   .btn.no:hover { border-color: var(--linea); }
   .btn.caro .c { color: var(--mal); }
-  .btn.listo { border-color: var(--musgo); background: var(--relleno); font-weight: 600; }
+  .btn.listo { border-color: var(--tinta); background: var(--tinta); color: var(--fondo); font-weight: 600; }
   .btn .c { font-variant-numeric: tabular-nums; }
   #sel { min-height: 18px; }
   #ayuda { margin-top: auto; border-top: 1px solid var(--linea); padding-top: 9px; }
@@ -36,14 +36,15 @@
   #fin[hidden] { display: none; }
   #fin div { pointer-events: auto; background: var(--fondo); border: 1px solid var(--tinta); border-radius: 2px; padding: 22px 30px; text-align: center; }
   #fin strong { display: block; font-size: 20px; margin-bottom: 6px; }
-  #fin a { color: var(--acero); margin: 0 6px; }
+  #fin a { color: var(--tinta); margin: 0 6px; }
+  #dios { color: var(--mal); font-size: 10px; letter-spacing: .12em; margin-left: 6px; }
 </style>
 </head>
 <body>
 <div id="app">
   <canvas id="lienzo"></canvas>
   <aside id="barra">
-    <h1 id="titulo" title="Recargar">rts<span>.</span>warfare</h1>
+    <h1 id="titulo" title="Recargar">rts<span>.</span>warfare<b id="dios" hidden>GOD</b></h1>
     <div id="recursos">
       <div class="fila"><span>minerales</span><b id="rMin">0</b></div>
       <div class="fila"><span>energía</span><b id="rEne">0 / 0</b></div>
@@ -62,6 +63,7 @@
       <div><kbd>Mayús+1…9</kbd> guardar grupo · <kbd>1…9</kbd> llamarlo</div>
       <div>clic derecho en botón: cancelar</div>
       <div><kbd>P</kbd> pausa · <kbd>T</kbd> tema · <span id="semilla"></span></div>
+      <div>escribe <kbd>god</kbd>: recursos infinitos</div>
     </div>
   </aside>
 </div>

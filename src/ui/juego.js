@@ -6,8 +6,9 @@
 
   // Toda la paleta vive aquí: cambiar de tema no cuesta nada.
   const PALETAS = {
-    clara:  { fondo: '#ffffff', llano: '#f3f1e8', roca: '#4a4a42', agua: '#b9cfdc', bosque: '#c5d3b0', tinta: '#111111', mineral: '#586a45', raro: '#7d5aa6', niebla: [196, 194, 184], velo: 150, yo: '#4f6b82', rival: '#b06a36', bien: '#586a45', mal: '#b0362f' },
-    oscura: { fondo: '#16170f', llano: '#26271c', roca: '#5b5c50', agua: '#22343f', bosque: '#34412a', tinta: '#e8e4d6', mineral: '#8fa676', raro: '#b08ad6', niebla: [6, 6, 4],       velo: 140, yo: '#6f93b0', rival: '#d0854a', bien: '#8fa676', mal: '#d0554a' },
+    // Grises para todo lo que es interfaz y terreno; el color queda para bandos y recursos.
+    clara:  { fondo: '#ededed', llano: '#f5f5f5', roca: '#5a5a5a', agua: '#aebfcc', bosque: '#c6cfbd', tinta: '#1a1a1a', mineral: '#4d7a38', raro: '#7d5aa6', niebla: [178, 178, 178], velo: 150, yo: '#3b6ea5', rival: '#c9622b', bien: '#4d7a38', mal: '#b0362f' },
+    oscura: { fondo: '#1c1c1c', llano: '#2c2c2c', roca: '#666666', agua: '#27353f', bosque: '#343d2f', tinta: '#e6e6e6', mineral: '#8fb574', raro: '#b08ad6', niebla: [8, 8, 8],       velo: 140, yo: '#6aa0d8', rival: '#e08a4f', bien: '#8fb574', mal: '#d0554a' },
   };
   const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
 
@@ -27,6 +28,8 @@
     const mini = $('mini'), mctx = mini.getContext('2d'), MS = mini.width;
     let cw = 0, ch = 0, dpr = 1;
     const cam = { x: m.mapa.bases[YO].x, y: m.mapa.bases[YO].y, z: 14 };
+    W.cam = cam;
+    let tecleado = ''; // últimas letras escritas, para el código "god"
     const sel = new Set(), grupos = {}, teclas = new Set(), marcas = [];
     let modo = null; // null | 'colocar' | 'amover'
     let pausa = false, cuadros = 0, nieblaVista = -1;
@@ -254,7 +257,8 @@
     for (const tipo in UNID) boton($('bUnid'), tipo, UNID[tipo], false);
 
     function actualizarBarra() {
-      $('rMin').textContent = Math.floor(J.minerales);
+      $('rMin').textContent = J.dios ? '∞' : Math.floor(J.minerales);
+      $('dios').hidden = !J.dios;
       const e = $('rEne'); e.textContent = J.prod + ' / ' + J.uso; e.className = J.uso > J.prod ? 'mal' : '';
       for (const o of botones) {
         const d = o.d, req = W.tieneReq(m, YO, d.req);
@@ -362,6 +366,10 @@
     window.addEventListener('keydown', (ev) => {
       if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
       teclas.add(ev.code);
+      if (ev.key.length === 1) {
+        tecleado = (tecleado + ev.key.toLowerCase()).slice(-3);
+        if (tecleado === 'god') { W.orden(m, { t: 'dios', j: YO }); tecleado = ''; }
+      }
       if (ev.code.startsWith('Arrow') || ev.code === 'Space') ev.preventDefault();
       const digito = /^Digit([1-9])$/.exec(ev.code);
       if (digito) {

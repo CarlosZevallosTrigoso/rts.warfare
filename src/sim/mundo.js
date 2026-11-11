@@ -10,7 +10,7 @@
 
   function nuevoJugador() {
     return {
-      minerales: ECON.inicio, prod: 0, uso: 0, cuenta: {}, vivo: true,
+      minerales: ECON.inicio, prod: 0, uso: 0, cuenta: {}, vivo: true, dios: false,
       edif: null, // { tipo, prog, listo }
       colas: { inf: { lista: [], prog: 0 }, veh: { lista: [], prog: 0 } },
       alerta: null, cosechado: 0, bajas: 0, producidas: 0,
@@ -115,6 +115,7 @@
       J.cuenta[e.tipo] = (J.cuenta[e.tipo] || 0) + 1;
       if (e.edif) { const en = EDIF[e.tipo].energia; if (en > 0) J.prod += en; else J.uso -= en; }
     }
+    for (let j = 0; j < 2; j++) { const J = m.jug[j]; if (J.dios) { J.minerales = 999999; if (J.prod < J.uso) J.prod = J.uso; } }
   }
 
   // ---------- comandos ----------
@@ -148,6 +149,10 @@
     const J = m.jug[cmd.j];
     if (!J || !J.vivo) return;
     switch (cmd.t) {
+      case 'dios': // modo GOD: recursos infinitos; al apagarlo vuelve el saldo anterior
+        J.dios = !J.dios;
+        if (J.dios) J.antesDios = J.minerales; else J.minerales = J.antesDios;
+        return;
       case 'construir': {
         const d = EDIF[cmd.tipo];
         if (!d || cmd.tipo === 'patio' || J.edif || !W.tieneReq(m, cmd.j, d.req) || J.minerales < d.costo) return;

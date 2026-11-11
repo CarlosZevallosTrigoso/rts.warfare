@@ -25,6 +25,7 @@
   function buscarSitio(m, j, tipo, patio) {
     const N = m.N, t = EDIF[tipo].tam, rival = m.mapa.bases[1 - j];
     let mejor = null, mp = Infinity;
+    const cerca = tipo !== 'refineria' ? [] : m.minas.filter((c) => Math.abs((c % N) - patio.cx) < 60 && Math.abs(((c / N) | 0) - patio.cy) < 60);
     for (let dy = -14; dy <= 14; dy++) for (let dx = -14; dx <= 14; dx++) {
       const x = Math.floor(patio.cx) + dx, y = Math.floor(patio.cy) + dy;
       if (x < 1 || y < 1 || x + t >= N || y + t >= N) continue;
@@ -36,7 +37,7 @@
       let p = Math.hypot(cx - patio.cx, cy - patio.cy);
       if (tipo === 'refineria') {
         let dm = 40;
-        for (let k = 0; k < m.minas.length; k++) { const c = m.minas[k]; const d = Math.hypot((c % N) + 0.5 - cx, ((c / N) | 0) + 0.5 - cy); if (d < dm) dm = d; }
+        for (let k = 0; k < cerca.length; k++) { const c = cerca[k]; const d = Math.hypot((c % N) + 0.5 - cx, ((c / N) | 0) + 0.5 - cy); if (d < dm) dm = d; }
         p = p * 0.3 + dm * 2;
       } else if (tipo === 'torreta') {
         p = p * 0.5 + Math.hypot(cx - rival.x, cy - rival.y) * 0.4;

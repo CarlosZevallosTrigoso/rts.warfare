@@ -14,7 +14,7 @@
     };
   };
 
-  W.N = 128; // lado del mapa en celdas
+  W.N = 512; // lado del mapa en celdas (la cantidad de recursos se escala sola)
   W.TPS = 20; // ticks de simulación por segundo
   W.TERRENO = { LLANO: 0, ROCA: 1, AGUA: 2, BOSQUE: 3 };
 

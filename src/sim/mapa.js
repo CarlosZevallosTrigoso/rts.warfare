@@ -17,11 +17,12 @@
         return (a + (b - a) * tx) * (1 - ty) + (c + (d - c) * tx) * ty;
       };
     }
-    const e1 = capa(20), e2 = capa(8), b1 = capa(11);
+    const K = N / 128, AREA = K * K; // factores de escala respecto del mapa base de 128
+    const e0 = capa(64), e1 = capa(20), e2 = capa(8), b1 = capa(11), b0 = capa(40);
     const crudoE = new Float32Array(NN), crudoB = new Float32Array(NN);
     for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-      crudoE[y * N + x] = e1(x, y) * 0.7 + e2(x, y) * 0.3;
-      crudoB[y * N + x] = b1(x, y);
+      crudoE[y * N + x] = e0(x, y) * 0.4 + e1(x, y) * 0.42 + e2(x, y) * 0.18;
+      crudoB[y * N + x] = b1(x, y) * 0.6 + b0(x, y) * 0.4;
     }
     // Sumar cada celda con su espejo vuelve simétrico el ruido sin costura.
     const elev = new Float32Array(NN), bosq = new Float32Array(NN);
@@ -32,7 +33,8 @@
     const terreno = new Uint8Array(NN);
     for (let i = 0; i < NN; i++) terreno[i] = elev[i] > uRoca ? T.ROCA : elev[i] < uAgua ? T.AGUA : bosq[i] > uBosq ? T.BOSQUE : T.LLANO;
 
-    const A = { x: 14, y: N - 15 }, B = { x: N - 1 - 14, y: 14 };
+    const O = Math.round(14 + (K - 1) * 4); // distancia de la base a la esquina
+    const A = { x: O, y: N - 1 - O }, B = { x: N - 1 - O, y: O };
     const bases = [A, B];
     const dBase = (x, y) => Math.min(Math.hypot(x - A.x, y - A.y), Math.hypot(x - B.x, y - B.y));
     for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (dBase(x, y) <= 11) terreno[y * N + x] = T.LLANO;
@@ -92,13 +94,13 @@
       if (!llanoLibre(x, y)) continue;
       campo(x, y, 3.6, 1, 450); anota(centros, x, y); break;
     }
-    for (let k = 0, n = 0; k < 600 && n < 5; k++) { // campos disputados
+    for (let k = 0, n = 0; k < 900 * AREA && n < Math.round(4 * AREA); k++) { // campos disputados
       const x = 4 + Math.floor(r() * (N - 8)), y = 4 + Math.floor(r() * (N - 8));
       if (!llanoLibre(x, y) || dBase(x, y) < 24 || !lejos(x, y, centros, 16)) continue;
       campo(x, y, 3 + r() * 2, 1, 450); anota(centros, x, y); n++;
     }
     const mitad = (N - 1) / 2;
-    for (let k = 0, n = 0; k < 600 && n < 2; k++) { // vetas raras, hacia el centro
+    for (let k = 0, n = 0; k < 600 * K && n < Math.round(2 * K); k++) { // vetas raras, hacia el centro
       const ang = r() * Math.PI * 2, d = r() * N * 0.24;
       const x = Math.round(mitad + Math.cos(ang) * d), y = Math.round(mitad + Math.sin(ang) * d);
       if (!llanoLibre(x, y) || !lejos(x, y, centros, 8)) continue;
@@ -118,12 +120,12 @@
       if (!sitioValido(x, y)) continue;
       sitio('petroleo', x, y); break;
     }
-    for (let k = 0, n = 0; k < 600 && n < 3; k++) {
+    for (let k = 0, n = 0; k < 600 * AREA && n < Math.round(1.5 * AREA); k++) {
       const x = 4 + Math.floor(r() * (N - 8)), y = 4 + Math.floor(r() * (N - 8));
       if (!sitioValido(x, y) || dBase(x, y) < 26) continue;
       sitio('petroleo', x, y); n++;
     }
-    for (let k = 0, n = 0; k < 600 && n < 2; k++) {
+    for (let k = 0, n = 0; k < 600 * K && n < Math.round(2 * K); k++) {
       const ang = r() * Math.PI * 2, d = r() * N * 0.3;
       const x = Math.round(mitad + Math.cos(ang) * d), y = Math.round(mitad + Math.sin(ang) * d);
       if (!sitioValido(x, y)) continue;
