@@ -30,7 +30,7 @@
 
     // Devuelve la lista de celdas desde (x0,y0) hasta la primera cuyo centro
     // quede a `radio` o menos de (mx,my); [] si ya está ahí; null si no hay paso.
-    // kh: factor de la estimación (1 normal; 0,7 cuando hay caminos, para que el cálculo los encuentre y los prefiera).
+    // kh: factor de la estimación (1 normal; 0,62 cuando hay caminos, para que el cálculo los encuentre y los prefiera).
     return function (paso, terreno, x0, y0, mx, my, radio, kh) {
       kh = kh || 1;
       gen++; hI.length = 0; hF.length = 0;
@@ -53,7 +53,7 @@
           const n = ny * N + nx;
           if (!paso[n] || cerrado[n] === gen) continue;
           if (d >= 4 && (!paso[cy * N + nx] || !paso[ny * N + cx])) continue;
-          const ng = g[c] + (d >= 4 ? 1.4142 : 1) * (terreno[n] === 3 ? 1.7 : terreno[n] === 4 ? 0.7 : 1);
+          const ng = g[c] + (d >= 4 ? 1.4142 : 1) * (terreno[n] === 3 ? 1.7 : terreno[n] === 4 ? 0.62 : 1);
           if (visto[n] !== gen || ng < g[n]) { visto[n] = gen; g[n] = ng; padre[n] = c; mete(n, ng + h(nx, ny)); }
         }
       }

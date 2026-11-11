@@ -29,7 +29,7 @@
     const mapa = W.generarMapa(semilla, op.N), N = mapa.N, NN = N * N;
     const m = {
       N, semilla, mapa, t: 0, ents: [], porId: new Map(), sigId: 1,
-      ocup: new Int32Array(NN), paso: new Uint8Array(NN), pasoV: new Uint8Array(NN), hayCaminos: false, terrenoV: 0, carrilX: new Float32Array(NN), carrilY: new Float32Array(NN), caminos: [], // carrilX/Y: por cada celda de camino, el punto del carril que le toca (0 = ninguno); // caminos: el recorrido de cada trazado [x0, y0, x1, y1…], para dibujarlo como un carril
+      ocup: new Int32Array(NN), paso: new Uint8Array(NN), pasoV: new Uint8Array(NN), hayCaminos: false, terrenoV: 0, carrilX: new Float32Array(NN), carrilY: new Float32Array(NN), tramoEn: new Int32Array(NN), // carrilX/Y: por cada celda de camino, el punto del carril que le toca (0 = ninguno); tramoEn: el tramo dueño de la celda
       jug: [nuevoJugador(op.inicio), nuevoJugador(op.inicio)],
       niebla: [new Uint8Array(NN), new Uint8Array(NN)],
       cola: [], colaRutas: [], efectos: [], proy: [], barridos: [], trincheras: new Map(), focos: [[], []], sigFoco: 1, sigMision: 1, minas: [], raros: [], ganador: -1, embarques: [],
@@ -67,6 +67,33 @@
     for (let dy = 0; dy < d.tam; dy++) for (let dx = 0; dx < d.tam; dx++) { const i = (y + dy) * N + x + dx; m.ocup[i] = e.id; m.paso[i] = 0; m.pasoV[i] = 0; }
     m.ents.push(e); m.porId.set(e.id, e);
     return e;
+  }
+  // Un tramo de camino: infraestructura con vida propia. Guarda su recorrido (pts), las celdas que abrió y lo que había antes en ellas.
+  // No ocupa celdas ni estorba: es una entidad para poder seleccionarla, atacarla, repararla y demolerla.
+  function crearTramo(m, j, x, y) {
+    const d = EDIF.camino;
+    const e = { id: m.sigId++, j, tipo: 'camino', edif: true, infra: true, x: x - 0.5, y: y - 0.5, tam: 1, cx: x, cy: y, vida: d.vida, vidaMax: d.vida, recarga: 0, obj: 0, reunion: null, acum: 0, nace: m.t, cola: [], pago: [], prog: 0, sinAgua: false, sinFondos: false, bucle: false, angT: 0, pts: [x, y], largo: 0, celdas: [], antes: [] };
+    m.ents.push(e); m.porId.set(e.id, e);
+    return e;
+  }
+  // Tramo destruido o demolido: sus celdas vuelven a ser lo que eran (el bosque se cierra otra vez a los vehículos).
+  function quitarTramo(m, e) {
+    const terr = m.mapa.terreno; let cerrado = false;
+    for (let k = 0; k < e.celdas.length; k++) {
+      const c = e.celdas[k];
+      if (m.tramoEn[c] !== e.id) continue;
+      m.tramoEn[c] = 0; m.carrilX[c] = 0; m.carrilY[c] = 0; terr[c] = e.antes[k];
+      if (e.antes[k] === T.BOSQUE) { m.pasoV[c] = 0; cerrado = true; }
+    }
+    m.terrenoV++;
+    if (!cerrado) return;
+    for (const u of m.ents) { // el vehículo que estaba encima sale al claro más cercano
+      if (u.edif || u.vida <= 0 || UNID[u.tipo].cat !== 'veh' || UNID[u.tipo].aire || u.orden === 'trazar') continue;
+      const c = Math.floor(u.y) * m.N + Math.floor(u.x);
+      if (m.pasoV[c] || !m.paso[c]) continue;
+      const l = W.cercaLibre(m, u.x, u.y, true); u.x = (l % m.N) + 0.5; u.y = ((l / m.N) | 0) + 0.5; u.ruta = null; u.v = 0;
+      if (u.meta) pedirRuta(m, u, u.meta.x, u.meta.y, u.meta.radio);
+    }
   }
   // ---------- efectos de las mejoras ----------
   const bonoVida = (J, tipo) => (UNID[tipo].cat === 'inf' ? (J.mejoras.chalecos ? 1.3 : 1) : UNID[tipo].cat === 'veh' && J.mejoras.reactivo ? 1.25 : 1);
@@ -341,7 +368,7 @@
         for (const u of propias(m, cmd)) {
           if (!UNID[u.tipo].traza) continue;
           if (cmd.enc && u.orden === 'trazar') { if (u.trazas.length < 12) u.trazas.push({ x: cmd.x, y: cmd.y }); continue; }
-          limpiar(u); u.obj = 0; u.trazas = []; u.trazo = m.caminos.push([u.x, u.y]) - 1; u.orden = 'trazar'; u.dest = { x: cmd.x, y: cmd.y }; u.ruta = null; u.guardia = false;
+          limpiar(u); u.obj = 0; u.trazas = []; u.tramo = 0; u.tramoFin = null; u.orden = 'trazar'; u.dest = { x: cmd.x, y: cmd.y }; u.ruta = null; u.guardia = false;
           pedirRuta(m, u, cmd.x, cmd.y, 0);
         }
         return;
@@ -595,7 +622,7 @@
       if (!u || !u.pend) continue;
       const p = u.pend; u.pend = null; n++;
       const paso = pasoDe(m, u);
-      const camino = m.ruta(paso, m.mapa.terreno, Math.floor(u.x), Math.floor(u.y), p.x, p.y, p.radio, m.hayCaminos ? 0.7 : 1);
+      const camino = m.ruta(paso, m.mapa.terreno, Math.floor(u.x), Math.floor(u.y), p.x, p.y, p.radio, m.hayCaminos ? 0.62 : 1);
       if (camino) {
         u.fin = null;
         if (p.radio === 0) { // destino exacto: el último tramo va al punto pedido, no al centro de su celda
@@ -695,7 +722,7 @@
     let mejor = null, md = rango;
     for (let k = 0; k < m.ents.length; k++) {
       const e = m.ents[k];
-      if (e.j === a.j || e.vida <= 0 || !puede(arma, e)) continue;
+      if (e.j === a.j || e.vida <= 0 || e.infra || !puede(arma, e)) continue; // a los caminos no se les dispara por iniciativa propia: solo por orden
       const d = dist(x, y, e);
       if (d > md) continue;
       if (oculta(m, e)) { if (d > ECON.ocultaVe) continue; e.delatada = m.t; } // escondida: solo se la ve de muy cerca
@@ -769,7 +796,7 @@
       if (!J.colmena) { for (const f of focos) soltar(m, f); focos.length = 0; continue; }
       for (const f of focos) { f.victimas = []; f.agresores = []; }
       for (const e of m.ents) { // lo herido hace poco se agrupa por cercanía
-        if (e.j !== j || e.tDano === undefined || m.t - e.tDano > 40 || !e.agresor) continue;
+        if (e.j !== j || e.infra || e.tDano === undefined || m.t - e.tDano > 40 || !e.agresor) continue; // un camino atacado no llama a nadie
         const x = posX(e), y = posY(e);
         let f = focos.find((q) => Math.hypot(q.x - x, q.y - y) < 7);
         if (!f) { f = { id: m.sigFoco++, x, y, radio: 8, resp: [], victimas: [], agresores: [], visto: m.t }; focos.push(f); }
@@ -948,6 +975,9 @@
       if (x < 0 || y < 0 || x >= N || y >= N || (terr[c] !== T.LLANO && terr[c] !== T.BOSQUE) || m.ocup[c] || m.mapa.mineral[c] || m.mapa.sitioEn[c]) continue;
       const precio = terr[c] === T.BOSQUE ? ECON.caminoBosque : ECON.caminoLlano;
       if (J.minerales < precio) { u.orden = 'nada'; u.ruta = null; u.trazas = []; m.efectos.push({ tipo: 'sinCamino', x1: u.x, y1: u.y, j: u.j, t: m.t }); return; }
+      let tr = u.tramo ? m.porId.get(u.tramo) : null; // el tramo en curso; si no hay (o ya mide lo suyo), empieza otro
+      if (!tr || tr.vida <= 0) { const f = u.tramoFin, sigue = f && Math.hypot(f.x - u.x, f.y - u.y) < 3.5; tr = crearTramo(m, u.j, sigue ? f.x : u.x, sigue ? f.y : u.y); u.tramo = tr.id; } // empieza donde acabó el anterior, para que el carril no se corte
+      tr.celdas.push(c); tr.antes.push(terr[c]); m.tramoEn[c] = tr.id;
       J.minerales -= precio; terr[c] = T.CAMINO; m.paso[c] = 1; m.pasoV[c] = 1; m.hayCaminos = true; m.terrenoV++;
     }
     if (m.carrilX) for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) { // a cada celda de camino le toca el punto del carril más cercano a su centro
@@ -957,8 +987,18 @@
       if (!px || Math.hypot(u.x - x - 0.5, u.y - y - 0.5) < Math.hypot(px - x - 0.5, py - y - 0.5)) { m.carrilX[c] = u.x; m.carrilY[c] = u.y; }
     }
     if (u.fallo) { u.fallo = false; u.orden = 'nada'; u.trazas = []; m.efectos.push({ tipo: 'sinCamino', x1: u.x, y1: u.y, j: u.j, t: m.t, corte: true }); return; }
-    const tr = m.caminos[u.trazo]; // el carril: se apunta el recorrido cada poco
-    if (tr && Math.hypot(u.x - tr[tr.length - 2], u.y - tr[tr.length - 1]) > 0.35) { tr.push(u.x, u.y); m.terrenoV++; }
+    { // el carril: el tramo apunta el recorrido cada poco, mientras la excavadora pisa celdas suyas; al llegar a su largo se cierra y el siguiente empieza donde acaba
+      const tr = u.tramo ? m.porId.get(u.tramo) : null;
+      if (tr && tr.vida > 0) {
+        const p = tr.pts, d = Math.hypot(u.x - p[p.length - 2], u.y - p[p.length - 1]);
+        if (m.tramoEn[Math.floor(u.y) * N + Math.floor(u.x)] !== tr.id) { if (p.length >= 4) { u.tramo = 0; u.tramoFin = { x: p[p.length - 2], y: p[p.length - 1] }; } } // va sobre un camino que ya existía: no se dibuja dos veces
+        else if (d > 0.35) {
+          p.push(u.x, u.y); tr.largo += d;
+          const q = (p.length >> 2) << 1; tr.cx = p[q]; tr.cy = p[q + 1]; tr.x = tr.cx - 0.5; tr.y = tr.cy - 0.5; // su centro: el punto medio del recorrido
+          if (tr.largo >= ECON.tramoLargo) { u.tramo = 0; u.tramoFin = { x: u.x, y: u.y }; }
+        }
+      } else u.tramo = 0;
+    }
     if (avanzar(m, u) || (!u.ruta && !u.pend)) {
       const sig = u.trazas.shift();
       if (sig) { u.dest = sig; pedirRuta(m, u, sig.x, sig.y, 0); } else u.orden = 'nada';
@@ -1455,6 +1495,7 @@
       if (e.vida > 0) continue;
       muertos = true; m.porId.delete(e.id);
       if (e.desplegado) continue; // el patio móvil no muere: se ha convertido en patio
+      if (e.infra) { quitarTramo(m, e); m.efectos.push({ tipo: e.vendido ? 'venta' : 'muerte', x2: e.cx, y2: e.cy, edif: true, tam: 1, clase: 'camino', ang: 0, j: e.j, t: m.t }); continue; }
       m.jug[e.j].bajas++;
       if (!e.edif && e.pasajeros.length) { // del transporte destruido sale la mitad de su carga
         const vivos = e.pasajeros.filter((p, i) => i % 2 === 0);

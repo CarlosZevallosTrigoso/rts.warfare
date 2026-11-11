@@ -125,7 +125,7 @@
       return;
     }
     for (const e of m.ents) { // objetivo: el patio rival más cercano; si no queda ninguno, el edificio rival más cercano
-      if (e.j === j || !e.edif) continue;
+      if (e.j === j || !e.edif || e.infra) continue;
       const d = Math.hypot(e.cx - patio.cx, e.cy - patio.cy) - (e.tipo === 'patio' ? 10000 : 0);
       if (d < dObj) { dObj = d; objetivo = e; }
     }
@@ -248,7 +248,7 @@
         let blanco = null, mb = Infinity;
         if (casa && (u.tipo === 'bombardero' || u.tipo === 'helicoptero') && u.fuel >= d.fuel * 0.9) {
           for (const e of m.ents) {
-            if (e.j === j || e.vida <= 0 || (!e.edif && (u.tipo === 'bombardero' || UNID[e.tipo].aire)) || !W.puedeAtacar(u, e)) continue;
+            if (e.j === j || e.vida <= 0 || e.infra || (!e.edif && (u.tipo === 'bombardero' || UNID[e.tipo].aire)) || !W.puedeAtacar(u, e)) continue;
             const ex = e.edif ? e.cx : e.x, ey = e.edif ? e.cy : e.y, dd = Math.hypot(ex - casa.cx, ey - casa.cy);
             if (dd < d.radioVuelo - 3 && dd < mb && m.niebla[j][Math.floor(ey) * m.N + Math.floor(ex)] >= (e.edif ? 1 : 2)) { mb = dd; blanco = e; }
           }

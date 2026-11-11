@@ -138,6 +138,13 @@
       let mejor = null, md = Infinity;
       for (const e of m.ents) {
         if (!veo(e)) continue;
+        if (e.infra) { // un tramo de camino: se acierta sobre su carril, y cede ante cualquier unidad
+          if (md <= 40) continue;
+          const p = e.pts; let dm = Math.hypot(wx - p[0], wy - p[1]);
+          for (let k = 0; k + 3 < p.length; k += 2) { const bx = p[k + 2] - p[k], by = p[k + 3] - p[k + 1], q = Math.max(0, Math.min(1, ((wx - p[k]) * bx + (wy - p[k + 1]) * by) / (bx * bx + by * by || 1))); dm = Math.min(dm, Math.hypot(wx - p[k] - bx * q, wy - p[k + 1] - by * q)); }
+          if (dm < 0.55 + (holgura || 0)) { mejor = e; md = 40; }
+          continue;
+        }
         if (e.edif) { if (wx >= e.x && wx < e.x + e.tam && wy >= e.y - (cam.z >= 8 ? ALTO[e.tipo] : 0) && wy < e.y + e.tam && md > 50) { mejor = e; md = 50; } } // el tejado sobresale por arriba
         else { const d = Math.hypot(e.x - wx, e.y - wy); if (d < UNID[e.tipo].radio + 0.3 + (holgura || 0) && d < md) { mejor = e; md = d; } }
       }
@@ -146,7 +153,7 @@
     const unidadesSel = () => { const out = []; for (const id of sel) { const e = m.porId.get(id); if (e && !e.edif) out.push(e); } return out; };
     const esquinaColocar = (tipo) => { const t = EDIF[tipo].tam; return { x: Math.round(aMundoX(raton.x) - t / 2), y: Math.round(aMundoY(raton.y) - t / 2) }; };
 
-    const NOMBRE_TERRENO = ['Llano', 'Roca · no se puede pasar', 'Agua · no se puede pasar', 'Bosque · cubre y esconde a la infantería; los vehículos no pasan', 'Camino · los vehículos van más rápido'];
+    const NOMBRE_TERRENO = ['Llano', 'Roca · no se puede pasar', 'Agua · no se puede pasar', 'Bosque · cubre y esconde a la infantería; los vehículos no pasan', 'Camino · los vehículos van mucho más rápido'];
     const sitioPorCelda = new Map(m.mapa.sitios.map((s) => [s.y * N + s.x, s.tipo]));
     // Lo que el terreno (o la trinchera) le da o le quita a una unidad, en texto.
     const pct = (k) => Math.round(Math.abs(1 - k) * 100) + ' %';
@@ -256,18 +263,21 @@
         ctx.fillStyle = COL.rocaLuz; ctx.fill(luz);
         ctx.fillStyle = COL.copa; ctx.fill(copas);
       }
-      if (m.caminos && m.caminos.length) { // caminos: un carril continuo por donde pasó la excavadora, con su borde
+      const tramos = m.ents.filter((e) => e.infra); // caminos: cada tramo es una pieza de infraestructura, dibujada como un carril continuo con su borde
+      if (tramos.length) {
+        const linea = (p) => { ctx.moveTo(ox + p[0] * z, oy + p[1] * z); if (p.length < 4) ctx.lineTo(ox + p[0] * z + 0.01, oy + p[1] * z); for (let k = 2; k < p.length; k += 2) ctx.lineTo(ox + p[k] * z, oy + p[k + 1] * z); };
         ctx.lineCap = 'round'; ctx.lineJoin = 'round';
         for (const [ancho, color] of [[1.0, COL.caminoBorde], [0.78, P.camino]]) {
           ctx.strokeStyle = color; ctx.lineWidth = Math.max(1.5, z * ancho); ctx.beginPath();
-          for (const tr of m.caminos) { if (tr.length < 4) continue; ctx.moveTo(ox + tr[0] * z, oy + tr[1] * z); for (let k = 2; k < tr.length; k += 2) ctx.lineTo(ox + tr[k] * z, oy + tr[k + 1] * z); }
+          for (const e of tramos) linea(e.pts);
           ctx.stroke();
         }
         if (z >= 16) { // rodadas, como las que dejan los vehículos
           ctx.strokeStyle = COL.caminoBorde; ctx.lineWidth = Math.max(1, z * 0.05); ctx.globalAlpha = 0.55;
           for (const lado of [-0.2, 0.2]) {
             ctx.beginPath();
-            for (const tr of m.caminos) {
+            for (const e of tramos) {
+              const tr = e.pts;
               for (let k = 0; k + 3 < tr.length; k += 2) {
                 const dx = tr[k + 2] - tr[k], dy = tr[k + 3] - tr[k + 1], L = Math.hypot(dx, dy) || 1, nx = (-dy / L) * lado, ny = (dx / L) * lado;
                 if (k === 0) ctx.moveTo(ox + (tr[k] + nx) * z, oy + (tr[k + 1] + ny) * z);
@@ -277,6 +287,16 @@
             ctx.stroke();
           }
           ctx.globalAlpha = 1;
+        }
+        for (const e of tramos) { // el tramo dañado se oscurece; el seleccionado se marca, con su barra de vida
+          const dano = 1 - e.vida / e.vidaMax, elegido = sel.has(e.id);
+          if (dano > 0.02) { ctx.strokeStyle = 'rgba(40,30,20,' + (0.15 + dano * 0.5).toFixed(2) + ')'; ctx.lineWidth = Math.max(1.5, z * 0.78); ctx.lineCap = 'butt'; ctx.beginPath(); linea(e.pts); ctx.stroke(); ctx.lineCap = 'round'; }
+          if (elegido) { ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.beginPath(); linea(e.pts); ctx.stroke(); ctx.setLineDash([]); }
+          if (elegido || dano > 0.02) {
+            const bx = ox + e.cx * z, by = oy + e.cy * z - z * 0.75, w = Math.max(14, z * 1.2);
+            ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(bx - w / 2, by, w, 3);
+            ctx.fillStyle = dano > 0.6 ? P.mal : e.j === YO ? P.yo : P.rival; ctx.fillRect(bx - w / 2, by, w * (1 - dano), 3);
+          }
         }
         ctx.lineCap = 'butt'; ctx.lineJoin = 'miter';
       }
@@ -406,7 +426,7 @@
       const descargando = new Set();
       for (const e of m.ents) if (!e.edif && e.est === 'descargar') descargando.add(e.ref);
       for (const e of m.ents) {
-        if (!e.edif || !veo(e) || fuera(e.cx, e.cy) && fuera(e.x, e.y)) continue;
+        if (!e.edif || e.infra || !veo(e) || fuera(e.cx, e.cy) && fuera(e.x, e.y)) continue;
         const px = ox + e.x * z, py = oy + e.y * z, t = e.tam * z, Je = m.jug[e.j];
         const est = { tiempo, id: e.id, vida: e.vida / e.vidaMax, deficit: Je.uso > Je.prod, activo: false, descarga: descargando.has(e.id), ang: 0, retro: 0 };
         if (e.tipo === 'patio') est.activo = Je.obras.some((o) => !o.listo);
@@ -761,15 +781,15 @@
       mctx.fillStyle = P.tinta; // yacimientos y campos: cuadro pequeño
       for (const s of m.mapa.sitios) if (f[s.y * N + s.x]) mctx.fillRect(s.x * k - 1, s.y * k - 1, 3, 3);
       for (const e of m.ents) {
-        if (!veo(e)) continue;
+        if (e.infra || !veo(e)) continue;
         mctx.fillStyle = e.j === YO ? P.yo : P.rival;
         if (e.edif) mctx.fillRect(e.x * k, e.y * k, Math.max(3, e.tam * k), Math.max(3, e.tam * k)); else mctx.fillRect(e.x * k - 1, e.y * k - 1, 2.5, 2.5);
       }
       mctx.imageSmoothingEnabled = true;
       mctx.drawImage(cNie, 0, 0, MS, MS);
-      if (m.caminos && m.caminos.length) { // caminos, en el minimapa: una línea fina
+      { // caminos, en el minimapa: una línea fina
         mctx.strokeStyle = P.camino; mctx.lineWidth = 1.5; mctx.beginPath();
-        for (const tr of m.caminos) { if (tr.length < 4) continue; mctx.moveTo(tr[0] * k, tr[1] * k); for (let q = 2; q < tr.length; q += 2) mctx.lineTo(tr[q] * k, tr[q + 1] * k); }
+        for (const e of m.ents) { if (!e.infra) continue; const tr = e.pts; mctx.moveTo(tr[0] * k, tr[1] * k); for (let q = 2; q < tr.length; q += 2) mctx.lineTo(tr[q] * k, tr[q + 1] * k); }
         mctx.stroke();
       }
       for (const p of m.puestos) { // puestos: rombo del color de su dueño
@@ -828,6 +848,7 @@
         } else if (d.tipo === 'muerte') {
           if (d.edif && d.clase === 'patio' && d.j === YO && m.ganador < 0) aviso('¡Has perdido un patio!');
           else if (d.edif && d.clase === 'patio' && m.ganador < 0) aviso('Patio enemigo destruido');
+          else if (d.clase === 'camino' && d.j === YO) aviso('Te han cortado un camino');
           if (!enVista) continue;
           if (d.edif) {
             for (let k = 0; k < d.tam * 2; k++) estallido(d.x2 + (azar() - 0.5) * d.tam * 0.8, d.y2 + (azar() - 0.5) * d.tam * 0.8, 2);
@@ -871,7 +892,7 @@
       if (J.producidas > oido.producidas) son.unidadLista();
       oido.producidas = J.producidas;
       let edificios = 0;
-      for (const tipo in EDIF) edificios += J.cuenta[tipo] || 0;
+      for (const tipo in EDIF) if (!EDIF[tipo].infra) edificios += J.cuenta[tipo] || 0;
       if (edificios > oido.edificios && oido.edificios) son.colocar();
       oido.edificios = edificios;
       if (J.alerta && J.alerta.t > oido.alerta + 300) { oido.alerta = J.alerta.t; if (cerca(J.alerta.x, J.alerta.y) === 0) son.alerta(); }
@@ -897,6 +918,7 @@
           c.restore(); css += '.i-' + tipo + '{background-image:url(' + lz.toDataURL() + ')}';
         }
         for (const tipo in EDIF) {
+          if (EDIF[tipo].infra) continue;
           c.clearRect(0, 0, 120, 52); c.save();
           W.fichaEdificio(c, { tipo, id: 1, j: YO }, 38, 4, 44, 2, COL.yo, { tiempo: 0, id: 1, vida: 1, deficit: false, activo: true, descarga: 0, ang: -0.6, retro: 0 });
           c.restore(); css += '.i-' + tipo + '{background-image:url(' + lz.toDataURL() + ')}';
@@ -1229,7 +1251,7 @@
       cont.appendChild(b);
       botones.push({ b, tipo, d, esEdif, c: b.querySelector('.c'), k: b.querySelector('.k') });
     }
-    for (const tipo in EDIF) if (tipo !== 'patio') boton($('bEdif'), tipo, EDIF[tipo], true);
+    for (const tipo in EDIF) if (tipo !== 'patio' && !EDIF[tipo].infra) boton($('bEdif'), tipo, EDIF[tipo], true);
     for (const tipo in UNID) boton($('bUnid'), tipo, UNID[tipo], false);
 
     function actualizarBarra() {

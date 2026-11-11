@@ -1025,8 +1025,9 @@ prueba('carril: los vehículos entran al camino y lo siguen por el centro', () =
   W.orden(m, { t: 'trazar', j: 0, ids: [ex.id], x: 80.5, y: 70.5 }); // un camino en diagonal tendida, como el de la captura
   W.tick(m); for (let i = 0; i < 6000 && ex.orden === 'trazar'; i++) W.tick(m);
   assert.ok(ex.orden !== 'trazar' && Math.hypot(ex.x - 80.5, ex.y - 70.5) < 1.5, 'la excavadora debía terminar el camino');
-  const tr = m.caminos[m.caminos.length - 1];
-  const alCarril = (x, y) => { let mejor = 1e9; for (let k = 0; k + 3 < tr.length; k += 2) { const ax = tr[k], ay = tr[k + 1], bx = tr[k + 2] - ax, by = tr[k + 3] - ay, q = Math.max(0, Math.min(1, ((x - ax) * bx + (y - ay) * by) / (bx * bx + by * by || 1))); mejor = Math.min(mejor, Math.hypot(x - ax - bx * q, y - ay - by * q)); } return mejor; };
+  const tramos = m.ents.filter((e) => e.infra);
+  assert.ok(tramos.length >= 8 && tramos.every((e) => e.pts.length >= 4 && e.celdas.length > 0), 'el camino debía quedar partido en tramos: ' + tramos.length);
+  const alCarril = (x, y) => { let mejor = 1e9; for (const e of tramos) for (let k = 0, tr = e.pts; k + 3 < tr.length; k += 2) { const ax = tr[k], ay = tr[k + 1], bx = tr[k + 2] - ax, by = tr[k + 3] - ay, q = Math.max(0, Math.min(1, ((x - ax) * bx + (y - ay) * by) / (bx * bx + by * by || 1))); mejor = Math.min(mejor, Math.hypot(x - ax - bx * q, y - ay - by * q)); } return mejor; };
   ex.vida = 0; W.tick(m);
   const tq = W.crearUnidad(m, 0, 'tanque', cel(42, 46)); // empieza fuera del camino, a un par de celdas
   W.orden(m, { t: 'mover', j: 0, ids: [tq.id], x: 79.5, y: 72.5 });
@@ -1038,6 +1039,62 @@ prueba('carril: los vehículos entran al camino y lo siguen por el centro', () =
   assert.ok(Math.hypot(tq.x - 79.5, tq.y - 72.5) < 1, 'el tanque debía llegar');
   assert.ok(enCamino > total * 0.75, 'debía hacer casi todo el viaje por el camino: ' + enCamino + ' de ' + total);
   assert.ok(centrado > enCamino * 0.85, 'y por el centro del carril: ' + centrado + ' de ' + enCamino);
+});
+
+prueba('camino como infraestructura: tramos con vida, se destruyen por orden y el bosque se cierra', () => {
+  const m = W.crearMundo(31, { N: 128 }), N = m.N, J = m.jug[0], T = W.TERRENO;
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const cel = (x, y) => y * N + x;
+  const pon = (x, y, t) => { const i = cel(x, y); m.mapa.terreno[i] = t; m.mapa.mineral[i] = 0; m.paso[i] = t === 1 || t === 2 ? 0 : 1; m.pasoV[i] = t === 0 || t === 4 ? 1 : 0; };
+  for (let y = 40; y < 80; y++) for (let x = 30; x < 100; x++) if (!m.ocup[cel(x, y)]) pon(x, y, 0);
+  for (let y = 40; y < 80; y++) for (let x = 56; x < 68; x++) pon(x, y, 3); // franja de bosque de 12 celdas
+  for (let x = 30; x < 100; x++) { pon(x, 39, 1); pon(x, 80, 1); } for (let y = 39; y <= 80; y++) { pon(29, y, 1); pon(100, y, 1); }
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  J.dios = false; J.minerales = 5000; m.jug[1].minerales = 5000;
+  const ex = W.crearUnidad(m, 0, 'excavadora', cel(50, 60));
+  W.orden(m, { t: 'trazar', j: 0, ids: [ex.id], x: 74.5, y: 60.5 }); avanza(2);
+  for (let i = 0; i < 6000 && ex.orden === 'trazar'; i++) W.tick(m);
+  const tramos = () => m.ents.filter((e) => e.infra);
+  const n0 = tramos().length;
+  assert.ok(n0 >= 5 && n0 <= 8, 'unas 24 celdas de camino en tramos de 4: ' + n0);
+  assert.ok(tramos().every((e) => e.j === 0 && e.vida === W.EDIF.camino.vida && !m.ocup[cel(Math.floor(e.cx), Math.floor(e.cy))]), 'los tramos son del que los traza y no ocupan celdas');
+  // un tanque propio cruza por el camino
+  const tq = W.crearUnidad(m, 0, 'tanque', cel(48, 60));
+  W.orden(m, { t: 'mover', j: 0, ids: [tq.id], x: 75.5, y: 60.5 }); avanza(900);
+  assert.ok(tq.x > 73, 'el tanque debía cruzar el bosque por el camino: ' + tq.x.toFixed(1));
+  // el enemigo no dispara a los caminos por su cuenta…
+  const medio = tramos().find((e) => m.mapa.terreno[cel(Math.floor(e.cx), Math.floor(e.cy))] === T.CAMINO && e.cx > 59 && e.cx < 65);
+  assert.ok(medio, 'debía haber un tramo en mitad del bosque');
+  ex.vida = 0; tq.vida = 0; avanza(2);
+  const ene = [0, 1, 2].map((k) => W.crearUnidad(m, 1, 'tanque', cel(70 + k, 56)));
+  avanza(400);
+  assert.ok(tramos().length === n0 && tramos().every((e) => e.vida === e.vidaMax), 'sin orden, nadie toca el camino');
+  assert.ok(ene.every((u) => !u.obj), 'los tanques enemigos no debían fijarse en el camino');
+  // …pero con orden lo destruyen, y ese tramo se cierra otra vez
+  W.orden(m, { t: 'atacar', j: 1, ids: ene.map((u) => u.id), obj: medio.id });
+  for (let i = 0; i < 3000 && medio.vida > 0; i++) W.tick(m);
+  avanza(3);
+  assert.ok(medio.vida <= 0 && tramos().length === n0 - 1, 'el tramo debía caer');
+  assert.ok(medio.celdas.some((c) => m.mapa.terreno[c] === T.BOSQUE && !m.pasoV[c] && m.paso[c]), 'sus celdas vuelven a ser bosque cerrado a los vehículos');
+  assert.ok(medio.celdas.every((c) => !m.tramoEn[c] && !m.carrilX[c]));
+  ene.forEach((u) => { u.vida = 0; }); avanza(2);
+  const tq2 = W.crearUnidad(m, 0, 'tanque', cel(48, 60));
+  W.orden(m, { t: 'mover', j: 0, ids: [tq2.id], x: 75.5, y: 60.5 }); avanza(900);
+  assert.ok(tq2.x < 66, 'con el camino cortado el tanque ya no cruza: ' + tq2.x.toFixed(1));
+  assert.ok(m.mapa.terreno[cel(Math.floor(tq2.x), Math.floor(tq2.y))] !== T.BOSQUE, 'y no se queda dentro del bosque');
+  // la excavadora lo repone trazando otra vez, y demoler un tramo propio devuelve algo
+  const ex2 = W.crearUnidad(m, 0, 'excavadora', cel(50, 62));
+  W.orden(m, { t: 'trazar', j: 0, ids: [ex2.id], x: 74.5, y: 60.5 }); avanza(2);
+  for (let i = 0; i < 6000 && ex2.orden === 'trazar'; i++) W.tick(m);
+  W.orden(m, { t: 'mover', j: 0, ids: [tq2.id], x: 75.5, y: 60.5 }); avanza(900);
+  assert.ok(tq2.x > 73, 'repuesto el tramo, vuelve a cruzar: ' + tq2.x.toFixed(1));
+  const propio = tramos()[0], min0 = J.minerales, nAntes = tramos().length;
+  W.orden(m, { t: 'vender', j: 0, id: propio.id }); avanza(3);
+  assert.ok(tramos().length === nAntes - 1 && J.minerales > min0, 'demoler un tramo lo quita y devuelve parte');
+  // partida guardada con caminos: sigue igual
+  const copia = W.cargar(W.guardar(m)).m;
+  for (let i = 0; i < 200; i++) { W.tick(m); W.tick(copia); }
+  assert.equal(W.huella(copia), W.huella(m), 'con caminos, la partida cargada sigue igual');
 });
 
 prueba('bosque cerrado a los vehículos, excavadora y caminos', () => {

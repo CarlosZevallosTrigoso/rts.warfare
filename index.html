@@ -251,7 +251,7 @@
       <button type="button" class="grupo on" data-f="grupo">grupo</button><button type="button" class="grupo" data-f="linea">línea</button><button type="button" class="grupo" data-f="columna">columna</button>
       <button type="button" class="grupo" data-f="cuna">cuña</button><button type="button" class="grupo" data-f="cuadro">cuadro</button></div></section>
     <div id="sel" class="tenue"></div>
-    <button type="button" id="trazar" class="btn" hidden title="La excavadora va hasta el punto que marques dejando camino. Abre el bosque; por camino los vehículos van más rápido.">Trazar camino</button>
+    <button type="button" id="trazar" class="btn" hidden title="La excavadora va hasta el punto que marques dejando camino. Abre el bosque; por camino los vehículos van mucho más rápido. Cada tramo se puede seleccionar, demoler, reparar con un ingeniero, y el enemigo puede destruirlo.">Trazar camino</button>
     <button type="button" id="descargar" class="btn" hidden></button>
     <button type="button" id="desplegar" class="btn" hidden title="Convierte el patio móvil en un patio, donde está. No se puede replegar.">Desplegar patio</button>
     <button type="button" id="retiro" class="btn" hidden title="Con poca vida, la unidad se va sola a reparar y luego vuelve a su puesto."></button>
@@ -276,11 +276,11 @@
   <div><h2>Semilla del mapa</h2><input id="op-s" inputmode="numeric" placeholder="al azar" autocomplete="off"></div>
   <button type="button" id="empezar">Empezar</button>
   <button type="button" id="continuar" hidden>Continuar la partida guardada</button>
-  <div id="version">versión 43</div>
+  <div id="version">versión 44</div>
 </div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 43' };
+globalThis.W = { VERSION: 'versión 44' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -320,6 +320,8 @@ globalThis.W = { VERSION: 'versión 43' };
     aerodromo: { nombre: 'Aeródromo', tam: 3, vida: 900,  costo: 1600, pet: 150, tiempo: 500, energia: -40, vision: 6, req: ['fabrica'], nivel: 2 },
     antiaerea: { nombre: 'Antiaérea', tam: 1, vida: 500,  costo: 600,  tiempo: 300, energia: -20, vision: 9, req: ['cuartel'], arma: 'flak', nivel: 2, giroT: 0.28 },
     estacion:  { nombre: 'Estación',  tam: 2, vida: 500,  costo: 900,  tiempo: 400, energia: -30, vision: 7, req: ['cuartel'], sobre: 'conocimiento', libre: true, da: { rec: 'info', cada: 20 } },
+    // Infraestructura: cada tramo de camino. No se construye desde el patio (lo deja la excavadora), no ocupa celdas y no se ataca solo: hay que ordenarlo.
+    camino:    { nombre: 'Camino', infra: true, tam: 1, vida: 320, costo: 24, tiempo: 1, energia: 0, vision: 0, req: [] },
   };
 
   // Frente: una unidad dispara solo hacia donde apunta. giroT: tiene torreta y gira así de rápido (rad por tick) sin mover el casco;
@@ -415,7 +417,7 @@ globalThis.W = { VERSION: 'versión 43' };
     cartografia: { nombre: 'Cartografía', info: 200, nivel: 3, que: 'Revela el terreno de todo el mapa.' },
   };
 
-  W.ECON = { inicio: 2500, petInicio: 150, cosecha: 5, descarga: 25, colaMax: 9, separacionColocar: 3, goteoCada: 5, vistaInicial: 22, obrasMax: 8, curaUnidad: 0.01, curaEdificio: 0.0025, curaCosto: 0.15, venta: 0.5, trinchera: 0.45, arco: 0.14, arcoTrinchera: 1.05, visAd: 1.3, visLado: 0.75, visAt: 0.3, cono: 1.05, periferia: 1.83, flanco: 1.25, espalda: 1.5, bosqueVeh: 0.6, bosqueCubre: 0.7, reposta: 12, retiroBajo: 0.3, retiroAlto: 0.9, huida: 300, dia: 9600, diaLuz: 6000, nocheVis: 0.7, caminoVel: 1.3, trazaVel: 0.45, caminoLlano: 4, caminoBosque: 12, mandoCada: 40, mandoGiro: 1.5, captura: 600, capturaRadio: 2, antenaRadio: 12, depositoCada: 8, tallerRadio: 4, ocultaVe: 2.5, chatarra: 0.25, reparaRadio: 8, reparaVeh: 0.5, reparaEdif: 0.8, rangos: [2, 5, 10], rangoDano: 0.1, rangoVida: 0.1, cupoAviones: 5, pasada: 7, orbita: 3.5, fuelCae: 80, cavar: 80, aplasta: 10, bonoProd: 0.5, bonoMax: 2.5 };
+  W.ECON = { inicio: 2500, petInicio: 150, cosecha: 5, descarga: 25, colaMax: 9, separacionColocar: 3, goteoCada: 5, vistaInicial: 22, obrasMax: 8, curaUnidad: 0.01, curaEdificio: 0.0025, curaCosto: 0.15, venta: 0.5, trinchera: 0.45, arco: 0.14, arcoTrinchera: 1.05, visAd: 1.3, visLado: 0.75, visAt: 0.3, cono: 1.05, periferia: 1.83, flanco: 1.25, espalda: 1.5, bosqueVeh: 0.6, bosqueCubre: 0.7, reposta: 12, retiroBajo: 0.3, retiroAlto: 0.9, huida: 300, dia: 9600, diaLuz: 6000, nocheVis: 0.7, caminoVel: 1.6, tramoLargo: 4, trazaVel: 0.45, caminoLlano: 4, caminoBosque: 12, mandoCada: 40, mandoGiro: 1.5, captura: 600, capturaRadio: 2, antenaRadio: 12, depositoCada: 8, tallerRadio: 4, ocultaVe: 2.5, chatarra: 0.25, reparaRadio: 8, reparaVeh: 0.5, reparaEdif: 0.8, rangos: [2, 5, 10], rangoDano: 0.1, rangoVida: 0.1, cupoAviones: 5, pasada: 7, orbita: 3.5, fuelCae: 80, cavar: 80, aplasta: 10, bonoProd: 0.5, bonoMax: 2.5 };
 })();
 
 // ===== sim/mapa.js =====
@@ -653,7 +655,7 @@ globalThis.W = { VERSION: 'versión 43' };
 
     // Devuelve la lista de celdas desde (x0,y0) hasta la primera cuyo centro
     // quede a `radio` o menos de (mx,my); [] si ya está ahí; null si no hay paso.
-    // kh: factor de la estimación (1 normal; 0,7 cuando hay caminos, para que el cálculo los encuentre y los prefiera).
+    // kh: factor de la estimación (1 normal; 0,62 cuando hay caminos, para que el cálculo los encuentre y los prefiera).
     return function (paso, terreno, x0, y0, mx, my, radio, kh) {
       kh = kh || 1;
       gen++; hI.length = 0; hF.length = 0;
@@ -676,7 +678,7 @@ globalThis.W = { VERSION: 'versión 43' };
           const n = ny * N + nx;
           if (!paso[n] || cerrado[n] === gen) continue;
           if (d >= 4 && (!paso[cy * N + nx] || !paso[ny * N + cx])) continue;
-          const ng = g[c] + (d >= 4 ? 1.4142 : 1) * (terreno[n] === 3 ? 1.7 : terreno[n] === 4 ? 0.7 : 1);
+          const ng = g[c] + (d >= 4 ? 1.4142 : 1) * (terreno[n] === 3 ? 1.7 : terreno[n] === 4 ? 0.62 : 1);
           if (visto[n] !== gen || ng < g[n]) { visto[n] = gen; g[n] = ng; padre[n] = c; mete(n, ng + h(nx, ny)); }
         }
       }
@@ -717,7 +719,7 @@ globalThis.W = { VERSION: 'versión 43' };
     const mapa = W.generarMapa(semilla, op.N), N = mapa.N, NN = N * N;
     const m = {
       N, semilla, mapa, t: 0, ents: [], porId: new Map(), sigId: 1,
-      ocup: new Int32Array(NN), paso: new Uint8Array(NN), pasoV: new Uint8Array(NN), hayCaminos: false, terrenoV: 0, carrilX: new Float32Array(NN), carrilY: new Float32Array(NN), caminos: [], // carrilX/Y: por cada celda de camino, el punto del carril que le toca (0 = ninguno); // caminos: el recorrido de cada trazado [x0, y0, x1, y1…], para dibujarlo como un carril
+      ocup: new Int32Array(NN), paso: new Uint8Array(NN), pasoV: new Uint8Array(NN), hayCaminos: false, terrenoV: 0, carrilX: new Float32Array(NN), carrilY: new Float32Array(NN), tramoEn: new Int32Array(NN), // carrilX/Y: por cada celda de camino, el punto del carril que le toca (0 = ninguno); tramoEn: el tramo dueño de la celda
       jug: [nuevoJugador(op.inicio), nuevoJugador(op.inicio)],
       niebla: [new Uint8Array(NN), new Uint8Array(NN)],
       cola: [], colaRutas: [], efectos: [], proy: [], barridos: [], trincheras: new Map(), focos: [[], []], sigFoco: 1, sigMision: 1, minas: [], raros: [], ganador: -1, embarques: [],
@@ -755,6 +757,33 @@ globalThis.W = { VERSION: 'versión 43' };
     for (let dy = 0; dy < d.tam; dy++) for (let dx = 0; dx < d.tam; dx++) { const i = (y + dy) * N + x + dx; m.ocup[i] = e.id; m.paso[i] = 0; m.pasoV[i] = 0; }
     m.ents.push(e); m.porId.set(e.id, e);
     return e;
+  }
+  // Un tramo de camino: infraestructura con vida propia. Guarda su recorrido (pts), las celdas que abrió y lo que había antes en ellas.
+  // No ocupa celdas ni estorba: es una entidad para poder seleccionarla, atacarla, repararla y demolerla.
+  function crearTramo(m, j, x, y) {
+    const d = EDIF.camino;
+    const e = { id: m.sigId++, j, tipo: 'camino', edif: true, infra: true, x: x - 0.5, y: y - 0.5, tam: 1, cx: x, cy: y, vida: d.vida, vidaMax: d.vida, recarga: 0, obj: 0, reunion: null, acum: 0, nace: m.t, cola: [], pago: [], prog: 0, sinAgua: false, sinFondos: false, bucle: false, angT: 0, pts: [x, y], largo: 0, celdas: [], antes: [] };
+    m.ents.push(e); m.porId.set(e.id, e);
+    return e;
+  }
+  // Tramo destruido o demolido: sus celdas vuelven a ser lo que eran (el bosque se cierra otra vez a los vehículos).
+  function quitarTramo(m, e) {
+    const terr = m.mapa.terreno; let cerrado = false;
+    for (let k = 0; k < e.celdas.length; k++) {
+      const c = e.celdas[k];
+      if (m.tramoEn[c] !== e.id) continue;
+      m.tramoEn[c] = 0; m.carrilX[c] = 0; m.carrilY[c] = 0; terr[c] = e.antes[k];
+      if (e.antes[k] === T.BOSQUE) { m.pasoV[c] = 0; cerrado = true; }
+    }
+    m.terrenoV++;
+    if (!cerrado) return;
+    for (const u of m.ents) { // el vehículo que estaba encima sale al claro más cercano
+      if (u.edif || u.vida <= 0 || UNID[u.tipo].cat !== 'veh' || UNID[u.tipo].aire || u.orden === 'trazar') continue;
+      const c = Math.floor(u.y) * m.N + Math.floor(u.x);
+      if (m.pasoV[c] || !m.paso[c]) continue;
+      const l = W.cercaLibre(m, u.x, u.y, true); u.x = (l % m.N) + 0.5; u.y = ((l / m.N) | 0) + 0.5; u.ruta = null; u.v = 0;
+      if (u.meta) pedirRuta(m, u, u.meta.x, u.meta.y, u.meta.radio);
+    }
   }
   // ---------- efectos de las mejoras ----------
   const bonoVida = (J, tipo) => (UNID[tipo].cat === 'inf' ? (J.mejoras.chalecos ? 1.3 : 1) : UNID[tipo].cat === 'veh' && J.mejoras.reactivo ? 1.25 : 1);
@@ -1029,7 +1058,7 @@ globalThis.W = { VERSION: 'versión 43' };
         for (const u of propias(m, cmd)) {
           if (!UNID[u.tipo].traza) continue;
           if (cmd.enc && u.orden === 'trazar') { if (u.trazas.length < 12) u.trazas.push({ x: cmd.x, y: cmd.y }); continue; }
-          limpiar(u); u.obj = 0; u.trazas = []; u.trazo = m.caminos.push([u.x, u.y]) - 1; u.orden = 'trazar'; u.dest = { x: cmd.x, y: cmd.y }; u.ruta = null; u.guardia = false;
+          limpiar(u); u.obj = 0; u.trazas = []; u.tramo = 0; u.tramoFin = null; u.orden = 'trazar'; u.dest = { x: cmd.x, y: cmd.y }; u.ruta = null; u.guardia = false;
           pedirRuta(m, u, cmd.x, cmd.y, 0);
         }
         return;
@@ -1283,7 +1312,7 @@ globalThis.W = { VERSION: 'versión 43' };
       if (!u || !u.pend) continue;
       const p = u.pend; u.pend = null; n++;
       const paso = pasoDe(m, u);
-      const camino = m.ruta(paso, m.mapa.terreno, Math.floor(u.x), Math.floor(u.y), p.x, p.y, p.radio, m.hayCaminos ? 0.7 : 1);
+      const camino = m.ruta(paso, m.mapa.terreno, Math.floor(u.x), Math.floor(u.y), p.x, p.y, p.radio, m.hayCaminos ? 0.62 : 1);
       if (camino) {
         u.fin = null;
         if (p.radio === 0) { // destino exacto: el último tramo va al punto pedido, no al centro de su celda
@@ -1383,7 +1412,7 @@ globalThis.W = { VERSION: 'versión 43' };
     let mejor = null, md = rango;
     for (let k = 0; k < m.ents.length; k++) {
       const e = m.ents[k];
-      if (e.j === a.j || e.vida <= 0 || !puede(arma, e)) continue;
+      if (e.j === a.j || e.vida <= 0 || e.infra || !puede(arma, e)) continue; // a los caminos no se les dispara por iniciativa propia: solo por orden
       const d = dist(x, y, e);
       if (d > md) continue;
       if (oculta(m, e)) { if (d > ECON.ocultaVe) continue; e.delatada = m.t; } // escondida: solo se la ve de muy cerca
@@ -1457,7 +1486,7 @@ globalThis.W = { VERSION: 'versión 43' };
       if (!J.colmena) { for (const f of focos) soltar(m, f); focos.length = 0; continue; }
       for (const f of focos) { f.victimas = []; f.agresores = []; }
       for (const e of m.ents) { // lo herido hace poco se agrupa por cercanía
-        if (e.j !== j || e.tDano === undefined || m.t - e.tDano > 40 || !e.agresor) continue;
+        if (e.j !== j || e.infra || e.tDano === undefined || m.t - e.tDano > 40 || !e.agresor) continue; // un camino atacado no llama a nadie
         const x = posX(e), y = posY(e);
         let f = focos.find((q) => Math.hypot(q.x - x, q.y - y) < 7);
         if (!f) { f = { id: m.sigFoco++, x, y, radio: 8, resp: [], victimas: [], agresores: [], visto: m.t }; focos.push(f); }
@@ -1636,6 +1665,9 @@ globalThis.W = { VERSION: 'versión 43' };
       if (x < 0 || y < 0 || x >= N || y >= N || (terr[c] !== T.LLANO && terr[c] !== T.BOSQUE) || m.ocup[c] || m.mapa.mineral[c] || m.mapa.sitioEn[c]) continue;
       const precio = terr[c] === T.BOSQUE ? ECON.caminoBosque : ECON.caminoLlano;
       if (J.minerales < precio) { u.orden = 'nada'; u.ruta = null; u.trazas = []; m.efectos.push({ tipo: 'sinCamino', x1: u.x, y1: u.y, j: u.j, t: m.t }); return; }
+      let tr = u.tramo ? m.porId.get(u.tramo) : null; // el tramo en curso; si no hay (o ya mide lo suyo), empieza otro
+      if (!tr || tr.vida <= 0) { const f = u.tramoFin, sigue = f && Math.hypot(f.x - u.x, f.y - u.y) < 3.5; tr = crearTramo(m, u.j, sigue ? f.x : u.x, sigue ? f.y : u.y); u.tramo = tr.id; } // empieza donde acabó el anterior, para que el carril no se corte
+      tr.celdas.push(c); tr.antes.push(terr[c]); m.tramoEn[c] = tr.id;
       J.minerales -= precio; terr[c] = T.CAMINO; m.paso[c] = 1; m.pasoV[c] = 1; m.hayCaminos = true; m.terrenoV++;
     }
     if (m.carrilX) for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) { // a cada celda de camino le toca el punto del carril más cercano a su centro
@@ -1645,8 +1677,18 @@ globalThis.W = { VERSION: 'versión 43' };
       if (!px || Math.hypot(u.x - x - 0.5, u.y - y - 0.5) < Math.hypot(px - x - 0.5, py - y - 0.5)) { m.carrilX[c] = u.x; m.carrilY[c] = u.y; }
     }
     if (u.fallo) { u.fallo = false; u.orden = 'nada'; u.trazas = []; m.efectos.push({ tipo: 'sinCamino', x1: u.x, y1: u.y, j: u.j, t: m.t, corte: true }); return; }
-    const tr = m.caminos[u.trazo]; // el carril: se apunta el recorrido cada poco
-    if (tr && Math.hypot(u.x - tr[tr.length - 2], u.y - tr[tr.length - 1]) > 0.35) { tr.push(u.x, u.y); m.terrenoV++; }
+    { // el carril: el tramo apunta el recorrido cada poco, mientras la excavadora pisa celdas suyas; al llegar a su largo se cierra y el siguiente empieza donde acaba
+      const tr = u.tramo ? m.porId.get(u.tramo) : null;
+      if (tr && tr.vida > 0) {
+        const p = tr.pts, d = Math.hypot(u.x - p[p.length - 2], u.y - p[p.length - 1]);
+        if (m.tramoEn[Math.floor(u.y) * N + Math.floor(u.x)] !== tr.id) { if (p.length >= 4) { u.tramo = 0; u.tramoFin = { x: p[p.length - 2], y: p[p.length - 1] }; } } // va sobre un camino que ya existía: no se dibuja dos veces
+        else if (d > 0.35) {
+          p.push(u.x, u.y); tr.largo += d;
+          const q = (p.length >> 2) << 1; tr.cx = p[q]; tr.cy = p[q + 1]; tr.x = tr.cx - 0.5; tr.y = tr.cy - 0.5; // su centro: el punto medio del recorrido
+          if (tr.largo >= ECON.tramoLargo) { u.tramo = 0; u.tramoFin = { x: u.x, y: u.y }; }
+        }
+      } else u.tramo = 0;
+    }
     if (avanzar(m, u) || (!u.ruta && !u.pend)) {
       const sig = u.trazas.shift();
       if (sig) { u.dest = sig; pedirRuta(m, u, sig.x, sig.y, 0); } else u.orden = 'nada';
@@ -2143,6 +2185,7 @@ globalThis.W = { VERSION: 'versión 43' };
       if (e.vida > 0) continue;
       muertos = true; m.porId.delete(e.id);
       if (e.desplegado) continue; // el patio móvil no muere: se ha convertido en patio
+      if (e.infra) { quitarTramo(m, e); m.efectos.push({ tipo: e.vendido ? 'venta' : 'muerte', x2: e.cx, y2: e.cy, edif: true, tam: 1, clase: 'camino', ang: 0, j: e.j, t: m.t }); continue; }
       m.jug[e.j].bajas++;
       if (!e.edif && e.pasajeros.length) { // del transporte destruido sale la mitad de su carga
         const vivos = e.pasajeros.filter((p, i) => i % 2 === 0);
@@ -2323,7 +2366,7 @@ globalThis.W = { VERSION: 'versión 43' };
       return;
     }
     for (const e of m.ents) { // objetivo: el patio rival más cercano; si no queda ninguno, el edificio rival más cercano
-      if (e.j === j || !e.edif) continue;
+      if (e.j === j || !e.edif || e.infra) continue;
       const d = Math.hypot(e.cx - patio.cx, e.cy - patio.cy) - (e.tipo === 'patio' ? 10000 : 0);
       if (d < dObj) { dObj = d; objetivo = e; }
     }
@@ -2446,7 +2489,7 @@ globalThis.W = { VERSION: 'versión 43' };
         let blanco = null, mb = Infinity;
         if (casa && (u.tipo === 'bombardero' || u.tipo === 'helicoptero') && u.fuel >= d.fuel * 0.9) {
           for (const e of m.ents) {
-            if (e.j === j || e.vida <= 0 || (!e.edif && (u.tipo === 'bombardero' || UNID[e.tipo].aire)) || !W.puedeAtacar(u, e)) continue;
+            if (e.j === j || e.vida <= 0 || e.infra || (!e.edif && (u.tipo === 'bombardero' || UNID[e.tipo].aire)) || !W.puedeAtacar(u, e)) continue;
             const ex = e.edif ? e.cx : e.x, ey = e.edif ? e.cy : e.y, dd = Math.hypot(ex - casa.cx, ey - casa.cy);
             if (dd < d.radioVuelo - 3 && dd < mb && m.niebla[j][Math.floor(ey) * m.N + Math.floor(ex)] >= (e.edif ? 1 : 2)) { mb = dd; blanco = e; }
           }
@@ -3301,6 +3344,13 @@ globalThis.W = { VERSION: 'versión 43' };
       let mejor = null, md = Infinity;
       for (const e of m.ents) {
         if (!veo(e)) continue;
+        if (e.infra) { // un tramo de camino: se acierta sobre su carril, y cede ante cualquier unidad
+          if (md <= 40) continue;
+          const p = e.pts; let dm = Math.hypot(wx - p[0], wy - p[1]);
+          for (let k = 0; k + 3 < p.length; k += 2) { const bx = p[k + 2] - p[k], by = p[k + 3] - p[k + 1], q = Math.max(0, Math.min(1, ((wx - p[k]) * bx + (wy - p[k + 1]) * by) / (bx * bx + by * by || 1))); dm = Math.min(dm, Math.hypot(wx - p[k] - bx * q, wy - p[k + 1] - by * q)); }
+          if (dm < 0.55 + (holgura || 0)) { mejor = e; md = 40; }
+          continue;
+        }
         if (e.edif) { if (wx >= e.x && wx < e.x + e.tam && wy >= e.y - (cam.z >= 8 ? ALTO[e.tipo] : 0) && wy < e.y + e.tam && md > 50) { mejor = e; md = 50; } } // el tejado sobresale por arriba
         else { const d = Math.hypot(e.x - wx, e.y - wy); if (d < UNID[e.tipo].radio + 0.3 + (holgura || 0) && d < md) { mejor = e; md = d; } }
       }
@@ -3309,7 +3359,7 @@ globalThis.W = { VERSION: 'versión 43' };
     const unidadesSel = () => { const out = []; for (const id of sel) { const e = m.porId.get(id); if (e && !e.edif) out.push(e); } return out; };
     const esquinaColocar = (tipo) => { const t = EDIF[tipo].tam; return { x: Math.round(aMundoX(raton.x) - t / 2), y: Math.round(aMundoY(raton.y) - t / 2) }; };
 
-    const NOMBRE_TERRENO = ['Llano', 'Roca · no se puede pasar', 'Agua · no se puede pasar', 'Bosque · cubre y esconde a la infantería; los vehículos no pasan', 'Camino · los vehículos van más rápido'];
+    const NOMBRE_TERRENO = ['Llano', 'Roca · no se puede pasar', 'Agua · no se puede pasar', 'Bosque · cubre y esconde a la infantería; los vehículos no pasan', 'Camino · los vehículos van mucho más rápido'];
     const sitioPorCelda = new Map(m.mapa.sitios.map((s) => [s.y * N + s.x, s.tipo]));
     // Lo que el terreno (o la trinchera) le da o le quita a una unidad, en texto.
     const pct = (k) => Math.round(Math.abs(1 - k) * 100) + ' %';
@@ -3419,18 +3469,21 @@ globalThis.W = { VERSION: 'versión 43' };
         ctx.fillStyle = COL.rocaLuz; ctx.fill(luz);
         ctx.fillStyle = COL.copa; ctx.fill(copas);
       }
-      if (m.caminos && m.caminos.length) { // caminos: un carril continuo por donde pasó la excavadora, con su borde
+      const tramos = m.ents.filter((e) => e.infra); // caminos: cada tramo es una pieza de infraestructura, dibujada como un carril continuo con su borde
+      if (tramos.length) {
+        const linea = (p) => { ctx.moveTo(ox + p[0] * z, oy + p[1] * z); if (p.length < 4) ctx.lineTo(ox + p[0] * z + 0.01, oy + p[1] * z); for (let k = 2; k < p.length; k += 2) ctx.lineTo(ox + p[k] * z, oy + p[k + 1] * z); };
         ctx.lineCap = 'round'; ctx.lineJoin = 'round';
         for (const [ancho, color] of [[1.0, COL.caminoBorde], [0.78, P.camino]]) {
           ctx.strokeStyle = color; ctx.lineWidth = Math.max(1.5, z * ancho); ctx.beginPath();
-          for (const tr of m.caminos) { if (tr.length < 4) continue; ctx.moveTo(ox + tr[0] * z, oy + tr[1] * z); for (let k = 2; k < tr.length; k += 2) ctx.lineTo(ox + tr[k] * z, oy + tr[k + 1] * z); }
+          for (const e of tramos) linea(e.pts);
           ctx.stroke();
         }
         if (z >= 16) { // rodadas, como las que dejan los vehículos
           ctx.strokeStyle = COL.caminoBorde; ctx.lineWidth = Math.max(1, z * 0.05); ctx.globalAlpha = 0.55;
           for (const lado of [-0.2, 0.2]) {
             ctx.beginPath();
-            for (const tr of m.caminos) {
+            for (const e of tramos) {
+              const tr = e.pts;
               for (let k = 0; k + 3 < tr.length; k += 2) {
                 const dx = tr[k + 2] - tr[k], dy = tr[k + 3] - tr[k + 1], L = Math.hypot(dx, dy) || 1, nx = (-dy / L) * lado, ny = (dx / L) * lado;
                 if (k === 0) ctx.moveTo(ox + (tr[k] + nx) * z, oy + (tr[k + 1] + ny) * z);
@@ -3440,6 +3493,16 @@ globalThis.W = { VERSION: 'versión 43' };
             ctx.stroke();
           }
           ctx.globalAlpha = 1;
+        }
+        for (const e of tramos) { // el tramo dañado se oscurece; el seleccionado se marca, con su barra de vida
+          const dano = 1 - e.vida / e.vidaMax, elegido = sel.has(e.id);
+          if (dano > 0.02) { ctx.strokeStyle = 'rgba(40,30,20,' + (0.15 + dano * 0.5).toFixed(2) + ')'; ctx.lineWidth = Math.max(1.5, z * 0.78); ctx.lineCap = 'butt'; ctx.beginPath(); linea(e.pts); ctx.stroke(); ctx.lineCap = 'round'; }
+          if (elegido) { ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.beginPath(); linea(e.pts); ctx.stroke(); ctx.setLineDash([]); }
+          if (elegido || dano > 0.02) {
+            const bx = ox + e.cx * z, by = oy + e.cy * z - z * 0.75, w = Math.max(14, z * 1.2);
+            ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(bx - w / 2, by, w, 3);
+            ctx.fillStyle = dano > 0.6 ? P.mal : e.j === YO ? P.yo : P.rival; ctx.fillRect(bx - w / 2, by, w * (1 - dano), 3);
+          }
         }
         ctx.lineCap = 'butt'; ctx.lineJoin = 'miter';
       }
@@ -3569,7 +3632,7 @@ globalThis.W = { VERSION: 'versión 43' };
       const descargando = new Set();
       for (const e of m.ents) if (!e.edif && e.est === 'descargar') descargando.add(e.ref);
       for (const e of m.ents) {
-        if (!e.edif || !veo(e) || fuera(e.cx, e.cy) && fuera(e.x, e.y)) continue;
+        if (!e.edif || e.infra || !veo(e) || fuera(e.cx, e.cy) && fuera(e.x, e.y)) continue;
         const px = ox + e.x * z, py = oy + e.y * z, t = e.tam * z, Je = m.jug[e.j];
         const est = { tiempo, id: e.id, vida: e.vida / e.vidaMax, deficit: Je.uso > Je.prod, activo: false, descarga: descargando.has(e.id), ang: 0, retro: 0 };
         if (e.tipo === 'patio') est.activo = Je.obras.some((o) => !o.listo);
@@ -3924,15 +3987,15 @@ globalThis.W = { VERSION: 'versión 43' };
       mctx.fillStyle = P.tinta; // yacimientos y campos: cuadro pequeño
       for (const s of m.mapa.sitios) if (f[s.y * N + s.x]) mctx.fillRect(s.x * k - 1, s.y * k - 1, 3, 3);
       for (const e of m.ents) {
-        if (!veo(e)) continue;
+        if (e.infra || !veo(e)) continue;
         mctx.fillStyle = e.j === YO ? P.yo : P.rival;
         if (e.edif) mctx.fillRect(e.x * k, e.y * k, Math.max(3, e.tam * k), Math.max(3, e.tam * k)); else mctx.fillRect(e.x * k - 1, e.y * k - 1, 2.5, 2.5);
       }
       mctx.imageSmoothingEnabled = true;
       mctx.drawImage(cNie, 0, 0, MS, MS);
-      if (m.caminos && m.caminos.length) { // caminos, en el minimapa: una línea fina
+      { // caminos, en el minimapa: una línea fina
         mctx.strokeStyle = P.camino; mctx.lineWidth = 1.5; mctx.beginPath();
-        for (const tr of m.caminos) { if (tr.length < 4) continue; mctx.moveTo(tr[0] * k, tr[1] * k); for (let q = 2; q < tr.length; q += 2) mctx.lineTo(tr[q] * k, tr[q + 1] * k); }
+        for (const e of m.ents) { if (!e.infra) continue; const tr = e.pts; mctx.moveTo(tr[0] * k, tr[1] * k); for (let q = 2; q < tr.length; q += 2) mctx.lineTo(tr[q] * k, tr[q + 1] * k); }
         mctx.stroke();
       }
       for (const p of m.puestos) { // puestos: rombo del color de su dueño
@@ -3991,6 +4054,7 @@ globalThis.W = { VERSION: 'versión 43' };
         } else if (d.tipo === 'muerte') {
           if (d.edif && d.clase === 'patio' && d.j === YO && m.ganador < 0) aviso('¡Has perdido un patio!');
           else if (d.edif && d.clase === 'patio' && m.ganador < 0) aviso('Patio enemigo destruido');
+          else if (d.clase === 'camino' && d.j === YO) aviso('Te han cortado un camino');
           if (!enVista) continue;
           if (d.edif) {
             for (let k = 0; k < d.tam * 2; k++) estallido(d.x2 + (azar() - 0.5) * d.tam * 0.8, d.y2 + (azar() - 0.5) * d.tam * 0.8, 2);
@@ -4034,7 +4098,7 @@ globalThis.W = { VERSION: 'versión 43' };
       if (J.producidas > oido.producidas) son.unidadLista();
       oido.producidas = J.producidas;
       let edificios = 0;
-      for (const tipo in EDIF) edificios += J.cuenta[tipo] || 0;
+      for (const tipo in EDIF) if (!EDIF[tipo].infra) edificios += J.cuenta[tipo] || 0;
       if (edificios > oido.edificios && oido.edificios) son.colocar();
       oido.edificios = edificios;
       if (J.alerta && J.alerta.t > oido.alerta + 300) { oido.alerta = J.alerta.t; if (cerca(J.alerta.x, J.alerta.y) === 0) son.alerta(); }
@@ -4060,6 +4124,7 @@ globalThis.W = { VERSION: 'versión 43' };
           c.restore(); css += '.i-' + tipo + '{background-image:url(' + lz.toDataURL() + ')}';
         }
         for (const tipo in EDIF) {
+          if (EDIF[tipo].infra) continue;
           c.clearRect(0, 0, 120, 52); c.save();
           W.fichaEdificio(c, { tipo, id: 1, j: YO }, 38, 4, 44, 2, COL.yo, { tiempo: 0, id: 1, vida: 1, deficit: false, activo: true, descarga: 0, ang: -0.6, retro: 0 });
           c.restore(); css += '.i-' + tipo + '{background-image:url(' + lz.toDataURL() + ')}';
@@ -4392,7 +4457,7 @@ globalThis.W = { VERSION: 'versión 43' };
       cont.appendChild(b);
       botones.push({ b, tipo, d, esEdif, c: b.querySelector('.c'), k: b.querySelector('.k') });
     }
-    for (const tipo in EDIF) if (tipo !== 'patio') boton($('bEdif'), tipo, EDIF[tipo], true);
+    for (const tipo in EDIF) if (tipo !== 'patio' && !EDIF[tipo].infra) boton($('bEdif'), tipo, EDIF[tipo], true);
     for (const tipo in UNID) boton($('bUnid'), tipo, UNID[tipo], false);
 
     function actualizarBarra() {
