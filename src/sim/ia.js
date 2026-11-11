@@ -115,9 +115,10 @@
     }
     if (soldados.length < 40 && !urgente) {
       // Vehículo: pesado si hay nivel y raros; una artillería por cada cuatro tanques; si no, tanque.
-      const c = J.cuenta, enFabrica = J.colas.tanque.n + J.colas.artilleria.n + J.colas.pesado.n;
-      let veh = 'tanque';
-      if (J.nivel >= 3 && (c.pesado || 0) < 5 && W.puedePagar(J, UNID.pesado)) veh = 'pesado';
+      const c = J.cuenta, enFabrica = J.colas.tanque.n + J.colas.artilleria.n + J.colas.pesado.n + J.colas.blindado.n + J.colas.antiaereoMovil.n;
+      let veh = (c.blindado || 0) < 2 && (c.tanque || 0) < 2 ? 'blindado' : 'tanque'; // un par de blindados ligeros para empezar
+      if (J.nivel >= 2 && (c.antiaereoMovil || 0) < 1 + Math.floor(((c.tanque || 0) + (c.pesado || 0)) / 8)) veh = 'antiaereoMovil'; // escolta antiaérea para las columnas
+      else if (J.nivel >= 3 && (c.pesado || 0) < 5 && W.puedePagar(J, UNID.pesado)) veh = 'pesado';
       else if (J.nivel >= 2 && (c.artilleria || 0) * 4 < (c.tanque || 0)) veh = 'artilleria';
       if (c.fabrica && !enFabrica && dinero >= UNID[veh].costo && W.puedePagar(J, UNID[veh])) { W.orden(m, { t: 'entrenar', j, tipo: veh }); dinero -= UNID[veh].costo; }
       // Aviación: hasta tres cazas y, con nivel 3, dos bombarderos; uno a la vez y sin vaciar la caja.

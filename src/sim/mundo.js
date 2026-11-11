@@ -424,7 +424,7 @@
         return;
       }
       case 'patrulla': // va y vuelve entre puntos, atacando lo que encuentre; con enc se añade otro punto
-        destinos(m, propias(m, cmd).filter((u) => UNID[u.tipo].arma), cmd.x, cmd.y, (u, x, y) => {
+        destinos(m, propias(m, cmd).filter((u) => u.tipo !== 'cosechadora'), cmd.x, cmd.y, (u, x, y) => {
           if (cmd.enc && u.patrulla) { if (u.patrulla.pts.length < 12) u.patrulla.pts.push({ x, y }); return; }
           limpiar(u); u.orden = 'nada'; u.obj = 0; u.ruta = null; u.pend = null;
           u.patrulla = UNID[u.tipo].aire ? { pts: [{ x, y }], i: 0 } : { pts: [{ x: u.x, y: u.y }, { x, y }], i: 0 }; // el avión patrulla el punto, no el trayecto
@@ -569,6 +569,8 @@
   const girarHacia = (act, meta, paso) => { const d = difAng(meta, act); return Math.abs(d) <= paso ? meta : act + Math.sign(d) * paso; };
   const COS_CONO = Math.cos(ECON.cono), COS_PERI = Math.cos(ECON.periferia);
   const K_CONO = COS_CONO * Math.abs(COS_CONO), K_PERI = COS_PERI * Math.abs(COS_PERI); // cosenos al cuadrado con signo: comparan sin raíz
+  const CAMPO = {}; // campo de visión de cada tipo de unidad (algunas ven más ancho, o en redondo)
+  for (const t in UNID) { const a = UNID[t].cono || ECON.cono, c = Math.cos(a); CAMPO[t] = { todo: a >= Math.PI, cos: c, k: c * Math.abs(c) }; }
   // ¿Ve la unidad a ese enemigo? Cerca, en todas direcciones; lejos, solo dentro del cono frontal.
   function veDir(m, a, e, d) {
     const v = UNID[a.tipo].vision;
@@ -577,8 +579,9 @@
     if (q && Math.abs(difAng(Math.atan2(dy, dx), q.ang)) > ECON.arcoTrinchera) return false; // desde la trinchera solo se cubre su frente
     if (d <= v * ECON.visAt) return true;
     if (d > v * ECON.visAd) return false;
+    if (CAMPO[a.tipo].todo) return true;
     const c = (dx * Math.cos(a.ang) + dy * Math.sin(a.ang)) / (Math.hypot(dx, dy) || 1); // coseno del ángulo respecto al frente
-    return c >= COS_CONO || (c >= COS_PERI && d <= v * ECON.visLado);
+    return c >= CAMPO[a.tipo].cos || (c >= COS_PERI && d <= v * ECON.visLado);
   }
   // Apunta el arma al blanco y dice si ya puede disparar. Con torreta gira solo la torreta; sin ella, el cuerpo entero
   // (y solo si está quieto: en marcha el cuerpo sigue el camino). Desde una trinchera no se sale de su arco frontal.
@@ -842,6 +845,29 @@
     return true;
   }
 
+  // Ingeniero: cada medio segundo elige el vehículo o edificio propio dañado más cercano; va hasta él y lo repara, gratis
+  // y también en pleno combate. En guardia (fijo) solo repara lo que tiene al alcance de la mano.
+  function tickIngeniero(m, u) {
+    let o = u.arregla ? m.porId.get(u.arregla) : null;
+    if (o && (o.vida <= 0 || o.vida >= o.vidaMax)) { o = null; u.arregla = 0; u.ruta = null; }
+    if (!o && (m.t + u.id) % 10 === 0) {
+      let md = u.guardia ? 1.6 : ECON.reparaRadio;
+      for (const e of m.ents) {
+        if (e.j !== u.j || e.vida >= e.vidaMax || e.vida <= 0 || e.enTierra || (!e.edif && UNID[e.tipo].cat !== 'veh')) continue;
+        const dd = dist(u.x, u.y, e);
+        if (dd < md) { md = dd; o = e; }
+      }
+      if (o) { u.arregla = o.id; u.ruta = null; u.pend = null; }
+    }
+    if (!o) return;
+    if (dist(u.x, u.y, o) <= 1.6) {
+      u.ruta = null; u.v = 0; u.ang = Math.atan2(posY(o) - u.y, posX(o) - u.x);
+      o.vida = Math.min(o.vidaMax, o.vida + (o.edif ? ECON.reparaEdif : ECON.reparaVeh)); o.curando = m.t;
+    } else {
+      if (!u.pend && (!u.ruta || (!o.edif && (m.t + u.id) % 20 === 0))) pedirRuta(m, u, posX(o), posY(o), o.edif ? o.tam / 2 + 1 : 1);
+      avanzar(m, u);
+    }
+  }
   // Retirada automática: la unidad muy dañada se va a reparar al taller más cercano (patio, o cuartel/fábrica según sea)
   // y, ya recuperada, vuelve a su puesto o retoma su patrulla. Cualquier orden directa la anula.
   function retirada(m, u) {
@@ -886,9 +912,15 @@
     }
     if (u.cava > 0) { // cavando: al terminar queda la trinchera en esa celda, para quien la ocupe
       if (u.orden !== 'nada') u.cava = 0;
-      else if (--u.cava <= 0) m.trincheras.set(Math.floor(u.y) * m.N + Math.floor(u.x), { x: Math.floor(u.x) + 0.5, y: Math.floor(u.y) + 0.5, ang: u.ang });
+      else if ((u.cava -= d.cavaRapido ? 2 : 1) <= 0) m.trincheras.set(Math.floor(u.y) * m.N + Math.floor(u.x), { x: Math.floor(u.x) + 0.5, y: Math.floor(u.y) + 0.5, ang: u.ang });
     }
     if (!d.aire && (u.retira || u.retirando)) retirada(m, u);
+    if (!d.arma) { // sin arma: solo se mueve; el ingeniero, además, repara lo que tenga cerca
+      if (u.orden === 'atacar') { u.orden = 'nada'; u.obj = 0; }
+      if (u.orden !== 'nada') { u.arregla = 0; if (avanzar(m, u) || (!u.ruta && !u.pend)) u.orden = 'nada'; return; }
+      if (d.repara) tickIngeniero(m, u);
+      return;
+    }
     const arma = ARMAS[d.arma], alc = alcance(m, u, arma);
     if (u.orden === 'mover') { // cumple la orden sin desviarse, pero dispara a lo que tenga a tiro
       if ((m.t + u.id) % 4 === 0) { const e = buscarEnemigo(m, u, u.x, u.y, alc); u.mira = e ? e.id : 0; }
@@ -1162,15 +1194,15 @@
       }
       // Las unidades ven cerca alrededor y lejos solo en un cono hacia su frente.
       const v = UNID[e.tipo].vision, rc = v * ECON.visAt, rc2 = rc * rc, rs = v * ECON.visLado, rs2 = rs * rs, rl = v * ECON.visAd, rl2 = rl * rl, R = Math.ceil(rl);
-      const ux = Math.cos(e.ang), uy = Math.sin(e.ang);
+      const ux = Math.cos(e.ang), uy = Math.sin(e.ang), campo = CAMPO[e.tipo], kc = campo.k;
       for (let dy = -R; dy <= R; dy++) {
         const y = cy + dy; if (y < 0 || y >= N) continue;
         for (let dx = -R; dx <= R; dx++) {
           const x = cx + dx, d2 = dx * dx + dy * dy;
           if (x < 0 || x >= N || d2 > rl2) continue;
-          if (d2 > rc2) { // fuera del círculo cercano: al frente llega lejos, a los costados menos, detrás nada
+          if (d2 > rc2 && !campo.todo) { // fuera del círculo cercano: al frente llega lejos, a los costados menos, detrás nada
             const p = dx * ux + dy * uy, s = p * Math.abs(p);
-            if (s < K_CONO * d2 && (d2 > rs2 || s < K_PERI * d2)) continue;
+            if (s < kc * d2 && (d2 > rs2 || s < K_PERI * d2)) continue;
           }
           f[y * N + x] = 2;
         }

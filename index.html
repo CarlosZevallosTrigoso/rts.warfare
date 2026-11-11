@@ -128,6 +128,8 @@
       <div>muy dañadas, se retiran solas a reparar (se puede apagar)</div>
       <div>galones: veteranía por bajas, +10 % de daño y vida cada uno</div>
       <div>la artillería tira a lo que vea cualquier unidad propia</div>
+      <div>explorador y dron ven lejos; el ingeniero repara solo;</div>
+      <div>el antiaéreo móvil solo dispara a aviones</div>
       <div><kbd>B</kbd> patio · <kbd>Q</kbd> cuarteles · <kbd>V</kbd> fábricas · <kbd>X</kbd> aeródromos</div>
       <div>clic en la cola, <kbd>×</kbd> o clic derecho en botón: cancelar</div>
       <div><kbd>P</kbd> pausa · <kbd>T</kbd> tema · <kbd>N</kbd> silenciar</div>
@@ -178,11 +180,11 @@
     <button type="button" data-v="normal">normal</button><button type="button" data-v="agresivo">agresivo<small>ataca pronto</small></button></div></div>
   <div><h2>Semilla del mapa</h2><input id="op-s" inputmode="numeric" placeholder="al azar" autocomplete="off"></div>
   <button type="button" id="empezar">Empezar</button>
-  <div id="version">versión 31</div>
+  <div id="version">versión 32</div>
 </div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><p><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 31' };
+globalThis.W = { VERSION: 'versión 32' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -245,8 +247,15 @@ globalThis.W = { VERSION: 'versión 31' };
     // Cada avión tiene su aeródromo (ECON.cupoAviones por aeródromo): sale de él, no se aleja más de radioVuelo celdas y
     // vuelve a aterrizar al acabar su orden o cuando le queda el combustible justo. En tierra reposta y no se le puede atacar
     // (cae con su aeródromo). En patrulla, tras repostar despega y la retoma. Sin combustible ni base, cae.
+    // Fase 1c. cono: medio ángulo del campo central de visión (por defecto ECON.cono; Math.PI = ve en todas direcciones).
+    // repara: arregla sola los vehículos y edificios propios cercanos. cavaRapido: cava trincheras al doble de velocidad.
+    explorador:  { nombre: 'Explorador',  cat: 'inf', vida: 45,  vel: 0.10, costo: 120, tiempo: 80, blindaje: 'ligero', arma: 'pistola', vision: 10, radio: 0.10, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.03, arco: 0.5, cono: 1.4 },
+    ingeniero:   { nombre: 'Ingeniero',   cat: 'inf', vida: 60,  vel: 0.06, costo: 200, tiempo: 160, blindaje: 'ligero', arma: null, vision: 6, radio: 0.11, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, repara: true, cavaRapido: true },
+    blindado:    { nombre: 'Blindado ligero', cat: 'veh', vida: 150, vel: 0.15, costo: 350, pet: 20, tiempo: 180, blindaje: 'pesado', arma: 'ametralladora', vision: 8, radio: 0.17, req: ['fabrica'], agua: 1, giro: 0.2, acel: 0.012, giroT: 0.3 },
+    antiaereoMovil: { nombre: 'Antiaéreo móvil', cat: 'veh', vida: 220, vel: 0.09, costo: 700, pet: 40, tiempo: 300, blindaje: 'pesado', arma: 'flakMovil', vision: 8, radio: 0.20, req: ['fabrica'], agua: 2, giro: 0.12, acel: 0.006, giroT: 0.28, nivel: 2 },
     caza:        { nombre: 'Caza',        cat: 'aire', aire: true, vida: 160, vel: 0.22, costo: 900, pet: 120, tiempo: 360, blindaje: 'aire', arma: 'misil', vision: 9, radio: 0.25, req: ['aerodromo'], agua: 1, giro: 0.16, acel: 0.012, nivel: 2, fuel: 1800, arco: 0.3, radioVuelo: 70 },
     bombardero:  { nombre: 'Bombardero',  cat: 'aire', aire: true, vida: 260, vel: 0.15, costo: 1600, pet: 200, raros: 40, tiempo: 520, blindaje: 'aire', arma: 'bomba', vision: 8, radio: 0.38, req: ['aerodromo'], agua: 2, giro: 0.09, acel: 0.008, nivel: 3, fuel: 2400, radioVuelo: 90 },
+    dron:        { nombre: 'Dron', cat: 'aire', aire: true, vida: 50, vel: 0.16, costo: 250, info: 40, tiempo: 200, blindaje: 'aire', arma: null, vision: 12, radio: 0.14, req: ['aerodromo'], agua: 0, giro: 0.2, acel: 0.01, nivel: 2, fuel: 4200, radioVuelo: 110, cono: Math.PI },
     cosechadora: { nombre: 'Cosechadora', cat: 'veh', vida: 450, vel: 0.07, costo: 900, pet: 30, tiempo: 360, blindaje: 'pesado', arma: null,    vision: 5, radio: 0.25, req: ['fabrica', 'refineria'], carga: 500, agua: 1, giro: 0.1, acel: 0.004 },
   };
 
@@ -263,6 +272,9 @@ globalThis.W = { VERSION: 'versión 31' };
     canonTorre:  { alcance: 8, dano: 75, recarga: 60, vuelo: 1.0, vs: { ligero: 0.5, pesado: 1.2, edificio: 0.6 } },
     bateria: { alcance: 6.5, dano: 30, recarga: 30, vuelo: 1.1, vs: { ligero: 0.8, pesado: 1,    edificio: 0.5, aire: 0.8 } },
     flak:    { alcance: 9,   dano: 34, recarga: 22, vuelo: 1.3, vs: { aire: 1 } },
+    flakMovil: { alcance: 8, dano: 26, recarga: 22, vuelo: 1.3, vs: { aire: 1 } },
+    pistola: { alcance: 3,   dano: 4,  recarga: 18, vs: { ligero: 1,   pesado: 0.1,  edificio: 0.1 } },
+    ametralladora: { alcance: 4.5, dano: 6, recarga: 5, vs: { ligero: 1, pesado: 0.15, edificio: 0.15, aire: 0.25 } },
     misil:   { alcance: 6,   dano: 40, recarga: 45, vuelo: 1.0, vs: { ligero: 0.6, pesado: 0.6, edificio: 0.3, aire: 1.3 } },
     bomba:   { omni: true, alcance: 1.6, area: 1.7, dano: 150, recarga: 90, vuelo: 0.12, vs: { ligero: 1, pesado: 1, edificio: 1.4 } },
   };
@@ -290,7 +302,7 @@ globalThis.W = { VERSION: 'versión 31' };
     cartografia: { nombre: 'Cartografía', info: 200, nivel: 3, que: 'Revela el terreno de todo el mapa.' },
   };
 
-  W.ECON = { inicio: 2500, petInicio: 150, cosecha: 5, descarga: 25, colaMax: 9, separacionColocar: 3, goteoCada: 5, vistaInicial: 22, obrasMax: 8, curaUnidad: 0.01, curaEdificio: 0.0025, curaCosto: 0.15, venta: 0.5, trinchera: 0.45, arco: 0.14, arcoTrinchera: 1.05, visAd: 1.3, visLado: 0.75, visAt: 0.3, cono: 1.05, periferia: 1.83, flanco: 1.25, espalda: 1.5, bosqueVeh: 0.6, bosqueCubre: 0.7, reposta: 12, retiroBajo: 0.3, retiroAlto: 0.9, huida: 300, rangos: [2, 5, 10], rangoDano: 0.1, rangoVida: 0.1, cupoAviones: 5, orbita: 3.5, fuelCae: 80, cavar: 80, aplasta: 10, bonoProd: 0.5, bonoMax: 2.5 };
+  W.ECON = { inicio: 2500, petInicio: 150, cosecha: 5, descarga: 25, colaMax: 9, separacionColocar: 3, goteoCada: 5, vistaInicial: 22, obrasMax: 8, curaUnidad: 0.01, curaEdificio: 0.0025, curaCosto: 0.15, venta: 0.5, trinchera: 0.45, arco: 0.14, arcoTrinchera: 1.05, visAd: 1.3, visLado: 0.75, visAt: 0.3, cono: 1.05, periferia: 1.83, flanco: 1.25, espalda: 1.5, bosqueVeh: 0.6, bosqueCubre: 0.7, reposta: 12, retiroBajo: 0.3, retiroAlto: 0.9, huida: 300, reparaRadio: 8, reparaVeh: 0.5, reparaEdif: 0.8, rangos: [2, 5, 10], rangoDano: 0.1, rangoVida: 0.1, cupoAviones: 5, orbita: 3.5, fuelCae: 80, cavar: 80, aplasta: 10, bonoProd: 0.5, bonoMax: 2.5 };
 })();
 
 // ===== sim/mapa.js =====
@@ -934,7 +946,7 @@ globalThis.W = { VERSION: 'versión 31' };
         return;
       }
       case 'patrulla': // va y vuelve entre puntos, atacando lo que encuentre; con enc se añade otro punto
-        destinos(m, propias(m, cmd).filter((u) => UNID[u.tipo].arma), cmd.x, cmd.y, (u, x, y) => {
+        destinos(m, propias(m, cmd).filter((u) => u.tipo !== 'cosechadora'), cmd.x, cmd.y, (u, x, y) => {
           if (cmd.enc && u.patrulla) { if (u.patrulla.pts.length < 12) u.patrulla.pts.push({ x, y }); return; }
           limpiar(u); u.orden = 'nada'; u.obj = 0; u.ruta = null; u.pend = null;
           u.patrulla = UNID[u.tipo].aire ? { pts: [{ x, y }], i: 0 } : { pts: [{ x: u.x, y: u.y }, { x, y }], i: 0 }; // el avión patrulla el punto, no el trayecto
@@ -1079,6 +1091,8 @@ globalThis.W = { VERSION: 'versión 31' };
   const girarHacia = (act, meta, paso) => { const d = difAng(meta, act); return Math.abs(d) <= paso ? meta : act + Math.sign(d) * paso; };
   const COS_CONO = Math.cos(ECON.cono), COS_PERI = Math.cos(ECON.periferia);
   const K_CONO = COS_CONO * Math.abs(COS_CONO), K_PERI = COS_PERI * Math.abs(COS_PERI); // cosenos al cuadrado con signo: comparan sin raíz
+  const CAMPO = {}; // campo de visión de cada tipo de unidad (algunas ven más ancho, o en redondo)
+  for (const t in UNID) { const a = UNID[t].cono || ECON.cono, c = Math.cos(a); CAMPO[t] = { todo: a >= Math.PI, cos: c, k: c * Math.abs(c) }; }
   // ¿Ve la unidad a ese enemigo? Cerca, en todas direcciones; lejos, solo dentro del cono frontal.
   function veDir(m, a, e, d) {
     const v = UNID[a.tipo].vision;
@@ -1087,8 +1101,9 @@ globalThis.W = { VERSION: 'versión 31' };
     if (q && Math.abs(difAng(Math.atan2(dy, dx), q.ang)) > ECON.arcoTrinchera) return false; // desde la trinchera solo se cubre su frente
     if (d <= v * ECON.visAt) return true;
     if (d > v * ECON.visAd) return false;
+    if (CAMPO[a.tipo].todo) return true;
     const c = (dx * Math.cos(a.ang) + dy * Math.sin(a.ang)) / (Math.hypot(dx, dy) || 1); // coseno del ángulo respecto al frente
-    return c >= COS_CONO || (c >= COS_PERI && d <= v * ECON.visLado);
+    return c >= CAMPO[a.tipo].cos || (c >= COS_PERI && d <= v * ECON.visLado);
   }
   // Apunta el arma al blanco y dice si ya puede disparar. Con torreta gira solo la torreta; sin ella, el cuerpo entero
   // (y solo si está quieto: en marcha el cuerpo sigue el camino). Desde una trinchera no se sale de su arco frontal.
@@ -1352,6 +1367,29 @@ globalThis.W = { VERSION: 'versión 31' };
     return true;
   }
 
+  // Ingeniero: cada medio segundo elige el vehículo o edificio propio dañado más cercano; va hasta él y lo repara, gratis
+  // y también en pleno combate. En guardia (fijo) solo repara lo que tiene al alcance de la mano.
+  function tickIngeniero(m, u) {
+    let o = u.arregla ? m.porId.get(u.arregla) : null;
+    if (o && (o.vida <= 0 || o.vida >= o.vidaMax)) { o = null; u.arregla = 0; u.ruta = null; }
+    if (!o && (m.t + u.id) % 10 === 0) {
+      let md = u.guardia ? 1.6 : ECON.reparaRadio;
+      for (const e of m.ents) {
+        if (e.j !== u.j || e.vida >= e.vidaMax || e.vida <= 0 || e.enTierra || (!e.edif && UNID[e.tipo].cat !== 'veh')) continue;
+        const dd = dist(u.x, u.y, e);
+        if (dd < md) { md = dd; o = e; }
+      }
+      if (o) { u.arregla = o.id; u.ruta = null; u.pend = null; }
+    }
+    if (!o) return;
+    if (dist(u.x, u.y, o) <= 1.6) {
+      u.ruta = null; u.v = 0; u.ang = Math.atan2(posY(o) - u.y, posX(o) - u.x);
+      o.vida = Math.min(o.vidaMax, o.vida + (o.edif ? ECON.reparaEdif : ECON.reparaVeh)); o.curando = m.t;
+    } else {
+      if (!u.pend && (!u.ruta || (!o.edif && (m.t + u.id) % 20 === 0))) pedirRuta(m, u, posX(o), posY(o), o.edif ? o.tam / 2 + 1 : 1);
+      avanzar(m, u);
+    }
+  }
   // Retirada automática: la unidad muy dañada se va a reparar al taller más cercano (patio, o cuartel/fábrica según sea)
   // y, ya recuperada, vuelve a su puesto o retoma su patrulla. Cualquier orden directa la anula.
   function retirada(m, u) {
@@ -1396,9 +1434,15 @@ globalThis.W = { VERSION: 'versión 31' };
     }
     if (u.cava > 0) { // cavando: al terminar queda la trinchera en esa celda, para quien la ocupe
       if (u.orden !== 'nada') u.cava = 0;
-      else if (--u.cava <= 0) m.trincheras.set(Math.floor(u.y) * m.N + Math.floor(u.x), { x: Math.floor(u.x) + 0.5, y: Math.floor(u.y) + 0.5, ang: u.ang });
+      else if ((u.cava -= d.cavaRapido ? 2 : 1) <= 0) m.trincheras.set(Math.floor(u.y) * m.N + Math.floor(u.x), { x: Math.floor(u.x) + 0.5, y: Math.floor(u.y) + 0.5, ang: u.ang });
     }
     if (!d.aire && (u.retira || u.retirando)) retirada(m, u);
+    if (!d.arma) { // sin arma: solo se mueve; el ingeniero, además, repara lo que tenga cerca
+      if (u.orden === 'atacar') { u.orden = 'nada'; u.obj = 0; }
+      if (u.orden !== 'nada') { u.arregla = 0; if (avanzar(m, u) || (!u.ruta && !u.pend)) u.orden = 'nada'; return; }
+      if (d.repara) tickIngeniero(m, u);
+      return;
+    }
     const arma = ARMAS[d.arma], alc = alcance(m, u, arma);
     if (u.orden === 'mover') { // cumple la orden sin desviarse, pero dispara a lo que tenga a tiro
       if ((m.t + u.id) % 4 === 0) { const e = buscarEnemigo(m, u, u.x, u.y, alc); u.mira = e ? e.id : 0; }
@@ -1672,15 +1716,15 @@ globalThis.W = { VERSION: 'versión 31' };
       }
       // Las unidades ven cerca alrededor y lejos solo en un cono hacia su frente.
       const v = UNID[e.tipo].vision, rc = v * ECON.visAt, rc2 = rc * rc, rs = v * ECON.visLado, rs2 = rs * rs, rl = v * ECON.visAd, rl2 = rl * rl, R = Math.ceil(rl);
-      const ux = Math.cos(e.ang), uy = Math.sin(e.ang);
+      const ux = Math.cos(e.ang), uy = Math.sin(e.ang), campo = CAMPO[e.tipo], kc = campo.k;
       for (let dy = -R; dy <= R; dy++) {
         const y = cy + dy; if (y < 0 || y >= N) continue;
         for (let dx = -R; dx <= R; dx++) {
           const x = cx + dx, d2 = dx * dx + dy * dy;
           if (x < 0 || x >= N || d2 > rl2) continue;
-          if (d2 > rc2) { // fuera del círculo cercano: al frente llega lejos, a los costados menos, detrás nada
+          if (d2 > rc2 && !campo.todo) { // fuera del círculo cercano: al frente llega lejos, a los costados menos, detrás nada
             const p = dx * ux + dy * uy, s = p * Math.abs(p);
-            if (s < K_CONO * d2 && (d2 > rs2 || s < K_PERI * d2)) continue;
+            if (s < kc * d2 && (d2 > rs2 || s < K_PERI * d2)) continue;
           }
           f[y * N + x] = 2;
         }
@@ -1871,9 +1915,10 @@ globalThis.W = { VERSION: 'versión 31' };
     }
     if (soldados.length < 40 && !urgente) {
       // Vehículo: pesado si hay nivel y raros; una artillería por cada cuatro tanques; si no, tanque.
-      const c = J.cuenta, enFabrica = J.colas.tanque.n + J.colas.artilleria.n + J.colas.pesado.n;
-      let veh = 'tanque';
-      if (J.nivel >= 3 && (c.pesado || 0) < 5 && W.puedePagar(J, UNID.pesado)) veh = 'pesado';
+      const c = J.cuenta, enFabrica = J.colas.tanque.n + J.colas.artilleria.n + J.colas.pesado.n + J.colas.blindado.n + J.colas.antiaereoMovil.n;
+      let veh = (c.blindado || 0) < 2 && (c.tanque || 0) < 2 ? 'blindado' : 'tanque'; // un par de blindados ligeros para empezar
+      if (J.nivel >= 2 && (c.antiaereoMovil || 0) < 1 + Math.floor(((c.tanque || 0) + (c.pesado || 0)) / 8)) veh = 'antiaereoMovil'; // escolta antiaérea para las columnas
+      else if (J.nivel >= 3 && (c.pesado || 0) < 5 && W.puedePagar(J, UNID.pesado)) veh = 'pesado';
       else if (J.nivel >= 2 && (c.artilleria || 0) * 4 < (c.tanque || 0)) veh = 'artilleria';
       if (c.fabrica && !enFabrica && dinero >= UNID[veh].costo && W.puedePagar(J, UNID[veh])) { W.orden(m, { t: 'entrenar', j, tipo: veh }); dinero -= UNID[veh].costo; }
       // Aviación: hasta tres cazas y, con nivel 3, dos bombarderos; uno a la vez y sin vaciar la caja.
@@ -2046,6 +2091,7 @@ globalThis.W = { VERSION: 'versión 31' };
         ruido(b, 'bandpass', 500 * k, 2600, 0.45, 0.5); tono(b, 'sawtooth', 180 * k, 320, 0.35, 0.12); ruido(b, 'lowpass', 700, 200, 0.12, 0.5);
         return;
       }
+      if (arma === 'pistola') { k *= 1.3; v *= 0.6; arma = 'fusil'; } else if (arma === 'ametralladora') { k *= 0.85; v *= 0.7; arma = 'fusil'; }
       if (arma === 'obus') { k *= 0.7; arma = 'canon'; } else if (arma === 'canonPesado' || arma === 'canonTorre') { k *= 0.85; arma = 'canon'; }
       if (arma === 'fusil') {
         ruido(b, 'highpass', 2400 * k, 2000, 0.04, 0.5); // chasquido
@@ -2105,7 +2151,7 @@ globalThis.W = { VERSION: 'versión 31' };
   // El contexto llega trasladado al centro de la unidad. r = radio en píxeles.
   // e = { ang, angT, retro (0..1), anda, tiempo, carga (0..1), cosecha }
   W.fichaUnidad = function (c, u, r, lod, col, e) {
-    const inf = W.UNID[u.tipo].cat === 'inf', at = u.tipo === 'antitanque', pesado = u.tipo === 'pesado';
+    const inf = W.UNID[u.tipo].cat === 'inf', at = u.tipo === 'antitanque', pesado = u.tipo === 'pesado', expl = u.tipo === 'explorador', ing = u.tipo === 'ingeniero';
     if (lod === 0) {
       c.fillStyle = col.base; c.beginPath();
       if (inf) c.arc(0, 0, r, 0, TAU);
@@ -2118,11 +2164,18 @@ globalThis.W = { VERSION: 'versión 31' };
     if (inf) {
       const R = r * 1.4;
       c.strokeStyle = col.osc; c.lineCap = at ? 'butt' : 'round'; c.lineWidth = Math.max(1.4, R * (at ? 0.55 : 0.3)); // fusil, o tubo lanzacohetes al hombro
-      c.beginPath(); c.moveTo(R * (at ? -0.7 : 0.1), R * 0.5); c.lineTo(R * ((at ? 1.3 : 1.55) - e.retro * 0.3), R * 0.5); c.stroke();
+      if (ing) { // sin arma: lleva una llave inglesa por delante
+        c.lineWidth = Math.max(1.2, R * 0.26); c.beginPath(); c.moveTo(R * 0.3, R * 0.45); c.lineTo(R * 1.25, R * 0.45); c.moveTo(R * 1.25, R * 0.15); c.lineTo(R * 1.25, R * 0.75); c.stroke();
+      } else if (expl) { // pistola corta
+        c.beginPath(); c.moveTo(R * 0.3, R * 0.5); c.lineTo(R * (1.05 - e.retro * 0.2), R * 0.5); c.stroke();
+      } else { c.beginPath(); c.moveTo(R * (at ? -0.7 : 0.1), R * 0.5); c.lineTo(R * ((at ? 1.3 : 1.55) - e.retro * 0.3), R * 0.5); c.stroke(); }
       if (lod === 2) { c.fillStyle = col.osc; c.fillRect(-R * 0.95, -R * 0.5, R * 0.5, R); } // mochila
+      if (expl) { c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.moveTo(-R * 0.7, -R * 0.3); c.lineTo(-R * 1.7, -R * 0.9); c.stroke(); } // antena de la radio
       c.fillStyle = col.base; c.beginPath(); c.ellipse(0, 0, R * 0.62, R, 0, 0, TAU); c.fill(); // hombros
       c.strokeStyle = col.osc; c.lineWidth = 1; c.stroke();
       c.fillStyle = at ? col.osc : col.luz; c.strokeStyle = at ? col.luz : col.osc; c.beginPath(); c.arc(R * 0.08, 0, R * 0.42, 0, TAU); c.fill(); c.stroke(); // casco
+      if (ing) { c.strokeStyle = col.osc; c.lineWidth = Math.max(1, R * 0.2); c.beginPath(); c.moveTo(R * 0.08 - R * 0.42, 0); c.lineTo(R * 0.08 + R * 0.42, 0); c.stroke(); } // franja del casco
+      if (expl) { c.fillStyle = col.osc; c.fillRect(R * 0.3, -R * 0.3, R * 0.35, R * 0.6); } // prismáticos
       if (e.retro > 0.5) { c.fillStyle = col.fuego; c.beginPath(); c.arc(R * 1.75, R * 0.5, R * 0.3, 0, TAU); c.fill(); }
     } else if (u.tipo === 'tanque' || pesado) {
       const L = r * 1.4, w = r;
@@ -2152,6 +2205,35 @@ globalThis.W = { VERSION: 'versión 31' };
       c.closePath(); c.fill(); c.stroke();
       if (lod === 2) { c.fillStyle = col.luz; c.beginPath(); c.arc(-w * 0.12, w * 0.12, w * 0.13, 0, TAU); c.fill(); } // escotilla
       if (e.retro > 0.6) { c.fillStyle = col.fuego; c.beginPath(); c.arc(w * 0.2 + L * 1.45, 0, w * 0.34, 0, TAU); c.fill(); }
+    } else if (u.tipo === 'blindado') { // coche de cuatro ruedas, con torreta pequeña y ametralladora
+      const L = r * 1.35, w = r * 0.9;
+      c.fillStyle = col.osc;
+      for (const x of [-L * 0.75, L * 0.3]) { c.fillRect(x, -w * 1.05, L * 0.45, w * 0.32); c.fillRect(x, w * 0.73, L * 0.45, w * 0.32); } // ruedas
+      c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); // casco afilado hacia delante
+      c.moveTo(-L, -w * 0.72); c.lineTo(L * 0.45, -w * 0.72); c.lineTo(L, -w * 0.3); c.lineTo(L, w * 0.3); c.lineTo(L * 0.45, w * 0.72); c.lineTo(-L, w * 0.72); c.closePath(); c.fill(); c.stroke();
+      if (lod === 2) { c.fillStyle = col.luz; c.fillRect(L * 0.5, -w * 0.3, L * 0.14, w * 0.6); } // parabrisas
+      c.rotate(e.angT - e.ang);
+      c.fillStyle = col.osc; c.fillRect(0, -w * 0.07, L * (0.95 - e.retro * 0.1), w * 0.14); // ametralladora
+      c.fillStyle = col.base; c.strokeStyle = col.luz; c.lineWidth = Math.max(1, r * 0.14); c.beginPath(); c.arc(0, 0, w * 0.4, 0, TAU); c.fill(); c.stroke();
+      if (e.retro > 0.5) { c.fillStyle = col.fuego; c.beginPath(); c.arc(L * 1.05, 0, w * 0.2, 0, TAU); c.fill(); }
+    } else if (u.tipo === 'antiaereoMovil') { // chasis de orugas con dos cañones finos y un plato de radar
+      const L = r * 1.35, w = r * 0.95;
+      c.fillStyle = col.osc; c.fillRect(-L, -w, L * 2, w * 0.4); c.fillRect(-L, w * 0.6, L * 2, w * 0.4); // orugas
+      c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.rect(-L * 0.92, -w * 0.64, L * 1.84, w * 1.28); c.fill(); c.stroke();
+      c.rotate(e.angT - e.ang);
+      const rec = e.retro * L * 0.2;
+      c.fillStyle = col.osc; c.fillRect(-rec, -w * 0.34, L * 1.35, w * 0.13); c.fillRect(-rec, w * 0.21, L * 1.35, w * 0.13); // dos tubos
+      c.fillStyle = col.base; c.strokeStyle = col.luz; c.lineWidth = Math.max(1, r * 0.14); c.beginPath(); c.rect(-w * 0.5, -w * 0.5, w, w); c.fill(); c.stroke();
+      if (lod === 2) { c.strokeStyle = col.luz; c.beginPath(); c.arc(-w * 0.15, 0, w * 0.28, -1.2 + e.tiempo * 0.004, 1.2 + e.tiempo * 0.004); c.stroke(); } // radar girando
+      if (e.retro > 0.6) { c.fillStyle = col.fuego; c.beginPath(); c.arc(L * 1.45, -w * 0.27, w * 0.2, 0, TAU); c.arc(L * 1.45, w * 0.27, w * 0.2, 0, TAU); c.fill(); }
+    } else if (u.tipo === 'dron') { // ala fina y larga, cola en V, hélice detrás
+      const L = r * 1.8;
+      c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1;
+      c.beginPath(); c.rect(-L * 0.05, -L * 1.25, L * 0.24, L * 2.5); c.fill(); c.stroke(); // ala
+      c.beginPath(); c.moveTo(-L * 0.85, 0); c.lineTo(-L * 1.1, -L * 0.42); c.moveTo(-L * 0.85, 0); c.lineTo(-L * 1.1, L * 0.42); c.stroke(); // cola en V
+      c.fillStyle = col.osc; c.beginPath(); c.ellipse(-L * 0.05, 0, L * 0.95, L * 0.13, 0, 0, TAU); c.fill(); // fuselaje
+      if (lod === 2) { c.fillStyle = col.luz; c.beginPath(); c.arc(L * 0.55, 0, L * 0.11, 0, TAU); c.fill(); } // cámara
+      if (e.anda) { c.strokeStyle = col.luz; c.globalAlpha = 0.6; const a = Math.cos(e.tiempo * 0.05) * L * 0.3; c.beginPath(); c.moveTo(-L, -a); c.lineTo(-L, a); c.stroke(); c.globalAlpha = 1; }
     } else if (u.tipo === 'caza') { // ala en delta, morro afilado
       const L = r * 1.9;
       c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1;
@@ -2552,6 +2634,7 @@ globalThis.W = { VERSION: 'versión 31' };
         if (UNID[e.tipo] && UNID[e.tipo].aire && e.j === YO) t += (e.enTierra ? ' · en tierra' : e.repostando ? ' · vuelve a repostar' : e.patrulla ? ' · patrulla' : '') + ' · combustible ' + Math.round(e.fuel / UNID[e.tipo].fuel * 100) + ' %';
         if (!e.edif && e.rango) t += ' · veterano ' + '▲'.repeat(e.rango);
         if (!e.edif && e.j === YO && e.bajas) t += ' · ' + e.bajas + (e.bajas === 1 ? ' baja' : ' bajas');
+        if (e.arregla && e.j === YO) t += ' · reparando';
         if (e.retirando) t += ' · se retira a reparar'; else if (e.huye > m.t) t += ' · huye';
         if (e.tipo === 'aerodromo' && e.j === YO) t += ' · aviones ' + m.ents.filter((u) => !u.edif && u.casa === e.id).length + '/' + W.ECON.cupoAviones;
         const ef = efectos(e); if (ef) t += ' · ' + ef;
@@ -2784,8 +2867,13 @@ globalThis.W = { VERSION: 'versión 31' };
         if (sel.has(e.id)) { ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(px, py, r * 1.9 + 2, 0, TAU); ctx.stroke(); }
         if (sel.has(e.id) && e.j === YO && lod && sel.size <= 40) { // lo que ve: cerca alrededor, lejos solo al frente
           const E = W.ECON, rf = d.vision * E.visAd * z, rs = d.vision * E.visLado * z, rb = d.vision * E.visAt * z, a = g.a;
-          ctx.beginPath(); ctx.arc(px, py, rf, a - E.cono, a + E.cono); ctx.arc(px, py, rs, a + E.cono, a + E.periferia);
-          ctx.arc(px, py, rb, a + E.periferia, a - E.periferia + TAU); ctx.arc(px, py, rs, a - E.periferia, a - E.cono); ctx.closePath();
+          const cono = d.cono || E.cono; // cada tipo tiene su campo; el dron ve en redondo
+          ctx.beginPath();
+          if (cono >= Math.PI) ctx.arc(px, py, rf, 0, TAU);
+          else {
+            ctx.arc(px, py, rf, a - cono, a + cono); ctx.arc(px, py, rs, a + cono, a + E.periferia);
+            ctx.arc(px, py, rb, a + E.periferia, a - E.periferia + TAU); ctx.arc(px, py, rs, a - E.periferia, a - cono); ctx.closePath();
+          }
           ctx.fillStyle = P.tinta; ctx.globalAlpha = 0.035; ctx.fill();
           ctx.globalAlpha = 0.28; ctx.lineWidth = 1; ctx.setLineDash([3, 4]); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
         }
@@ -2796,6 +2884,10 @@ globalThis.W = { VERSION: 'versión 31' };
           ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(px - r * 1.3, py + r * 1.9); ctx.lineTo(px + r * 1.3, py + r * 1.9); ctx.moveTo(px - r * 0.7, py + r * 1.9 + 3); ctx.lineTo(px + r * 0.7, py + r * 1.9 + 3); ctx.stroke();
         }
         if (e.j === YO) { if (m.t - e.llama < 14) signos.push([px, py - r * 1.9 - 20, '!']); else if (m.t - e.oyo < 36) signos.push([px, py - r * 1.9 - 20, '✓']); }
+        if (e.arregla && lod && veo(e)) { // el ingeniero trabajando: una línea hasta lo que repara
+          const o = m.porId.get(e.arregla);
+          if (o && W.dist(e.x, e.y, o) <= 1.7) { ctx.strokeStyle = P.bien; ctx.lineWidth = 1.5; ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(ox + (o.edif ? o.cx : o.x) * z, oy + (o.edif ? o.cy : o.y) * z); ctx.stroke(); ctx.setLineDash([]); }
+        }
         if (e.rango && lod) { // galones de veteranía, junto a la unidad
           ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.2; ctx.beginPath();
           for (let g2 = 0; g2 < e.rango; g2++) { const gx = px + r * 1.2 + 3, gy = py - r - g2 * 4; ctx.moveTo(gx - 3, gy + 2); ctx.lineTo(gx, gy - 1); ctx.lineTo(gx + 3, gy + 2); }
@@ -3170,6 +3262,7 @@ globalThis.W = { VERSION: 'versión 31' };
       if (us.length) {
         const armadas = us.some((u) => UNID[u.tipo].arma);
         const soloAire = us.every((u) => UNID[u.tipo].aire);
+        if (us.some((u) => UNID[u.tipo].repara)) L.push('<b>ingeniero: repara solo los vehículos y edificios cercanos</b>');
         if (soloAire) L.push('clic derecho: ir y volver, o atacar · ' + k('S') + ' volver ya');
         else L.push('clic derecho: mover' + (armadas ? ' o atacar' : '') + ' · otro clic cerca: orientar');
         if (us.some((u) => u.tipo === 'cosechadora')) L.push('clic derecho en una veta: cosechar');

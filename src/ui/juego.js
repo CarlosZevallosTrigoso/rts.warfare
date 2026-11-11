@@ -146,6 +146,7 @@
         if (UNID[e.tipo] && UNID[e.tipo].aire && e.j === YO) t += (e.enTierra ? ' · en tierra' : e.repostando ? ' · vuelve a repostar' : e.patrulla ? ' · patrulla' : '') + ' · combustible ' + Math.round(e.fuel / UNID[e.tipo].fuel * 100) + ' %';
         if (!e.edif && e.rango) t += ' · veterano ' + '▲'.repeat(e.rango);
         if (!e.edif && e.j === YO && e.bajas) t += ' · ' + e.bajas + (e.bajas === 1 ? ' baja' : ' bajas');
+        if (e.arregla && e.j === YO) t += ' · reparando';
         if (e.retirando) t += ' · se retira a reparar'; else if (e.huye > m.t) t += ' · huye';
         if (e.tipo === 'aerodromo' && e.j === YO) t += ' · aviones ' + m.ents.filter((u) => !u.edif && u.casa === e.id).length + '/' + W.ECON.cupoAviones;
         const ef = efectos(e); if (ef) t += ' · ' + ef;
@@ -378,8 +379,13 @@
         if (sel.has(e.id)) { ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(px, py, r * 1.9 + 2, 0, TAU); ctx.stroke(); }
         if (sel.has(e.id) && e.j === YO && lod && sel.size <= 40) { // lo que ve: cerca alrededor, lejos solo al frente
           const E = W.ECON, rf = d.vision * E.visAd * z, rs = d.vision * E.visLado * z, rb = d.vision * E.visAt * z, a = g.a;
-          ctx.beginPath(); ctx.arc(px, py, rf, a - E.cono, a + E.cono); ctx.arc(px, py, rs, a + E.cono, a + E.periferia);
-          ctx.arc(px, py, rb, a + E.periferia, a - E.periferia + TAU); ctx.arc(px, py, rs, a - E.periferia, a - E.cono); ctx.closePath();
+          const cono = d.cono || E.cono; // cada tipo tiene su campo; el dron ve en redondo
+          ctx.beginPath();
+          if (cono >= Math.PI) ctx.arc(px, py, rf, 0, TAU);
+          else {
+            ctx.arc(px, py, rf, a - cono, a + cono); ctx.arc(px, py, rs, a + cono, a + E.periferia);
+            ctx.arc(px, py, rb, a + E.periferia, a - E.periferia + TAU); ctx.arc(px, py, rs, a - E.periferia, a - cono); ctx.closePath();
+          }
           ctx.fillStyle = P.tinta; ctx.globalAlpha = 0.035; ctx.fill();
           ctx.globalAlpha = 0.28; ctx.lineWidth = 1; ctx.setLineDash([3, 4]); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
         }
@@ -390,6 +396,10 @@
           ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(px - r * 1.3, py + r * 1.9); ctx.lineTo(px + r * 1.3, py + r * 1.9); ctx.moveTo(px - r * 0.7, py + r * 1.9 + 3); ctx.lineTo(px + r * 0.7, py + r * 1.9 + 3); ctx.stroke();
         }
         if (e.j === YO) { if (m.t - e.llama < 14) signos.push([px, py - r * 1.9 - 20, '!']); else if (m.t - e.oyo < 36) signos.push([px, py - r * 1.9 - 20, '✓']); }
+        if (e.arregla && lod && veo(e)) { // el ingeniero trabajando: una línea hasta lo que repara
+          const o = m.porId.get(e.arregla);
+          if (o && W.dist(e.x, e.y, o) <= 1.7) { ctx.strokeStyle = P.bien; ctx.lineWidth = 1.5; ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(ox + (o.edif ? o.cx : o.x) * z, oy + (o.edif ? o.cy : o.y) * z); ctx.stroke(); ctx.setLineDash([]); }
+        }
         if (e.rango && lod) { // galones de veteranía, junto a la unidad
           ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.2; ctx.beginPath();
           for (let g2 = 0; g2 < e.rango; g2++) { const gx = px + r * 1.2 + 3, gy = py - r - g2 * 4; ctx.moveTo(gx - 3, gy + 2); ctx.lineTo(gx, gy - 1); ctx.lineTo(gx + 3, gy + 2); }
@@ -764,6 +774,7 @@
       if (us.length) {
         const armadas = us.some((u) => UNID[u.tipo].arma);
         const soloAire = us.every((u) => UNID[u.tipo].aire);
+        if (us.some((u) => UNID[u.tipo].repara)) L.push('<b>ingeniero: repara solo los vehículos y edificios cercanos</b>');
         if (soloAire) L.push('clic derecho: ir y volver, o atacar · ' + k('S') + ' volver ya');
         else L.push('clic derecho: mover' + (armadas ? ' o atacar' : '') + ' · otro clic cerca: orientar');
         if (us.some((u) => u.tipo === 'cosechadora')) L.push('clic derecho en una veta: cosechar');

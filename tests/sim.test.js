@@ -740,6 +740,80 @@ prueba('fase 1a y 1b: bucle, retirada, cosechadora que huye, veteranía, observa
   assert.ok(co.huye === 0 && co.est !== 'espera', 'pasado el susto vuelve al trabajo: ' + co.est);
 });
 
+prueba('fase 1c: explorador, blindado ligero, ingeniero, antiaéreo móvil y dron', () => {
+  const m = W.crearMundo(31, { N: 128 }), N = m.N, J = m.jug[0];
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  for (let y = 30; y < 100; y++) for (let x = 30; x < 110; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; } }
+  const avanza = (n, fn) => { for (let i = 0; i < n; i++) { W.tick(m); if (fn) fn(); } };
+  const cel = (x, y) => y * N + x;
+  const mudo = (u) => { u.recarga = 99999; u.guardia = true; return u; };
+  J.dios = true; m.jug[1].dios = true;
+  const cu = W.crearEdificio(m, 0, 'cuartel', 40, 40), fa = W.crearEdificio(m, 0, 'fabrica', 40, 46), ae = W.crearEdificio(m, 0, 'aerodromo', 40, 52); avanza(1);
+  // niveles: explorador y blindado desde el nivel 1; ingeniero, antiaéreo móvil y dron piden el 2
+  for (const t of ['explorador', 'ingeniero', 'blindado', 'antiaereoMovil', 'dron']) W.orden(m, { t: 'entrenar', j: 0, tipo: t });
+  avanza(1);
+  assert.deepStrictEqual([cu.cola, fa.cola, ae.cola], [['explorador'], ['blindado'], []], 'en nivel 1 solo explorador y blindado');
+  J.nivel = 2; W.orden(m, { t: 'cancelarUnidad', j: 0, id: cu.id, i: 0 }); W.orden(m, { t: 'cancelarUnidad', j: 0, id: fa.id, i: 0 }); avanza(1);
+  // explorador: ve más lejos y más ancho que un soldado
+  const ex = W.crearUnidad(m, 0, 'explorador', cel(60, 40)); ex.ang = 0; avanza(4);
+  const f = m.niebla[0];
+  assert.strictEqual(f[cel(72, 40)], 2, 'el explorador debía ver a 12 celdas');
+  assert.strictEqual(f[cel(62, 49)], 2, 'y con un campo ancho (casi de costado, a 9 celdas)');
+  const so = W.crearUnidad(m, 0, 'infanteria', cel(60, 70)); so.ang = 0; avanza(4);
+  assert.notStrictEqual(f[cel(62, 79)], 2, 'un soldado no ve ahí');
+  ex.vida = 0; so.vida = 0; avanza(2);
+  // blindado ligero: barre infantería con su torreta; a un tanque casi no le hace nada
+  const bl = W.crearUnidad(m, 0, 'blindado', cel(60, 40)); bl.ang = bl.angT = 0;
+  const inf = mudo(W.crearUnidad(m, 1, 'infanteria', cel(63, 42)));
+  avanza(120);
+  assert.ok(!m.porId.has(inf.id) && bl.ang === 0, 'debía acabar pronto con el soldado, girando solo la torreta');
+  const tq = mudo(W.crearUnidad(m, 1, 'tanque', cel(63, 40)));
+  avanza(200);
+  assert.ok(tq.vida > tq.vidaMax * 0.8, 'la ametralladora apenas araña un tanque: ' + tq.vida);
+  tq.recarga = 0; avanza(300);
+  assert.ok(!m.porId.has(bl.id), 'y un cañón lo destroza');
+  tq.vida = 0; avanza(2);
+  // ingeniero: sin arma; va solo hasta el vehículo dañado y lo repara gratis; también edificios; cava el doble de rápido
+  const ing = W.crearUnidad(m, 0, 'ingeniero', cel(60, 60)), roto = W.crearUnidad(m, 0, 'tanque', cel(65, 60));
+  roto.guardia = true; roto.vida = 100; J.dios = false; J.minerales = 0;
+  W.orden(m, { t: 'atacar', j: 0, ids: [ing.id], obj: roto.id }); W.orden(m, { t: 'amover', j: 0, ids: [ing.id], x: 61.5, y: 60.5 }); avanza(60); // órdenes de combate: no deben romper nada
+  avanza(700);
+  assert.ok(roto.vida === roto.vidaMax && W.dist(ing.x, ing.y, roto) <= 1.7, 'el ingeniero debía ir y dejar el tanque como nuevo: ' + roto.vida);
+  assert.ok(J.minerales < 200, 'reparar con ingeniero no cuesta minerales');
+  cu.vida = cu.vidaMax - 200; cu.tDano = m.t; avanza(900);
+  assert.ok(cu.vida > cu.vidaMax - 200 + 100, 'también repara edificios cercanos... si están a su alcance: ' + cu.vida);
+  J.dios = true;
+  const s2 = W.crearUnidad(m, 0, 'infanteria', cel(70, 70)), i2 = W.crearUnidad(m, 0, 'ingeniero', cel(73, 70));
+  W.orden(m, { t: 'trinchera', j: 0, ids: [s2.id, i2.id] }); avanza(W.ECON.cavar / 2 + 3);
+  assert.ok(m.trincheras.has(cel(73, 70)) && !m.trincheras.has(cel(70, 70)), 'el ingeniero cava en la mitad de tiempo');
+  // antiaéreo móvil: solo dispara a aviones y acompaña al grupo
+  const aa = W.crearUnidad(m, 0, 'antiaereoMovil', cel(60, 80)); aa.ang = aa.angT = 0;
+  const t3 = mudo(W.crearUnidad(m, 1, 'tanque', cel(63, 80))), v3 = t3.vida;
+  const avion = W.crearUnidad(m, 1, 'caza', cel(65, 82)); avion.recarga = 99999; avion.fuel = 99999; avion.orden = 'mover';
+  avanza(120);
+  assert.ok(t3.vida === v3 && (!m.porId.has(avion.id) || avion.vida < avion.vidaMax), 'debía disparar al avión y no al tanque');
+  t3.vida = 0; avion.vida = 0; avanza(2);
+  W.orden(m, { t: 'amover', j: 0, ids: [aa.id], x: 80.5, y: 80.5 }); avanza(400);
+  assert.ok(Math.hypot(aa.x - 80.5, aa.y - 80.5) < 1, 'el antiaéreo móvil se mueve con el grupo');
+  // dron: se paga con información, no tiene armas, ve en redondo, patrulla y ocupa plaza de aeródromo
+  J.dios = false; J.minerales = 5000; J.info = 10;
+  W.orden(m, { t: 'entrenar', j: 0, tipo: 'dron' }); avanza(1);
+  assert.deepStrictEqual(ae.cola, [], 'sin información no hay dron');
+  J.info = 100; W.orden(m, { t: 'entrenar', j: 0, tipo: 'dron' }); avanza(1);
+  assert.ok(ae.cola.length === 1 && J.info === 100 - W.UNID.dron.info);
+  J.dios = true; avanza(W.UNID.dron.tiempo + 5);
+  const dr = m.ents.find((e) => e.tipo === 'dron');
+  assert.ok(dr && dr.enTierra && W.cupoAire(m, 0).hay === 1, 'el dron nace posado y cuenta para el cupo');
+  W.orden(m, { t: 'patrulla', j: 0, ids: [dr.id], x: 70.5, y: 55.5 }); avanza(400);
+  assert.ok(!dr.enTierra && Math.hypot(dr.x - 70.5, dr.y - 55.5) < W.ECON.orbita + 2.5, 'debía patrullar el punto');
+  avanza(4);
+  const atras = { x: Math.round(dr.x - Math.cos(dr.ang) * 11), y: Math.round(dr.y - Math.sin(dr.ang) * 11) };
+  assert.strictEqual(m.niebla[0][cel(atras.x, atras.y)], 2, 'el dron ve en todas direcciones');
+  const e4 = mudo(W.crearUnidad(m, 1, 'tanque', cel(72, 56)));
+  W.orden(m, { t: 'atacar', j: 0, ids: [dr.id], obj: e4.id }); avanza(100);
+  assert.ok(e4.vida === e4.vidaMax && m.porId.has(dr.id), 'el dron no ataca');
+});
+
 prueba('determinismo: misma semilla, misma partida', () => {
   const corre = () => {
     const m = W.crearMundo(777), a = W.iaCrear(0), b = W.iaCrear(1);

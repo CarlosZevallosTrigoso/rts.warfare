@@ -8,7 +8,7 @@
   // El contexto llega trasladado al centro de la unidad. r = radio en píxeles.
   // e = { ang, angT, retro (0..1), anda, tiempo, carga (0..1), cosecha }
   W.fichaUnidad = function (c, u, r, lod, col, e) {
-    const inf = W.UNID[u.tipo].cat === 'inf', at = u.tipo === 'antitanque', pesado = u.tipo === 'pesado';
+    const inf = W.UNID[u.tipo].cat === 'inf', at = u.tipo === 'antitanque', pesado = u.tipo === 'pesado', expl = u.tipo === 'explorador', ing = u.tipo === 'ingeniero';
     if (lod === 0) {
       c.fillStyle = col.base; c.beginPath();
       if (inf) c.arc(0, 0, r, 0, TAU);
@@ -21,11 +21,18 @@
     if (inf) {
       const R = r * 1.4;
       c.strokeStyle = col.osc; c.lineCap = at ? 'butt' : 'round'; c.lineWidth = Math.max(1.4, R * (at ? 0.55 : 0.3)); // fusil, o tubo lanzacohetes al hombro
-      c.beginPath(); c.moveTo(R * (at ? -0.7 : 0.1), R * 0.5); c.lineTo(R * ((at ? 1.3 : 1.55) - e.retro * 0.3), R * 0.5); c.stroke();
+      if (ing) { // sin arma: lleva una llave inglesa por delante
+        c.lineWidth = Math.max(1.2, R * 0.26); c.beginPath(); c.moveTo(R * 0.3, R * 0.45); c.lineTo(R * 1.25, R * 0.45); c.moveTo(R * 1.25, R * 0.15); c.lineTo(R * 1.25, R * 0.75); c.stroke();
+      } else if (expl) { // pistola corta
+        c.beginPath(); c.moveTo(R * 0.3, R * 0.5); c.lineTo(R * (1.05 - e.retro * 0.2), R * 0.5); c.stroke();
+      } else { c.beginPath(); c.moveTo(R * (at ? -0.7 : 0.1), R * 0.5); c.lineTo(R * ((at ? 1.3 : 1.55) - e.retro * 0.3), R * 0.5); c.stroke(); }
       if (lod === 2) { c.fillStyle = col.osc; c.fillRect(-R * 0.95, -R * 0.5, R * 0.5, R); } // mochila
+      if (expl) { c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.moveTo(-R * 0.7, -R * 0.3); c.lineTo(-R * 1.7, -R * 0.9); c.stroke(); } // antena de la radio
       c.fillStyle = col.base; c.beginPath(); c.ellipse(0, 0, R * 0.62, R, 0, 0, TAU); c.fill(); // hombros
       c.strokeStyle = col.osc; c.lineWidth = 1; c.stroke();
       c.fillStyle = at ? col.osc : col.luz; c.strokeStyle = at ? col.luz : col.osc; c.beginPath(); c.arc(R * 0.08, 0, R * 0.42, 0, TAU); c.fill(); c.stroke(); // casco
+      if (ing) { c.strokeStyle = col.osc; c.lineWidth = Math.max(1, R * 0.2); c.beginPath(); c.moveTo(R * 0.08 - R * 0.42, 0); c.lineTo(R * 0.08 + R * 0.42, 0); c.stroke(); } // franja del casco
+      if (expl) { c.fillStyle = col.osc; c.fillRect(R * 0.3, -R * 0.3, R * 0.35, R * 0.6); } // prismáticos
       if (e.retro > 0.5) { c.fillStyle = col.fuego; c.beginPath(); c.arc(R * 1.75, R * 0.5, R * 0.3, 0, TAU); c.fill(); }
     } else if (u.tipo === 'tanque' || pesado) {
       const L = r * 1.4, w = r;
@@ -55,6 +62,35 @@
       c.closePath(); c.fill(); c.stroke();
       if (lod === 2) { c.fillStyle = col.luz; c.beginPath(); c.arc(-w * 0.12, w * 0.12, w * 0.13, 0, TAU); c.fill(); } // escotilla
       if (e.retro > 0.6) { c.fillStyle = col.fuego; c.beginPath(); c.arc(w * 0.2 + L * 1.45, 0, w * 0.34, 0, TAU); c.fill(); }
+    } else if (u.tipo === 'blindado') { // coche de cuatro ruedas, con torreta pequeña y ametralladora
+      const L = r * 1.35, w = r * 0.9;
+      c.fillStyle = col.osc;
+      for (const x of [-L * 0.75, L * 0.3]) { c.fillRect(x, -w * 1.05, L * 0.45, w * 0.32); c.fillRect(x, w * 0.73, L * 0.45, w * 0.32); } // ruedas
+      c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); // casco afilado hacia delante
+      c.moveTo(-L, -w * 0.72); c.lineTo(L * 0.45, -w * 0.72); c.lineTo(L, -w * 0.3); c.lineTo(L, w * 0.3); c.lineTo(L * 0.45, w * 0.72); c.lineTo(-L, w * 0.72); c.closePath(); c.fill(); c.stroke();
+      if (lod === 2) { c.fillStyle = col.luz; c.fillRect(L * 0.5, -w * 0.3, L * 0.14, w * 0.6); } // parabrisas
+      c.rotate(e.angT - e.ang);
+      c.fillStyle = col.osc; c.fillRect(0, -w * 0.07, L * (0.95 - e.retro * 0.1), w * 0.14); // ametralladora
+      c.fillStyle = col.base; c.strokeStyle = col.luz; c.lineWidth = Math.max(1, r * 0.14); c.beginPath(); c.arc(0, 0, w * 0.4, 0, TAU); c.fill(); c.stroke();
+      if (e.retro > 0.5) { c.fillStyle = col.fuego; c.beginPath(); c.arc(L * 1.05, 0, w * 0.2, 0, TAU); c.fill(); }
+    } else if (u.tipo === 'antiaereoMovil') { // chasis de orugas con dos cañones finos y un plato de radar
+      const L = r * 1.35, w = r * 0.95;
+      c.fillStyle = col.osc; c.fillRect(-L, -w, L * 2, w * 0.4); c.fillRect(-L, w * 0.6, L * 2, w * 0.4); // orugas
+      c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.rect(-L * 0.92, -w * 0.64, L * 1.84, w * 1.28); c.fill(); c.stroke();
+      c.rotate(e.angT - e.ang);
+      const rec = e.retro * L * 0.2;
+      c.fillStyle = col.osc; c.fillRect(-rec, -w * 0.34, L * 1.35, w * 0.13); c.fillRect(-rec, w * 0.21, L * 1.35, w * 0.13); // dos tubos
+      c.fillStyle = col.base; c.strokeStyle = col.luz; c.lineWidth = Math.max(1, r * 0.14); c.beginPath(); c.rect(-w * 0.5, -w * 0.5, w, w); c.fill(); c.stroke();
+      if (lod === 2) { c.strokeStyle = col.luz; c.beginPath(); c.arc(-w * 0.15, 0, w * 0.28, -1.2 + e.tiempo * 0.004, 1.2 + e.tiempo * 0.004); c.stroke(); } // radar girando
+      if (e.retro > 0.6) { c.fillStyle = col.fuego; c.beginPath(); c.arc(L * 1.45, -w * 0.27, w * 0.2, 0, TAU); c.arc(L * 1.45, w * 0.27, w * 0.2, 0, TAU); c.fill(); }
+    } else if (u.tipo === 'dron') { // ala fina y larga, cola en V, hélice detrás
+      const L = r * 1.8;
+      c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1;
+      c.beginPath(); c.rect(-L * 0.05, -L * 1.25, L * 0.24, L * 2.5); c.fill(); c.stroke(); // ala
+      c.beginPath(); c.moveTo(-L * 0.85, 0); c.lineTo(-L * 1.1, -L * 0.42); c.moveTo(-L * 0.85, 0); c.lineTo(-L * 1.1, L * 0.42); c.stroke(); // cola en V
+      c.fillStyle = col.osc; c.beginPath(); c.ellipse(-L * 0.05, 0, L * 0.95, L * 0.13, 0, 0, TAU); c.fill(); // fuselaje
+      if (lod === 2) { c.fillStyle = col.luz; c.beginPath(); c.arc(L * 0.55, 0, L * 0.11, 0, TAU); c.fill(); } // cámara
+      if (e.anda) { c.strokeStyle = col.luz; c.globalAlpha = 0.6; const a = Math.cos(e.tiempo * 0.05) * L * 0.3; c.beginPath(); c.moveTo(-L, -a); c.lineTo(-L, a); c.stroke(); c.globalAlpha = 1; }
     } else if (u.tipo === 'caza') { // ala en delta, morro afilado
       const L = r * 1.9;
       c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1;
