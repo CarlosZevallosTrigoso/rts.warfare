@@ -222,7 +222,44 @@
       if (blanco) for (const id of e.dr.bomba) { const q = m.porId.get(id); if (q.est === 'espera' && q.recarga <= 0 && (J.minerales >= ECON.dronBomba || J.dios)) { if (!J.dios) J.minerales -= ECON.dronBomba; q.obj = blanco.id; q.est = 'ir'; break; } }
     }
   }
+  // ---------- puente aéreo ----------
+  // Cada puesto de avanzada tiene un helicóptero de carga que va y viene de un puesto logístico. Cada entrega renueva su enlace;
+  // si derriban los vuelos y el enlace caduca, el puesto se queda fuera de la red hasta que llegue otro.
+  function tickPuenteAereo(m) {
+    for (const e of m.ents) {
+      if (e.tipo !== 'avanzada' || e.vida <= 0) continue;
+      const J = m.jug[e.j], N = m.N, vivo = e.abast > m.t;
+      if (vivo !== !!e.enlace) { e.enlace = vivo; m.redSucia = true; if (!vivo) m.efectos.push({ tipo: 'sinEnlace', x1: e.cx, y1: e.cy, j: e.j, t: m.t }); }
+      if (vivo) for (const u of m.ents) { if (u.edif || u.j !== e.j || u.vida <= 0 || u.vida >= u.vidaMax || UNID[u.tipo].cat !== 'inf' || Math.hypot(u.x - e.cx, u.y - e.cy) > EDIF.avanzada.hospital) continue; u.vida = Math.min(u.vidaMax, u.vida + ECON.hospitalCura); u.curando = m.t; } // hospital
+      const h = e.heli ? m.porId.get(e.heli) : null;
+      if ((h && h.vida > 0) || m.t < (e.heliT || 0)) continue;
+      let base = null, md = Infinity; // el puesto logístico propio más cercano que funcione
+      for (const b of m.ents) { if (b.tipo !== 'logistica' || b.j !== e.j || b.vida <= 0 || b.sinLuz || b.hack > m.t) continue; const d0 = Math.hypot(b.cx - e.cx, b.cy - e.cy); if (d0 < md) { md = d0; base = b; } }
+      if (!base) continue;
+      if (e.heliHubo && J.minerales < UNID.heliCarga.costo && !J.dios) continue; // el primero viene con el puesto; reponer uno derribado se paga
+      if (e.heliHubo && !J.dios) J.minerales -= UNID.heliCarga.costo;
+      const q = crearUnidad(m, e.j, 'heliCarga', Math.floor(base.cy) * N + Math.floor(base.cx)); q.x = q.px = base.cx; q.y = q.py = base.cy; q.rol = 'carga'; q.base = base.id; q.av = e.id; q.est = 'ida';
+      e.heli = q.id; e.heliT = m.t + ECON.heliRepone; e.heliHubo = true;
+    }
+  }
+  function tickHeli(m, u) {
+    const d = UNID[u.tipo];
+    const ir = (x, y) => { const dx = x - u.x, dy = y - u.y, dd = Math.hypot(dx, dy); if (dd > 0.05) u.ang = Math.atan2(dy, dx); u.v = Math.min(d.vel, dd); if (dd > 1e-6) { u.x += (dx / dd) * u.v; u.y += (dy / dd) * u.v; } return dd; };
+    if (u.rol === 'tropa') { // lleva a los suyos a la otra pista, los deja y se va
+      if (u.est === 'fuera') { if (ir(u.ox, u.oy) <= 0.6) { u.vida = 0; u.retirado = true; } return; }
+      if (ir(u.tx, u.ty) > 0.4) return;
+      const lista = u.pasajeros; u.pasajeros = []; apear(m, u, lista); contar(m);
+      m.efectos.push({ tipo: 'aterriza', x1: u.x, y1: u.y, j: u.j, n: lista.length, t: m.t }); u.est = 'fuera';
+      return;
+    }
+    const base = m.porId.get(u.base), av = m.porId.get(u.av); // de carga
+    if (!base || base.vida <= 0 || !av || av.vida <= 0) { u.vida = 0; return; }
+    if (u.espera > m.t) return;
+    if (u.est === 'ida') { if (ir(av.cx, av.cy) <= 0.5) { av.abast = m.t + ECON.abastDura; u.est = 'vuelta'; u.espera = m.t + 40; } }
+    else if (ir(base.cx, base.cy) <= 0.5) { u.est = 'ida'; u.espera = m.t + 60; }
+  }
   function tickDron(m, u) {
+    if (UNID[u.tipo].heli) { tickHeli(m, u); return; }
     const d = UNID[u.tipo], base = m.porId.get(u.base);
     if (!base || base.vida <= 0) { u.vida = 0; return; } // sin portador, cae
     if (m.t - (u.tInterf === undefined ? -99 : u.tInterf) <= 12) { u.vida -= 1.2; if (u.vida <= 0) m.efectos.push({ tipo: 'interferido', x1: u.x, y1: u.y, j: u.j, t: m.t }); return; } // interferido por un vehículo de mando enemigo: pierde el enlace y cae
@@ -392,10 +429,11 @@
   };
 
   // ¿Puede desplegarse aquí un patio móvil? Necesita 3×3 de llano libre a su alrededor (lo que hay debajo de otras unidades no cuenta).
+  W.destinoDespliegue = (u) => (UNID[u.tipo].despliega === true ? 'patio' : UNID[u.tipo].despliega); // en qué edificio se convierte
   W.puedeDesplegar = function (m, u) {
-    const N = m.N, x = Math.floor(u.x) - 1, y = Math.floor(u.y) - 1;
-    if (u.orden !== 'nada' || x < 0 || y < 0 || x + 3 > N || y + 3 > N) return false;
-    for (let dy = 0; dy < 3; dy++) for (let dx = 0; dx < 3; dx++) {
+    const N = m.N, x = Math.floor(u.x) - 1, y = Math.floor(u.y) - 1, t = EDIF[W.destinoDespliegue(u)].tam;
+    if (u.orden !== 'nada' || x < 0 || y < 0 || x + t > N || y + t > N) return false;
+    for (let dy = 0; dy < t; dy++) for (let dx = 0; dx < t; dx++) {
       const i = (y + dy) * N + x + dx;
       if (m.mapa.terreno[i] !== T.LLANO || m.ocup[i] || m.mapa.mineral[i] || m.mapa.sitioEn[i]) return false;
     }
@@ -461,6 +499,10 @@
         if (Math.max(o.x - (e.x + e.tam), e.x - (o.x + o.tam), 0) <= ECON.enlace && Math.max(o.y - (e.y + e.tam), e.y - (o.y + o.tam), 0) <= ECON.enlace) une(i, k);
       }
     }
+    for (let i = 0; i < its.length; i++) { // puente aéreo: el puesto de avanzada al que le llega carga está unido a un puesto logístico
+      const e = its[i]; if (e.tipo !== 'avanzada' || !(e.abast > m.t)) continue;
+      for (let k = 0; k < its.length; k++) if (its[k].tipo === 'logistica' && its[k].j === e.j) { une(i, k); break; }
+    }
     const red = new Map(); // por red: si tiene patio, cuánta energía da y cuánta pide
     for (let i = 0; i < its.length; i++) {
       const e = its[i], r = raiz(i); let g = red.get(r); if (!g) { g = { patio: false, prod: 0, uso: 0 }; red.set(r, g); }
@@ -475,7 +517,7 @@
       e.conRed = g.patio; e.red = its[raiz(i)].id;
       if (e.infra) continue; // ni los caminos ni las líneas dan cobertura: la dan los nodos y los edificios conectados
       e.deficit = g.uso > g.prod && !m.jug[e.j].dios; e.sinLuz = e.deficit && EDIF[e.tipo].energia < 0; // su red no da para todos: a media marcha
-      if (g.patio) sella(f, Math.floor(e.cx), Math.floor(e.cy), (e.tipo === 'patio' || e.tipo === 'deposito' ? ECON.cobNodo : ECON.cobEdif) + e.tam / 2);
+      if (g.patio) sella(f, Math.floor(e.cx), Math.floor(e.cy), (e.tipo === 'patio' || e.tipo === 'deposito' ? ECON.cobNodo : e.tipo === 'avanzada' ? ECON.cobAvanzada : ECON.cobEdif) + e.tam / 2);
     }
   }
   W.calcularRed = calcularRed;
@@ -708,6 +750,21 @@
       case 'trampa': // un interruptor del panel ADMIN
         trampa(m, cmd.j, cmd.clave, cmd.valor);
         return;
+      case 'aerotransporte': { // la infantería elegida que esté junto a una pista propia vuela a otra (cmd.de → cmd.a), de ocho en ocho; cada vuelo se paga
+        const de = m.porId.get(cmd.de), a = m.porId.get(cmd.a), N = m.N;
+        const vale = (e) => e && e.edif && e.j === cmd.j && e.vida > 0 && EDIF[e.tipo].pista && !(e.hack > m.t) && (e.tipo !== 'avanzada' || e.abast > m.t);
+        if (!vale(de) || !vale(a) || de === a) return;
+        const us = propias(m, cmd).filter((u) => UNID[u.tipo].cat === 'inf' && dist(u.x, u.y, de) <= 6);
+        for (let k = 0; k < us.length; k += UNID.heliTropa.plazas) {
+          if (J.minerales < UNID.heliTropa.costo && !J.dios) { m.efectos.push({ tipo: 'sinLinea', x1: de.cx, y1: de.cy, j: cmd.j, t: m.t, vuelo: true }); break; }
+          if (!J.dios) J.minerales -= UNID.heliTropa.costo;
+          const q = crearUnidad(m, cmd.j, 'heliTropa', Math.floor(de.cy) * N + Math.floor(de.cx)); q.x = q.px = q.ox = de.cx; q.y = q.py = q.oy = de.cy; q.rol = 'tropa'; q.est = 'ida';
+          const c = W.cercaLibre(m, a.cx, a.y + a.tam + 1.5); q.tx = (c % N) + 0.5; q.ty = ((c / N) | 0) + 0.5;
+          for (const u of us.slice(k, k + UNID.heliTropa.plazas)) { limpiar(u); u.ruta = null; u.pend = null; u.v = 0; u.trin = 0; u.dentro = true; q.pasajeros.push(u); m.porId.delete(u.id); }
+        }
+        m.ents = m.ents.filter((e) => !e.dentro); contar(m);
+        return;
+      }
       case 'mejorarEdif': { // sube un nivel el rendimiento de ese edificio (central, bomba, extractor, estación, laboratorio)
         const e = m.porId.get(cmd.id);
         if (!e || !e.edif || e.j !== cmd.j || e.vida <= 0 || !EDIF[e.tipo].mejora || (e.nivelE || 1) >= ECON.mejoraMax) return;
@@ -817,7 +874,7 @@
       }
       case 'construir': {
         const d = EDIF[cmd.tipo];
-        if (!d || cmd.tipo === 'patio' || !W.disponible(m, cmd.j, d) || !W.puedePagar(J, d)) return;
+        if (!d || cmd.tipo === 'patio' || d.oculto || !W.disponible(m, cmd.j, d) || !W.puedePagar(J, d)) return;
         // La obra va a un patio: de los indicados (cmd.ids) o de todos, el que menos tenga entre manos.
         let patio = null, carga = Infinity;
         for (const e of m.ents) {
@@ -861,10 +918,11 @@
           if (!UNID[u.tipo].despliega || u.vida <= 0 || !W.puedeDesplegar(m, u)) continue;
           const x = Math.floor(u.x) - 1, y = Math.floor(u.y) - 1;
           u.vida = 0; u.desplegado = true;
-          for (const e of m.ents) if (!e.edif && e !== u && e.vida > 0 && !UNID[e.tipo].aire && e.x > x - 0.4 && e.x < x + 3.4 && e.y > y - 0.4 && e.y < y + 3.4) { // quien esté en medio se aparta
+          const td = EDIF[W.destinoDespliegue(u)].tam;
+          for (const e of m.ents) if (!e.edif && e !== u && e.vida > 0 && !UNID[e.tipo].aire && e.x > x - 0.4 && e.x < x + td + 0.4 && e.y > y - 0.4 && e.y < y + td + 0.4) { // quien esté en medio se aparta
             const c = W.cercaLibre(m, e.x < x + 1.5 ? x - 1 : x + 4, e.y); e.x = e.px = (c % m.N) + 0.5; e.y = e.py = ((c / m.N) | 0) + 0.5; e.ruta = null;
           }
-          const p = crearEdificio(m, cmd.j, 'patio', x, y); p.nace = m.t;
+          const p = crearEdificio(m, cmd.j, W.destinoDespliegue(u), x, y); p.nace = m.t; if (EDIF[p.tipo].hospital) p.abast = m.t + 600; // el puesto de avanzada llega con suministros para medio minuto
           m.efectos.push({ tipo: 'despliega', x2: p.cx, y2: p.cy, j: cmd.j, t: m.t });
         }
         contar(m);
@@ -2005,7 +2063,7 @@
     if (m.t % 10 === 0) { curar(m); colmena(m); }
 
     if (m.redSucia || !m.cob || m.t - m.redT >= 100) calcularRed(m);
-    if (m.t % 10 === 0) { tickTrincheras(m); tickCamaras(m); tickPortadores(m); }
+    if (m.t % 10 === 0) { tickTrincheras(m); tickCamaras(m); tickPortadores(m); tickPuenteAereo(m); }
     if (m.t % 10 === 0 && m.logistica !== false) { // suministro: fuera de la cobertura el contador sube; dentro, baja rápido. Los aviones repostan en su base: no cuenta.
       for (const u of m.ents) { if (u.edif || UNID[u.tipo].aire) continue; const dentro = m.cob[u.j][Math.floor(u.y) * m.N + Math.floor(u.x)] || m.jug[u.j].dios; u.sinSum = dentro ? Math.max(0, (u.sinSum || 0) - 40) : Math.min(ECON.sinSum + 200, (u.sinSum || 0) + 10); }
     }
@@ -2018,6 +2076,7 @@
       if (e.desplegado) continue; // el patio móvil no muere: se ha convertido en patio
       if (e.muro) { if (!e.quitado) { quitarMuro(m, e.celda); m.efectos.push({ tipo: 'muerte', x2: e.cx, y2: e.cy, edif: true, tam: 1, clase: 'muro', ang: 0, j: e.j, t: m.t }); } continue; }
       if (e.infra) { quitarTramo(m, e); m.efectos.push({ tipo: e.vendido ? 'venta' : 'muerte', x2: e.cx, y2: e.cy, edif: true, tam: 1, clase: 'camino', ang: 0, j: e.j, t: m.t }); continue; }
+      if (e.retirado) continue; // el helicóptero que ya ha cumplido se va sin más
       m.jug[e.j].bajas++;
       if (!e.edif && e.pasajeros.length) { // del transporte destruido sale la mitad de su carga
         const vivos = e.pasajeros.filter((p, i) => i % 2 === 0);

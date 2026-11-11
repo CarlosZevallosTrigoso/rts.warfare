@@ -1545,6 +1545,50 @@ prueba('laboratorio y mejoras de rendimiento por edificio', () => {
   assert.ok(!cu.nivelE, 'el cuartel no se mejora'); void cen2;
 });
 
+prueba('tanda 5: puente aéreo, puesto de avanzada, hospital y traslado de infantería', () => {
+  const m = W.crearMundo(31, { N: 128, logistica: true }), N = m.N, J = m.jug[0];
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const cel = (x, y) => y * N + x, patio = m.ents.find((e) => e.j === 0 && e.tipo === 'patio'), px = Math.floor(patio.cx), py = Math.floor(patio.cy), dir = px < 64 ? 1 : -1;
+  for (let y = py - 10; y <= py + 10; y++) for (let x = Math.min(px, px + dir * 60) - 2; x <= Math.max(px, px + dir * 60) + 2; x++) { const i = cel(x, y); if (x < 2 || y < 2 || x >= N - 2 || y >= N - 2 || m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.mapa.tipoMin[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  J.dios = false; J.minerales = 20000;
+  W.crearEdificio(m, 0, 'central', px + dir * 5, py + 4); const log = W.crearEdificio(m, 0, 'logistica', px + dir * 5, py - 4);
+  const lejos = px + dir * 45, cob = () => W.cobertura(m, 0);
+  // el puesto móvil se despliega lejos como puesto de avanzada: queda en la red por aire, sin línea ni camino
+  const movil = W.crearUnidad(m, 0, 'avanzadaMovil', cel(lejos, py)); avanza(3);
+  assert.ok(!cob()[cel(lejos, py + 3)], 'antes de desplegar no hay cobertura allí');
+  assert.ok(W.puedeDesplegar(m, movil), 'cabe');
+  W.orden(m, { t: 'desplegar', j: 0, ids: [movil.id] }); avanza(15);
+  const av = m.ents.find((e) => e.tipo === 'avanzada');
+  assert.ok(av && av.conRed && cob()[cel(lejos, py + 3)], 'desplegado: en la red y con cobertura alrededor');
+  assert.ok(W.puedeColocar(m, 0, 'torreta', lejos + 3, py + 3), 'y se puede construir junto a él');
+  // el helicóptero de carga va y viene y renueva el enlace
+  const heli = () => m.ents.find((e) => e.tipo === 'heliCarga');
+  assert.ok(heli(), 'sale un helicóptero de carga del puesto logístico');
+  avanza(1400); assert.ok(av.abast > m.t + 300 && av.conRed, 'las entregas mantienen el enlace');
+  // hospital: cura a la infantería cercana
+  const her = W.crearUnidad(m, 0, 'infanteria', cel(lejos + 3, py + 1)); her.vida = 10; avanza(320);
+  assert.ok(her.vida >= her.vidaMax - 1, 'el hospital del puesto cura: ' + her.vida);
+  // traslado: ocho soldados junto al puesto logístico vuelan al puesto de avanzada
+  const us = []; for (let k = 0; k < 10; k++) us.push(W.crearUnidad(m, 0, 'infanteria', cel(px + dir * 5 + (k % 5), py - 6 - ((k / 5) | 0))));
+  avanza(3); W.orden(m, { t: 'aerotransporte', j: 0, ids: us.map((u) => u.id), de: log.id, a: av.id }); avanza(3);
+  assert.equal(m.ents.filter((e) => e.tipo === 'heliTropa').length, 2, 'diez soldados: dos helicópteros');
+  assert.ok(us.every((u) => !m.ents.includes(u)), 'la tropa va dentro');
+  avanza(600);
+  assert.ok(us.every((u) => m.ents.includes(u) && Math.hypot(u.x - av.cx, u.y - av.cy) < 6), 'llegan y bajan junto al puesto de avanzada');
+  avanza(600); assert.equal(m.ents.filter((e) => e.tipo === 'heliTropa').length, 0, 'los helicópteros de tropa se van');
+  // sin vuelos, el enlace caduca y el puesto sale de la red; con otro helicóptero, vuelve
+  log.vida = 0; avanza(W.ECON.abastDura + 60);
+  assert.ok(!av.conRed && !cob()[cel(lejos, py + 3)] && !heli(), 'sin puesto logístico no hay vuelos, y el puesto queda aislado');
+  const log2 = W.crearEdificio(m, 0, 'logistica', px + dir * 5, py - 4); avanza(900);
+  assert.ok(av.conRed && heli() && log2.vida > 0, 'con otro puesto logístico se restablece');
+  // derribar el helicóptero de carga corta el enlace hasta que lo reponen
+  heli().vida = 0; avanza(5); assert.ok(!heli(), 'derribado');
+  avanza(W.ECON.heliRepone + 40); assert.ok(heli(), 'lo reponen pasado un rato');
+  const copia = W.cargar(W.guardar(m)).m; for (let i = 0; i < 200; i++) { W.tick(m); W.tick(copia); }
+  assert.equal(W.huella(copia), W.huella(m));
+});
+
 prueba('puentes: la excavadora cruza el agua, todos lo usan y al caer se cierra', () => {
   const m = W.crearMundo(31, { N: 128 }), N = m.N, J = m.jug[0], T = W.TERRENO;
   m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);

@@ -119,13 +119,19 @@
       c.fillStyle = col.base; c.strokeStyle = col.luz; c.lineWidth = Math.max(1, r * 0.14); c.beginPath(); c.rect(-w * 0.5, -w * 0.5, w, w); c.fill(); c.stroke();
       if (lod === 2) { c.strokeStyle = col.luz; c.beginPath(); c.arc(-w * 0.15, 0, w * 0.28, -1.2 + e.tiempo * 0.004, 1.2 + e.tiempo * 0.004); c.stroke(); } // radar girando
       if (e.retro > 0.6) { c.fillStyle = col.fuego; c.beginPath(); c.arc(L * 1.45, -w * 0.27, w * 0.2, 0, TAU); c.arc(L * 1.45, w * 0.27, w * 0.2, 0, TAU); c.fill(); }
-    } else if (W.UNID[u.tipo].mini) { // cuadricóptero: cuerpo pequeño y cuatro rotores; el kamikaze lleva la carga delante, el bombardero colgando
+    } else if (W.UNID[u.tipo].mini && !W.UNID[u.tipo].heli) { // cuadricóptero: cuerpo pequeño y cuatro rotores; el kamikaze lleva la carga delante, el bombardero colgando
       const L = r * 1.5;
       c.strokeStyle = col.osc; c.lineWidth = Math.max(1, L * 0.16); c.beginPath(); c.moveTo(-L * 0.7, -L * 0.7); c.lineTo(L * 0.7, L * 0.7); c.moveTo(-L * 0.7, L * 0.7); c.lineTo(L * 0.7, -L * 0.7); c.stroke();
       c.fillStyle = col.luz; c.globalAlpha = 0.55; for (const [fx, fy] of [[-0.7, -0.7], [0.7, 0.7], [-0.7, 0.7], [0.7, -0.7]]) { c.beginPath(); c.arc(L * fx, L * fy, L * 0.42, 0, TAU); c.fill(); } c.globalAlpha = 1;
       c.fillStyle = col.base; c.fillRect(-L * 0.32, -L * 0.26, L * 0.64, L * 0.52);
       if (u.tipo === 'dronFpv') { c.fillStyle = col.mal; c.beginPath(); c.arc(L * 0.5, 0, L * 0.22, 0, TAU); c.fill(); }
       if (u.tipo === 'dronBomba') { c.fillStyle = col.tinta; c.beginPath(); c.arc(0, 0, L * 0.2, 0, TAU); c.fill(); }
+    } else if (u.tipo === 'avanzadaMovil') { // camión largo con la cruz del hospital en el techo
+      const L = r * 1.45, w = r * 0.8;
+      c.fillStyle = col.osc; c.fillRect(-L, -w, L * 2, w * 2);
+      c.fillStyle = col.luz; c.fillRect(-L * 0.92, -w * 0.82, L * 1.4, w * 1.64);
+      c.fillStyle = col.base; c.fillRect(L * 0.55, -w * 0.7, L * 0.38, w * 1.4);
+      c.fillStyle = col.mal; c.fillRect(-L * 0.36, -w * 0.18, L * 0.5, w * 0.36); c.fillRect(-L * 0.2, -w * 0.5, L * 0.18, w * 1.0);
     } else if (u.tipo === 'comandoDrones') { // furgón con plataforma de despegue detrás y antena
       const L = r * 1.35, w = r * 0.85;
       c.fillStyle = col.osc; c.fillRect(-L, -w, L * 2, w * 2);
@@ -209,7 +215,7 @@
       c.beginPath(); c.arc(0, 0, w * 0.5, -1.1, 1.1); c.moveTo(0, 0); c.lineTo(w * 0.5, 0); c.stroke(); c.restore();
       c.fillStyle = col.luz; c.beginPath(); c.arc(-L * 0.3, 0, w * 0.14, 0, TAU); c.fill();
       c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.moveTo(L * 0.2, w * 0.5); c.lineTo(L * 0.2 - r * 1.4, w * 0.5 + r * 0.9); c.stroke(); // antena
-    } else if (u.tipo === 'helicoptero') { // fuselaje con cola larga y el disco del rotor girando
+    } else if (u.tipo === 'helicoptero' || W.UNID[u.tipo].heli) { // fuselaje con cola larga y el disco del rotor girando
       const L = r * 1.6;
       c.fillStyle = col.osc; c.fillRect(-L * 1.2, -L * 0.07, L * 1.1, L * 0.14); c.fillRect(-L * 1.3, -L * 0.3, L * 0.12, L * 0.6); // cola y rotor de cola
       c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.ellipse(L * 0.15, 0, L * 0.62, L * 0.32, 0, 0, TAU); c.fill(); c.stroke();
@@ -435,6 +441,11 @@
       }
       c.fillStyle = tinta; c.beginPath(); c.arc(cx, cy, t * 0.05, 0, TAU); c.fill();
       if (lod === 2) { c.fillStyle = col.osc; c.fillRect(X(0.1), Y(0.76), t * 0.2, t * 0.12); c.fillRect(X(0.74), Y(0.1), t * 0.14, t * 0.14); }
+    } else if (e.tipo === 'logistica' || e.tipo === 'avanzada') { // la pista con su H; el logístico, además, cajas; el de avanzada, la cruz del hospital
+      c.strokeStyle = col.luz; c.lineWidth = lw * 1.4; c.beginPath(); c.arc(X(0.36), Y(0.62), t * 0.24, 0, TAU); c.stroke();
+      c.beginPath(); c.moveTo(X(0.28), Y(0.52)); c.lineTo(X(0.28), Y(0.72)); c.moveTo(X(0.44), Y(0.52)); c.lineTo(X(0.44), Y(0.72)); c.moveTo(X(0.28), Y(0.62)); c.lineTo(X(0.44), Y(0.62)); c.stroke();
+      if (e.tipo === 'logistica') { c.fillStyle = col.osc; for (const [fx, fy] of [[0.62, 0.14], [0.78, 0.14], [0.7, 0.3]]) { c.fillRect(X(fx), Y(fy), t * 0.14, t * 0.14); c.strokeRect(X(fx), Y(fy), t * 0.14, t * 0.14); } }
+      else { c.fillStyle = col.luz; c.fillRect(X(0.58), Y(0.12), t * 0.3, t * 0.3); c.fillStyle = s.deficit ? col.humo : col.mal; c.fillRect(X(0.61), Y(0.235), t * 0.24, t * 0.07); c.fillRect(X(0.695), Y(0.15), t * 0.07, t * 0.24); }
     } else if (e.tipo === 'laboratorio') { // un matraz con su líquido, que burbujea si hay energía
       c.strokeStyle = col.luz; c.lineWidth = lw * 1.4; c.beginPath(); c.moveTo(X(0.42), Y(0.2)); c.lineTo(X(0.42), Y(0.42)); c.lineTo(X(0.24), Y(0.78)); c.lineTo(X(0.76), Y(0.78)); c.lineTo(X(0.58), Y(0.42)); c.lineTo(X(0.58), Y(0.2)); c.stroke();
       c.fillStyle = s.deficit ? col.humo : col.agua; c.beginPath(); c.moveTo(X(0.34), Y(0.6)); c.lineTo(X(0.27), Y(0.75)); c.lineTo(X(0.73), Y(0.75)); c.lineTo(X(0.66), Y(0.6)); c.closePath(); c.fill();
