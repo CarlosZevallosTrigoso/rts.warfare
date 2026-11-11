@@ -88,7 +88,13 @@
 
     s.disparo = function (arma, v, pan) {
       if (!listo(v)) return;
-      const b = bus(v, pan), k = vari();
+      const b = bus(v, pan);
+      let k = vari();
+      if (arma === 'cohete') { // silbido que sube y un golpe seco
+        ruido(b, 'bandpass', 500 * k, 2600, 0.45, 0.5); tono(b, 'sawtooth', 180 * k, 320, 0.35, 0.12); ruido(b, 'lowpass', 700, 200, 0.12, 0.5);
+        return;
+      }
+      if (arma === 'obus') { k *= 0.7; arma = 'canon'; } else if (arma === 'canonPesado' || arma === 'canonTorre') { k *= 0.85; arma = 'canon'; }
       if (arma === 'fusil') {
         ruido(b, 'highpass', 2400 * k, 2000, 0.04, 0.5); // chasquido
         ruido(b, 'lowpass', 900 * k, 260, 0.1, 0.4); // cuerpo

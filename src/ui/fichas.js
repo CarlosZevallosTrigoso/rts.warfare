@@ -8,25 +8,26 @@
   // El contexto llega trasladado al centro de la unidad. r = radio en píxeles.
   // e = { ang, angT, retro (0..1), anda, tiempo, carga (0..1), cosecha }
   W.fichaUnidad = function (c, u, r, lod, col, e) {
+    const inf = W.UNID[u.tipo].cat === 'inf', at = u.tipo === 'antitanque', pesado = u.tipo === 'pesado';
     if (lod === 0) {
       c.fillStyle = col.base; c.beginPath();
-      if (u.tipo === 'infanteria') c.arc(0, 0, r, 0, TAU);
-      else if (u.tipo === 'tanque') { c.moveTo(0, -r * 1.15); c.lineTo(r * 1.15, 0); c.lineTo(0, r * 1.15); c.lineTo(-r * 1.15, 0); c.closePath(); }
+      if (inf) c.arc(0, 0, r, 0, TAU);
+      else if (u.tipo !== 'cosechadora') { c.moveTo(0, -r * 1.15); c.lineTo(r * 1.15, 0); c.lineTo(0, r * 1.15); c.lineTo(-r * 1.15, 0); c.closePath(); }
       else c.rect(-r, -r, r * 2, r * 2);
       c.fill();
       return;
     }
     c.save(); c.rotate(e.ang); c.lineJoin = 'round';
-    if (u.tipo === 'infanteria') {
+    if (inf) {
       const R = r * 1.4;
-      c.strokeStyle = col.osc; c.lineCap = 'round'; c.lineWidth = Math.max(1.4, R * 0.3); // fusil
-      c.beginPath(); c.moveTo(R * 0.1, R * 0.5); c.lineTo(R * (1.55 - e.retro * 0.3), R * 0.5); c.stroke();
+      c.strokeStyle = col.osc; c.lineCap = at ? 'butt' : 'round'; c.lineWidth = Math.max(1.4, R * (at ? 0.55 : 0.3)); // fusil, o tubo lanzacohetes al hombro
+      c.beginPath(); c.moveTo(R * (at ? -0.7 : 0.1), R * 0.5); c.lineTo(R * ((at ? 1.3 : 1.55) - e.retro * 0.3), R * 0.5); c.stroke();
       if (lod === 2) { c.fillStyle = col.osc; c.fillRect(-R * 0.95, -R * 0.5, R * 0.5, R); } // mochila
       c.fillStyle = col.base; c.beginPath(); c.ellipse(0, 0, R * 0.62, R, 0, 0, TAU); c.fill(); // hombros
       c.strokeStyle = col.osc; c.lineWidth = 1; c.stroke();
-      c.fillStyle = col.luz; c.beginPath(); c.arc(R * 0.08, 0, R * 0.42, 0, TAU); c.fill(); c.stroke(); // casco
+      c.fillStyle = at ? col.osc : col.luz; c.strokeStyle = at ? col.luz : col.osc; c.beginPath(); c.arc(R * 0.08, 0, R * 0.42, 0, TAU); c.fill(); c.stroke(); // casco
       if (e.retro > 0.5) { c.fillStyle = col.fuego; c.beginPath(); c.arc(R * 1.75, R * 0.5, R * 0.3, 0, TAU); c.fill(); }
-    } else if (u.tipo === 'tanque') {
+    } else if (u.tipo === 'tanque' || pesado) {
       const L = r * 1.4, w = r;
       c.fillStyle = col.osc; c.fillRect(-L, -w, L * 2, w * 0.44); c.fillRect(-L, w * 0.56, L * 2, w * 0.44); // orugas
       if (lod === 2) { // eslabones, que corren al avanzar
@@ -45,13 +46,26 @@
       }
       c.rotate(e.angT - e.ang); // la torreta gira aparte
       const rec = e.retro * L * 0.25;
-      c.fillStyle = col.osc; c.fillRect(w * 0.2 - rec, -w * 0.13, L * 1.25, w * 0.26); // cañón
-      c.fillRect(w * 0.2 - rec + L * 1.12, -w * 0.2, L * 0.16, w * 0.4); // freno de boca
+      c.fillStyle = col.osc;
+      for (const o of pesado ? [-0.2, 0.2] : [0]) { // cañón con freno de boca; el pesado lleva dos
+        c.fillRect(w * 0.2 - rec, w * (o - 0.12), L * 1.25, w * 0.24); c.fillRect(w * 0.2 - rec + L * 1.12, w * (o - 0.18), L * 0.16, w * 0.36);
+      }
       c.fillStyle = col.base; c.strokeStyle = col.luz; c.lineWidth = Math.max(1, r * 0.14); c.beginPath();
       for (let k = 0; k < 6; k++) { const a = (k / 6) * TAU; c.lineTo(Math.cos(a) * w * 0.52, Math.sin(a) * w * 0.52); }
       c.closePath(); c.fill(); c.stroke();
       if (lod === 2) { c.fillStyle = col.luz; c.beginPath(); c.arc(-w * 0.12, w * 0.12, w * 0.13, 0, TAU); c.fill(); } // escotilla
       if (e.retro > 0.6) { c.fillStyle = col.fuego; c.beginPath(); c.arc(w * 0.2 + L * 1.45, 0, w * 0.34, 0, TAU); c.fill(); }
+    } else if (u.tipo === 'artilleria') {
+      const L = r * 1.4, w = r * 0.85;
+      c.strokeStyle = col.osc; c.lineWidth = Math.max(1.5, r * 0.22); c.beginPath(); // patas de anclaje
+      c.moveTo(-L * 0.7, -w * 0.4); c.lineTo(-L * 1.4, -w); c.moveTo(-L * 0.7, w * 0.4); c.lineTo(-L * 1.4, w); c.stroke();
+      c.fillStyle = col.osc; c.fillRect(-L * 0.9, -w, L * 1.5, w * 0.4); c.fillRect(-L * 0.9, w * 0.6, L * 1.5, w * 0.4); // orugas cortas
+      c.fillStyle = col.base; c.lineWidth = 1; c.beginPath(); c.rect(-L * 0.85, -w * 0.62, L * 1.45, w * 1.24); c.fill(); c.stroke();
+      c.rotate(e.angT - e.ang);
+      const rec = e.retro * L * 0.45;
+      c.fillStyle = col.osc; c.fillRect(-w * 0.1 - rec, -w * 0.12, L * 2.1, w * 0.24); c.fillRect(L * 1.85 - rec, -w * 0.21, L * 0.2, w * 0.42); // tubo largo
+      c.fillStyle = col.base; c.strokeStyle = col.luz; c.lineWidth = Math.max(1, r * 0.14); c.beginPath(); c.rect(-w * 0.55, -w * 0.42, w * 0.95, w * 0.84); c.fill(); c.stroke();
+      if (e.retro > 0.6) { c.fillStyle = col.fuego; c.beginPath(); c.arc(L * 2.3, 0, w * 0.45, 0, TAU); c.fill(); }
     } else { // cosechadora
       const L = r * 1.45, w = r * 0.95;
       const mand = e.cosecha ? Math.sin(e.tiempo * 0.012) * w * 0.14 : 0;
@@ -97,6 +111,24 @@
       c.fillStyle = col.luz; c.strokeStyle = col.osc; c.lineWidth = 1;
       c.beginPath(); c.arc(0, 0, R * 0.42, 0, TAU); c.fill(); c.stroke();
       if (s.retro > 0.6) { c.fillStyle = col.fuego; c.beginPath(); c.arc(R * 1.5, 0, R * 0.36, 0, TAU); c.fill(); }
+      c.restore();
+      danos(c, cx, cy, t, col, s);
+      return;
+    }
+
+    if (e.tipo === 'torreCanon') { // casamata con un cañón grande que gira
+      c.fillStyle = col.osc; c.fillRect(px + 1, py + 1, t - 2, t - 2);
+      if (!lod) return;
+      const R = t * 0.41;
+      c.fillStyle = col.base; c.beginPath();
+      for (let k = 0; k < 8; k++) { const a = (k + 0.5) / 8 * TAU; c.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); }
+      c.closePath(); c.fill(); c.strokeStyle = col.luz; c.lineWidth = lw; c.stroke();
+      if (lod === 2) { c.fillStyle = col.luz; for (const [fx, fy] of [[0.1, 0.1], [0.9, 0.1], [0.1, 0.9], [0.9, 0.9]]) c.fillRect(X(fx) - 1.5, Y(fy) - 1.5, 3, 3); }
+      c.save(); c.translate(cx, cy); c.rotate(s.ang);
+      const rec = s.retro * R * 0.4;
+      c.fillStyle = s.deficit ? col.humo : col.osc; c.fillRect(R * 0.1 - rec, -R * 0.2, R * 1.75, R * 0.4); c.fillRect(R * 1.6 - rec, -R * 0.3, R * 0.32, R * 0.6);
+      c.fillStyle = col.luz; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.arc(0, 0, R * 0.52, 0, TAU); c.fill(); c.stroke();
+      if (s.retro > 0.6) { c.fillStyle = col.fuego; c.beginPath(); c.arc(R * 2.2, 0, R * 0.5, 0, TAU); c.fill(); }
       c.restore();
       danos(c, cx, cy, t, col, s);
       return;

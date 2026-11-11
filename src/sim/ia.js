@@ -2,11 +2,13 @@
 // Limitación declarada: no usa la niebla (sabe dónde está la base rival).
 (function () {
   const W = globalThis.W || (globalThis.W = {});
-  const EDIF = W.EDIF, UNID = W.UNID;
+  const EDIF = W.EDIF, UNID = W.UNID, TEC = W.TEC;
 
   // Orden de construcción: [tipo, cantidad deseada].
   const PLAN = [['central', 1], ['refineria', 1], ['cuartel', 1], ['bomba', 1], ['extractor', 1], ['fabrica', 1], ['torreta', 1], ['refineria', 2],
-    ['estacion', 1], ['torreta', 2], ['cuartel', 2], ['extractor', 2], ['torreta', 3], ['fabrica', 2]];
+    ['estacion', 1], ['torreta', 2], ['cuartel', 2], ['extractor', 2], ['torreta', 3], ['fabrica', 2], ['torreCanon', 1], ['torreCanon', 2]];
+  // Orden fijo de investigación.
+  const ORDEN_TEC = ['tolva', 'perforante', 'nivel2', 'motores', 'chalecos', 'reactivo', 'telemetro', 'turbinas', 'depuracion', 'nivel3', 'canonLargo', 'analisis'];
 
   // nivel: 'tranquilo' | 'normal' | 'agresivo'. Cambia el tamaño de la primera oleada.
   W.iaCrear = function (j, nivel) {
@@ -21,6 +23,7 @@
     for (const [tipo, n] of PLAN) {
       const d = EDIF[tipo];
       if ((J.cuenta[tipo] || 0) >= n) continue;
+      if ((d.nivel || 1) > J.nivel) continue; // aún sin el nivel: se salta
       if (!W.tieneReq(m, j, d.req)) return null;
       if (d.libre && !buscarSitio(m, j, tipo, patio)) continue; // sin yacimiento explorado: se salta
       if ((d.pet || 0) > J.petroleo && !J.cuenta.extractor) continue; // sin petróleo ni forma de sacarlo: se salta
@@ -110,8 +113,34 @@
       W.orden(m, { t: 'entrenar', j, tipo: 'cosechadora' }); dinero -= UNID.cosechadora.costo;
     }
     if (soldados.length < 40 && !urgente) {
-      if (J.cuenta.fabrica && !J.colas.tanque.n && dinero >= UNID.tanque.costo && J.petroleo >= UNID.tanque.pet) { W.orden(m, { t: 'entrenar', j, tipo: 'tanque' }); dinero -= UNID.tanque.costo; }
-      if (J.cuenta.cuartel && J.colas.infanteria.n < 2 && dinero >= UNID.infanteria.costo) W.orden(m, { t: 'entrenar', j, tipo: 'infanteria' });
+      // Vehículo: pesado si hay nivel y raros; una artillería por cada cuatro tanques; si no, tanque.
+      const c = J.cuenta, enFabrica = J.colas.tanque.n + J.colas.artilleria.n + J.colas.pesado.n;
+      let veh = 'tanque';
+      if (J.nivel >= 3 && (c.pesado || 0) < 5 && W.puedePagar(J, UNID.pesado)) veh = 'pesado';
+      else if (J.nivel >= 2 && (c.artilleria || 0) * 4 < (c.tanque || 0)) veh = 'artilleria';
+      if (c.fabrica && !enFabrica && dinero >= UNID[veh].costo && W.puedePagar(J, UNID[veh])) { W.orden(m, { t: 'entrenar', j, tipo: veh }); dinero -= UNID[veh].costo; }
+      // Infantería: un antitanque por cada dos fusileros desde el nivel 2.
+      const inf = J.nivel >= 2 && (c.antitanque || 0) * 2 < (c.infanteria || 0) ? 'antitanque' : 'infanteria';
+      if (c.cuartel && J.colas.infanteria.n + J.colas.antitanque.n < 2 && dinero >= UNID[inf].costo) { W.orden(m, { t: 'entrenar', j, tipo: inf }); dinero -= UNID[inf].costo; }
+    }
+
+    // Tecnología: la primera pendiente de la lista que se pueda empezar y pagar sin dejar la caja vacía.
+    for (const clave of ORDEN_TEC) {
+      const t = TEC[clave];
+      if (J.mejoras[clave] || (t.sube && J.nivel >= t.sube) || J.inv.some((i) => i.clave === clave)) continue;
+      if (!J.cuenta[t.lugar] || J.nivel < t.nivel || J.inv.some((i) => TEC[i.clave].lugar === t.lugar)) continue;
+      if (W.puedePagar(J, t) && dinero >= (t.costo || 0) + 300) { W.orden(m, { t: 'investigar', j, clave }); dinero -= t.costo || 0; }
+      break;
+    }
+    // Minerales raros para el nivel 3: una cosechadora se dedica a la veta más cercana.
+    if (J.nivel >= 2 && J.raros < 350 && m.raros.length && (J.cuenta.cosechadora || 0) >= 3) {
+      const rar = ia.rarera ? m.porId.get(ia.rarera) : null;
+      if (!rar || rar.quiere !== 2) {
+        const cos = m.ents.find((e) => e.j === j && e.tipo === 'cosechadora');
+        let veta = -1, dv = Infinity;
+        for (const cel of m.raros) { const d = Math.hypot((cel % m.N) - patio.cx, ((cel / m.N) | 0) - patio.cy); if (d < dv) { dv = d; veta = cel; } }
+        if (cos && veta >= 0) { ia.rarera = cos.id; W.orden(m, { t: 'cosechar', j, ids: [cos.id], x: (veta % m.N) + 0.5, y: ((veta / m.N) | 0) + 0.5 }); }
+      }
     }
 
     // Ejército

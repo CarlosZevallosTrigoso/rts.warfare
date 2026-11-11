@@ -234,7 +234,7 @@
           const r = q.s * z;
           ctx.globalAlpha = 0.6 * Math.min(1, a * 2.5); ctx.fillStyle = '#3a3a3a';
           ctx.save(); ctx.translate(sx, sy); ctx.rotate(q.ang); ctx.beginPath();
-          if (q.clase === 'infanteria') ctx.ellipse(0, 0, r * 1.5, r * 0.8, 0, 0, TAU);
+          if (UNID[q.clase].cat === 'inf') ctx.ellipse(0, 0, r * 1.5, r * 0.8, 0, 0, TAU);
           else { ctx.rect(-r * 1.3, -r * 0.9, r * 2.2, r * 1.8); ctx.rect(r * 0.5, -r * 0.3, r * 1.1, r * 0.5); }
           ctx.fill(); ctx.restore();
         } else { // ruina de edificio
@@ -253,7 +253,7 @@
         const est = { tiempo, id: e.id, vida: e.vida / e.vidaMax, deficit: Je.uso > Je.prod, activo: false, descarga: descargando.has(e.id), ang: 0, retro: 0 };
         if (e.tipo === 'patio') est.activo = Je.obras.some((o) => !o.listo);
         else if (e.tipo === 'fabrica') est.activo = Je.colas.tanque.n + Je.colas.cosechadora.n > 0;
-        else if (e.tipo === 'torreta') { est.ang = giro(e).t; est.retro = retroceso(e, 'bateria'); }
+        else if (EDIF[e.tipo].arma) { est.ang = giro(e).t; est.retro = retroceso(e, EDIF[e.tipo].arma); }
         if (lod) { // sombra
           ctx.fillStyle = 'rgba(0,0,0,0.17)';
           if (e.tipo === 'torreta') { ctx.beginPath(); ctx.arc(px + t / 2 + so, py + t / 2 + so, t * 0.47, 0, TAU); ctx.fill(); } else ctx.fillRect(px + 1 + so, py + 1 + so, t - 2, t - 2);
@@ -270,8 +270,8 @@
           ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.beginPath();
           ctx.moveTo(a, b + g); ctx.lineTo(a, b); ctx.lineTo(a + g, b); ctx.moveTo(c2 - g, b); ctx.lineTo(c2, b); ctx.lineTo(c2, b + g);
           ctx.moveTo(c2, d2 - g); ctx.lineTo(c2, d2); ctx.lineTo(c2 - g, d2); ctx.moveTo(a + g, d2); ctx.lineTo(a, d2); ctx.lineTo(a, d2 - g); ctx.stroke();
-          if (e.tipo === 'torreta') { // alcance
-            ctx.setLineDash([5, 5]); ctx.globalAlpha = 0.5; ctx.beginPath(); ctx.arc(px + t / 2, py + t / 2, W.ARMAS.bateria.alcance * z, 0, TAU); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+          if (EDIF[e.tipo].arma) { // alcance
+            ctx.setLineDash([5, 5]); ctx.globalAlpha = 0.5; ctx.beginPath(); ctx.arc(px + t / 2, py + t / 2, W.alcance(m, e, W.ARMAS[EDIF[e.tipo].arma]) * z, 0, TAU); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
           }
         }
         if (sel.has(e.id) && e.reunion && e.j === YO) { // punto de reunión: línea y banderín
@@ -333,8 +333,8 @@
         const anda = (e.x - e.px) ** 2 + (e.y - e.py) ** 2 > 1e-6;
         if (lod) { // sombra
           ctx.fillStyle = 'rgba(0,0,0,0.17)'; ctx.beginPath();
-          ctx.ellipse(px + so * 0.8, py + so * 0.8, r * (e.tipo === 'infanteria' ? 1.1 : 1.45), r * (e.tipo === 'infanteria' ? 1.1 : 1.1), g.a, 0, TAU); ctx.fill();
-          if (anda && e.tipo !== 'infanteria' && !pausa) { // los vehículos dejan huella y levantan polvo
+          ctx.ellipse(px + so * 0.8, py + so * 0.8, r * (d.cat === 'inf' ? 1.1 : 1.45), r * 1.1, g.a, 0, TAU); ctx.fill();
+          if (anda && d.cat === 'veh' && !pausa) { // los vehículos dejan huella y levantan polvo
             g.d = (g.d || 0) + e.v * (dtCuadro / 50);
             if (g.d > 0.5) {
               g.d = 0; marcaSuelo('huella', e.x, e.y, d.radio, g.a, 22000);
@@ -344,7 +344,7 @@
         }
         ctx.save(); ctx.translate(px, py);
         W.fichaUnidad(ctx, e, r, lod, e.j === YO ? COL.yo : COL.rival, {
-          ang: e.tipo === 'infanteria' && e.obj && !anda ? g.t : g.a, angT: g.t, retro: d.arma ? retroceso(e, d.arma) : 0,
+          ang: d.cat === 'inf' && e.obj && !anda ? g.t : g.a, angT: g.t, retro: d.arma ? retroceso(e, d.arma) : 0,
           anda, tiempo, carga: e.carga / (d.carga || 1), cosecha: e.est === 'cosechar', raro: e.cargaTipo === 2,
         });
         ctx.restore();
@@ -434,9 +434,20 @@
         ctx.setLineDash([]);
       }
       ctx.font = '11px "Fira Code", ui-monospace, monospace';
-      if (pausa || modo === 'amover' || modo === 'patrulla') {
+      if (pausa || modo === 'amover' || modo === 'patrulla' || modo === 'barrido') {
         ctx.fillStyle = P.tinta;
-        ctx.fillText(pausa ? 'pausa' : modo === 'amover' ? 'atacar al avanzar: elige destino' : 'patrulla: elige el punto (con Mayús añades más)', 12, ch - 14);
+        ctx.fillText(pausa ? 'pausa' : modo === 'amover' ? 'atacar al avanzar: elige destino' : modo === 'barrido' ? 'barrido: elige la zona a revelar' : 'patrulla: elige el punto (con Mayús añades más)', 12, ch - 14);
+      }
+      if (modo === 'barrido' && raton.dentro) { // zona que revelará el barrido
+        ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.setLineDash([6, 4]); ctx.beginPath(); ctx.arc(raton.x, raton.y, W.INTEL.barrido.radio * z, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+      }
+      for (let k = avisos.length - 1, fila = 0; k >= 0; k--) { // avisos, arriba al centro
+        const a = avisos[k], edad = (performance.now() - a.t0) / 6000;
+        if (edad >= 1) { avisos.splice(k, 1); continue; }
+        const w = ctx.measureText(a.txt).width + 16, x = (cw - w) / 2, y = 10 + fila++ * 24;
+        ctx.globalAlpha = Math.min(1, (1 - edad) * 3);
+        ctx.fillStyle = P.tinta; ctx.fillRect(x, y, w, 20); ctx.fillStyle = P.fondo; ctx.fillText(a.txt, x + 8, y + 14);
+        ctx.globalAlpha = 1;
       }
       // Etiqueta de lo que hay bajo el cursor.
       if (raton.dentro && !raton.izq && !raton.arrastre && !raton.medio) {
@@ -482,6 +493,12 @@
       let n = 0;
       for (const d of m.efectos) { // cada aviso de la simulación se vuelve sonido y partículas, una sola vez
         if (d.t < oido.t) continue;
+        if (d.tipo === 'tec') {
+          const t = W.TEC[d.clave];
+          if (d.j === YO) { aviso('Investigación lista: ' + t.nombre); son.obraLista(); }
+          else if (t.sube) { aviso('El rival alcanzó el nivel ' + t.sube); son.alerta(); }
+          continue;
+        }
         const enVista = visible(d.x2, d.y2);
         if (d.tipo === 'traza' || d.tipo === 'boca') {
           if (!visible(d.x1, d.y1)) continue;
@@ -490,7 +507,8 @@
           else if (enVista) parte('chispa', d.x2, d.y2, (azar() - 0.5) * 3, (azar() - 0.5) * 3, 0.18, 0);
         } else if (d.tipo === 'impacto') {
           if (!enVista) continue;
-          estallido(d.x2, d.y2, 1); marcaSuelo('quemado', d.x2, d.y2, 0.42, 0, 15000);
+          const area = W.ARMAS[d.arma].area || 0; // los obuses de área dejan un cráter mayor
+          estallido(d.x2, d.y2, area ? 2 : 1); marcaSuelo('quemado', d.x2, d.y2, area || 0.42, 0, 15000);
           if (n++ < 6) son.impacto(cerca(d.x2, d.y2), paneo(d.x2));
         } else if (d.tipo === 'muerte') {
           if (!enVista) continue;
@@ -498,7 +516,7 @@
             for (let k = 0; k < d.tam * 2; k++) estallido(d.x2 + (azar() - 0.5) * d.tam * 0.8, d.y2 + (azar() - 0.5) * d.tam * 0.8, 2);
             estallido(d.x2, d.y2, 3); marcaSuelo('ruina', d.x2, d.y2, d.tam, 0, 45000);
           } else {
-            estallido(d.x2, d.y2, d.clase === 'infanteria' ? 1 : 2);
+            estallido(d.x2, d.y2, UNID[d.clase].cat === 'inf' ? 1 : 2);
             marcaSuelo('quemado', d.x2, d.y2, UNID[d.clase].radio * 1.6, 0, 20000);
             marcaSuelo('resto', d.x2, d.y2, UNID[d.clase].radio, d.ang, 25000, d.clase);
           }
@@ -522,6 +540,74 @@
       if (edificios > oido.edificios && oido.edificios) son.colocar();
       oido.edificios = edificios;
       if (J.alerta && J.alerta.t > oido.alerta + 300) { oido.alerta = J.alerta.t; if (cerca(J.alerta.x, J.alerta.y) === 0) son.alerta(); }
+    }
+
+    // ---------- avisos breves sobre el mapa ----------
+    const avisos = [];
+    function aviso(txt) { avisos.push({ txt, t0: performance.now() }); if (avisos.length > 4) avisos.shift(); }
+
+    // ---------- tecnología e inteligencia ----------
+    const precio = (d) => [d.costo ? String(d.costo) : '', d.pet ? d.pet + ' pet' : '', d.raros ? d.raros + ' rar' : '', d.info ? d.info + ' inf' : ''].filter(Boolean).join(' + ');
+    const botonesTec = [];
+    for (const clave in W.TEC) {
+      const t = W.TEC[clave], b = document.createElement('button');
+      b.className = 'btn'; b.type = 'button';
+      b.innerHTML = '<span class="n"></span><span class="d"><span class="c"></span><span class="x" title="Cancelar">×</span></span>';
+      b.title = t.que + ' Se investiga en: ' + EDIF[t.lugar].nombre + '.';
+      b.addEventListener('click', () => { son.activar(); W.orden(m, { t: 'investigar', j: YO, clave }); });
+      const cancelar = (ev) => { ev.preventDefault(); ev.stopPropagation(); W.orden(m, { t: 'cancelarInv', j: YO, clave }); };
+      b.addEventListener('contextmenu', cancelar); b.querySelector('.x').addEventListener('click', cancelar);
+      $('bTec').appendChild(b);
+      botonesTec.push({ b, clave, t, n: b.querySelector('.n'), c: b.querySelector('.c') });
+    }
+    const botonesIntel = [];
+    for (const clave in W.INTEL) {
+      const it = W.INTEL[clave], b = document.createElement('button');
+      b.className = 'btn'; b.type = 'button';
+      b.innerHTML = '<span class="n"></span><span class="c"></span>';
+      b.firstChild.textContent = it.nombre; b.title = it.que;
+      b.addEventListener('click', () => {
+        if (J.nivel < it.nivel || J.info < it.info) return;
+        if (clave === 'barrido') modo = 'barrido'; else { W.orden(m, { t: 'intel', j: YO, clave }); son.orden(); }
+      });
+      $('bIntel').appendChild(b);
+      botonesIntel.push({ b, clave, it, c: b.lastChild });
+    }
+    function actualizarTec() {
+      $('nivel').textContent = J.nivel;
+      for (const o of botonesTec) {
+        const t = o.t, enCurso = J.inv.find((i) => i.clave === o.clave);
+        const hecha = J.mejoras[o.clave] || (t.sube && J.nivel >= t.sube);
+        // Se muestran las que se pueden investigar ahora y la siguiente subida de nivel.
+        const visible = !hecha && (enCurso || (t.sube ? J.nivel === t.nivel : J.nivel >= t.nivel && J.cuenta[t.lugar]));
+        o.b.hidden = !visible;
+        if (!visible) continue;
+        let clase = 'btn', txt = precio(t), p = 0;
+        if (enCurso) { clase += ' con-x'; p = enCurso.prog / t.tiempo; txt = Math.floor(p * 100) + '%'; }
+        else if (J.inv.some((i) => W.TEC[i.clave].lugar === t.lugar)) clase += ' no';
+        else if (!W.puedePagar(J, t)) clase += ' caro';
+        if (o.b.className !== clase) o.b.className = clase;
+        if (o.n.textContent !== t.nombre) o.n.textContent = t.nombre;
+        if (o.c.textContent !== txt) o.c.textContent = txt;
+        o.b.style.setProperty('--p', (p * 100).toFixed(1) + '%');
+      }
+      const hechas = Object.keys(J.mejoras).length;
+      const th = hechas ? hechas + (hechas === 1 ? ' mejora hecha' : ' mejoras hechas') : '';
+      if ($('hechas').textContent !== th) $('hechas').textContent = th;
+      $('secIntel').hidden = !J.cuenta.estacion;
+      for (const o of botonesIntel) {
+        const falta = J.nivel < o.it.nivel, clase = 'btn' + (falta ? ' no' : J.info < o.it.info ? ' caro' : ''), txt = falta ? 'nivel ' + o.it.nivel : o.it.info + ' inf';
+        if (o.b.className !== clase) o.b.className = clase;
+        if (o.c.textContent !== txt) o.c.textContent = txt;
+      }
+      // Interceptar: mientras dura, se ven los recursos del rival y qué produce.
+      let espia = '';
+      if (m.t < J.intercepta) {
+        const R = m.jug[1 - YO], obras = R.obras.filter((o) => !o.listo).map((o) => EDIF[o.tipo].nombre), tropas = Object.keys(R.colas).filter((t) => R.colas[t].n).map((t) => UNID[t].nombre);
+        espia = 'Rival · nivel ' + R.nivel + ' · ' + Math.floor(R.minerales) + ' min · ' + Math.floor(R.petroleo) + ' pet'
+          + (obras.length ? ' · construye: ' + obras.join(', ') : '') + (tropas.length ? ' · entrena: ' + tropas.join(', ') : '') + (R.inv.length ? ' · investiga: ' + R.inv.map((i) => W.TEC[i.clave].nombre).join(', ') : '');
+      }
+      if ($('espia').textContent !== espia) $('espia').textContent = espia;
     }
 
     // ---------- formación y demolición ----------
@@ -614,8 +700,8 @@
       const e = $('rEne'); e.textContent = J.uso + ' / ' + J.prod; e.className = J.uso > J.prod ? 'mal' : '';
       const ag = $('rAgu'); ag.textContent = J.aguaUso + ' / ' + (J.dios ? '∞' : J.aguaProd); ag.className = !J.dios && J.aguaUso >= J.aguaProd ? 'mal' : '';
       for (const o of botones) {
-        const d = o.d, req = W.tieneReq(m, YO, d.req);
-        let clase = 'btn', txt = d.costo + (d.pet ? ' + ' + d.pet + ' pet' : ''), p = 0, nombre = d.nombre;
+        const d = o.d, sinNivel = (d.nivel || 1) > J.nivel, req = W.tieneReq(m, YO, d.req) && !sinNivel;
+        let clase = 'btn', txt = sinNivel ? 'nivel ' + d.nivel : precio(d), p = 0, nombre = d.nombre;
         const caro = !W.puedePagar(J, d);
         if (o.esEdif) {
           let n = 0, listas = 0, activa = null; // cada tipo tiene su cola: avanza la primera sin terminar
@@ -637,7 +723,7 @@
         if (o.n.textContent !== nombre) o.n.textContent = nombre;
         o.b.style.setProperty('--p', (p * 100).toFixed(1) + '%');
       }
-      listarGrupos();
+      listarGrupos(); actualizarTec();
       const enCurso = new Set(J.obras.filter((a) => !a.listo).map((a) => a.tipo)).size;
       const reparto = enCurso > 1 ? enCurso + ' tipos a la vez: cada uno a 1/' + enCurso + ' de velocidad' : '';
       if ($('obras').textContent !== reparto) $('obras').textContent = reparto;
@@ -675,6 +761,7 @@
           if (W.puedeColocar(m, YO, tipoColocar, p.x, p.y)) { W.orden(m, { t: 'colocar', j: YO, tipo: tipoColocar, x: p.x, y: p.y }); modo = null; }
           return;
         }
+        if (modo === 'barrido') { W.orden(m, { t: 'intel', j: YO, clave: 'barrido', x: wx, y: wy }); son.orden(); modo = null; return; }
         if (modo === 'amover' || modo === 'patrulla') {
           const ids = unidadesSel().map((u) => u.id);
           if (ids.length) { W.orden(m, { t: modo, j: YO, ids, x: wx, y: wy, enc: ev.shiftKey, forma }); marca(wx, wy, P.mal); son.orden(); }

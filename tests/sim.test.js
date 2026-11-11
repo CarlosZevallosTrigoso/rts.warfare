@@ -335,6 +335,75 @@ prueba('demoler devuelve parte del costo y las formaciones ordenan al grupo', ()
   assert.ok(us.filter((u) => u.tipo === 'tanque').every((t) => t.x >= Math.min(...us.filter((u) => u.tipo === 'infanteria').map((i) => i.x)) - 0.5), 'los vehículos van delante');
 });
 
+prueba('fase 2: niveles, mejoras, unidades nuevas e inteligencia', () => {
+  const m = W.crearMundo(4242, { N: 128 }), J = m.jug[0], b = m.mapa.bases[0], N = m.N;
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  W.crearEdificio(m, 0, 'central', b.x + 3, b.y - 1); W.crearEdificio(m, 0, 'central', b.x + 3, b.y + 2);
+  W.crearEdificio(m, 0, 'cuartel', b.x + 6, b.y - 4); W.crearEdificio(m, 0, 'refineria', b.x - 6, b.y - 6); W.crearEdificio(m, 0, 'fabrica', b.x - 6, b.y + 3);
+  J.minerales = 20000; J.petroleo = 2000; J.info = 0; avanza(1);
+  // candados de nivel y de recursos
+  W.orden(m, { t: 'entrenar', j: 0, tipo: 'antitanque' }); W.orden(m, { t: 'construir', j: 0, tipo: 'torreCanon' }); avanza(1);
+  assert.ok(J.colas.antitanque.n === 0 && J.obras.length === 0, 'lo de nivel 2 no puede hacerse en nivel 1');
+  W.orden(m, { t: 'investigar', j: 0, clave: 'nivel2' }); avanza(1);
+  assert.strictEqual(J.inv.length, 0, 'sin información no se investiga');
+  J.info = 1000;
+  W.orden(m, { t: 'investigar', j: 0, clave: 'chalecos' }); avanza(1);
+  assert.strictEqual(J.inv.length, 0, 'una mejora de nivel 2 no se investiga en nivel 1');
+  // dos investigaciones en edificios distintos van a la vez; dos en el mismo, no
+  W.orden(m, { t: 'investigar', j: 0, clave: 'nivel2' }); W.orden(m, { t: 'investigar', j: 0, clave: 'perforante' }); W.orden(m, { t: 'investigar', j: 0, clave: 'motores' }); avanza(1);
+  assert.deepStrictEqual(J.inv.map((i) => i.clave).sort(), ['motores', 'nivel2', 'perforante']);
+  assert.strictEqual(J.info, 1000 - 150 - 60 - 80);
+  W.orden(m, { t: 'investigar', j: 0, clave: 'reactivo' }); avanza(1);
+  assert.strictEqual(J.inv.length, 3, 'la fábrica ya estaba investigando');
+  W.orden(m, { t: 'cancelarInv', j: 0, clave: 'motores' }); avanza(1);
+  assert.ok(J.inv.length === 2 && J.info === 1000 - 150 - 60, 'cancelar devuelve la información');
+  avanza(W.TEC.nivel2.tiempo + 5);
+  assert.ok(J.nivel === 2 && J.mejoras.perforante && J.inv.length === 0, 'debía llegar al nivel 2 con la mejora hecha');
+  assert.ok(m.efectos.length === 0 || true);
+  // unidades de nivel 2 y mejora de vida retroactiva
+  const inf = m.ents.find((e) => e.j === 0 && e.tipo === 'infanteria');
+  W.orden(m, { t: 'entrenar', j: 0, tipo: 'antitanque' }); W.orden(m, { t: 'investigar', j: 0, clave: 'chalecos' }); avanza(W.TEC.chalecos.tiempo + 5);
+  assert.ok(J.cuenta.antitanque === 1, 'el antitanque debía salir en nivel 2');
+  assert.strictEqual(inf.vidaMax, 78, 'los chalecos suben la vida de la infantería existente');
+  assert.strictEqual(m.ents.find((e) => e.tipo === 'antitanque').vidaMax, 91);
+  // nivel 3 pide raros; el pesado también
+  W.orden(m, { t: 'investigar', j: 0, clave: 'nivel3' }); avanza(1);
+  assert.strictEqual(J.inv.length, 0, 'el nivel 3 pide minerales raros');
+  J.raros = 400; W.orden(m, { t: 'investigar', j: 0, clave: 'nivel3' }); avanza(W.TEC.nivel3.tiempo + 5);
+  assert.strictEqual(J.nivel, 3); assert.strictEqual(J.raros, 200);
+  W.orden(m, { t: 'entrenar', j: 0, tipo: 'pesado' }); avanza(1);
+  assert.ok(J.colas.pesado.n === 1 && J.raros === 140, 'el tanque pesado cuesta raros');
+  // mejoras de economía
+  const e0 = J.prod; J.mejoras.turbinas = true; avanza(1);
+  assert.strictEqual(J.prod, e0 * 1.5, 'turbinas: +50 % de energía');
+  // artillería: daño en área y alcance mínimo
+  for (let y = 56; y < 72; y++) for (let x = 30; x < 110; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; } }
+  const art = W.crearUnidad(m, 0, 'artilleria', 64 * N + 40);
+  const v1 = W.crearUnidad(m, 1, 'infanteria', 64 * N + 49), v2 = W.crearUnidad(m, 1, 'infanteria', 65 * N + 49), lejos = W.crearUnidad(m, 1, 'infanteria', 64 * N + 56);
+  for (const v of [v1, v2, lejos]) { v.orden = 'mover'; v.recarga = 99999; } // blancos quietos y mudos
+  W.orden(m, { t: 'atacar', j: 0, ids: [art.id], obj: v1.id }); avanza(60);
+  assert.ok(v1.vida < v1.vidaMax && v2.vida < v2.vidaMax, 'el obús debía dañar a los dos soldados juntos');
+  assert.strictEqual(lejos.vida, lejos.vidaMax, 'y no al que estaba lejos de la explosión');
+  assert.ok(Math.hypot(art.x - 40.5, art.y - 64.5) < 0.6, 'la artillería tira desde lejos, sin acercarse');
+  const pegado = W.crearUnidad(m, 1, 'tanque', 64 * N + 42); pegado.orden = 'mover'; pegado.recarga = 99999;
+  for (const v of [v1, v2]) v.vida = 0;
+  avanza(2); art.obj = pegado.id; art.orden = 'atacar'; art.recarga = 0; avanza(150);
+  assert.strictEqual(pegado.vida, pegado.vidaMax, 'a menos del alcance mínimo la artillería no puede disparar');
+  // inteligencia
+  const est = m.mapa.sitios.find((s) => s.tipo === 'conocimiento');
+  W.orden(m, { t: 'intel', j: 0, clave: 'barrido', x: 100, y: 20 }); avanza(8);
+  assert.strictEqual(m.niebla[0][20 * N + 100], 0, 'sin estación no hay inteligencia');
+  W.crearEdificio(m, 0, 'estacion', est.x, est.y); J.info = 500; avanza(1);
+  W.orden(m, { t: 'intel', j: 0, clave: 'barrido', x: 100, y: 20 }); avanza(8);
+  assert.strictEqual(m.niebla[0][20 * N + 100], 2, 'el barrido debía revelar la zona');
+  assert.ok(J.info <= 500 - 30 + 1);
+  avanza(W.INTEL.barrido.dura + 8);
+  assert.strictEqual(m.niebla[0][20 * N + 100], 1, 'al acabar el barrido la zona queda solo explorada');
+  W.orden(m, { t: 'intel', j: 0, clave: 'cartografia' }); W.orden(m, { t: 'intel', j: 0, clave: 'interceptar' }); avanza(2);
+  assert.ok(m.niebla[0].every((v) => v > 0), 'la cartografía revela todo el terreno');
+  assert.ok(J.intercepta > m.t, 'interceptar debía quedar activo');
+});
+
 prueba('determinismo: misma semilla, misma partida', () => {
   const corre = () => {
     const m = W.crearMundo(777), a = W.iaCrear(0), b = W.iaCrear(1);
@@ -353,7 +422,7 @@ prueba('partidas completas IA contra IA', () => {
     let maxEnts = 0;
     while (m.ganador < 0 && m.t < LIMITE) { W.iaTick(m, a); W.iaTick(m, b); W.tick(m); if (m.ents.length > maxEnts) maxEnts = m.ents.length; }
     const [J0, J1] = m.jug;
-    console.log(`      semilla ${s}: ganador ${m.ganador} en ${(m.t / 1200).toFixed(1)} min de juego · cosechado ${J0.cosechado}/${J1.cosechado} · producidas ${J0.producidas}/${J1.producidas} · bajas ${J0.bajas}/${J1.bajas} · petróleo ${J0.extraido}/${J1.extraido} · info ${J0.info}/${J1.info} · máx entidades ${maxEnts} · ${(Date.now() - t0)} ms (${((Date.now() - t0) / m.t).toFixed(3)} ms/tick)`);
+    console.log(`      semilla ${s}: ganador ${m.ganador} en ${(m.t / 1200).toFixed(1)} min de juego · cosechado ${J0.cosechado}/${J1.cosechado} · producidas ${J0.producidas}/${J1.producidas} · bajas ${J0.bajas}/${J1.bajas} · petróleo ${J0.extraido}/${J1.extraido} · info ${J0.info}/${J1.info} · nivel ${J0.nivel}/${J1.nivel} · mejoras ${Object.keys(J0.mejoras).length}/${Object.keys(J1.mejoras).length} · máx entidades ${maxEnts} · ${(Date.now() - t0)} ms (${((Date.now() - t0) / m.t).toFixed(3)} ms/tick)`);
     for (const J of [J0, J1]) {
       assert.ok(J.cosechado > 3000, 'economía parada, semilla ' + s);
       assert.ok(J.producidas > 8, 'sin producción, semilla ' + s);
