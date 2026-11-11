@@ -517,7 +517,8 @@
   // ---------- frente, torreta y visión dirigida ----------
   const difAng = (a, b) => ((a - b + Math.PI) % TAU + TAU) % TAU - Math.PI;
   const girarHacia = (act, meta, paso) => { const d = difAng(meta, act); return Math.abs(d) <= paso ? meta : act + Math.sign(d) * paso; };
-  const COS_CONO = Math.cos(ECON.cono);
+  const COS_CONO = Math.cos(ECON.cono), COS_PERI = Math.cos(ECON.periferia);
+  const K_CONO = COS_CONO * Math.abs(COS_CONO), K_PERI = COS_PERI * Math.abs(COS_PERI); // cosenos al cuadrado con signo: comparan sin raíz
   // ¿Ve la unidad a ese enemigo? Cerca, en todas direcciones; lejos, solo dentro del cono frontal.
   function veDir(m, a, e, d) {
     const v = UNID[a.tipo].vision;
@@ -526,7 +527,8 @@
     if (q && Math.abs(difAng(Math.atan2(dy, dx), q.ang)) > ECON.arcoTrinchera) return false; // desde la trinchera solo se cubre su frente
     if (d <= v * ECON.visAt) return true;
     if (d > v * ECON.visAd) return false;
-    return dx * Math.cos(a.ang) + dy * Math.sin(a.ang) >= COS_CONO * Math.hypot(dx, dy);
+    const c = (dx * Math.cos(a.ang) + dy * Math.sin(a.ang)) / (Math.hypot(dx, dy) || 1); // coseno del ángulo respecto al frente
+    return c >= COS_CONO || (c >= COS_PERI && d <= v * ECON.visLado);
   }
   // Apunta el arma al blanco y dice si ya puede disparar. Con torreta gira solo la torreta; sin ella, el cuerpo entero
   // (y solo si está quieto: en marcha el cuerpo sigue el camino). Desde una trinchera no se sale de su arco frontal.
@@ -1006,14 +1008,17 @@
         continue;
       }
       // Las unidades ven cerca alrededor y lejos solo en un cono hacia su frente.
-      const v = UNID[e.tipo].vision, rc = v * ECON.visAt, rc2 = rc * rc, rl = v * ECON.visAd, rl2 = rl * rl, R = Math.ceil(rl);
-      const ux = Math.cos(e.ang), uy = Math.sin(e.ang), k2 = COS_CONO * COS_CONO;
+      const v = UNID[e.tipo].vision, rc = v * ECON.visAt, rc2 = rc * rc, rs = v * ECON.visLado, rs2 = rs * rs, rl = v * ECON.visAd, rl2 = rl * rl, R = Math.ceil(rl);
+      const ux = Math.cos(e.ang), uy = Math.sin(e.ang);
       for (let dy = -R; dy <= R; dy++) {
         const y = cy + dy; if (y < 0 || y >= N) continue;
         for (let dx = -R; dx <= R; dx++) {
           const x = cx + dx, d2 = dx * dx + dy * dy;
           if (x < 0 || x >= N || d2 > rl2) continue;
-          if (d2 > rc2) { const p = dx * ux + dy * uy; if (p <= 0 || p * p < k2 * d2) continue; }
+          if (d2 > rc2) { // fuera del círculo cercano: al frente llega lejos, a los costados menos, detrás nada
+            const p = dx * ux + dy * uy, s = p * Math.abs(p);
+            if (s < K_CONO * d2 && (d2 > rs2 || s < K_PERI * d2)) continue;
+          }
           f[y * N + x] = 2;
         }
       }

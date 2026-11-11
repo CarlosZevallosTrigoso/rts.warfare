@@ -40,7 +40,9 @@
 
   // Frente: una unidad dispara solo hacia donde apunta. giroT: tiene torreta y gira así de rápido (rad por tick) sin mover el casco;
   // sin giroT gira el cuerpo entero. arco: cuánto puede desviarse el tiro del frente (por defecto ECON.arco).
-  // La visión llega más lejos hacia adelante (ver ECON.visAd, visAt, cono) y los vehículos sufren más por costados y espalda.
+  // La visión sigue, simplificado, el campo visual humano: una zona central (±60°, donde se ve con los dos ojos) que llega
+  // más lejos (ECON.visAd); una periferia hasta ±105° (ECON.periferia), que es donde acaba el campo de cada ojo, con menos
+  // alcance (visLado); y detrás, donde no se ve y solo se oye lo muy cercano (visAt). Los vehículos sufren más por costados y espalda.
   // vel en celdas por tick. cat: cola de producción (inf = cuartel, veh = fábrica).
   // giro: radianes por tick que puede girar; acel: cuánto gana de velocidad por tick.
   // agua: cuánta agua consume mientras vive (el agua es un balance, como la energía, y limita la tropa).
@@ -96,5 +98,5 @@
     cartografia: { nombre: 'Cartografía', info: 200, nivel: 3, que: 'Revela el terreno de todo el mapa.' },
   };
 
-  W.ECON = { inicio: 2500, petInicio: 150, cosecha: 5, descarga: 25, colaMax: 9, separacionColocar: 3, goteoCada: 5, vistaInicial: 22, obrasMax: 8, curaUnidad: 0.01, curaEdificio: 0.0025, curaCosto: 0.15, venta: 0.5, trinchera: 0.45, arco: 0.14, arcoTrinchera: 1.05, visAd: 1.3, visAt: 0.6, cono: 1.05, flanco: 1.25, espalda: 1.5, bosqueVeh: 0.6, bosqueCubre: 0.7, reposta: 12, fuelCae: 80, cavar: 80, aplasta: 10, bonoProd: 0.5, bonoMax: 2.5 };
+  W.ECON = { inicio: 2500, petInicio: 150, cosecha: 5, descarga: 25, colaMax: 9, separacionColocar: 3, goteoCada: 5, vistaInicial: 22, obrasMax: 8, curaUnidad: 0.01, curaEdificio: 0.0025, curaCosto: 0.15, venta: 0.5, trinchera: 0.45, arco: 0.14, arcoTrinchera: 1.05, visAd: 1.3, visLado: 0.75, visAt: 0.3, cono: 1.05, periferia: 1.83, flanco: 1.25, espalda: 1.5, bosqueVeh: 0.6, bosqueCubre: 0.7, reposta: 12, fuelCae: 80, cavar: 80, aplasta: 10, bonoProd: 0.5, bonoMax: 2.5 };
 })();

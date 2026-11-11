@@ -373,9 +373,9 @@
         ctx.restore();
         if (sel.has(e.id)) { ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(px, py, r * 1.9 + 2, 0, TAU); ctx.stroke(); }
         if (sel.has(e.id) && e.j === YO && lod && sel.size <= 40) { // lo que ve: cerca alrededor, lejos solo al frente
-          const E = W.ECON, rc = d.vision * E.visAt * z, rl = d.vision * E.visAd * z;
-          ctx.beginPath(); ctx.moveTo(px + Math.cos(g.a - E.cono) * rc, py + Math.sin(g.a - E.cono) * rc);
-          ctx.arc(px, py, rl, g.a - E.cono, g.a + E.cono); ctx.arc(px, py, rc, g.a + E.cono, g.a - E.cono + TAU); ctx.closePath();
+          const E = W.ECON, rf = d.vision * E.visAd * z, rs = d.vision * E.visLado * z, rb = d.vision * E.visAt * z, a = g.a;
+          ctx.beginPath(); ctx.arc(px, py, rf, a - E.cono, a + E.cono); ctx.arc(px, py, rs, a + E.cono, a + E.periferia);
+          ctx.arc(px, py, rb, a + E.periferia, a - E.periferia + TAU); ctx.arc(px, py, rs, a - E.periferia, a - E.cono); ctx.closePath();
           ctx.fillStyle = P.tinta; ctx.globalAlpha = 0.035; ctx.fill();
           ctx.globalAlpha = 0.28; ctx.lineWidth = 1; ctx.setLineDash([3, 4]); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
         }
@@ -452,7 +452,7 @@
         else if (raton.dentro && d > 0.4 && d < 9) {
           giroCerca = true;
           ctx.globalAlpha = 0.8; flecha(ox + g.x * z, oy + g.y * z, raton.x, raton.y, P.tinta); ctx.globalAlpha = 1;
-          ctx.fillStyle = P.tinta; ctx.fillText('clic derecho: mirar hacia aquí', raton.x + 14, raton.y - 8);
+          ctx.fillStyle = P.tinta; ctx.fillText('clic: mirar hacia aquí', raton.x + 14, raton.y - 8);
         }
       }
       for (const s of signos) { // ! pide apoyo, ✓ acude
@@ -891,26 +891,28 @@
           if (!(modo === 'patrulla' && ev.shiftKey)) modo = null; // con Mayús se siguen añadiendo puntos de patrulla
           return;
         }
-        raton.izq = true; raton.x0 = raton.x; raton.y0 = raton.y; giroPend = null;
+        raton.izq = true; raton.x0 = raton.x; raton.y0 = raton.y;
         return;
       }
       if (ev.button === 2) { raton.der = true; raton.arrastre = false; raton.xd = raton.x; raton.yd = raton.y; }
     });
     // Clic derecho sin mover = orden; clic derecho arrastrando = desplazar el mapa (como en Red Alert).
     // Con Mayús la orden se encadena detrás de las que ya tiene la unidad.
+    // Segundo clic (con cualquier botón) cerca del destino recién ordenado: fija hacia dónde queda mirando el grupo.
+    function orientar(wx, wy) {
+      if (!giroPend || !mismaSel(giroPend.ids)) return false;
+      const g = giroPend, d = Math.hypot(wx - g.x, wy - g.y), en = entEn(wx, wy);
+      if (d <= 0.4 || d >= 9 || en) return false; // sobre una unidad o un edificio, el clic es para ellos
+      const rumbo = Math.atan2(wy - g.y, wx - g.x);
+      W.orden(m, { t: g.tipo, j: YO, ids: g.ids, x: g.x, y: g.y, forma: g.forma, rumbo });
+      senales.push({ k: 'flecha', x: g.x, y: g.y, x2: g.x + Math.cos(rumbo) * 2.4, y2: g.y + Math.sin(rumbo) * 2.4, t0: performance.now(), dur: 1400 });
+      giroPend = null; son.orden();
+      return true;
+    }
     function ordenar(wx, wy, enc) {
         if (modo) { modo = null; return; }
         if (wx < 0 || wy < 0 || wx >= N || wy >= N) return;
-        if (giroPend && !enc && mismaSel(giroPend.ids)) {
-          const g = giroPend, d = Math.hypot(wx - g.x, wy - g.y), en = entEn(wx, wy);
-          if (d > 0.4 && d < 9 && !(en && en.j !== YO)) { // clic cerca del destino: es la orientación, no otra orden
-            const rumbo = Math.atan2(wy - g.y, wx - g.x);
-            W.orden(m, { t: g.tipo, j: YO, ids: g.ids, x: g.x, y: g.y, forma: g.forma, rumbo });
-            senales.push({ k: 'flecha', x: g.x, y: g.y, x2: g.x + Math.cos(rumbo) * 2.4, y2: g.y + Math.sin(rumbo) * 2.4, t0: performance.now(), dur: 1400 });
-            giroPend = null; son.orden();
-            return;
-          }
-        }
+        if (!enc && orientar(wx, wy)) return;
         giroPend = null;
         const us = unidadesSel();
         if (!us.length) { // con un cuartel o una fábrica seleccionados: punto de reunión
@@ -951,8 +953,10 @@
       }
       if (ev.button !== 0 || !raton.izq) return;
       raton.izq = false;
+      const clic = Math.hypot(raton.x - raton.x0, raton.y - raton.y0) <= 5;
+      if (clic && !ev.shiftKey && orientar(aMundoX(raton.x), aMundoY(raton.y))) return; // el clic izquierdo también orienta
       if (!ev.shiftKey) sel.clear();
-      if (Math.hypot(raton.x - raton.x0, raton.y - raton.y0) <= 5) {
+      if (clic) {
         const e = entEn(aMundoX(raton.x), aMundoY(raton.y));
         if (e && e.j === YO) { if (ev.shiftKey && sel.has(e.id)) sel.delete(e.id); else sel.add(e.id); }
         return;

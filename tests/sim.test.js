@@ -558,7 +558,10 @@ prueba('frente: torreta, giro del cuerpo, flancos y visión en cono', () => {
   const f = m.niebla[0], vis = W.UNID.infanteria.vision;
   assert.strictEqual(f[cel(60 + Math.floor(vis * 1.2), 50)], 2, 'debía ver más lejos al frente');
   assert.notStrictEqual(f[cel(60 - Math.floor(vis * 0.9), 50)], 2, 'no debía ver tan lejos a su espalda');
-  assert.strictEqual(f[cel(60 - 2, 50)], 2, 'cerca ve alrededor');
+  assert.strictEqual(f[cel(60 - 1, 50)], 2, 'muy cerca percibe también detrás');
+  assert.strictEqual(f[cel(60, 50 + 4)], 2, 'a los costados ve más que detrás');
+  assert.notStrictEqual(f[cel(60 - 3, 50)], 2, 'detrás, casi nada');
+  assert.notStrictEqual(f[cel(60, 50 + 6)], 2, 'y a los costados menos que al frente');
   // detección: no advierte al enemigo que tiene detrás hasta que este le dispara
   const atras = mudo(W.crearUnidad(m, 1, 'infanteria', cel(56, 50)));
   avanza(30);
