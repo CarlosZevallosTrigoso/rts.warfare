@@ -1016,10 +1016,13 @@
       const r = lienzo.getBoundingClientRect();
       cw = r.width; ch = r.height;
       lienzo.width = Math.max(1, Math.round(cw * dpr)); lienzo.height = Math.max(1, Math.round(ch * dpr));
+      limitarCam();
     }
     function limitarCam() {
-      cam.z = Math.max(4, Math.min(40, cam.z));
-      cam.x = Math.max(0, Math.min(N, cam.x)); cam.y = Math.max(0, Math.min(N, cam.y));
+      // El mapa cubre siempre toda la ventana: ni zoom ni cámara dejan ver fuera de él.
+      cam.z = Math.max(Math.max(cw, ch) / N, Math.min(40, cam.z));
+      const mx = cw / 2 / cam.z, my = ch / 2 / cam.z;
+      cam.x = Math.max(mx, Math.min(N - mx, cam.x)); cam.y = Math.max(my, Math.min(N - my, cam.y));
     }
     const aMundoX = (sx) => cam.x + (sx - cw / 2) / cam.z, aMundoY = (sy) => cam.y + (sy - ch / 2) / cam.z;
     const visible = (x, y) => x >= 0 && y >= 0 && x < N && y < N && m.niebla[YO][Math.floor(y) * N + Math.floor(x)] === 2;
