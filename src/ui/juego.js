@@ -7,8 +7,8 @@
   // Toda la paleta vive aquí: cambiar de tema no cuesta nada.
   const PALETAS = {
     // Grises para todo lo que es interfaz y terreno; el color queda para bandos y recursos.
-    clara:  { fondo: '#ededed', llano: '#f5f5f5', roca: '#5a5a5a', agua: '#aebfcc', bosque: '#c6cfbd', tinta: '#1a1a1a', mineral: '#4d7a38', raro: '#7d5aa6', niebla: [178, 178, 178], velo: 150, yo: '#3b6ea5', rival: '#c9622b', bien: '#4d7a38', mal: '#b0362f' },
-    oscura: { fondo: '#1c1c1c', llano: '#2c2c2c', roca: '#666666', agua: '#27353f', bosque: '#343d2f', tinta: '#e6e6e6', mineral: '#8fb574', raro: '#b08ad6', niebla: [8, 8, 8],       velo: 140, yo: '#6aa0d8', rival: '#e08a4f', bien: '#8fb574', mal: '#d0554a' },
+    clara:  { fondo: '#ededed', llano: '#f5f5f5', roca: '#5a5a5a', agua: '#aebfcc', bosque: '#c6cfbd', tinta: '#1a1a1a', mineral: '#4d7a38', raro: '#7d5aa6', niebla: [178, 178, 178], velo: 150, yo: '#3b6ea5', yoOsc: '#22466b', rival: '#c9622b', rivalOsc: '#853d15', bien: '#4d7a38', mal: '#b0362f' },
+    oscura: { fondo: '#1c1c1c', llano: '#2c2c2c', roca: '#666666', agua: '#27353f', bosque: '#343d2f', tinta: '#e6e6e6', mineral: '#8fb574', raro: '#b08ad6', niebla: [8, 8, 8],       velo: 140, yo: '#6aa0d8', yoOsc: '#35597f', rival: '#e08a4f', rivalOsc: '#96552a', bien: '#8fb574', mal: '#d0554a' },
   };
   const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
 
@@ -22,12 +22,12 @@
 
     let tema = 'clara';
     try { tema = localStorage.getItem('rts.tema') === 'oscura' ? 'oscura' : 'clara'; } catch (e) { /* sin almacenamiento: tema por defecto */ }
-    let P = PALETAS[tema];
+    let P = PALETAS[tema], COL = null; // COL: colores de ficha por bando
 
     const lienzo = $('lienzo'), ctx = lienzo.getContext('2d');
     const mini = $('mini'), mctx = mini.getContext('2d'), MS = mini.width;
     let cw = 0, ch = 0, dpr = 1;
-    const cam = { x: m.mapa.bases[YO].x, y: m.mapa.bases[YO].y, z: 14 };
+    const cam = { x: m.mapa.bases[YO].x, y: m.mapa.bases[YO].y, z: 22 };
     W.cam = cam;
     const son = W.crearSonido();
     W.son = son;
@@ -59,6 +59,8 @@
     function ponerTema(t) {
       tema = t; P = PALETAS[t]; document.body.dataset.tema = t;
       try { localStorage.setItem('rts.tema', t); } catch (e) { /* no pasa nada */ }
+      const comun = { luz: P.llano, suelo: P.llano, mineral: P.mineral, humo: P.roca, fuego: '#e8912d', mal: P.mal };
+      COL = { yo: Object.assign({ base: P.yo, osc: P.yoOsc }, comun), rival: Object.assign({ base: P.rival, osc: P.rivalOsc }, comun) };
       pintarTerreno(); pintarNiebla();
     }
 
@@ -71,7 +73,7 @@
     }
     function limitarCam() {
       // El mapa cubre siempre toda la ventana: ni zoom ni cámara dejan ver fuera de él.
-      cam.z = Math.max(Math.max(cw, ch) / N, Math.min(40, cam.z));
+      cam.z = Math.max(Math.max(cw, ch) / N, Math.min(72, cam.z));
       const mx = cw / 2 / cam.z, my = ch / 2 / cam.z;
       cam.x = Math.max(mx, Math.min(N - mx, cam.x)); cam.y = Math.max(my, Math.min(N - my, cam.y));
     }
@@ -91,6 +93,20 @@
     const unidadesSel = () => { const out = []; for (const id of sel) { const e = m.porId.get(id); if (e && !e.edif) out.push(e); } return out; };
     const esquinaColocar = (tipo) => { const t = EDIF[tipo].tam; return { x: Math.round(aMundoX(raton.x) - t / 2), y: Math.round(aMundoY(raton.y) - t / 2) }; };
 
+    // Orientación visual de cada ficha: rumbo del casco (a) y de la torreta o el arma (t).
+    const giros = new Map();
+    const hacia = (a, b, k) => a + ((((b - a + Math.PI) % TAU) + TAU) % TAU - Math.PI) * k;
+    function giro(e) {
+      const x = e.edif ? e.cx : e.x, y = e.edif ? e.cy : e.y;
+      let g = giros.get(e.id);
+      if (!g) { const a0 = Math.atan2(N / 2 - y, N / 2 - x); g = { a: a0, t: a0 }; giros.set(e.id, g); }
+      if (!e.edif) { const dx = e.x - e.px, dy = e.y - e.py; if (dx * dx + dy * dy > 1e-6) g.a = hacia(g.a, Math.atan2(dy, dx), 0.25); }
+      const o = e.obj ? m.porId.get(e.obj) : null;
+      g.t = hacia(g.t, o ? Math.atan2((o.edif ? o.cy : o.y) - y, (o.edif ? o.cx : o.x) - x) : g.a, 0.3);
+      return g;
+    }
+    const retroceso = (e, arma) => Math.max(0, (e.recarga / W.ARMAS[arma].recarga - 0.7) / 0.3); // 1 justo al disparar
+
     // ---------- dibujo ----------
     function dibujar(alfa) {
       const z = cam.z, ox = cw / 2 - cam.x * z, oy = ch / 2 - cam.y * z, f = m.niebla[YO], mp = m.mapa;
@@ -106,7 +122,11 @@
         const x = c % N, y = (c / N) | 0;
         if (fuera(x, y) || !f[c]) continue;
         const r = z * (0.13 + 0.25 * Math.min(1, mp.mineral[c] / 600)), px = ox + (x + 0.5) * z, py = oy + (y + 0.5) * z;
-        ctx.moveTo(px + r, py); ctx.arc(px, py, r, 0, TAU);
+        if (z < 8) { ctx.moveTo(px + r, py); ctx.arc(px, py, r, 0, TAU); continue; }
+        for (let k = 0; k < 3; k++) { // de cerca, cada celda es un racimo de tres cristales
+          const a = c * 1.7 + k * 2.1, qx = px + Math.cos(a) * z * 0.2, qy = py + Math.sin(a) * z * 0.2, h = r * (1.05 - k * 0.2), w = h * 0.55;
+          ctx.moveTo(qx, qy - h); ctx.lineTo(qx + w, qy); ctx.lineTo(qx, qy + h); ctx.lineTo(qx - w, qy); ctx.closePath();
+        }
       }
       ctx.fill();
       ctx.fillStyle = P.raro; ctx.beginPath();
@@ -130,47 +150,74 @@
         }
       }
 
-      const barras = [];
+      const barras = [], tiempo = performance.now();
+      const lod = z >= 16 ? 2 : z >= 8 ? 1 : 0; // nivel de detalle según el zoom
+      const descargando = new Set();
+      for (const e of m.ents) if (!e.edif && e.est === 'descargar') descargando.add(e.ref);
       for (const e of m.ents) {
         if (!e.edif || !veo(e) || fuera(e.cx, e.cy) && fuera(e.x, e.y)) continue;
-        const px = ox + e.x * z, py = oy + e.y * z, t = e.tam * z, cx = px + t / 2, cy = py + t / 2;
-        ctx.fillStyle = e.j === YO ? P.yo : P.rival;
-        ctx.strokeStyle = P.llano; ctx.lineWidth = Math.max(1, z * 0.1);
-        if (e.tipo === 'torreta') {
-          ctx.beginPath(); ctx.arc(cx, cy, t * 0.46, 0, TAU); ctx.fill();
-          ctx.beginPath(); ctx.arc(cx, cy, t * 0.2, 0, TAU); ctx.stroke();
-        } else {
-          ctx.fillRect(px + 1, py + 1, t - 2, t - 2);
-          ctx.beginPath();
-          const g = t * 0.24;
-          if (e.tipo === 'patio') ctx.rect(cx - g, cy - g, g * 2, g * 2);
-          else if (e.tipo === 'central') ctx.arc(cx, cy, g, 0, TAU);
-          else if (e.tipo === 'refineria') { ctx.moveTo(cx, cy - g); ctx.lineTo(cx + g, cy); ctx.lineTo(cx, cy + g); ctx.lineTo(cx - g, cy); ctx.closePath(); }
-          else if (e.tipo === 'cuartel') { ctx.moveTo(cx - g, cy); ctx.lineTo(cx + g, cy); ctx.moveTo(cx, cy - g); ctx.lineTo(cx, cy + g); }
-          else if (e.tipo === 'fabrica') { ctx.moveTo(cx, cy - g); ctx.lineTo(cx + g, cy + g); ctx.lineTo(cx - g, cy + g); ctx.closePath(); }
-          ctx.stroke();
+        const px = ox + e.x * z, py = oy + e.y * z, t = e.tam * z, Je = m.jug[e.j];
+        const est = { tiempo, id: e.id, vida: e.vida / e.vidaMax, deficit: Je.uso > Je.prod, activo: false, descarga: descargando.has(e.id), ang: 0, retro: 0 };
+        if (e.tipo === 'patio') est.activo = Je.obras.some((o) => !o.listo);
+        else if (e.tipo === 'fabrica') est.activo = Je.colas.veh.lista.length > 0;
+        else if (e.tipo === 'torreta') { est.ang = giro(e).t; est.retro = retroceso(e, 'bateria'); }
+        W.fichaEdificio(ctx, e, px, py, t, lod, e.j === YO ? COL.yo : COL.rival, est);
+        if (sel.has(e.id)) {
+          const g = Math.max(4, t * 0.18), a = px - 2, b = py - 2, c2 = px + t + 2, d2 = py + t + 2; // escuadras de selección
+          ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.beginPath();
+          ctx.moveTo(a, b + g); ctx.lineTo(a, b); ctx.lineTo(a + g, b); ctx.moveTo(c2 - g, b); ctx.lineTo(c2, b); ctx.lineTo(c2, b + g);
+          ctx.moveTo(c2, d2 - g); ctx.lineTo(c2, d2); ctx.lineTo(c2 - g, d2); ctx.moveTo(a + g, d2); ctx.lineTo(a, d2); ctx.lineTo(a, d2 - g); ctx.stroke();
+          if (e.tipo === 'torreta') { // alcance
+            ctx.setLineDash([5, 5]); ctx.globalAlpha = 0.5; ctx.beginPath(); ctx.arc(px + t / 2, py + t / 2, W.ARMAS.bateria.alcance * z, 0, TAU); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+          }
         }
-        if (sel.has(e.id)) { ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.strokeRect(px - 1, py - 1, t + 2, t + 2); }
-        if (sel.has(e.id) || e.vida < e.vidaMax) barras.push([px, py - 5, t, e.vida / e.vidaMax]);
+        if (sel.has(e.id) || e.vida < e.vidaMax) barras.push([px, py - 6, t, e.vida / e.vidaMax]);
       }
+
+      // Líneas de recorrido de las unidades seleccionadas: ruta pendiente, destino y objetivo.
+      ctx.lineWidth = 1.2; ctx.lineJoin = 'round';
+      for (const id of sel) {
+        const u = m.porId.get(id);
+        if (!u || u.edif || u.j !== YO) continue;
+        const ux = ox + (u.px + (u.x - u.px) * alfa) * z, uy = oy + (u.py + (u.y - u.py) * alfa) * z;
+        const hostil = u.orden === 'amover' || u.orden === 'atacar';
+        const color = u.tipo === 'cosechadora' && u.orden !== 'mover' ? P.mineral : hostil ? P.mal : P.bien;
+        if (u.ruta && u.ri < u.ruta.length) {
+          ctx.strokeStyle = color; ctx.globalAlpha = 0.75; ctx.setLineDash([6, 4]); ctx.lineDashOffset = -tiempo * 0.02;
+          ctx.beginPath(); ctx.moveTo(ux, uy);
+          let fx = ux, fy = uy;
+          for (let k = u.ri; k < u.ruta.length; k++) { const c = u.ruta[k]; fx = ox + ((c % N) + 0.5) * z; fy = oy + (((c / N) | 0) + 0.5) * z; ctx.lineTo(fx, fy); }
+          ctx.stroke(); ctx.setLineDash([]); ctx.lineDashOffset = 0;
+          ctx.fillStyle = color; ctx.beginPath(); ctx.arc(fx, fy, 3, 0, TAU); ctx.fill();
+          ctx.beginPath(); ctx.arc(fx, fy, 6.5, 0, TAU); ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+        const o = u.obj ? m.porId.get(u.obj) : null;
+        if (o && veo(o)) { // objetivo de ataque: línea y retícula
+          const tx = ox + (o.edif ? o.cx : o.x) * z, ty = oy + (o.edif ? o.cy : o.y) * z, rr = (o.edif ? o.tam * 0.6 : 0.7) * z;
+          ctx.strokeStyle = P.mal; ctx.globalAlpha = 0.6;
+          ctx.beginPath(); ctx.moveTo(ux, uy); ctx.lineTo(tx, ty);
+          ctx.moveTo(tx + rr, ty); ctx.arc(tx, ty, rr, 0, TAU);
+          ctx.moveTo(tx - rr * 1.3, ty); ctx.lineTo(tx - rr * 0.7, ty); ctx.moveTo(tx + rr * 0.7, ty); ctx.lineTo(tx + rr * 1.3, ty);
+          ctx.moveTo(tx, ty - rr * 1.3); ctx.lineTo(tx, ty - rr * 0.7); ctx.moveTo(tx, ty + rr * 0.7); ctx.lineTo(tx, ty + rr * 1.3);
+          ctx.stroke(); ctx.globalAlpha = 1;
+        }
+      }
+
       for (const e of m.ents) {
         if (e.edif || !veo(e)) continue;
         const wx = e.px + (e.x - e.px) * alfa, wy = e.py + (e.y - e.py) * alfa;
         if (fuera(wx, wy)) continue;
-        const px = ox + wx * z, py = oy + wy * z, r = Math.max(2, UNID[e.tipo].radio * z);
-        ctx.fillStyle = e.j === YO ? P.yo : P.rival;
-        ctx.beginPath();
-        if (e.tipo === 'infanteria') ctx.arc(px, py, r, 0, TAU);
-        else if (e.tipo === 'tanque') { ctx.moveTo(px, py - r * 1.15); ctx.lineTo(px + r * 1.15, py); ctx.lineTo(px, py + r * 1.15); ctx.lineTo(px - r * 1.15, py); ctx.closePath(); }
-        else ctx.rect(px - r, py - r, r * 2, r * 2);
-        ctx.fill();
-        if (e.tipo === 'cosechadora') { // el relleno interior muestra la carga
-          const q = e.carga / UNID.cosechadora.carga, i = r * 0.62;
-          ctx.fillStyle = P.llano; ctx.fillRect(px - i, py - i, i * 2, i * 2);
-          if (q > 0) { ctx.fillStyle = P.mineral; ctx.fillRect(px - i, py + i - i * 2 * q, i * 2, i * 2 * q); }
-        }
-        if (sel.has(e.id)) { ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(px, py, r * 1.5 + 2, 0, TAU); ctx.stroke(); }
-        if (sel.has(e.id) || e.vida < e.vidaMax) barras.push([px - r * 1.3, py - r * 1.5 - 7, r * 2.6, e.vida / e.vidaMax]);
+        const d = UNID[e.tipo], px = ox + wx * z, py = oy + wy * z, r = Math.max(2, d.radio * z), g = giro(e);
+        const anda = (e.x - e.px) ** 2 + (e.y - e.py) ** 2 > 1e-6;
+        ctx.save(); ctx.translate(px, py);
+        W.fichaUnidad(ctx, e, r, lod, e.j === YO ? COL.yo : COL.rival, {
+          ang: e.tipo === 'infanteria' && e.obj && !anda ? g.t : g.a, angT: g.t, retro: d.arma ? retroceso(e, d.arma) : 0,
+          anda, tiempo, carga: e.carga / (d.carga || 1), cosecha: e.est === 'cosechar',
+        });
+        ctx.restore();
+        if (sel.has(e.id)) { ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(px, py, r * 1.9 + 2, 0, TAU); ctx.stroke(); }
+        if (sel.has(e.id) || e.vida < e.vidaMax) barras.push([px - r * 1.3, py - r * 1.9 - 8, r * 2.6, e.vida / e.vidaMax]);
       }
 
       ctx.lineWidth = Math.max(1, z * 0.07);
@@ -503,6 +550,7 @@
       if (nieblaVista !== m.nieblaV) pintarNiebla();
       dibujar(pausa || m.ganador >= 0 ? 1 : Math.min(1, acum / PASO));
       if (cuadros % 6 === 0) { dibujarMini(); actualizarBarra(); }
+      if (cuadros % 900 === 0) for (const id of giros.keys()) if (!m.porId.has(id)) giros.delete(id);
       cuadros++;
       if (m.ganador >= 0 && !finMostrado) {
         finMostrado = true;
