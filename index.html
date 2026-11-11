@@ -287,11 +287,11 @@
   <div><h2>Semilla del mapa</h2><input id="op-s" inputmode="numeric" placeholder="al azar" autocomplete="off"></div>
   <button type="button" id="empezar">Empezar</button>
   <button type="button" id="continuar" hidden>Continuar la partida guardada</button>
-  <div id="version">versión 53</div>
+  <div id="version">versión 54</div>
 </div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finVer" href="#" title="Vuelve a ver la partida entera, con todo el mapa a la vista y a la velocidad que quieras.">ver repetición</a><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 53' };
+globalThis.W = { VERSION: 'versión 54' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -1212,6 +1212,27 @@ globalThis.W = { VERSION: 'versión 53' };
       case 'trampa': // un interruptor del panel ADMIN
         trampa(m, cmd.j, cmd.clave, cmd.valor);
         return;
+      case 'ocupar': { // la infantería se mete en la trinchera de esa celda, hasta llenar sus puestos; va cada una a su puesto y se queda
+        const q = m.trincheras.get(cmd.c); if (!q) return;
+        if (!q.dentro) q.dentro = [];
+        if (q.dentro.some((id) => { const o = id ? m.porId.get(id) : null; return o && o.vida > 0 && o.j !== cmd.j; })) return; // la tiene el otro bando: hay que echarlo antes
+        for (const u of propias(m, cmd)) {
+          if (UNID[u.tipo].cat !== 'inf' || u.trin === cmd.c + 1) continue;
+          let k = q.dentro.findIndex((id) => !id); if (k < 0) { if (q.dentro.length >= PLAZAS) break; k = q.dentro.length; }
+          q.dentro[k] = u.id; u.trin = cmd.c + 1;
+          const p = puestoTrinchera(q, k); limpiar(u); asignar(m, u, { t: 'mover', x: p.x, y: p.y, angFin: q.ang });
+        }
+        return;
+      }
+      case 'salir': { // deja la trinchera: sale por detrás y el puesto queda libre
+        for (const u of propias(m, cmd)) {
+          const q = u.trin ? m.trincheras.get(u.trin - 1) : null; if (!q) continue;
+          const k = q.dentro.indexOf(u.id); if (k >= 0) q.dentro[k] = 0; u.trin = 0;
+          const c = W.cercaLibre(m, q.x - Math.cos(q.ang) * 1.4, q.y - Math.sin(q.ang) * 1.4);
+          limpiar(u); asignar(m, u, { t: 'mover', x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 });
+        }
+        return;
+      }
       case 'conectar': { // el ingeniero civil une edificios propios con líneas de servicio: cmd.edifs en orden; con enc, se añade a lo que ya tiene encargado
         const u = propias(m, cmd).find((q) => UNID[q.tipo].tiende), es = (cmd.edifs || []).map((id) => m.porId.get(id)).filter((e) => e && e.edif && !e.infra && e.j === cmd.j && e.vida > 0);
         if (!u || es.length < 2) return;
@@ -1602,9 +1623,33 @@ globalThis.W = { VERSION: 'versión 53' };
   }
 
   // Atrincherada: infantería quieta sobre una trinchera. Recibe menos daño y no puede ser atropellada.
-  function enTrinchera(m, b) { return !b.edif && b.orden === 'nada' && UNID[b.tipo].cat === 'inf' && m.trincheras.has(Math.floor(b.y) * m.N + Math.floor(b.x)); }
+  // La trinchera es un lugar fijo con cuatro puestos, que queda en el mapa: la ocupa la infantería que se mete en ella (con la orden, o parándose
+  // encima si queda sitio) y la deja libre al salir. Vacía, la puede tomar cualquiera. Solo quien ocupa un puesto está a cubierto.
+  function enTrinchera(m, b) { if (b.edif || b.orden !== 'nada' || !b.trin) return false; const q = m.trincheras.get(b.trin - 1); return !!q && Math.abs(b.x - q.x) < 0.8 && Math.abs(b.y - q.y) < 0.8; } // en su puesto (los de los extremos asoman de la celda)
+  const PLAZAS = 4;
+  const puestoTrinchera = (q, k) => { const l = (k - (PLAZAS - 1) / 2) * 0.3; return { x: q.x - Math.sin(q.ang) * l, y: q.y + Math.cos(q.ang) * l }; };
+  W.puestoTrinchera = puestoTrinchera; W.PLAZAS_TRINCHERA = PLAZAS;
+  function tickTrincheras(m) { // cada medio segundo: quien se fue deja su puesto; quien se ha parado encima y cabe, lo toma
+    for (const [c, q] of m.trincheras) {
+      if (!q.dentro) q.dentro = [];
+      for (let k = 0; k < PLAZAS; k++) {
+        const u = q.dentro[k] ? m.porId.get(q.dentro[k]) : null;
+        if (!u) { q.dentro[k] = 0; continue; }
+        const aqui = Math.abs(u.x - q.x) < 0.8 && Math.abs(u.y - q.y) < 0.8, viene = u.orden === 'mover' && u.dest && Math.hypot(u.dest.x - q.x, u.dest.y - q.y) < 0.7;
+        if (u.vida <= 0 || u.trin !== c + 1 || !(aqui ? u.orden === 'nada' || viene : viene)) { q.dentro[k] = 0; if (u.trin === c + 1) u.trin = 0; }
+      }
+    }
+    for (const u of m.ents) {
+      if (u.edif || u.trin || u.orden !== 'nada' || u.v > 0.001 || UNID[u.tipo].cat !== 'inf') continue;
+      const c = Math.floor(u.y) * m.N + Math.floor(u.x), q = m.trincheras.get(c);
+      if (!q) continue;
+      if (q.dentro.some((id) => { const o = id ? m.porId.get(id) : null; return o && o.j !== u.j; })) continue; // ocupada por el otro bando
+      const k = q.dentro.findIndex((id) => !id); if (k < 0 || k >= PLAZAS) { if (q.dentro.length < PLAZAS) { q.dentro.push(u.id); u.trin = c + 1; } continue; }
+      q.dentro[k] = u.id; u.trin = c + 1;
+    }
+  }
   W.enTrinchera = enTrinchera;
-  function trincheraDe(m, b) { return enTrinchera(m, b) ? m.trincheras.get(Math.floor(b.y) * m.N + Math.floor(b.x)) : null; }
+  function trincheraDe(m, b) { return enTrinchera(m, b) ? m.trincheras.get(b.trin - 1) : null; }
   // El bosque cubre a la infantería (recibe menos daño) y frena a los vehículos.
   function enBosque(m, b) { return !b.edif && !UNID[b.tipo].aire && m.mapa.terreno[Math.floor(b.y) * m.N + Math.floor(b.x)] === T.BOSQUE; }
   W.enBosque = enBosque;
@@ -1956,7 +2001,7 @@ globalThis.W = { VERSION: 'versión 53' };
     }
     if (u.cava > 0) { // cavando: al terminar queda la trinchera en esa celda, para quien la ocupe
       if (u.orden !== 'nada') u.cava = 0;
-      else if ((u.cava -= d.cavaRapido ? 2 : 1) <= 0) m.trincheras.set(Math.floor(u.y) * m.N + Math.floor(u.x), { x: Math.floor(u.x) + 0.5, y: Math.floor(u.y) + 0.5, ang: u.ang });
+      else if ((u.cava -= d.cavaRapido ? 2 : 1) <= 0) { const c = Math.floor(u.y) * m.N + Math.floor(u.x); m.trincheras.set(c, { x: Math.floor(u.x) + 0.5, y: Math.floor(u.y) + 0.5, ang: u.ang, dentro: [u.id] }); u.trin = c + 1; } // quien la cava se queda en ella
     }
     if (!d.aire && (u.retira || u.retirando)) retirada(m, u);
     if (!d.arma) { // sin arma: solo se mueve; el ingeniero, además, repara lo que tenga cerca
@@ -2368,6 +2413,7 @@ globalThis.W = { VERSION: 'versión 53' };
     if (m.t % 10 === 0) { curar(m); colmena(m); }
 
     if (m.redSucia || !m.cob || m.t - m.redT >= 100) calcularRed(m);
+    if (m.t % 10 === 0) tickTrincheras(m);
     if (m.t % 10 === 0 && m.logistica !== false) { // suministro: fuera de la cobertura el contador sube; dentro, baja rápido. Los aviones repostan en su base: no cuenta.
       for (const u of m.ents) { if (u.edif || UNID[u.tipo].aire) continue; const dentro = m.cob[u.j][Math.floor(u.y) * m.N + Math.floor(u.x)] || m.jug[u.j].dios; u.sinSum = dentro ? Math.max(0, (u.sinSum || 0) - 40) : Math.min(ECON.sinSum + 200, (u.sinSum || 0) + 10); }
     }
@@ -3672,6 +3718,7 @@ globalThis.W = { VERSION: 'versión 53' };
         const ef = efectos(e); if (ef) t += ' · ' + ef;
         return t;
       }
+      { const tq = m.trincheras.get(c); if (tq) { const n = (tq.dentro || []).filter((id) => id && m.porId.get(id)).length, ajena = (tq.dentro || []).some((id) => { const o = id ? m.porId.get(id) : null; return o && o.j !== YO; }); return 'Trinchera · ' + n + '/' + W.PLAZAS_TRINCHERA + (ajena ? ' · del enemigo' : n ? '' : ' · vacía') + ' · clic derecho con infantería: ocuparla'; } }
       const pu = m.puestos.find((p) => Math.abs(p.x - wx) < 0.8 && Math.abs(p.y - wy) < 0.8);
       if (pu) return NOMBRE_PUESTO[pu.tipo] + (pu.dueno === YO ? ' · tuyo' : pu.dueno >= 0 ? ' · del rival' : ' · neutral: lo captura la infantería') + (pu.prog > 0 ? ' · capturando ' + Math.floor((pu.prog / W.ECON.captura) * 100) + ' %' : '');
       if (m.mapa.tipoMin[c] === 3) return 'Chatarra · ' + m.mapa.mineral[c] + ' (la reciclan las cosechadoras)';
@@ -3923,8 +3970,16 @@ globalThis.W = { VERSION: 'versión 53' };
         if (fuera(q.x, q.y) || !m.niebla[YO][Math.floor(q.y) * N + Math.floor(q.x)]) continue;
         const sx = ox + q.x * z, sy = oy + q.y * z;
         ctx.lineCap = 'round';
-        ctx.strokeStyle = '#5f5140'; ctx.lineWidth = Math.max(2, z * 0.2); ctx.beginPath(); ctx.arc(sx, sy, z * 0.3, q.ang - 2.1, q.ang + 2.1); ctx.stroke();
-        if (lod) { ctx.strokeStyle = '#a8977c'; ctx.lineWidth = Math.max(1, z * 0.06); ctx.beginPath(); ctx.arc(sx, sy, z * 0.39, q.ang - 1.9, q.ang + 1.9); ctx.stroke(); }
+        { // una zanja a lo ancho, con el parapeto por delante
+          const lx = -Math.sin(q.ang) * z * 0.56, ly = Math.cos(q.ang) * z * 0.56, fx = Math.cos(q.ang) * z * 0.22, fy = Math.sin(q.ang) * z * 0.22;
+          ctx.strokeStyle = 'rgba(95,81,64,0.55)'; ctx.lineWidth = Math.max(2, z * 0.34); ctx.beginPath(); ctx.moveTo(sx - lx, sy - ly); ctx.lineTo(sx + lx, sy + ly); ctx.stroke();
+          ctx.strokeStyle = '#5f5140'; ctx.lineWidth = Math.max(1.5, z * 0.1); ctx.beginPath(); ctx.moveTo(sx - lx + fx, sy - ly + fy); ctx.lineTo(sx + lx + fx, sy + ly + fy); ctx.stroke();
+          if (lod) { ctx.strokeStyle = '#a8977c'; ctx.lineWidth = Math.max(1, z * 0.05); ctx.beginPath(); ctx.moveTo(sx - lx + fx * 1.5, sy - ly + fy * 1.5); ctx.lineTo(sx + lx + fx * 1.5, sy + ly + fy * 1.5); ctx.stroke(); }
+        }
+        if (lod && z >= 14) { // sus cuatro puestos: hueco el libre, lleno el ocupado
+          ctx.lineWidth = 1; ctx.strokeStyle = '#5f5140';
+          for (let k = 0; k < W.PLAZAS_TRINCHERA; k++) { const p = W.puestoTrinchera(q, k), o = q.dentro && q.dentro[k] ? m.porId.get(q.dentro[k]) : null; ctx.beginPath(); ctx.arc(ox + p.x * z, oy + p.y * z, Math.max(1.5, z * 0.05), 0, TAU); if (o) { ctx.fillStyle = o.j === YO ? P.yo : P.rival; ctx.fill(); } ctx.stroke(); }
+        }
         ctx.lineCap = 'butt';
       }
       // Cuerpo de un edificio: la pared sur y, encima y desplazado hacia arriba, el tejado (la ficha de siempre).
@@ -4578,8 +4633,11 @@ globalThis.W = { VERSION: 'versión 53' };
     const valorVenta = (e) => Math.floor(EDIF[e.tipo].costo * W.ECON.venta * (e.vida / e.vidaMax));
     function vender() { for (const e of vendibles()) W.orden(m, { t: 'vender', j: YO, id: e.id }); }
     $('vender').addEventListener('click', vender);
+    const enPuesto = () => unidadesSel().filter((u) => u.j === YO && u.trin); // los que ocupan (o van a ocupar) una trinchera
     const paraCavar = () => unidadesSel().filter((u) => u.j === YO && UNID[u.tipo].cat === 'inf' && u.orden === 'nada' && !(u.cava > 0) && !W.enTrinchera(m, u));
-    function atrincherar() { const ids = paraCavar().map((u) => u.id); if (ids.length) { W.orden(m, { t: 'trinchera', j: YO, ids }); son.colocar(); } }
+    function atrincherar() { // la misma tecla: quien está en una trinchera, sale; quien no, cava la suya
+      const fuera = enPuesto().map((u) => u.id); if (fuera.length) { W.orden(m, { t: 'salir', j: YO, ids: fuera }); son.orden(); return; }
+      const ids = paraCavar().map((u) => u.id); if (ids.length) { W.orden(m, { t: 'trinchera', j: YO, ids }); son.colocar(); } }
     $('trinchera').addEventListener('click', atrincherar);
     // Guardar y cargar: la partida entera va al almacenamiento del navegador (una sola, la última).
     function guardar() {
@@ -4897,8 +4955,9 @@ globalThis.W = { VERSION: 'versión 53' };
       const tropas = vivos.filter((v) => !v.edif).length;
       $('secFormas').hidden = tropas < 2;
       const dem = vendibles(), bv = $('vender');
-      const cav = paraCavar().length, bt = $('trinchera');
-      bt.hidden = !cav;
+      const dentroT = enPuesto().length, cav = dentroT ? 0 : paraCavar().length, bt = $('trinchera');
+      bt.hidden = !cav && !dentroT;
+      if (dentroT) { const t = 'Salir de la trinchera · ' + dentroT; if (bt.textContent !== t) bt.textContent = t; }
       $('desplegar').hidden = !paraDesplegar().length;
       { const hay = unidadesSel().some((u) => UNID[u.tipo].tiende), bc = $('conectar'); bc.hidden = !hay; bc.classList.toggle('listo', modo === 'conectar'); if (!hay && modo === 'conectar') modo = null; }
       { const hay = unidadesSel().some((u) => UNID[u.tipo].traza), bz = $('trazar'); bz.hidden = !hay; bz.classList.toggle('listo', modo === 'trazar'); }
@@ -4996,6 +5055,15 @@ globalThis.W = { VERSION: 'versión 53' };
           return;
         }
         if (us.some((u) => { const b = UNID[u.tipo].aire && u.casa ? m.porId.get(u.casa) : null; return b && Math.hypot(wx - b.cx, wy - b.cy) > UNID[u.tipo].radioVuelo; })) aviso('Fuera del radio de vuelo: el avión llegará hasta el límite');
+        if (m.trincheras.has(c) && us.some((u) => UNID[u.tipo].cat === 'inf')) { // clic derecho sobre una trinchera: la infantería la ocupa; el resto va al lado
+          const q = m.trincheras.get(c), ajena = (q.dentro || []).some((id) => { const o = id ? m.porId.get(id) : null; return o && o.j !== YO; });
+          if (ajena) aviso('La trinchera está ocupada por el enemigo');
+          else {
+            const infs = us.filter((u) => UNID[u.tipo].cat === 'inf').map((u) => u.id), resto = us.filter((u) => UNID[u.tipo].cat !== 'inf').map((u) => u.id);
+            W.orden(m, { t: 'ocupar', j: YO, ids: infs, c }); if (resto.length) W.orden(m, { t: 'mover', j: YO, ids: resto, x: wx, y: wy, enc, forma });
+            marca(wx, wy, P.bien); son.orden(); return;
+          }
+        }
         const cos = us.filter((u) => u.tipo === 'cosechadora').map((u) => u.id);
         if (cos.length && m.mapa.tipoMin[c] >= 1 && m.niebla[YO][c]) {
           W.orden(m, { t: 'cosechar', j: YO, ids: cos, x: wx, y: wy });

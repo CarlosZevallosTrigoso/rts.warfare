@@ -1286,6 +1286,46 @@ prueba('tanda 1: cohetes uno tras otro, el camino solo sirve a su dueño y el m�
   assert.ok(tq.vida <= 110, 'pero no repara tanques: ' + tq.vida);
 });
 
+prueba('trincheras ocupables: cuatro puestos, ocupar, salir, y vacía la toma cualquiera', () => {
+  const m = W.crearMundo(4242, { N: 128 }), N = m.N;
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  for (let y = 40; y < 90; y++) for (let x = 20; x < 110; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; } }
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  // uno cava; queda dentro, en su puesto
+  const cavador = W.crearUnidad(m, 0, 'infanteria', 60 * N + 50); cavador.ang = 0;
+  W.orden(m, { t: 'trinchera', j: 0, ids: [cavador.id] }); avanza(W.ECON.cavar + 15);
+  const c = 60 * N + 50, q = m.trincheras.get(c);
+  assert.ok(q && W.enTrinchera(m, cavador) && q.dentro.includes(cavador.id), 'quien cava la trinchera la ocupa');
+  // otros cinco reciben la orden de ocuparla: entran tres (hay cuatro puestos) y los demás se quedan fuera
+  const us = []; for (let k = 0; k < 5; k++) us.push(W.crearUnidad(m, 0, 'infanteria', (63 + k) * N + 46));
+  W.orden(m, { t: 'ocupar', j: 0, ids: us.map((u) => u.id), c }); avanza(300);
+  const dentro = us.filter((u) => W.enTrinchera(m, u));
+  assert.equal(dentro.length, 3, 'caben cuatro en total: ' + dentro.length);
+  assert.equal(q.dentro.filter((id) => id).length, 4);
+  const pos = [cavador, ...dentro].map((u) => u.x.toFixed(2) + ',' + u.y.toFixed(2));
+  assert.equal(new Set(pos).size, 4, 'cada uno en su puesto, a la vista: ' + pos);
+  // a cubierto: el de dentro recibe menos daño que el de fuera
+  const fuera = us.find((u) => !W.enTrinchera(m, u)), v0 = [dentro[0].vida, fuera.vida];
+  const ene = W.crearUnidad(m, 1, 'infanteria', 60 * N + 54);
+  ene.obj = dentro[0].id; ene.orden = 'atacar'; avanza(60); const dDentro = v0[0] - dentro[0].vida; dentro[0].vida = v0[0];
+  ene.vida = 0; avanza(2);
+  // salir: el puesto queda libre y otro puede entrar
+  W.orden(m, { t: 'salir', j: 0, ids: [dentro[0].id] }); avanza(120);
+  assert.ok(!W.enTrinchera(m, dentro[0]) && !dentro[0].trin && q.dentro.filter((id) => id).length === 3, 'al salir deja el puesto');
+  W.orden(m, { t: 'ocupar', j: 0, ids: [fuera.id], c }); avanza(300);
+  assert.ok(W.enTrinchera(m, fuera), 'y otro lo toma');
+  // mientras esté ocupada, el enemigo no puede meterse; vacía, sí
+  const rival = W.crearUnidad(m, 1, 'infanteria', 70 * N + 70); rival.guardia = true;
+  W.orden(m, { t: 'ocupar', j: 1, ids: [rival.id], c }); avanza(5);
+  assert.ok(!rival.trin, 'ocupada por el otro bando no se puede tomar');
+  for (const id of q.dentro) { const u = id ? m.porId.get(id) : null; if (u) u.vida = 0; }
+  [dentro[0], ...us].forEach((u) => { u.vida = 0; }); avanza(15);
+  assert.equal(q.dentro.filter((id) => id).length, 0, 'vacía tras caer sus ocupantes');
+  W.orden(m, { t: 'ocupar', j: 1, ids: [rival.id], c }); avanza(700);
+  assert.ok(W.enTrinchera(m, rival), 'vacía, la toma el enemigo');
+  assert.ok(dDentro > 0, 'dentro también se recibe daño, pero menos');
+});
+
 prueba('puentes: la excavadora cruza el agua, todos lo usan y al caer se cierra', () => {
   const m = W.crearMundo(31, { N: 128 }), N = m.N, J = m.jug[0], T = W.TERRENO;
   m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);

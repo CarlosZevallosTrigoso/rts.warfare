@@ -501,6 +501,27 @@
       case 'trampa': // un interruptor del panel ADMIN
         trampa(m, cmd.j, cmd.clave, cmd.valor);
         return;
+      case 'ocupar': { // la infantería se mete en la trinchera de esa celda, hasta llenar sus puestos; va cada una a su puesto y se queda
+        const q = m.trincheras.get(cmd.c); if (!q) return;
+        if (!q.dentro) q.dentro = [];
+        if (q.dentro.some((id) => { const o = id ? m.porId.get(id) : null; return o && o.vida > 0 && o.j !== cmd.j; })) return; // la tiene el otro bando: hay que echarlo antes
+        for (const u of propias(m, cmd)) {
+          if (UNID[u.tipo].cat !== 'inf' || u.trin === cmd.c + 1) continue;
+          let k = q.dentro.findIndex((id) => !id); if (k < 0) { if (q.dentro.length >= PLAZAS) break; k = q.dentro.length; }
+          q.dentro[k] = u.id; u.trin = cmd.c + 1;
+          const p = puestoTrinchera(q, k); limpiar(u); asignar(m, u, { t: 'mover', x: p.x, y: p.y, angFin: q.ang });
+        }
+        return;
+      }
+      case 'salir': { // deja la trinchera: sale por detrás y el puesto queda libre
+        for (const u of propias(m, cmd)) {
+          const q = u.trin ? m.trincheras.get(u.trin - 1) : null; if (!q) continue;
+          const k = q.dentro.indexOf(u.id); if (k >= 0) q.dentro[k] = 0; u.trin = 0;
+          const c = W.cercaLibre(m, q.x - Math.cos(q.ang) * 1.4, q.y - Math.sin(q.ang) * 1.4);
+          limpiar(u); asignar(m, u, { t: 'mover', x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 });
+        }
+        return;
+      }
       case 'conectar': { // el ingeniero civil une edificios propios con líneas de servicio: cmd.edifs en orden; con enc, se añade a lo que ya tiene encargado
         const u = propias(m, cmd).find((q) => UNID[q.tipo].tiende), es = (cmd.edifs || []).map((id) => m.porId.get(id)).filter((e) => e && e.edif && !e.infra && e.j === cmd.j && e.vida > 0);
         if (!u || es.length < 2) return;
@@ -891,9 +912,33 @@
   }
 
   // Atrincherada: infantería quieta sobre una trinchera. Recibe menos daño y no puede ser atropellada.
-  function enTrinchera(m, b) { return !b.edif && b.orden === 'nada' && UNID[b.tipo].cat === 'inf' && m.trincheras.has(Math.floor(b.y) * m.N + Math.floor(b.x)); }
+  // La trinchera es un lugar fijo con cuatro puestos, que queda en el mapa: la ocupa la infantería que se mete en ella (con la orden, o parándose
+  // encima si queda sitio) y la deja libre al salir. Vacía, la puede tomar cualquiera. Solo quien ocupa un puesto está a cubierto.
+  function enTrinchera(m, b) { if (b.edif || b.orden !== 'nada' || !b.trin) return false; const q = m.trincheras.get(b.trin - 1); return !!q && Math.abs(b.x - q.x) < 0.8 && Math.abs(b.y - q.y) < 0.8; } // en su puesto (los de los extremos asoman de la celda)
+  const PLAZAS = 4;
+  const puestoTrinchera = (q, k) => { const l = (k - (PLAZAS - 1) / 2) * 0.3; return { x: q.x - Math.sin(q.ang) * l, y: q.y + Math.cos(q.ang) * l }; };
+  W.puestoTrinchera = puestoTrinchera; W.PLAZAS_TRINCHERA = PLAZAS;
+  function tickTrincheras(m) { // cada medio segundo: quien se fue deja su puesto; quien se ha parado encima y cabe, lo toma
+    for (const [c, q] of m.trincheras) {
+      if (!q.dentro) q.dentro = [];
+      for (let k = 0; k < PLAZAS; k++) {
+        const u = q.dentro[k] ? m.porId.get(q.dentro[k]) : null;
+        if (!u) { q.dentro[k] = 0; continue; }
+        const aqui = Math.abs(u.x - q.x) < 0.8 && Math.abs(u.y - q.y) < 0.8, viene = u.orden === 'mover' && u.dest && Math.hypot(u.dest.x - q.x, u.dest.y - q.y) < 0.7;
+        if (u.vida <= 0 || u.trin !== c + 1 || !(aqui ? u.orden === 'nada' || viene : viene)) { q.dentro[k] = 0; if (u.trin === c + 1) u.trin = 0; }
+      }
+    }
+    for (const u of m.ents) {
+      if (u.edif || u.trin || u.orden !== 'nada' || u.v > 0.001 || UNID[u.tipo].cat !== 'inf') continue;
+      const c = Math.floor(u.y) * m.N + Math.floor(u.x), q = m.trincheras.get(c);
+      if (!q) continue;
+      if (q.dentro.some((id) => { const o = id ? m.porId.get(id) : null; return o && o.j !== u.j; })) continue; // ocupada por el otro bando
+      const k = q.dentro.findIndex((id) => !id); if (k < 0 || k >= PLAZAS) { if (q.dentro.length < PLAZAS) { q.dentro.push(u.id); u.trin = c + 1; } continue; }
+      q.dentro[k] = u.id; u.trin = c + 1;
+    }
+  }
   W.enTrinchera = enTrinchera;
-  function trincheraDe(m, b) { return enTrinchera(m, b) ? m.trincheras.get(Math.floor(b.y) * m.N + Math.floor(b.x)) : null; }
+  function trincheraDe(m, b) { return enTrinchera(m, b) ? m.trincheras.get(b.trin - 1) : null; }
   // El bosque cubre a la infantería (recibe menos daño) y frena a los vehículos.
   function enBosque(m, b) { return !b.edif && !UNID[b.tipo].aire && m.mapa.terreno[Math.floor(b.y) * m.N + Math.floor(b.x)] === T.BOSQUE; }
   W.enBosque = enBosque;
@@ -1245,7 +1290,7 @@
     }
     if (u.cava > 0) { // cavando: al terminar queda la trinchera en esa celda, para quien la ocupe
       if (u.orden !== 'nada') u.cava = 0;
-      else if ((u.cava -= d.cavaRapido ? 2 : 1) <= 0) m.trincheras.set(Math.floor(u.y) * m.N + Math.floor(u.x), { x: Math.floor(u.x) + 0.5, y: Math.floor(u.y) + 0.5, ang: u.ang });
+      else if ((u.cava -= d.cavaRapido ? 2 : 1) <= 0) { const c = Math.floor(u.y) * m.N + Math.floor(u.x); m.trincheras.set(c, { x: Math.floor(u.x) + 0.5, y: Math.floor(u.y) + 0.5, ang: u.ang, dentro: [u.id] }); u.trin = c + 1; } // quien la cava se queda en ella
     }
     if (!d.aire && (u.retira || u.retirando)) retirada(m, u);
     if (!d.arma) { // sin arma: solo se mueve; el ingeniero, además, repara lo que tenga cerca
@@ -1657,6 +1702,7 @@
     if (m.t % 10 === 0) { curar(m); colmena(m); }
 
     if (m.redSucia || !m.cob || m.t - m.redT >= 100) calcularRed(m);
+    if (m.t % 10 === 0) tickTrincheras(m);
     if (m.t % 10 === 0 && m.logistica !== false) { // suministro: fuera de la cobertura el contador sube; dentro, baja rápido. Los aviones repostan en su base: no cuenta.
       for (const u of m.ents) { if (u.edif || UNID[u.tipo].aire) continue; const dentro = m.cob[u.j][Math.floor(u.y) * m.N + Math.floor(u.x)] || m.jug[u.j].dios; u.sinSum = dentro ? Math.max(0, (u.sinSum || 0) - 40) : Math.min(ECON.sinSum + 200, (u.sinSum || 0) + 10); }
     }

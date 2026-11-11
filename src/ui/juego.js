@@ -201,6 +201,7 @@
         const ef = efectos(e); if (ef) t += ' · ' + ef;
         return t;
       }
+      { const tq = m.trincheras.get(c); if (tq) { const n = (tq.dentro || []).filter((id) => id && m.porId.get(id)).length, ajena = (tq.dentro || []).some((id) => { const o = id ? m.porId.get(id) : null; return o && o.j !== YO; }); return 'Trinchera · ' + n + '/' + W.PLAZAS_TRINCHERA + (ajena ? ' · del enemigo' : n ? '' : ' · vacía') + ' · clic derecho con infantería: ocuparla'; } }
       const pu = m.puestos.find((p) => Math.abs(p.x - wx) < 0.8 && Math.abs(p.y - wy) < 0.8);
       if (pu) return NOMBRE_PUESTO[pu.tipo] + (pu.dueno === YO ? ' · tuyo' : pu.dueno >= 0 ? ' · del rival' : ' · neutral: lo captura la infantería') + (pu.prog > 0 ? ' · capturando ' + Math.floor((pu.prog / W.ECON.captura) * 100) + ' %' : '');
       if (m.mapa.tipoMin[c] === 3) return 'Chatarra · ' + m.mapa.mineral[c] + ' (la reciclan las cosechadoras)';
@@ -452,8 +453,16 @@
         if (fuera(q.x, q.y) || !m.niebla[YO][Math.floor(q.y) * N + Math.floor(q.x)]) continue;
         const sx = ox + q.x * z, sy = oy + q.y * z;
         ctx.lineCap = 'round';
-        ctx.strokeStyle = '#5f5140'; ctx.lineWidth = Math.max(2, z * 0.2); ctx.beginPath(); ctx.arc(sx, sy, z * 0.3, q.ang - 2.1, q.ang + 2.1); ctx.stroke();
-        if (lod) { ctx.strokeStyle = '#a8977c'; ctx.lineWidth = Math.max(1, z * 0.06); ctx.beginPath(); ctx.arc(sx, sy, z * 0.39, q.ang - 1.9, q.ang + 1.9); ctx.stroke(); }
+        { // una zanja a lo ancho, con el parapeto por delante
+          const lx = -Math.sin(q.ang) * z * 0.56, ly = Math.cos(q.ang) * z * 0.56, fx = Math.cos(q.ang) * z * 0.22, fy = Math.sin(q.ang) * z * 0.22;
+          ctx.strokeStyle = 'rgba(95,81,64,0.55)'; ctx.lineWidth = Math.max(2, z * 0.34); ctx.beginPath(); ctx.moveTo(sx - lx, sy - ly); ctx.lineTo(sx + lx, sy + ly); ctx.stroke();
+          ctx.strokeStyle = '#5f5140'; ctx.lineWidth = Math.max(1.5, z * 0.1); ctx.beginPath(); ctx.moveTo(sx - lx + fx, sy - ly + fy); ctx.lineTo(sx + lx + fx, sy + ly + fy); ctx.stroke();
+          if (lod) { ctx.strokeStyle = '#a8977c'; ctx.lineWidth = Math.max(1, z * 0.05); ctx.beginPath(); ctx.moveTo(sx - lx + fx * 1.5, sy - ly + fy * 1.5); ctx.lineTo(sx + lx + fx * 1.5, sy + ly + fy * 1.5); ctx.stroke(); }
+        }
+        if (lod && z >= 14) { // sus cuatro puestos: hueco el libre, lleno el ocupado
+          ctx.lineWidth = 1; ctx.strokeStyle = '#5f5140';
+          for (let k = 0; k < W.PLAZAS_TRINCHERA; k++) { const p = W.puestoTrinchera(q, k), o = q.dentro && q.dentro[k] ? m.porId.get(q.dentro[k]) : null; ctx.beginPath(); ctx.arc(ox + p.x * z, oy + p.y * z, Math.max(1.5, z * 0.05), 0, TAU); if (o) { ctx.fillStyle = o.j === YO ? P.yo : P.rival; ctx.fill(); } ctx.stroke(); }
+        }
         ctx.lineCap = 'butt';
       }
       // Cuerpo de un edificio: la pared sur y, encima y desplazado hacia arriba, el tejado (la ficha de siempre).
@@ -1107,8 +1116,11 @@
     const valorVenta = (e) => Math.floor(EDIF[e.tipo].costo * W.ECON.venta * (e.vida / e.vidaMax));
     function vender() { for (const e of vendibles()) W.orden(m, { t: 'vender', j: YO, id: e.id }); }
     $('vender').addEventListener('click', vender);
+    const enPuesto = () => unidadesSel().filter((u) => u.j === YO && u.trin); // los que ocupan (o van a ocupar) una trinchera
     const paraCavar = () => unidadesSel().filter((u) => u.j === YO && UNID[u.tipo].cat === 'inf' && u.orden === 'nada' && !(u.cava > 0) && !W.enTrinchera(m, u));
-    function atrincherar() { const ids = paraCavar().map((u) => u.id); if (ids.length) { W.orden(m, { t: 'trinchera', j: YO, ids }); son.colocar(); } }
+    function atrincherar() { // la misma tecla: quien está en una trinchera, sale; quien no, cava la suya
+      const fuera = enPuesto().map((u) => u.id); if (fuera.length) { W.orden(m, { t: 'salir', j: YO, ids: fuera }); son.orden(); return; }
+      const ids = paraCavar().map((u) => u.id); if (ids.length) { W.orden(m, { t: 'trinchera', j: YO, ids }); son.colocar(); } }
     $('trinchera').addEventListener('click', atrincherar);
     // Guardar y cargar: la partida entera va al almacenamiento del navegador (una sola, la última).
     function guardar() {
@@ -1426,8 +1438,9 @@
       const tropas = vivos.filter((v) => !v.edif).length;
       $('secFormas').hidden = tropas < 2;
       const dem = vendibles(), bv = $('vender');
-      const cav = paraCavar().length, bt = $('trinchera');
-      bt.hidden = !cav;
+      const dentroT = enPuesto().length, cav = dentroT ? 0 : paraCavar().length, bt = $('trinchera');
+      bt.hidden = !cav && !dentroT;
+      if (dentroT) { const t = 'Salir de la trinchera · ' + dentroT; if (bt.textContent !== t) bt.textContent = t; }
       $('desplegar').hidden = !paraDesplegar().length;
       { const hay = unidadesSel().some((u) => UNID[u.tipo].tiende), bc = $('conectar'); bc.hidden = !hay; bc.classList.toggle('listo', modo === 'conectar'); if (!hay && modo === 'conectar') modo = null; }
       { const hay = unidadesSel().some((u) => UNID[u.tipo].traza), bz = $('trazar'); bz.hidden = !hay; bz.classList.toggle('listo', modo === 'trazar'); }
@@ -1525,6 +1538,15 @@
           return;
         }
         if (us.some((u) => { const b = UNID[u.tipo].aire && u.casa ? m.porId.get(u.casa) : null; return b && Math.hypot(wx - b.cx, wy - b.cy) > UNID[u.tipo].radioVuelo; })) aviso('Fuera del radio de vuelo: el avión llegará hasta el límite');
+        if (m.trincheras.has(c) && us.some((u) => UNID[u.tipo].cat === 'inf')) { // clic derecho sobre una trinchera: la infantería la ocupa; el resto va al lado
+          const q = m.trincheras.get(c), ajena = (q.dentro || []).some((id) => { const o = id ? m.porId.get(id) : null; return o && o.j !== YO; });
+          if (ajena) aviso('La trinchera está ocupada por el enemigo');
+          else {
+            const infs = us.filter((u) => UNID[u.tipo].cat === 'inf').map((u) => u.id), resto = us.filter((u) => UNID[u.tipo].cat !== 'inf').map((u) => u.id);
+            W.orden(m, { t: 'ocupar', j: YO, ids: infs, c }); if (resto.length) W.orden(m, { t: 'mover', j: YO, ids: resto, x: wx, y: wy, enc, forma });
+            marca(wx, wy, P.bien); son.orden(); return;
+          }
+        }
         const cos = us.filter((u) => u.tipo === 'cosechadora').map((u) => u.id);
         if (cos.length && m.mapa.tipoMin[c] >= 1 && m.niebla[YO][c]) {
           W.orden(m, { t: 'cosechar', j: YO, ids: cos, x: wx, y: wy });
