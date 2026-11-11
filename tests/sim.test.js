@@ -546,6 +546,60 @@ prueba('fase 3: aviación, combustible y defensa antiaérea', () => {
   assert.ok(!m.porId.has(bo.id), 'el caza debía derribar al bombardero: ' + bo.vida);
 });
 
+prueba('frente: torreta, giro del cuerpo, flancos y visión en cono', () => {
+  const m = W.crearMundo(99, { N: 128 }), N = m.N;
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  for (let y = 40; y < 100; y++) for (let x = 30; x < 110; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.paso[i] = 1; } }
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  const cel = (x, y) => y * N + x;
+  const mudo = (u) => { u.recarga = 99999; u.guardia = true; return u; };
+  // visión: lejos hacia adelante, corta hacia atrás
+  const v = W.crearUnidad(m, 0, 'infanteria', cel(60, 50)); v.ang = 0; avanza(4);
+  const f = m.niebla[0], vis = W.UNID.infanteria.vision;
+  assert.strictEqual(f[cel(60 + Math.floor(vis * 1.2), 50)], 2, 'debía ver más lejos al frente');
+  assert.notStrictEqual(f[cel(60 - Math.floor(vis * 0.9), 50)], 2, 'no debía ver tan lejos a su espalda');
+  assert.strictEqual(f[cel(60 - 2, 50)], 2, 'cerca ve alrededor');
+  // detección: no advierte al enemigo que tiene detrás hasta que este le dispara
+  const atras = mudo(W.crearUnidad(m, 1, 'infanteria', cel(56, 50)));
+  avanza(30);
+  assert.strictEqual(v.obj, 0, 'no debía detectar lo que tiene a la espalda');
+  const delante = mudo(W.crearUnidad(m, 1, 'infanteria', cel(63, 50)));
+  avanza(10);
+  assert.strictEqual(v.obj, delante.id, 'debía detectar lo que tiene delante');
+  for (const u of [v, atras, delante]) u.vida = 0; avanza(2);
+  // tanque: gira la torreta, no el casco, y tarda en apuntar a lo que tiene detrás
+  const tq = W.crearUnidad(m, 0, 'tanque', cel(60, 60)); tq.ang = tq.angT = 0;
+  const b1 = mudo(W.crearUnidad(m, 1, 'tanque', cel(56, 60))); b1.ang = Math.PI; // de espaldas al tanque... y el tanque de espaldas a él
+  W.orden(m, { t: 'atacar', j: 0, ids: [tq.id], obj: b1.id }); avanza(5);
+  assert.strictEqual(tq.recarga, 0, 'aún no debía haber disparado: la torreta está girando');
+  assert.ok(tq.ang === 0 && tq.angT !== 0, 'gira la torreta, no el casco');
+  avanza(30);
+  assert.ok(tq.recarga > 0 && Math.abs(Math.abs(tq.angT) - Math.PI) < 0.2 && tq.ang === 0, 'debía disparar con la torreta vuelta: ' + tq.angT);
+  // flancos: el mismo cañonazo duele más por el costado y más por la espalda
+  const dano = (angBlanco) => { const b = mudo(W.crearUnidad(m, 1, 'tanque', cel(80, 80))); b.ang = angBlanco; const a = W.crearUnidad(m, 0, 'tanque', cel(76, 80)); a.ang = a.angT = 0;
+    W.orden(m, { t: 'atacar', j: 0, ids: [a.id], obj: b.id }); avanza(12); const d = b.vidaMax - b.vida; a.vida = 0; b.vida = 0; avanza(2); return d; };
+  tq.vida = 0; b1.vida = 0; avanza(2);
+  const frente = dano(Math.PI), costado = dano(Math.PI / 2), espalda = dano(0);
+  assert.ok(frente > 0 && Math.abs(costado / frente - W.ECON.flanco) < 0.01 && Math.abs(espalda / frente - W.ECON.espalda) < 0.01, 'flancos: ' + [frente, costado, espalda]);
+  // artillería: sin torreta, gira el cuerpo entero antes de tirar
+  const ar = W.crearUnidad(m, 0, 'artilleria', cel(60, 90)); ar.ang = 0;
+  const b2 = mudo(W.crearUnidad(m, 1, 'tanque', cel(60, 83)));
+  W.orden(m, { t: 'atacar', j: 0, ids: [ar.id], obj: b2.id }); avanza(8);
+  assert.ok(ar.recarga === 0 && ar.ang < 0, 'debía estar girando, sin disparar todavía');
+  avanza(30);
+  assert.ok(ar.recarga > 0 && Math.abs(ar.ang + Math.PI / 2) < 0.2, 'debía tirar ya encarada: ' + ar.ang);
+  ar.vida = 0; b2.vida = 0; avanza(2);
+  // trinchera: solo cubre su frente
+  const s = W.crearUnidad(m, 0, 'infanteria', cel(60, 70)); s.ang = 0;
+  W.orden(m, { t: 'trinchera', j: 0, ids: [s.id] }); avanza(W.ECON.cavar + 5);
+  const e1 = mudo(W.crearUnidad(m, 1, 'infanteria', cel(57, 70)));
+  avanza(40);
+  assert.ok(e1.vida === 60 && s.obj === 0, 'desde la trinchera no se dispara hacia atrás');
+  const e2 = mudo(W.crearUnidad(m, 1, 'infanteria', cel(63, 70)));
+  avanza(40);
+  assert.ok(e2.vida < 60, 'pero sí hacia su frente');
+});
+
 prueba('determinismo: misma semilla, misma partida', () => {
   const corre = () => {
     const m = W.crearMundo(777), a = W.iaCrear(0), b = W.iaCrear(1);

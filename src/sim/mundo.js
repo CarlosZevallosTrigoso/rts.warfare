@@ -58,7 +58,7 @@
   // ---------- entidades ----------
   function crearEdificio(m, j, tipo, x, y) {
     const d = EDIF[tipo], N = m.N;
-    const e = { id: m.sigId++, j, tipo, edif: true, x, y, tam: d.tam, cx: x + d.tam / 2, cy: y + d.tam / 2, vida: d.vida, vidaMax: d.vida, recarga: 0, obj: 0, reunion: null, acum: 0, nace: m.t };
+    const e = { id: m.sigId++, j, tipo, edif: true, x, y, tam: d.tam, cx: x + d.tam / 2, cy: y + d.tam / 2, vida: d.vida, vidaMax: d.vida, recarga: 0, obj: 0, reunion: null, acum: 0, nace: m.t, angT: Math.atan2(N / 2 - y, N / 2 - x) };
     for (let dy = 0; dy < d.tam; dy++) for (let dx = 0; dx < d.tam; dx++) { const i = (y + dy) * N + x + dx; m.ocup[i] = e.id; m.paso[i] = 0; }
     m.ents.push(e); m.porId.set(e.id, e);
     return e;
@@ -78,7 +78,7 @@
     const u = {
       id: m.sigId++, j, tipo, edif: false, x, y, px: x, py: y, vida: vidaDe(m.jug[j], tipo), vidaMax: vidaDe(m.jug[j], tipo),
       orden: 'nada', ruta: null, ri: 0, dest: null, meta: null, pend: null, fallo: false, obj: 0, recarga: 0, fijo: false,
-      ang: Math.atan2(N / 2 - y, N / 2 - x), v: 0, tReplan: -99, tRep: -999, tope: 0, angFin: null,
+      ang: Math.atan2(N / 2 - y, N / 2 - x), angT: Math.atan2(N / 2 - y, N / 2 - x), mira: 0, apunto: false, v: 0, tReplan: -99, tRep: -999, tope: 0, angFin: null,
       guardia: false, mision: 0, acude: 0, salto: 0, origen: null, previo: null, // colmena: modo fijo, misión, foco al que acude // rumbo, velocidad actual
       carga: 0, est: tipo === 'cosechadora' ? 'buscar' : '', celda: -1, ref: 0, espera: 0, pref: null,
       quiere: 1, cargaTipo: 1, // cosechadora: qué busca y qué lleva (1 minerales, 2 raros)
@@ -514,6 +514,39 @@
   // ¿Puede esta arma dañar a ese blanco? (los cañones no alcanzan a los aviones; la antiaérea solo a ellos)
   function puede(arma, b) { return !!arma && arma.vs[b.edif ? 'edificio' : UNID[b.tipo].blindaje] > 0; }
   W.puedeAtacar = (a, b) => puede(ARMAS[a.edif ? EDIF[a.tipo].arma : UNID[a.tipo].arma], b);
+  // ---------- frente, torreta y visión dirigida ----------
+  const difAng = (a, b) => ((a - b + Math.PI) % TAU + TAU) % TAU - Math.PI;
+  const girarHacia = (act, meta, paso) => { const d = difAng(meta, act); return Math.abs(d) <= paso ? meta : act + Math.sign(d) * paso; };
+  const COS_CONO = Math.cos(ECON.cono);
+  // ¿Ve la unidad a ese enemigo? Cerca, en todas direcciones; lejos, solo dentro del cono frontal.
+  function veDir(m, a, e, d) {
+    const v = UNID[a.tipo].vision;
+    const dx = posX(e) - a.x, dy = posY(e) - a.y;
+    const q = trincheraDe(m, a);
+    if (q && Math.abs(difAng(Math.atan2(dy, dx), q.ang)) > ECON.arcoTrinchera) return false; // desde la trinchera solo se cubre su frente
+    if (d <= v * ECON.visAt) return true;
+    if (d > v * ECON.visAd) return false;
+    return dx * Math.cos(a.ang) + dy * Math.sin(a.ang) >= COS_CONO * Math.hypot(dx, dy);
+  }
+  // Apunta el arma al blanco y dice si ya puede disparar. Con torreta gira solo la torreta; sin ella, el cuerpo entero
+  // (y solo si está quieto: en marcha el cuerpo sigue el camino). Desde una trinchera no se sale de su arco frontal.
+  function apuntar(m, a, o, quieto) {
+    const meta = Math.atan2(posY(o) - posY(a), posX(o) - posX(a));
+    if (a.edif) { a.angT = girarHacia(a.angT, meta, EDIF[a.tipo].giroT); return Math.abs(difAng(meta, a.angT)) <= ECON.arco; }
+    const d = UNID[a.tipo];
+    if (ARMAS[d.arma].omni) return true;
+    a.apunto = true;
+    if (d.giroT) { a.angT = girarHacia(a.angT, meta, d.giroT); return Math.abs(difAng(meta, a.angT)) <= ECON.arco; }
+    const q = trincheraDe(m, a);
+    if (q && Math.abs(difAng(meta, q.ang)) > ECON.arcoTrinchera) return false;
+    if (quieto) a.ang = girarHacia(a.ang, meta, d.giro);
+    return Math.abs(difAng(meta, a.ang)) <= (d.arco || ECON.arco);
+  }
+  W.sector = (m, a, e) => { // 0 frente, 1 costado, 2 espalda: desde dónde le llega a "a" algo situado en "e"
+    const rel = Math.abs(difAng(Math.atan2(e.y - a.y, e.x - a.x), a.ang));
+    return rel > 2.094 ? 2 : rel > 1.047 ? 1 : 0;
+  };
+
   function buscarEnemigo(m, a, x, y, rango) {
     const arma = ARMAS[a.edif ? EDIF[a.tipo].arma : UNID[a.tipo].arma];
     let mejor = null, md = rango;
@@ -521,7 +554,8 @@
       const e = m.ents[k];
       if (e.j === a.j || e.vida <= 0 || !puede(arma, e)) continue;
       const d = dist(x, y, e);
-      if (d <= md) { md = d; mejor = e; }
+      if (d > md || (!a.edif && !veDir(m, a, e, d))) continue; // una unidad solo detecta por sí misma lo que cae en su visión
+      md = d; mejor = e;
     }
     return mejor;
   }
@@ -529,12 +563,16 @@
   // Atrincherada: infantería quieta sobre una trinchera. Recibe menos daño y no puede ser atropellada.
   function enTrinchera(m, b) { return !b.edif && b.orden === 'nada' && UNID[b.tipo].cat === 'inf' && m.trincheras.has(Math.floor(b.y) * m.N + Math.floor(b.x)); }
   W.enTrinchera = enTrinchera;
+  function trincheraDe(m, b) { return enTrinchera(m, b) ? m.trincheras.get(Math.floor(b.y) * m.N + Math.floor(b.x)) : null; }
   // El bosque cubre a la infantería (recibe menos daño) y frena a los vehículos.
   function enBosque(m, b) { return !b.edif && !UNID[b.tipo].aire && m.mapa.terreno[Math.floor(b.y) * m.N + Math.floor(b.x)] === T.BOSQUE; }
   W.enBosque = enBosque;
-  function herir(m, b, arma, mult, de) {
+  // ox, oy: de dónde viene el tiro. A un vehículo le duele más por los costados y más aún por la espalda.
+  function herir(m, b, arma, mult, de, ox, oy) {
     if (!puede(arma, b)) return;
-    b.vida -= arma.dano * (mult || 1) * arma.vs[b.edif ? 'edificio' : UNID[b.tipo].blindaje] * (enTrinchera(m, b) ? ECON.trinchera : 1) * (enBosque(m, b) && UNID[b.tipo].cat === 'inf' ? ECON.bosqueCubre : 1);
+    let fl = 1;
+    if (ox !== undefined && !b.edif && UNID[b.tipo].cat === 'veh') { const s = W.sector(m, b, { x: ox, y: oy }); fl = s === 2 ? ECON.espalda : s === 1 ? ECON.flanco : 1; if (s) b.tFlanco = m.t; }
+    b.vida -= fl * arma.dano * (mult || 1) * arma.vs[b.edif ? 'edificio' : UNID[b.tipo].blindaje] * (enTrinchera(m, b) ? ECON.trinchera : 1) * (enBosque(m, b) && UNID[b.tipo].cat === 'inf' ? ECON.bosqueCubre : 1);
     b.tDano = m.t; b.agresor = de;
   }
   // Contraataque: el atacado va por su agresor. Los compañeros llegan por la colmena (ver más abajo).
@@ -632,10 +670,10 @@
     const mult = !a.edif && UNID[a.tipo].cat === 'inf' && m.jug[a.j].mejoras.perforante ? 1.25 : 1;
     a.recarga = arma.recarga;
     if (arma.vuelo) { // obús: vuela hasta donde estaba el blanco al disparar
-      m.proy.push({ x: ax, y: ay, px: ax, py: ay, tx: bx, ty: by, obj: b.id, j: a.j, arma: clave, mult, de: a.id });
+      m.proy.push({ ox: ax, oy: ay, x: ax, y: ay, px: ax, py: ay, tx: bx, ty: by, obj: b.id, j: a.j, arma: clave, mult, de: a.id });
       m.efectos.push({ tipo: 'boca', x1: ax, y1: ay, x2: bx, y2: by, j: a.j, t: m.t, arma: clave });
     } else {
-      herir(m, b, arma, mult, a.id);
+      herir(m, b, arma, mult, a.id, ax, ay);
       m.efectos.push({ tipo: 'traza', x1: ax, y1: ay, x2: bx, y2: by, j: a.j, t: m.t, arma: clave });
     }
     alertar(m, a, b);
@@ -651,7 +689,7 @@
       } else {
         const o = m.porId.get(p.obj);
         acierto = !!o && o.vida > 0 && dist(p.tx, p.ty, o) <= 0.9; // si el blanco se apartó, falla
-        if (acierto) herir(m, o, arma, p.mult, p.de);
+        if (acierto) herir(m, o, arma, p.mult, p.de, p.ox, p.oy);
       }
       m.efectos.push({ tipo: 'impacto', x1: p.x, y1: p.y, x2: p.tx, y2: p.ty, j: p.j, t: m.t, arma: p.arma, acierto });
       m.proy[k] = m.proy[m.proy.length - 1]; m.proy.pop();
@@ -665,7 +703,7 @@
     let o = e.obj ? m.porId.get(e.obj) : null;
     if (o && (o.vida <= 0 || dist(e.cx, e.cy, o) > alc)) { o = null; e.obj = 0; }
     if (!o && (m.t + e.id) % 5 === 0) { o = buscarEnemigo(m, e, e.cx, e.cy, alc); if (o) e.obj = o.id; }
-    if (o && e.recarga <= 0) disparar(m, e, o, arma);
+    if (o && apuntar(m, e, o) && e.recarga <= 0) disparar(m, e, o, arma);
   }
 
   // Aviación: gasta combustible en vuelo, reposta sobre un aeródromo propio y vuelve sola cuando le queda lo justo.
@@ -695,6 +733,8 @@
     if (u.recarga > 0) u.recarga--;
     if (d.aire && tickVuelo(m, u)) return;
     if (u.tipo === 'cosechadora') { tickCosechadora(m, u); return; }
+    if (d.giroT) { if (!u.apunto) u.angT = girarHacia(u.angT, u.ang, d.giroT); } else u.angT = u.ang; // sin blanco, la torreta vuelve al frente
+    u.apunto = false;
     if (u.fallo) { u.fallo = false; u.orden = 'nada'; u.obj = 0; limpiar(u); }
     if (u.orden === 'nada' && !u.obj && !u.acude && (u.cola.length || u.patrulla || u.explora)) siguienteOrden(m, u);
     if (u.orden === 'nada' && !u.obj && u.angFin != null) { // en su puesto, se encara como el resto de la formación
@@ -707,7 +747,9 @@
     }
     const arma = ARMAS[d.arma], alc = alcance(m, u, arma);
     if (u.orden === 'mover') { // cumple la orden sin desviarse, pero dispara a lo que tenga a tiro
-      if (u.recarga <= 0 && (m.t + u.id) % 4 === 0) { const e = buscarEnemigo(m, u, u.x, u.y, alc); if (e && dist(u.x, u.y, e) >= (arma.alcanceMin || 0)) disparar(m, u, e, arma); }
+      if ((m.t + u.id) % 4 === 0) { const e = buscarEnemigo(m, u, u.x, u.y, alc); u.mira = e ? e.id : 0; }
+      const e = u.mira ? m.porId.get(u.mira) : null;
+      if (e && e.vida > 0) { const dd = dist(u.x, u.y, e); if (dd <= alc && dd >= (arma.alcanceMin || 0) && apuntar(m, u, e, false) && u.recarga <= 0) disparar(m, u, e, arma); }
       if (avanzar(m, u) || (!u.ruta && !u.pend)) u.orden = 'nada';
       return;
     }
@@ -720,13 +762,16 @@
     if (o) {
       const dd = dist(u.x, u.y, o);
       if (dd <= alc) {
-        if (u.recarga <= 0 && dd >= (arma.alcanceMin || 0)) disparar(m, u, o, arma); // demasiado cerca, la artillería no puede tirar
+        const listo = apuntar(m, u, o, true);
+        if (listo && u.recarga <= 0 && dd >= (arma.alcanceMin || 0)) disparar(m, u, o, arma); // demasiado cerca, la artillería no puede tirar
+        else if (!listo && u.orden !== 'atacar' && enTrinchera(m, u)) u.obj = 0; // fuera del arco de la trinchera: no puede responder
       } else if (u.guardia) {
         u.obj = 0; // en guardia no persigue
       } else if (u.orden !== 'atacar' && dd > alc + (m.t - u.tRep < 240 ? 14 : 4)) { // al agresor lo persigue más lejos
         u.obj = 0; u.ruta = null; // se alejó demasiado: lo suelta
       } else {
         if (!u.pend && (!u.ruta || (!o.edif && (m.t + u.id) % 20 === 0))) pedirRuta(m, u, posX(o), posY(o), o.edif ? o.tam / 2 + 1 : 1);
+        if (d.giroT) apuntar(m, u, o, false); // la torreta va siguiendo al blanco mientras el casco avanza
         avanzar(m, u);
       }
       return;
@@ -948,12 +993,27 @@
     for (let j = 0; j < 2; j++) { const f = m.niebla[j]; for (let i = 0; i < NN; i++) if (f[i] === 2) f[i] = 1; }
     for (let k = 0; k < m.ents.length; k++) {
       const e = m.ents[k], f = m.niebla[e.j];
-      const r = (e.edif ? EDIF[e.tipo] : UNID[e.tipo]).vision + (e.edif ? e.tam / 2 : 0), r2 = r * r;
-      const cx = Math.floor(posX(e)), cy = Math.floor(posY(e)), R = Math.ceil(r);
+      const cx = Math.floor(posX(e)), cy = Math.floor(posY(e));
+      if (e.edif) { // los edificios ven en círculo
+        const r = EDIF[e.tipo].vision + e.tam / 2, r2 = r * r, R = Math.ceil(r);
+        for (let dy = -R; dy <= R; dy++) {
+          const y = cy + dy; if (y < 0 || y >= N) continue;
+          for (let dx = -R; dx <= R; dx++) {
+            const x = cx + dx; if (x < 0 || x >= N || dx * dx + dy * dy > r2) continue;
+            f[y * N + x] = 2;
+          }
+        }
+        continue;
+      }
+      // Las unidades ven cerca alrededor y lejos solo en un cono hacia su frente.
+      const v = UNID[e.tipo].vision, rc = v * ECON.visAt, rc2 = rc * rc, rl = v * ECON.visAd, rl2 = rl * rl, R = Math.ceil(rl);
+      const ux = Math.cos(e.ang), uy = Math.sin(e.ang), k2 = COS_CONO * COS_CONO;
       for (let dy = -R; dy <= R; dy++) {
         const y = cy + dy; if (y < 0 || y >= N) continue;
         for (let dx = -R; dx <= R; dx++) {
-          const x = cx + dx; if (x < 0 || x >= N || dx * dx + dy * dy > r2) continue;
+          const x = cx + dx, d2 = dx * dx + dy * dy;
+          if (x < 0 || x >= N || d2 > rl2) continue;
+          if (d2 > rc2) { const p = dx * ux + dy * uy; if (p <= 0 || p * p < k2 * d2) continue; }
           f[y * N + x] = 2;
         }
       }

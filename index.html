@@ -51,7 +51,12 @@
   #formas { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; }
   #formas .grupo { justify-content: center; }
   #vender, #trinchera { justify-content: center; margin-top: 4px; }
-  #contexto { position: fixed; left: 8px; bottom: 8px; z-index: 3; background: var(--panel); border: 1px solid var(--linea); border-radius: 2px; padding: 4px 8px; max-width: 340px; font-size: 11px; line-height: 1.5; pointer-events: none; opacity: 0.92; }
+  #abajo { position: fixed; left: 8px; bottom: 8px; z-index: 3; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; pointer-events: none; }
+  #rend { border-collapse: collapse; background: var(--panel); border: 1px solid var(--linea); border-radius: 2px; font-size: 10px; line-height: 1.35; opacity: 0.92; pointer-events: auto; cursor: pointer; }
+  #rend td { padding: 0 6px; } #rend td:last-child { text-align: right; color: var(--tinta); font-variant-numeric: tabular-nums; }
+  #rend tr.mal td { color: var(--mal); }
+  #rend.plegado tr:not(:first-child) { display: none; }
+  #contexto { background: var(--panel); border: 1px solid var(--linea); border-radius: 2px; padding: 4px 8px; max-width: 340px; font-size: 11px; line-height: 1.5; pointer-events: none; opacity: 0.92; }
   #contexto kbd { font: inherit; color: var(--tinta); }
   #contexto b { color: var(--tinta); font-weight: 600; }
   #vender:hover { background: var(--mal); color: #fff; border-color: var(--mal); }
@@ -89,6 +94,9 @@
       <div><kbd>Z</kbd> atrincherarse (infantería quieta): recibe menos daño</div>
       <div>tras mover, otro clic derecho cerca: hacia dónde mirar</div>
       <div>bosque: cubre a la infantería y frena a los vehículos</div>
+      <div>las unidades disparan y ven lejos solo hacia su frente;</div>
+      <div>tanques y torres giran la torreta, el resto gira entero</div>
+      <div>vehículos: +25 % de daño por el costado, +50 % por la espalda</div>
       <div>aviones: sin terreno que los frene, con combustible limitado;</div>
       <div>solo les alcanzan fusil, cohete, torreta, antiaérea y caza</div>
       <div><b>!</b> pide apoyo · <b>✓</b> acude a la llamada</div>
@@ -106,7 +114,7 @@
       <div id="semilla"></div>
       <div>escribe <kbd>god</kbd>: recursos infinitos</div>
   </details>
-  <div id="contexto" class="tenue" hidden></div>
+  <div id="abajo"><table id="rend" class="tenue" title="Rendimiento del último segundo. Clic para plegar."></table><div id="contexto" class="tenue" hidden></div></div>
   <aside id="barra">
     <h1 id="titulo" title="Recargar">rts<span>.</span>warfare<b id="dios" hidden>GOD</b><b id="sinColmena" hidden>SIN COLMENA</b></h1>
     <div id="recursos">
@@ -146,11 +154,11 @@
     <button type="button" data-v="normal">normal</button><button type="button" data-v="agresivo">agresivo<small>ataca pronto</small></button></div></div>
   <div><h2>Semilla del mapa</h2><input id="op-s" inputmode="numeric" placeholder="al azar" autocomplete="off"></div>
   <button type="button" id="empezar">Empezar</button>
-  <div id="version">versión 24</div>
+  <div id="version">versión 25</div>
 </div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><p><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 24' };
+globalThis.W = { VERSION: 'versión 25' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -185,25 +193,28 @@ globalThis.W = { VERSION: 'versión 24' };
     cuartel:   { nombre: 'Cuartel',   tam: 2, vida: 700,  costo: 400,  tiempo: 300, energia: -20, vision: 5, req: ['central'] },
     extractor: { nombre: 'Extractor', tam: 2, vida: 600,  costo: 700,  tiempo: 300, energia: -20, vision: 5, req: ['refineria'], sobre: 'petroleo', libre: true, da: { rec: 'petroleo', cada: 6 } },
     fabrica:   { nombre: 'Fábrica',   tam: 3, vida: 1000, costo: 1400, pet: 100, tiempo: 500, energia: -40, vision: 5, req: ['refineria'] },
-    torreta:   { nombre: 'Torreta',   tam: 1, vida: 600,  costo: 500,  tiempo: 300, energia: -25, vision: 8, req: ['cuartel'], arma: 'bateria' },
-    torreCanon: { nombre: 'Torre de cañón', tam: 2, vida: 1100, costo: 1200, pet: 60, tiempo: 500, energia: -40, vision: 9, req: ['fabrica'], arma: 'canonTorre', nivel: 2 },
+    torreta:   { nombre: 'Torreta',   tam: 1, vida: 600,  costo: 500,  tiempo: 300, energia: -25, vision: 8, req: ['cuartel'], arma: 'bateria', giroT: 0.2 },
+    torreCanon: { nombre: 'Torre de cañón', tam: 2, vida: 1100, costo: 1200, pet: 60, tiempo: 500, energia: -40, vision: 9, req: ['fabrica'], arma: 'canonTorre', nivel: 2, giroT: 0.1 },
     aerodromo: { nombre: 'Aeródromo', tam: 3, vida: 900,  costo: 1600, pet: 150, tiempo: 500, energia: -40, vision: 6, req: ['fabrica'], nivel: 2 },
-    antiaerea: { nombre: 'Antiaérea', tam: 1, vida: 500,  costo: 600,  tiempo: 300, energia: -20, vision: 9, req: ['cuartel'], arma: 'flak', nivel: 2 },
+    antiaerea: { nombre: 'Antiaérea', tam: 1, vida: 500,  costo: 600,  tiempo: 300, energia: -20, vision: 9, req: ['cuartel'], arma: 'flak', nivel: 2, giroT: 0.28 },
     estacion:  { nombre: 'Estación',  tam: 2, vida: 500,  costo: 900,  tiempo: 400, energia: -30, vision: 7, req: ['cuartel'], sobre: 'conocimiento', libre: true, da: { rec: 'info', cada: 20 } },
   };
 
+  // Frente: una unidad dispara solo hacia donde apunta. giroT: tiene torreta y gira así de rápido (rad por tick) sin mover el casco;
+  // sin giroT gira el cuerpo entero. arco: cuánto puede desviarse el tiro del frente (por defecto ECON.arco).
+  // La visión llega más lejos hacia adelante (ver ECON.visAd, visAt, cono) y los vehículos sufren más por costados y espalda.
   // vel en celdas por tick. cat: cola de producción (inf = cuartel, veh = fábrica).
   // giro: radianes por tick que puede girar; acel: cuánto gana de velocidad por tick.
   // agua: cuánta agua consume mientras vive (el agua es un balance, como la energía, y limita la tropa).
   W.UNID = {
-    infanteria:  { nombre: 'Infantería',  cat: 'inf', vida: 60,  vel: 0.06, costo: 100, tiempo: 100, blindaje: 'ligero', arma: 'fusil', vision: 6, radio: 0.24, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02 },
-    tanque:      { nombre: 'Tanque',      cat: 'veh', vida: 300, vel: 0.10, costo: 600, pet: 50, tiempo: 300, blindaje: 'pesado', arma: 'canon', vision: 7, radio: 0.40, req: ['fabrica'], agua: 2, giro: 0.13, acel: 0.006 },
-    antitanque:  { nombre: 'Antitanque',  cat: 'inf', vida: 70,  vel: 0.055, costo: 250, tiempo: 160, blindaje: 'ligero', arma: 'cohete', vision: 6, radio: 0.25, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2 },
+    infanteria:  { nombre: 'Infantería',  cat: 'inf', vida: 60,  vel: 0.06, costo: 100, tiempo: 100, blindaje: 'ligero', arma: 'fusil', vision: 6, radio: 0.24, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, arco: 0.5 },
+    tanque:      { nombre: 'Tanque',      cat: 'veh', vida: 300, vel: 0.10, costo: 600, pet: 50, tiempo: 300, blindaje: 'pesado', arma: 'canon', vision: 7, radio: 0.40, req: ['fabrica'], agua: 2, giro: 0.13, acel: 0.006, giroT: 0.16 },
+    antitanque:  { nombre: 'Antitanque',  cat: 'inf', vida: 70,  vel: 0.055, costo: 250, tiempo: 160, blindaje: 'ligero', arma: 'cohete', vision: 6, radio: 0.25, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, arco: 0.35 },
     artilleria:  { nombre: 'Artillería',  cat: 'veh', vida: 180, vel: 0.06, costo: 900, pet: 70, tiempo: 400, blindaje: 'pesado', arma: 'obus', vision: 7, radio: 0.42, req: ['fabrica'], agua: 2, giro: 0.08, acel: 0.004, nivel: 2 },
-    pesado:      { nombre: 'Tanque pesado', cat: 'veh', vida: 700, vel: 0.07, costo: 1500, pet: 120, raros: 60, tiempo: 520, blindaje: 'pesado', arma: 'canonPesado', vision: 7, radio: 0.52, req: ['fabrica'], agua: 3, giro: 0.08, acel: 0.004, nivel: 3 },
+    pesado:      { nombre: 'Tanque pesado', cat: 'veh', vida: 700, vel: 0.07, costo: 1500, pet: 120, raros: 60, tiempo: 520, blindaje: 'pesado', arma: 'canonPesado', vision: 7, radio: 0.52, req: ['fabrica'], agua: 3, giro: 0.08, acel: 0.004, nivel: 3, giroT: 0.1 },
     // Aviación (cat 'aire', sale del aeródromo): vuela sobre cualquier terreno y en línea recta. fuel: ticks de vuelo;
     // reposta sola sobre un aeródromo propio y vuelve a él cuando le queda lo justo. Sin combustible, cae.
-    caza:        { nombre: 'Caza',        cat: 'aire', aire: true, vida: 160, vel: 0.22, costo: 900, pet: 120, tiempo: 360, blindaje: 'aire', arma: 'misil', vision: 9, radio: 0.42, req: ['aerodromo'], agua: 1, giro: 0.16, acel: 0.012, nivel: 2, fuel: 1800 },
+    caza:        { nombre: 'Caza',        cat: 'aire', aire: true, vida: 160, vel: 0.22, costo: 900, pet: 120, tiempo: 360, blindaje: 'aire', arma: 'misil', vision: 9, radio: 0.42, req: ['aerodromo'], agua: 1, giro: 0.16, acel: 0.012, nivel: 2, fuel: 1800, arco: 0.3 },
     bombardero:  { nombre: 'Bombardero',  cat: 'aire', aire: true, vida: 260, vel: 0.15, costo: 1600, pet: 200, raros: 40, tiempo: 520, blindaje: 'aire', arma: 'bomba', vision: 8, radio: 0.55, req: ['aerodromo'], agua: 2, giro: 0.09, acel: 0.008, nivel: 3, fuel: 2400 },
     cosechadora: { nombre: 'Cosechadora', cat: 'veh', vida: 450, vel: 0.07, costo: 900, pet: 30, tiempo: 360, blindaje: 'pesado', arma: null,    vision: 5, radio: 0.44, req: ['fabrica', 'refineria'], carga: 500, agua: 1, giro: 0.1, acel: 0.004 },
   };
@@ -221,7 +232,7 @@ globalThis.W = { VERSION: 'versión 24' };
     bateria: { alcance: 6.5, dano: 30, recarga: 30, vuelo: 1.1, vs: { ligero: 0.8, pesado: 1,    edificio: 0.5, aire: 0.8 } },
     flak:    { alcance: 9,   dano: 34, recarga: 22, vuelo: 1.3, vs: { aire: 1 } },
     misil:   { alcance: 6,   dano: 40, recarga: 45, vuelo: 1.0, vs: { ligero: 0.6, pesado: 0.6, edificio: 0.3, aire: 1.3 } },
-    bomba:   { alcance: 1.6, area: 1.7, dano: 150, recarga: 90, vuelo: 0.12, vs: { ligero: 1, pesado: 1, edificio: 1.4 } },
+    bomba:   { omni: true, alcance: 1.6, area: 1.7, dano: 150, recarga: 90, vuelo: 0.12, vs: { ligero: 1, pesado: 1, edificio: 1.4 } },
   };
 
   // Tecnología. lugar: edificio donde se investiga (uno a la vez por tipo de edificio). nivel: nivel mínimo.
@@ -247,7 +258,7 @@ globalThis.W = { VERSION: 'versión 24' };
     cartografia: { nombre: 'Cartografía', info: 200, nivel: 3, que: 'Revela el terreno de todo el mapa.' },
   };
 
-  W.ECON = { inicio: 2500, petInicio: 150, cosecha: 5, descarga: 25, colaMax: 9, separacionColocar: 3, goteoCada: 5, vistaInicial: 22, obrasMax: 8, curaUnidad: 0.01, curaEdificio: 0.0025, curaCosto: 0.15, venta: 0.5, trinchera: 0.45, bosqueVeh: 0.6, bosqueCubre: 0.7, reposta: 12, fuelCae: 80, cavar: 80, aplasta: 10, bonoProd: 0.5, bonoMax: 2.5 };
+  W.ECON = { inicio: 2500, petInicio: 150, cosecha: 5, descarga: 25, colaMax: 9, separacionColocar: 3, goteoCada: 5, vistaInicial: 22, obrasMax: 8, curaUnidad: 0.01, curaEdificio: 0.0025, curaCosto: 0.15, venta: 0.5, trinchera: 0.45, arco: 0.14, arcoTrinchera: 1.05, visAd: 1.3, visAt: 0.6, cono: 1.05, flanco: 1.25, espalda: 1.5, bosqueVeh: 0.6, bosqueCubre: 0.7, reposta: 12, fuelCae: 80, cavar: 80, aplasta: 10, bonoProd: 0.5, bonoMax: 2.5 };
 })();
 
 // ===== sim/mapa.js =====
@@ -525,7 +536,7 @@ globalThis.W = { VERSION: 'versión 24' };
   // ---------- entidades ----------
   function crearEdificio(m, j, tipo, x, y) {
     const d = EDIF[tipo], N = m.N;
-    const e = { id: m.sigId++, j, tipo, edif: true, x, y, tam: d.tam, cx: x + d.tam / 2, cy: y + d.tam / 2, vida: d.vida, vidaMax: d.vida, recarga: 0, obj: 0, reunion: null, acum: 0, nace: m.t };
+    const e = { id: m.sigId++, j, tipo, edif: true, x, y, tam: d.tam, cx: x + d.tam / 2, cy: y + d.tam / 2, vida: d.vida, vidaMax: d.vida, recarga: 0, obj: 0, reunion: null, acum: 0, nace: m.t, angT: Math.atan2(N / 2 - y, N / 2 - x) };
     for (let dy = 0; dy < d.tam; dy++) for (let dx = 0; dx < d.tam; dx++) { const i = (y + dy) * N + x + dx; m.ocup[i] = e.id; m.paso[i] = 0; }
     m.ents.push(e); m.porId.set(e.id, e);
     return e;
@@ -545,7 +556,7 @@ globalThis.W = { VERSION: 'versión 24' };
     const u = {
       id: m.sigId++, j, tipo, edif: false, x, y, px: x, py: y, vida: vidaDe(m.jug[j], tipo), vidaMax: vidaDe(m.jug[j], tipo),
       orden: 'nada', ruta: null, ri: 0, dest: null, meta: null, pend: null, fallo: false, obj: 0, recarga: 0, fijo: false,
-      ang: Math.atan2(N / 2 - y, N / 2 - x), v: 0, tReplan: -99, tRep: -999, tope: 0, angFin: null,
+      ang: Math.atan2(N / 2 - y, N / 2 - x), angT: Math.atan2(N / 2 - y, N / 2 - x), mira: 0, apunto: false, v: 0, tReplan: -99, tRep: -999, tope: 0, angFin: null,
       guardia: false, mision: 0, acude: 0, salto: 0, origen: null, previo: null, // colmena: modo fijo, misión, foco al que acude // rumbo, velocidad actual
       carga: 0, est: tipo === 'cosechadora' ? 'buscar' : '', celda: -1, ref: 0, espera: 0, pref: null,
       quiere: 1, cargaTipo: 1, // cosechadora: qué busca y qué lleva (1 minerales, 2 raros)
@@ -981,6 +992,39 @@ globalThis.W = { VERSION: 'versión 24' };
   // ¿Puede esta arma dañar a ese blanco? (los cañones no alcanzan a los aviones; la antiaérea solo a ellos)
   function puede(arma, b) { return !!arma && arma.vs[b.edif ? 'edificio' : UNID[b.tipo].blindaje] > 0; }
   W.puedeAtacar = (a, b) => puede(ARMAS[a.edif ? EDIF[a.tipo].arma : UNID[a.tipo].arma], b);
+  // ---------- frente, torreta y visión dirigida ----------
+  const difAng = (a, b) => ((a - b + Math.PI) % TAU + TAU) % TAU - Math.PI;
+  const girarHacia = (act, meta, paso) => { const d = difAng(meta, act); return Math.abs(d) <= paso ? meta : act + Math.sign(d) * paso; };
+  const COS_CONO = Math.cos(ECON.cono);
+  // ¿Ve la unidad a ese enemigo? Cerca, en todas direcciones; lejos, solo dentro del cono frontal.
+  function veDir(m, a, e, d) {
+    const v = UNID[a.tipo].vision;
+    const dx = posX(e) - a.x, dy = posY(e) - a.y;
+    const q = trincheraDe(m, a);
+    if (q && Math.abs(difAng(Math.atan2(dy, dx), q.ang)) > ECON.arcoTrinchera) return false; // desde la trinchera solo se cubre su frente
+    if (d <= v * ECON.visAt) return true;
+    if (d > v * ECON.visAd) return false;
+    return dx * Math.cos(a.ang) + dy * Math.sin(a.ang) >= COS_CONO * Math.hypot(dx, dy);
+  }
+  // Apunta el arma al blanco y dice si ya puede disparar. Con torreta gira solo la torreta; sin ella, el cuerpo entero
+  // (y solo si está quieto: en marcha el cuerpo sigue el camino). Desde una trinchera no se sale de su arco frontal.
+  function apuntar(m, a, o, quieto) {
+    const meta = Math.atan2(posY(o) - posY(a), posX(o) - posX(a));
+    if (a.edif) { a.angT = girarHacia(a.angT, meta, EDIF[a.tipo].giroT); return Math.abs(difAng(meta, a.angT)) <= ECON.arco; }
+    const d = UNID[a.tipo];
+    if (ARMAS[d.arma].omni) return true;
+    a.apunto = true;
+    if (d.giroT) { a.angT = girarHacia(a.angT, meta, d.giroT); return Math.abs(difAng(meta, a.angT)) <= ECON.arco; }
+    const q = trincheraDe(m, a);
+    if (q && Math.abs(difAng(meta, q.ang)) > ECON.arcoTrinchera) return false;
+    if (quieto) a.ang = girarHacia(a.ang, meta, d.giro);
+    return Math.abs(difAng(meta, a.ang)) <= (d.arco || ECON.arco);
+  }
+  W.sector = (m, a, e) => { // 0 frente, 1 costado, 2 espalda: desde dónde le llega a "a" algo situado en "e"
+    const rel = Math.abs(difAng(Math.atan2(e.y - a.y, e.x - a.x), a.ang));
+    return rel > 2.094 ? 2 : rel > 1.047 ? 1 : 0;
+  };
+
   function buscarEnemigo(m, a, x, y, rango) {
     const arma = ARMAS[a.edif ? EDIF[a.tipo].arma : UNID[a.tipo].arma];
     let mejor = null, md = rango;
@@ -988,7 +1032,8 @@ globalThis.W = { VERSION: 'versión 24' };
       const e = m.ents[k];
       if (e.j === a.j || e.vida <= 0 || !puede(arma, e)) continue;
       const d = dist(x, y, e);
-      if (d <= md) { md = d; mejor = e; }
+      if (d > md || (!a.edif && !veDir(m, a, e, d))) continue; // una unidad solo detecta por sí misma lo que cae en su visión
+      md = d; mejor = e;
     }
     return mejor;
   }
@@ -996,12 +1041,16 @@ globalThis.W = { VERSION: 'versión 24' };
   // Atrincherada: infantería quieta sobre una trinchera. Recibe menos daño y no puede ser atropellada.
   function enTrinchera(m, b) { return !b.edif && b.orden === 'nada' && UNID[b.tipo].cat === 'inf' && m.trincheras.has(Math.floor(b.y) * m.N + Math.floor(b.x)); }
   W.enTrinchera = enTrinchera;
+  function trincheraDe(m, b) { return enTrinchera(m, b) ? m.trincheras.get(Math.floor(b.y) * m.N + Math.floor(b.x)) : null; }
   // El bosque cubre a la infantería (recibe menos daño) y frena a los vehículos.
   function enBosque(m, b) { return !b.edif && !UNID[b.tipo].aire && m.mapa.terreno[Math.floor(b.y) * m.N + Math.floor(b.x)] === T.BOSQUE; }
   W.enBosque = enBosque;
-  function herir(m, b, arma, mult, de) {
+  // ox, oy: de dónde viene el tiro. A un vehículo le duele más por los costados y más aún por la espalda.
+  function herir(m, b, arma, mult, de, ox, oy) {
     if (!puede(arma, b)) return;
-    b.vida -= arma.dano * (mult || 1) * arma.vs[b.edif ? 'edificio' : UNID[b.tipo].blindaje] * (enTrinchera(m, b) ? ECON.trinchera : 1) * (enBosque(m, b) && UNID[b.tipo].cat === 'inf' ? ECON.bosqueCubre : 1);
+    let fl = 1;
+    if (ox !== undefined && !b.edif && UNID[b.tipo].cat === 'veh') { const s = W.sector(m, b, { x: ox, y: oy }); fl = s === 2 ? ECON.espalda : s === 1 ? ECON.flanco : 1; if (s) b.tFlanco = m.t; }
+    b.vida -= fl * arma.dano * (mult || 1) * arma.vs[b.edif ? 'edificio' : UNID[b.tipo].blindaje] * (enTrinchera(m, b) ? ECON.trinchera : 1) * (enBosque(m, b) && UNID[b.tipo].cat === 'inf' ? ECON.bosqueCubre : 1);
     b.tDano = m.t; b.agresor = de;
   }
   // Contraataque: el atacado va por su agresor. Los compañeros llegan por la colmena (ver más abajo).
@@ -1099,10 +1148,10 @@ globalThis.W = { VERSION: 'versión 24' };
     const mult = !a.edif && UNID[a.tipo].cat === 'inf' && m.jug[a.j].mejoras.perforante ? 1.25 : 1;
     a.recarga = arma.recarga;
     if (arma.vuelo) { // obús: vuela hasta donde estaba el blanco al disparar
-      m.proy.push({ x: ax, y: ay, px: ax, py: ay, tx: bx, ty: by, obj: b.id, j: a.j, arma: clave, mult, de: a.id });
+      m.proy.push({ ox: ax, oy: ay, x: ax, y: ay, px: ax, py: ay, tx: bx, ty: by, obj: b.id, j: a.j, arma: clave, mult, de: a.id });
       m.efectos.push({ tipo: 'boca', x1: ax, y1: ay, x2: bx, y2: by, j: a.j, t: m.t, arma: clave });
     } else {
-      herir(m, b, arma, mult, a.id);
+      herir(m, b, arma, mult, a.id, ax, ay);
       m.efectos.push({ tipo: 'traza', x1: ax, y1: ay, x2: bx, y2: by, j: a.j, t: m.t, arma: clave });
     }
     alertar(m, a, b);
@@ -1118,7 +1167,7 @@ globalThis.W = { VERSION: 'versión 24' };
       } else {
         const o = m.porId.get(p.obj);
         acierto = !!o && o.vida > 0 && dist(p.tx, p.ty, o) <= 0.9; // si el blanco se apartó, falla
-        if (acierto) herir(m, o, arma, p.mult, p.de);
+        if (acierto) herir(m, o, arma, p.mult, p.de, p.ox, p.oy);
       }
       m.efectos.push({ tipo: 'impacto', x1: p.x, y1: p.y, x2: p.tx, y2: p.ty, j: p.j, t: m.t, arma: p.arma, acierto });
       m.proy[k] = m.proy[m.proy.length - 1]; m.proy.pop();
@@ -1132,7 +1181,7 @@ globalThis.W = { VERSION: 'versión 24' };
     let o = e.obj ? m.porId.get(e.obj) : null;
     if (o && (o.vida <= 0 || dist(e.cx, e.cy, o) > alc)) { o = null; e.obj = 0; }
     if (!o && (m.t + e.id) % 5 === 0) { o = buscarEnemigo(m, e, e.cx, e.cy, alc); if (o) e.obj = o.id; }
-    if (o && e.recarga <= 0) disparar(m, e, o, arma);
+    if (o && apuntar(m, e, o) && e.recarga <= 0) disparar(m, e, o, arma);
   }
 
   // Aviación: gasta combustible en vuelo, reposta sobre un aeródromo propio y vuelve sola cuando le queda lo justo.
@@ -1162,6 +1211,8 @@ globalThis.W = { VERSION: 'versión 24' };
     if (u.recarga > 0) u.recarga--;
     if (d.aire && tickVuelo(m, u)) return;
     if (u.tipo === 'cosechadora') { tickCosechadora(m, u); return; }
+    if (d.giroT) { if (!u.apunto) u.angT = girarHacia(u.angT, u.ang, d.giroT); } else u.angT = u.ang; // sin blanco, la torreta vuelve al frente
+    u.apunto = false;
     if (u.fallo) { u.fallo = false; u.orden = 'nada'; u.obj = 0; limpiar(u); }
     if (u.orden === 'nada' && !u.obj && !u.acude && (u.cola.length || u.patrulla || u.explora)) siguienteOrden(m, u);
     if (u.orden === 'nada' && !u.obj && u.angFin != null) { // en su puesto, se encara como el resto de la formación
@@ -1174,7 +1225,9 @@ globalThis.W = { VERSION: 'versión 24' };
     }
     const arma = ARMAS[d.arma], alc = alcance(m, u, arma);
     if (u.orden === 'mover') { // cumple la orden sin desviarse, pero dispara a lo que tenga a tiro
-      if (u.recarga <= 0 && (m.t + u.id) % 4 === 0) { const e = buscarEnemigo(m, u, u.x, u.y, alc); if (e && dist(u.x, u.y, e) >= (arma.alcanceMin || 0)) disparar(m, u, e, arma); }
+      if ((m.t + u.id) % 4 === 0) { const e = buscarEnemigo(m, u, u.x, u.y, alc); u.mira = e ? e.id : 0; }
+      const e = u.mira ? m.porId.get(u.mira) : null;
+      if (e && e.vida > 0) { const dd = dist(u.x, u.y, e); if (dd <= alc && dd >= (arma.alcanceMin || 0) && apuntar(m, u, e, false) && u.recarga <= 0) disparar(m, u, e, arma); }
       if (avanzar(m, u) || (!u.ruta && !u.pend)) u.orden = 'nada';
       return;
     }
@@ -1187,13 +1240,16 @@ globalThis.W = { VERSION: 'versión 24' };
     if (o) {
       const dd = dist(u.x, u.y, o);
       if (dd <= alc) {
-        if (u.recarga <= 0 && dd >= (arma.alcanceMin || 0)) disparar(m, u, o, arma); // demasiado cerca, la artillería no puede tirar
+        const listo = apuntar(m, u, o, true);
+        if (listo && u.recarga <= 0 && dd >= (arma.alcanceMin || 0)) disparar(m, u, o, arma); // demasiado cerca, la artillería no puede tirar
+        else if (!listo && u.orden !== 'atacar' && enTrinchera(m, u)) u.obj = 0; // fuera del arco de la trinchera: no puede responder
       } else if (u.guardia) {
         u.obj = 0; // en guardia no persigue
       } else if (u.orden !== 'atacar' && dd > alc + (m.t - u.tRep < 240 ? 14 : 4)) { // al agresor lo persigue más lejos
         u.obj = 0; u.ruta = null; // se alejó demasiado: lo suelta
       } else {
         if (!u.pend && (!u.ruta || (!o.edif && (m.t + u.id) % 20 === 0))) pedirRuta(m, u, posX(o), posY(o), o.edif ? o.tam / 2 + 1 : 1);
+        if (d.giroT) apuntar(m, u, o, false); // la torreta va siguiendo al blanco mientras el casco avanza
         avanzar(m, u);
       }
       return;
@@ -1415,12 +1471,27 @@ globalThis.W = { VERSION: 'versión 24' };
     for (let j = 0; j < 2; j++) { const f = m.niebla[j]; for (let i = 0; i < NN; i++) if (f[i] === 2) f[i] = 1; }
     for (let k = 0; k < m.ents.length; k++) {
       const e = m.ents[k], f = m.niebla[e.j];
-      const r = (e.edif ? EDIF[e.tipo] : UNID[e.tipo]).vision + (e.edif ? e.tam / 2 : 0), r2 = r * r;
-      const cx = Math.floor(posX(e)), cy = Math.floor(posY(e)), R = Math.ceil(r);
+      const cx = Math.floor(posX(e)), cy = Math.floor(posY(e));
+      if (e.edif) { // los edificios ven en círculo
+        const r = EDIF[e.tipo].vision + e.tam / 2, r2 = r * r, R = Math.ceil(r);
+        for (let dy = -R; dy <= R; dy++) {
+          const y = cy + dy; if (y < 0 || y >= N) continue;
+          for (let dx = -R; dx <= R; dx++) {
+            const x = cx + dx; if (x < 0 || x >= N || dx * dx + dy * dy > r2) continue;
+            f[y * N + x] = 2;
+          }
+        }
+        continue;
+      }
+      // Las unidades ven cerca alrededor y lejos solo en un cono hacia su frente.
+      const v = UNID[e.tipo].vision, rc = v * ECON.visAt, rc2 = rc * rc, rl = v * ECON.visAd, rl2 = rl * rl, R = Math.ceil(rl);
+      const ux = Math.cos(e.ang), uy = Math.sin(e.ang), k2 = COS_CONO * COS_CONO;
       for (let dy = -R; dy <= R; dy++) {
         const y = cy + dy; if (y < 0 || y >= N) continue;
         for (let dx = -R; dx <= R; dx++) {
-          const x = cx + dx; if (x < 0 || x >= N || dx * dx + dy * dy > r2) continue;
+          const x = cx + dx, d2 = dx * dx + dy * dy;
+          if (x < 0 || x >= N || d2 > rl2) continue;
+          if (d2 > rc2) { const p = dx * ux + dy * uy; if (p <= 0 || p * p < k2 * d2) continue; }
           f[y * N + x] = 2;
         }
       }
@@ -2308,8 +2379,7 @@ globalThis.W = { VERSION: 'versión 24' };
       let g = giros.get(e.id);
       if (!g) { const a0 = Math.atan2(N / 2 - y, N / 2 - x); g = { a: a0, t: a0 }; giros.set(e.id, g); }
       if (!e.edif) g.a = hacia(g.a, e.ang, 0.45); // el rumbo real lo lleva la simulación; aquí solo se suaviza
-      const o = e.obj ? m.porId.get(e.obj) : null;
-      g.t = hacia(g.t, o ? Math.atan2((o.edif ? o.cy : o.y) - y, (o.edif ? o.cx : o.x) - x) : g.a, 0.3);
+      g.t = hacia(g.t, e.angT !== undefined ? e.angT : g.a, 0.45); // hacia dónde apunta el arma también lo decide la simulación
       return g;
     }
     const retroceso = (e, arma) => Math.max(0, (e.recarga / W.ARMAS[arma].recarga - 0.7) / 0.3); // 1 justo al disparar
@@ -2507,6 +2577,13 @@ globalThis.W = { VERSION: 'versión 24' };
         });
         ctx.restore();
         if (sel.has(e.id)) { ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(px, py, r * 1.9 + 2, 0, TAU); ctx.stroke(); }
+        if (sel.has(e.id) && e.j === YO && lod && sel.size <= 40) { // lo que ve: cerca alrededor, lejos solo al frente
+          const E = W.ECON, rc = d.vision * E.visAt * z, rl = d.vision * E.visAd * z;
+          ctx.beginPath(); ctx.moveTo(px + Math.cos(g.a - E.cono) * rc, py + Math.sin(g.a - E.cono) * rc);
+          ctx.arc(px, py, rl, g.a - E.cono, g.a + E.cono); ctx.arc(px, py, rc, g.a + E.cono, g.a - E.cono + TAU); ctx.closePath();
+          ctx.fillStyle = P.tinta; ctx.globalAlpha = 0.035; ctx.fill();
+          ctx.globalAlpha = 0.28; ctx.lineWidth = 1; ctx.setLineDash([3, 4]); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+        }
         if (e.cava > 0) { // cavando: el parapeto se va cerrando
           const fr = 1 - e.cava / W.ECON.cavar;
           ctx.strokeStyle = '#5f5140'; ctx.lineWidth = Math.max(2, z * 0.16); ctx.beginPath(); ctx.arc(px, py, z * 0.44, e.ang - 2.1 * fr, e.ang + 2.1 * fr); ctx.stroke();
@@ -3171,6 +3248,22 @@ globalThis.W = { VERSION: 'versión 24' };
     $('finRep').href = '?' + op.consulta + '&ya=1';
     $('finNueva').href = location.pathname;
 
+    // ---------- rendimiento: tablita de abajo a la izquierda ----------
+    // Tiempos medios del último segundo. A 20 ticks por segundo, la simulación dispone de 50 ms por tick;
+    // a 60 cuadros por segundo, el dibujo dispone de 16,7 ms por cuadro.
+    const R = { sim: 0, ticks: 0, dib: 0, cuadros: 0, ms: 0, niebla: 0, pasadas: 0 };
+    const nieblaBase = W.actualizarNiebla;
+    W.actualizarNiebla = function (mm) { const t0 = performance.now(); nieblaBase(mm); R.niebla += performance.now() - t0; R.pasadas++; };
+    function rendimiento() {
+      const f = (v) => (v < 10 ? v.toFixed(2) : v.toFixed(1)).replace('.', ',');
+      const fps = R.cuadros / (R.ms / 1000), sim = R.ticks ? R.sim / R.ticks : 0, dib = R.dib / R.cuadros, nie = R.pasadas ? R.niebla / R.pasadas : 0;
+      const fila = (n, v, mal) => '<tr' + (mal ? ' class="mal"' : '') + '><td>' + n + '</td><td>' + v + '</td></tr>';
+      $('rend').innerHTML = fila('cuadros/s', Math.round(fps), fps < 30) + fila('dibujo', f(dib) + ' ms', dib > 16.7) + fila('simulación', f(sim) + ' ms/tick', sim > 25)
+        + fila('· niebla', f(nie) + ' ms', nie > 10) + fila('entidades', m.ents.length + ' · ' + parts.length + ' part.', false);
+      R.sim = R.ticks = R.dib = R.cuadros = R.ms = R.niebla = R.pasadas = 0;
+    }
+    $('rend').addEventListener('click', () => $('rend').classList.toggle('plegado'));
+
     // ---------- bucle ----------
     const PASO = 1000 / W.TPS;
     let antes = performance.now(), acum = 0, finMostrado = false;
@@ -3184,15 +3277,20 @@ globalThis.W = { VERSION: 'versión 24' };
       if (!pausa && m.ganador < 0) {
         acum += dt;
         let n = 0;
+        const t0 = performance.now();
         while (acum >= PASO && n < 4) { if (ia) W.iaTick(m, ia); W.tick(m); acum -= PASO; n++; }
+        R.sim += performance.now() - t0; R.ticks += n;
         if (n === 4) acum = 0;
         if (n) sonar();
       }
       for (const id of sel) if (!m.porId.has(id)) sel.delete(id);
       if (modo === 'colocar' && !obraLista(tipoColocar)) modo = null;
+      const td = performance.now();
       if (nieblaVista !== m.nieblaV) pintarNiebla();
       dibujar(pausa || m.ganador >= 0 ? 1 : Math.min(1, acum / PASO));
       if (cuadros % 6 === 0) { dibujarMini(); actualizarBarra(); }
+      R.dib += performance.now() - td; R.cuadros++; R.ms += dt;
+      if (R.ms >= 1000) rendimiento();
       if (cuadros % 900 === 0) for (const id of giros.keys()) if (!m.porId.has(id)) giros.delete(id);
       cuadros++;
       if (m.ganador >= 0 && !finMostrado) {

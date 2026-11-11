@@ -51,7 +51,12 @@
   #formas { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; }
   #formas .grupo { justify-content: center; }
   #vender, #trinchera { justify-content: center; margin-top: 4px; }
-  #contexto { position: fixed; left: 8px; bottom: 8px; z-index: 3; background: var(--panel); border: 1px solid var(--linea); border-radius: 2px; padding: 4px 8px; max-width: 340px; font-size: 11px; line-height: 1.5; pointer-events: none; opacity: 0.92; }
+  #abajo { position: fixed; left: 8px; bottom: 8px; z-index: 3; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; pointer-events: none; }
+  #rend { border-collapse: collapse; background: var(--panel); border: 1px solid var(--linea); border-radius: 2px; font-size: 10px; line-height: 1.35; opacity: 0.92; pointer-events: auto; cursor: pointer; }
+  #rend td { padding: 0 6px; } #rend td:last-child { text-align: right; color: var(--tinta); font-variant-numeric: tabular-nums; }
+  #rend tr.mal td { color: var(--mal); }
+  #rend.plegado tr:not(:first-child) { display: none; }
+  #contexto { background: var(--panel); border: 1px solid var(--linea); border-radius: 2px; padding: 4px 8px; max-width: 340px; font-size: 11px; line-height: 1.5; pointer-events: none; opacity: 0.92; }
   #contexto kbd { font: inherit; color: var(--tinta); }
   #contexto b { color: var(--tinta); font-weight: 600; }
   #vender:hover { background: var(--mal); color: #fff; border-color: var(--mal); }
@@ -89,6 +94,9 @@
       <div><kbd>Z</kbd> atrincherarse (infantería quieta): recibe menos daño</div>
       <div>tras mover, otro clic derecho cerca: hacia dónde mirar</div>
       <div>bosque: cubre a la infantería y frena a los vehículos</div>
+      <div>las unidades disparan y ven lejos solo hacia su frente;</div>
+      <div>tanques y torres giran la torreta, el resto gira entero</div>
+      <div>vehículos: +25 % de daño por el costado, +50 % por la espalda</div>
       <div>aviones: sin terreno que los frene, con combustible limitado;</div>
       <div>solo les alcanzan fusil, cohete, torreta, antiaérea y caza</div>
       <div><b>!</b> pide apoyo · <b>✓</b> acude a la llamada</div>
@@ -106,7 +114,7 @@
       <div id="semilla"></div>
       <div>escribe <kbd>god</kbd>: recursos infinitos</div>
   </details>
-  <div id="contexto" class="tenue" hidden></div>
+  <div id="abajo"><table id="rend" class="tenue" title="Rendimiento del último segundo. Clic para plegar."></table><div id="contexto" class="tenue" hidden></div></div>
   <aside id="barra">
     <h1 id="titulo" title="Recargar">rts<span>.</span>warfare<b id="dios" hidden>GOD</b><b id="sinColmena" hidden>SIN COLMENA</b></h1>
     <div id="recursos">

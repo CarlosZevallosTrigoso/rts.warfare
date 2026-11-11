@@ -174,8 +174,7 @@
       let g = giros.get(e.id);
       if (!g) { const a0 = Math.atan2(N / 2 - y, N / 2 - x); g = { a: a0, t: a0 }; giros.set(e.id, g); }
       if (!e.edif) g.a = hacia(g.a, e.ang, 0.45); // el rumbo real lo lleva la simulación; aquí solo se suaviza
-      const o = e.obj ? m.porId.get(e.obj) : null;
-      g.t = hacia(g.t, o ? Math.atan2((o.edif ? o.cy : o.y) - y, (o.edif ? o.cx : o.x) - x) : g.a, 0.3);
+      g.t = hacia(g.t, e.angT !== undefined ? e.angT : g.a, 0.45); // hacia dónde apunta el arma también lo decide la simulación
       return g;
     }
     const retroceso = (e, arma) => Math.max(0, (e.recarga / W.ARMAS[arma].recarga - 0.7) / 0.3); // 1 justo al disparar
@@ -373,6 +372,13 @@
         });
         ctx.restore();
         if (sel.has(e.id)) { ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(px, py, r * 1.9 + 2, 0, TAU); ctx.stroke(); }
+        if (sel.has(e.id) && e.j === YO && lod && sel.size <= 40) { // lo que ve: cerca alrededor, lejos solo al frente
+          const E = W.ECON, rc = d.vision * E.visAt * z, rl = d.vision * E.visAd * z;
+          ctx.beginPath(); ctx.moveTo(px + Math.cos(g.a - E.cono) * rc, py + Math.sin(g.a - E.cono) * rc);
+          ctx.arc(px, py, rl, g.a - E.cono, g.a + E.cono); ctx.arc(px, py, rc, g.a + E.cono, g.a - E.cono + TAU); ctx.closePath();
+          ctx.fillStyle = P.tinta; ctx.globalAlpha = 0.035; ctx.fill();
+          ctx.globalAlpha = 0.28; ctx.lineWidth = 1; ctx.setLineDash([3, 4]); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+        }
         if (e.cava > 0) { // cavando: el parapeto se va cerrando
           const fr = 1 - e.cava / W.ECON.cavar;
           ctx.strokeStyle = '#5f5140'; ctx.lineWidth = Math.max(2, z * 0.16); ctx.beginPath(); ctx.arc(px, py, z * 0.44, e.ang - 2.1 * fr, e.ang + 2.1 * fr); ctx.stroke();
@@ -1037,6 +1043,22 @@
     $('finRep').href = '?' + op.consulta + '&ya=1';
     $('finNueva').href = location.pathname;
 
+    // ---------- rendimiento: tablita de abajo a la izquierda ----------
+    // Tiempos medios del último segundo. A 20 ticks por segundo, la simulación dispone de 50 ms por tick;
+    // a 60 cuadros por segundo, el dibujo dispone de 16,7 ms por cuadro.
+    const R = { sim: 0, ticks: 0, dib: 0, cuadros: 0, ms: 0, niebla: 0, pasadas: 0 };
+    const nieblaBase = W.actualizarNiebla;
+    W.actualizarNiebla = function (mm) { const t0 = performance.now(); nieblaBase(mm); R.niebla += performance.now() - t0; R.pasadas++; };
+    function rendimiento() {
+      const f = (v) => (v < 10 ? v.toFixed(2) : v.toFixed(1)).replace('.', ',');
+      const fps = R.cuadros / (R.ms / 1000), sim = R.ticks ? R.sim / R.ticks : 0, dib = R.dib / R.cuadros, nie = R.pasadas ? R.niebla / R.pasadas : 0;
+      const fila = (n, v, mal) => '<tr' + (mal ? ' class="mal"' : '') + '><td>' + n + '</td><td>' + v + '</td></tr>';
+      $('rend').innerHTML = fila('cuadros/s', Math.round(fps), fps < 30) + fila('dibujo', f(dib) + ' ms', dib > 16.7) + fila('simulación', f(sim) + ' ms/tick', sim > 25)
+        + fila('· niebla', f(nie) + ' ms', nie > 10) + fila('entidades', m.ents.length + ' · ' + parts.length + ' part.', false);
+      R.sim = R.ticks = R.dib = R.cuadros = R.ms = R.niebla = R.pasadas = 0;
+    }
+    $('rend').addEventListener('click', () => $('rend').classList.toggle('plegado'));
+
     // ---------- bucle ----------
     const PASO = 1000 / W.TPS;
     let antes = performance.now(), acum = 0, finMostrado = false;
@@ -1050,15 +1072,20 @@
       if (!pausa && m.ganador < 0) {
         acum += dt;
         let n = 0;
+        const t0 = performance.now();
         while (acum >= PASO && n < 4) { if (ia) W.iaTick(m, ia); W.tick(m); acum -= PASO; n++; }
+        R.sim += performance.now() - t0; R.ticks += n;
         if (n === 4) acum = 0;
         if (n) sonar();
       }
       for (const id of sel) if (!m.porId.has(id)) sel.delete(id);
       if (modo === 'colocar' && !obraLista(tipoColocar)) modo = null;
+      const td = performance.now();
       if (nieblaVista !== m.nieblaV) pintarNiebla();
       dibujar(pausa || m.ganador >= 0 ? 1 : Math.min(1, acum / PASO));
       if (cuadros % 6 === 0) { dibujarMini(); actualizarBarra(); }
+      R.dib += performance.now() - td; R.cuadros++; R.ms += dt;
+      if (R.ms >= 1000) rendimiento();
       if (cuadros % 900 === 0) for (const id of giros.keys()) if (!m.porId.has(id)) giros.delete(id);
       cuadros++;
       if (m.ganador >= 0 && !finMostrado) {
