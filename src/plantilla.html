@@ -80,6 +80,8 @@
   #admin .grupo::before { content: '○'; } #admin .grupo.on::before { content: '●'; }
   #admin .fila2 { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; } #admin .fila2 span { flex-basis: 100%; font-size: 10px; color: var(--suave); margin-top: 3px; }
   #admin .fila2 .grupo::before { content: none; }
+  #finGraf { display: block; margin: 12px auto 4px; max-width: 100%; }
+  #continuar { margin-top: 6px; font: inherit; padding: 8px 14px; cursor: pointer; background: var(--panel); color: var(--tinta); border: 1px solid var(--linea); border-radius: 2px; }
   #abajo { position: fixed; left: 8px; bottom: 8px; z-index: 3; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; pointer-events: none; }
   #rend { border-collapse: collapse; background: var(--panel); border: 1px solid var(--linea); border-radius: 2px; font-size: 10px; line-height: 1.35; opacity: 0.92; pointer-events: auto; cursor: pointer; }
   #rend td { padding: 0 6px; } #rend td:last-child { text-align: right; color: var(--tinta); font-variant-numeric: tabular-nums; }
@@ -165,6 +167,8 @@
       <div>clic en la cola, <kbd>×</kbd> o clic derecho en botón: cancelar</div>
       <div><kbd>P</kbd> pausa · <kbd>T</kbd> tema · <kbd>N</kbd> silenciar</div>
       <div id="semilla"></div>
+      <div><button type="button" id="guardar" class="grupo">guardar partida</button> <button type="button" id="recargar" class="grupo">cargar la guardada</button> <kbd>F6</kbd> guarda</div>
+      <div>día y noche: de noche las unidades ven un 30 % menos</div>
       <div>escribe <kbd>god</kbd>: recursos infinitos · <kbd>admin</kbd>: panel de trampas</div>
   </details>
   <div id="admin" hidden>
@@ -194,6 +198,7 @@
       <div class="fila" title="Usada / disponible. Cada unidad consume agua; el patio y las bombas la dan. Sin agua libre no sale más tropa."><span>agua</span><b id="rAgu">0 / 0</b></div>
       <div id="espia" class="tenue"></div>
       <div class="fila" title="Nivel tecnológico. Se sube desde el patio."><span>nivel</span><b><span id="nivel">1</span><span id="hechas" class="tenue"></span></b></div>
+      <div class="fila" title="De noche las unidades ven un 30 % menos; los edificios, igual."><span>hora</span><b id="rHora">día</b></div>
       <div class="fila" title="Usada / disponible. En déficit todo va a media velocidad y las torretas se apagan."><span>energía</span><b id="rEne">0 / 0</b></div>
     </div>
     <canvas id="mini" width="208" height="208"></canvas>
@@ -233,9 +238,10 @@
     <button type="button" data-v="aereo">aéreo<small>aviación</small></button><button type="button" data-v="defensivo">defensivo<small>torres, ataca tarde</small></button><button type="button" data-v="asalto">de asalto<small>ataca pronto</small></button></div></div>
   <div><h2>Semilla del mapa</h2><input id="op-s" inputmode="numeric" placeholder="al azar" autocomplete="off"></div>
   <button type="button" id="empezar">Empezar</button>
+  <button type="button" id="continuar" hidden>Continuar la partida guardada</button>
   <div id="version">__VERSION__</div>
 </div></div>
-<div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><p><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
+<div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
 globalThis.W = { VERSION: '__VERSION__' };
 /*__CODIGO__*/

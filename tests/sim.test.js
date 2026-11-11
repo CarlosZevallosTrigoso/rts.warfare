@@ -1,7 +1,7 @@
 // Pruebas de la simulación. Ejecutar: node tests/sim.test.js
 const assert = require('node:assert');
 const path = require('node:path');
-for (const f of ['datos', 'mapa', 'ruta', 'mundo', 'ia']) require(path.join(__dirname, '..', 'src', 'sim', f + '.js'));
+for (const f of ['datos', 'mapa', 'ruta', 'mundo', 'ia', 'guardar']) require(path.join(__dirname, '..', 'src', 'sim', f + '.js'));
 const W = globalThis.W, N = W.N;
 
 let ok = 0;
@@ -730,7 +730,7 @@ prueba('fase 1a y 1b: bucle, retirada, cosechadora que huye, veteranía, observa
   avanza(900);
   assert.ok(co.est === 'cosechar' || co.est === 'ir' || co.est === 'volver' || co.est === 'descargar', 'la cosechadora debía estar trabajando: ' + co.est);
   let espera = 0; while (co.est !== 'cosechar' && espera++ < 1500) W.tick(m);
-  const malo = W.crearUnidad(m, 1, 'infanteria', W.cercaLibre(m, co.x + 2, co.y)); malo.guardia = true;
+  const malo = W.crearUnidad(m, 1, 'infanteria', W.cercaLibre(m, co.x + 2, co.y)); malo.guardia = true; malo.ang = Math.atan2(co.y - malo.y, co.x - malo.x); // de noche ve menos: que la tenga delante
   avanza(60);
   assert.ok(co.huye > 0 && (co.est === 'volver0' || co.est === 'volver'), 'atacada, debía huir a la refinería: ' + co.est);
   malo.vida = 0; let llego = false;
@@ -1112,6 +1112,21 @@ prueba('panel ADMIN: cada interruptor por separado', () => {
   // de un solo uso
   pon('nivel3', true); pon('mejoras', true);
   assert.ok(J.nivel === 3 && J.mejoras.canonLargo && !J.admin, 'nivel y mejoras quedan puestos');
+});
+
+prueba('guardar y cargar: la partida cargada sigue exactamente igual que la original', () => {
+  const m = W.crearMundo(2026, { N: 128 }), a = W.iaCrear(0), b = W.iaCrear(1, 'normal', 'asalto');
+  const paso = (mm, x, y) => { W.iaTick(mm, x); W.iaTick(mm, y); W.tick(mm); };
+  for (let i = 0; i < 9000; i++) paso(m, a, b);
+  const txt = W.guardar(m, { a, b });
+  assert.ok(txt.length < 1500000, 'la partida guardada debía caber de sobra en el navegador: ' + txt.length);
+  const c = W.cargar(txt), m2 = c.m, a2 = c.extra.a, b2 = c.extra.b;
+  assert.ok(m2.t === m.t && m2.ents.length === m.ents.length && m2.porId.size === m.porId.size && a2.atacantes instanceof Set && m2.trincheras instanceof Map);
+  assert.ok(m2.mapa.terreno instanceof Uint8Array && m2.mapa.terreno.every((v, i) => v === m.mapa.terreno[i]) && m2.niebla[0].every((v, i) => v === m.niebla[0][i]), 'las tablas del mapa debían volver idénticas');
+  for (let i = 0; i < 4000; i++) { paso(m, a, b); paso(m2, a2, b2); }
+  const firma = (mm) => mm.ents.map((e) => e.id + ':' + e.tipo + ':' + (e.edif ? e.x : e.x.toFixed(3)) + ':' + Math.round(e.vida)).join('|') + '#' + mm.jug.map((J) => Math.round(J.minerales) + '/' + J.bajas).join(',');
+  assert.strictEqual(firma(m2), firma(m), 'tras cargar, la partida debía seguir igual que la original');
+  assert.throws(() => W.cargar('{"hola":1}'), /partida guardada/);
 });
 
 prueba('determinismo: misma semilla, misma partida', () => {

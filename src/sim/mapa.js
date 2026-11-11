@@ -152,31 +152,45 @@
       sitioEn[y * N + x] = 1; sitioEn[espejo(y * N + x)] = 1; n++;
     }
 
-    // Corredor para vehículos: el bosque solo lo cruza la infantería, así que entre las dos bases tiene que quedar al menos
-    // un paso de llano. Se busca el camino que menos bosque tala (búsqueda 0-1) y se abre con dos celdas de ancho, en espejo.
+    // Corredores para vehículos: el bosque solo lo cruza la infantería, así que entre las dos bases tienen que quedar pasos
+    // de llano. Se busca el camino que menos bosque tala (búsqueda 0-1) y se abre con dos celdas de ancho, en espejo.
+    // Después se busca un segundo camino lejos del primero, para que haya dos frentes y los ataques no se embotellen.
     {
-      const INF = 1e9, coste = new Int32Array(NN).fill(INF), de = new Int32Array(NN).fill(-1), cola = new Int32Array(NN * 2 + 4);
-      let ini = NN, fin = NN; // cola doble: lo gratis entra por delante, lo que cuesta por detrás
-      const a0 = A.y * N + A.x, b0 = B.y * N + B.x;
-      coste[a0] = 0; cola[fin++] = a0;
-      while (ini < fin) {
-        const c = cola[ini++], cx = c % N, cy = (c / N) | 0;
-        if (c === b0) break;
-        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-          const x = cx + dx, y = cy + dy;
-          if (x < 1 || y < 1 || x >= N - 1 || y >= N - 1) continue;
-          const n = y * N + x, t = terreno[n];
-          if (t === T.ROCA || t === T.AGUA) continue;
-          const w = t === T.BOSQUE ? 1 : 0, nc = coste[c] + w;
-          if (nc >= coste[n]) continue;
-          coste[n] = nc; de[n] = c;
-          if (w) { if (fin < cola.length) cola[fin++] = n; } else if (ini > 0) cola[--ini] = n;
+      const INF = 1e9, a0 = A.y * N + A.x, b0 = B.y * N + B.x;
+      const buscar = (veto) => {
+        const coste = new Int32Array(NN).fill(INF), de = new Int32Array(NN).fill(-1), cola = new Int32Array(NN * 2 + 4);
+        let ini = NN, fin = NN; // cola doble: lo gratis entra por delante, lo que cuesta por detrás
+        coste[a0] = 0; cola[fin++] = a0;
+        while (ini < fin) {
+          const c = cola[ini++], cx = c % N, cy = (c / N) | 0;
+          if (c === b0) break;
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const x = cx + dx, y = cy + dy;
+            if (x < 1 || y < 1 || x >= N - 1 || y >= N - 1) continue;
+            const n = y * N + x, t = terreno[n];
+            if (t === T.ROCA || t === T.AGUA || (veto && veto[n])) continue;
+            const w = t === T.BOSQUE ? 1 : 0, nc = coste[c] + w;
+            if (nc >= coste[n]) continue;
+            coste[n] = nc; de[n] = c;
+            if (w) { if (fin < cola.length) cola[fin++] = n; } else if (ini > 0) cola[--ini] = n;
+          }
         }
-      }
-      if (coste[b0] < INF && coste[b0] > 0) {
-        for (let c = b0; c >= 0 && c !== a0; c = de[c]) {
-          for (const d of [0, 1, N, N + 1]) { const i = c + d; if (i < NN && terreno[i] === T.BOSQUE) terreno[i] = T.LLANO; const e = espejo(i); if (e >= 0 && e < NN && terreno[e] === T.BOSQUE) terreno[e] = T.LLANO; }
+        if (coste[b0] >= INF) return null;
+        const camino = []; for (let c = b0; c >= 0 && c !== a0; c = de[c]) camino.push(c);
+        return camino;
+      };
+      const abrir = (camino) => { for (const c of camino) for (const d of [0, 1, N, N + 1]) { const i = c + d; if (i < NN && terreno[i] === T.BOSQUE) terreno[i] = T.LLANO; const e = espejo(i); if (e >= 0 && e < NN && terreno[e] === T.BOSQUE) terreno[e] = T.LLANO; } };
+      const primero = buscar(null);
+      if (primero) {
+        abrir(primero);
+        const veto = new Uint8Array(NN), R = Math.max(7, Math.round(N * 0.09)), libre = 16; // franja vetada alrededor del primero, salvo junto a las bases
+        for (let k = 0; k < primero.length; k += Math.max(1, R >> 1)) {
+          const c = primero[k], cx = c % N, cy = (c / N) | 0;
+          if (Math.hypot(cx - A.x, cy - A.y) < libre + R || Math.hypot(cx - B.x, cy - B.y) < libre + R) continue;
+          for (let y = Math.max(0, cy - R); y <= Math.min(N - 1, cy + R); y++) for (let x = Math.max(0, cx - R); x <= Math.min(N - 1, cx + R); x++) veto[y * N + x] = 1;
         }
+        const segundo = buscar(veto);
+        if (segundo) abrir(segundo);
       }
     }
 

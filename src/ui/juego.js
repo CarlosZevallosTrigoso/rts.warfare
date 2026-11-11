@@ -36,6 +36,19 @@
       W.jugar({ semilla, N: +op.n, inicio: +op.min, ia: op.ia, estilo: op.est, consulta: q });
     };
     $('empezar').addEventListener('click', empezar);
+    // Partida guardada: se ofrece continuarla, y con ?cargar=1 se entra directo (así funciona «cargar la guardada» desde dentro).
+    const continuar = () => {
+      try {
+        const c = W.cargar(localStorage.getItem('rts.guardado'));
+        $('menu').hidden = true;
+        W.jugar(Object.assign({}, c.extra.op, { guardado: c }));
+      } catch (e) { $('continuar').textContent = 'La partida guardada no se pudo leer'; $('continuar').disabled = true; }
+    };
+    let hayGuardada = false;
+    try { hayGuardada = !!localStorage.getItem('rts.guardado'); } catch (e) { /* sin almacenamiento */ }
+    $('continuar').hidden = !hayGuardada;
+    $('continuar').addEventListener('click', continuar);
+    if (hayGuardada && params.get('cargar')) { try { history.replaceState(null, '', location.pathname); } catch (e) { /* da igual */ } continuar(); return; }
     $('op-s').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') empezar(); });
     $('tituloMenu').addEventListener('click', () => location.reload());
     if (params.has('ya')) empezar();
@@ -44,7 +57,10 @@
   W.jugar = function (op) {
     const $ = (id) => document.getElementById(id);
     const semilla = op.semilla;
-    const m = W.crearMundo(semilla, { N: op.N, inicio: op.inicio }), estilos = Object.keys(W.ESTILOS_IA), ia = op.ia === 'no' ? null : W.iaCrear(1, op.ia, W.ESTILOS_IA[op.estilo] ? op.estilo : estilos[semilla % estilos.length]), N = m.N, YO = 0, J = m.jug[YO];
+    const cargado = op.guardado || null; // partida guardada: el mundo y la IA vienen ya hechos
+    const m = cargado ? cargado.m : W.crearMundo(semilla, { N: op.N, inicio: op.inicio }), estilos = Object.keys(W.ESTILOS_IA);
+    const ia = cargado ? cargado.extra.ia : op.ia === 'no' ? null : W.iaCrear(1, op.ia, W.ESTILOS_IA[op.estilo] ? op.estilo : estilos[semilla % estilos.length]), N = m.N, YO = 0, J = m.jug[YO];
+    const hist = cargado && cargado.extra.hist ? cargado.extra.hist : []; // una muestra cada 30 s, para el resumen final
     W.mundo = m; // a mano en la consola, para depurar
 
     let tema = 'clara';
@@ -54,7 +70,7 @@
     const lienzo = $('lienzo'), ctx = lienzo.getContext('2d');
     const mini = $('mini'), mctx = mini.getContext('2d'), MS = mini.width;
     let cw = 0, ch = 0, dpr = 1;
-    const cam = { x: m.mapa.bases[YO].x, y: m.mapa.bases[YO].y, z: 30 };
+    const cam = cargado && cargado.extra.cam ? cargado.extra.cam : { x: m.mapa.bases[YO].x, y: m.mapa.bases[YO].y, z: 30 };
     W.cam = cam;
     const son = W.crearSonido();
     W.son = son;
@@ -573,6 +589,7 @@
       ctx.globalAlpha = 1;
 
       ctx.imageSmoothingEnabled = true;
+      { const luz = W.luz(m); if (luz < 1) { ctx.fillStyle = 'rgba(14,20,48,' + (0.36 * (1 - luz)).toFixed(3) + ')'; ctx.fillRect(0, 0, cw, ch); } } // la noche: un velo azulado sobre el mapa
       ctx.drawImage(cNie, ox, oy, N * z, N * z);
       ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.strokeRect(ox - 0.5, oy - 0.5, N * z + 1, N * z + 1);
 
@@ -915,6 +932,42 @@
     const paraCavar = () => unidadesSel().filter((u) => u.j === YO && UNID[u.tipo].cat === 'inf' && u.orden === 'nada' && !(u.cava > 0) && !W.enTrinchera(m, u));
     function atrincherar() { const ids = paraCavar().map((u) => u.id); if (ids.length) { W.orden(m, { t: 'trinchera', j: YO, ids }); son.colocar(); } }
     $('trinchera').addEventListener('click', atrincherar);
+    // Guardar y cargar: la partida entera va al almacenamiento del navegador (una sola, la última).
+    function guardar() {
+      try {
+        const txt = W.guardar(m, { ia, hist, cam, op: { semilla, N: op.N, inicio: op.inicio, ia: op.ia, estilo: op.estilo, consulta: op.consulta } });
+        localStorage.setItem('rts.guardado', txt);
+        aviso('Partida guardada (' + Math.round(txt.length / 1024) + ' KB). Se continúa desde el menú inicial.');
+      } catch (e) { aviso('No se pudo guardar: ' + (e && e.name === 'QuotaExceededError' ? 'no cabe en el almacenamiento del navegador' : 'el navegador no lo permite')); }
+    }
+    $('guardar').addEventListener('click', guardar);
+    $('recargar').addEventListener('click', () => { let hay = false; try { hay = !!localStorage.getItem('rts.guardado'); } catch (e) { /* nada */ } if (!hay) { aviso('No hay ninguna partida guardada'); return; } location.href = location.pathname + '?cargar=1'; });
+    // Historial para el resumen final: lo cosechado, el valor del ejército y las bajas de cada bando.
+    function muestra() {
+      const ej = [0, 0];
+      for (const e of m.ents) if (!e.edif && UNID[e.tipo].arma) ej[e.j] += UNID[e.tipo].costo;
+      hist.push({ t: m.t, c: [m.jug[0].cosechado, m.jug[1].cosechado], e: ej, b: [m.jug[0].bajas, m.jug[1].bajas] });
+      if (hist.length > 400) hist.splice(0, hist.length - 400);
+    }
+    function resumen() {
+      muestra();
+      const cv = $('finGraf'), g = cv.getContext('2d'), Wd = cv.width, Hd = cv.height, n = hist.length;
+      g.clearRect(0, 0, Wd, Hd); g.font = '11px "Fira Code", monospace';
+      const series = [['minerales cosechados', 'c'], ['valor del ejército', 'e'], ['bajas', 'b']], ancho = Wd / 3;
+      series.forEach(([titulo, k], s) => {
+        const x0 = s * ancho + 10, w = ancho - 20, y0 = 22, h = Hd - 44;
+        let max = 1; for (const q of hist) max = Math.max(max, q[k][0], q[k][1]);
+        g.fillStyle = P.tinta; g.fillText(titulo, x0, 12);
+        g.strokeStyle = P.suave || '#999'; g.lineWidth = 1; g.strokeRect(x0 + 0.5, y0 + 0.5, w, h);
+        for (const j of [1, 0]) { // el rival debajo, tú encima
+          g.strokeStyle = j === YO ? P.yo : P.rival; g.lineWidth = 2; g.beginPath();
+          hist.forEach((q, i) => { const x = x0 + (n > 1 ? (i / (n - 1)) * w : 0), y = y0 + h - (q[k][j] / max) * h; if (i) g.lineTo(x, y); else g.moveTo(x, y); });
+          g.stroke();
+        }
+        g.fillStyle = P.tinta; g.fillText(String(Math.round(max)), x0 + 3, y0 + 12);
+        g.fillStyle = P.yo; g.fillText('tú ' + Math.round(hist[n - 1][k][YO]), x0, Hd - 6); g.fillStyle = P.rival; g.fillText('rival ' + Math.round(hist[n - 1][k][1 - YO]), x0 + w / 2, Hd - 6);
+      });
+    }
     // Panel ADMIN: cada trampa se prende y se apaga por separado, como en un trainer.
     $('admin').addEventListener('click', (ev) => {
       const b = ev.target.closest('button'); if (!b) return;
@@ -947,7 +1000,7 @@
       W.orden(m, { t: 'desplegar', j: YO, ids: ok.map((u) => u.id) });
     }
     $('desplegar').addEventListener('click', desplegar);
-    W.orden(m, { t: 'retiro', j: YO, on: true }); // por defecto, las unidades propias muy dañadas se retiran solas a reparar
+    if (!cargado) W.orden(m, { t: 'retiro', j: YO, on: true }); // por defecto, las unidades propias muy dañadas se retiran solas a reparar
     const paraRetiro = () => unidadesSel().filter((u) => !UNID[u.tipo].aire && u.tipo !== 'cosechadora');
     $('retiro').addEventListener('click', () => { const us = paraRetiro(); if (us.length) W.orden(m, { t: 'retiro', j: YO, ids: us.map((u) => u.id), on: !us.every((u) => u.retira) }); });
     // Segundo clic derecho tras ordenar mover: fija hacia dónde queda mirando la unidad (o el frente de la formación).
@@ -1122,6 +1175,7 @@
     for (const tipo in UNID) boton($('bUnid'), tipo, UNID[tipo], false);
 
     function actualizarBarra() {
+      { const f = m.t % W.ECON.dia, noche = W.esNoche(m), falta = Math.ceil(((noche ? W.ECON.dia : W.ECON.diaLuz) - f) / 20), t = (noche ? 'noche · amanece en ' : 'día · anochece en ') + Math.floor(falta / 60) + ':' + String(falta % 60).padStart(2, '0'); if ($('rHora').textContent !== t) $('rHora').textContent = t; }
       const num = (v) => (J.dios ? '∞' : String(Math.floor(v)));
       $('rMin').textContent = num(J.minerales); $('rPet').textContent = num(J.petroleo); $('rRar').textContent = num(J.raros); $('rInf').textContent = num(J.info);
       { const otras = J.tr.requisitos || J.tr.libre || J.tr.vel > 1 || J.tr.mapa || J.tr.invulnerable || iaQuieta, t = otras ? 'ADMIN' : 'GOD'; $('dios').hidden = !J.dios && !otras; if ($('dios').textContent !== t) $('dios').textContent = t; } actualizarAdmin(); $('sinColmena').hidden = J.colmena;
@@ -1455,6 +1509,7 @@
         case 'KeyR': if (unidadesSel().length) modo = 'patrulla'; break;
         case 'KeyZ': atrincherar(); break;
         case 'KeyD': desplegar(); break;
+        case 'F6': ev.preventDefault(); guardar(); break;
         case 'KeyK': trazar(); break;
         case 'KeyU': descargar(); break;
         case 'KeyB': elegirEdificios('patio'); break;
@@ -1521,6 +1576,7 @@
         const t0 = performance.now();
         while (acum >= PASO && n < 4) { if (ia && !iaQuieta) W.iaTick(m, ia); W.tick(m); acum -= PASO; n++; }
         R.sim += performance.now() - t0; R.ticks += n;
+        if (n && Math.floor(m.t / 600) !== Math.floor((m.t - n) / 600)) muestra();
         if (n === 4) acum = 0;
         if (n) sonar();
       }
@@ -1540,7 +1596,7 @@
         $('finTxt').textContent = m.ganador === YO ? 'victoria' : m.ganador === 2 ? 'empate' : 'derrota';
         son.fin(m.ganador === YO);
         $('finSub').textContent = 'semilla ' + semilla + ' · ' + Math.round(m.t / W.TPS / 60) + ' min';
-        $('fin').hidden = false;
+        $('fin').hidden = false; resumen();
       }
       requestAnimationFrame(cuadro);
     }

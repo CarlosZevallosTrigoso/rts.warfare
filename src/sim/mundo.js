@@ -651,7 +651,7 @@
   for (const t in UNID) { const a = UNID[t].cono || ECON.cono, c = Math.cos(a); CAMPO[t] = { todo: a >= Math.PI, cos: c, k: c * Math.abs(c) }; }
   // ¿Ve la unidad a ese enemigo? Cerca, en todas direcciones; lejos, solo dentro del cono frontal.
   function veDir(m, a, e, d) {
-    const v = UNID[a.tipo].vision;
+    const v = UNID[a.tipo].vision * (W.esNoche(m) ? ECON.nocheVis : 1);
     const dx = posX(e) - a.x, dy = posY(e) - a.y;
     const q = trincheraDe(m, a);
     if (q && Math.abs(difAng(Math.atan2(dy, dx), q.ang)) > ECON.arcoTrinchera) return false; // desde la trinchera solo se cubre su frente
@@ -1352,11 +1352,22 @@
   }
 
   // ---------- niebla ----------
+  // Día y noche: ciclo fijo; W.luz va de 1 (día) a 0 (noche), con un minuto de transición, para el velo de la interfaz.
+  W.esNoche = (m) => m.t % ECON.dia >= ECON.diaLuz;
+  W.luz = (m) => { const f = m.t % ECON.dia, T2 = 600; return f < ECON.diaLuz - T2 ? 1 : f < ECON.diaLuz ? (ECON.diaLuz - f) / T2 : f < ECON.dia - T2 ? 0 : (f - (ECON.dia - T2)) / T2; };
   W.actualizarNiebla = function (m) {
     const N = m.N, NN = N * N;
-    for (let j = 0; j < 2; j++) { const f = m.niebla[j]; for (let i = 0; i < NN; i++) if (f[i] === 2) f[i] = 1; }
+    // Lo visto en la pasada anterior deja de estarlo. Se lleva la lista de esas celdas para no recorrer el mapa entero cada vez.
+    if (!m.vistas) m.vistas = [0, 1].map(() => { const L = new Int32Array(NN); L.n = 0; L.todo = true; return L; });
+    for (let j = 0; j < 2; j++) {
+      const f = m.niebla[j], L = m.vistas[j];
+      if (L.todo) { for (let i = 0; i < NN; i++) if (f[i] === 2) f[i] = 1; L.todo = false; }
+      else for (let k = 0; k < L.n; k++) f[L[k]] = 1;
+      L.n = 0;
+    }
+    const noche = W.esNoche(m) ? ECON.nocheVis : 1; // de noche las unidades ven menos (los edificios, igual)
     for (let k = 0; k < m.ents.length; k++) {
-      const e = m.ents[k], f = m.niebla[e.j];
+      const e = m.ents[k], f = m.niebla[e.j], L = m.vistas[e.j];
       const cx = Math.floor(posX(e)), cy = Math.floor(posY(e));
       if (e.edif) { // los edificios ven en círculo
         const r = EDIF[e.tipo].vision + e.tam / 2, r2 = r * r, R = Math.ceil(r);
@@ -1364,13 +1375,13 @@
           const y = cy + dy; if (y < 0 || y >= N) continue;
           for (let dx = -R; dx <= R; dx++) {
             const x = cx + dx; if (x < 0 || x >= N || dx * dx + dy * dy > r2) continue;
-            f[y * N + x] = 2;
+            { const q = y * N + x; if (f[q] !== 2) { f[q] = 2; L[L.n++] = q; } }
           }
         }
         continue;
       }
       // Las unidades ven cerca alrededor y lejos solo en un cono hacia su frente.
-      const v = UNID[e.tipo].vision, rc = v * ECON.visAt, rc2 = rc * rc, rs = v * ECON.visLado, rs2 = rs * rs, rl = v * ECON.visAd, rl2 = rl * rl, R = Math.ceil(rl);
+      const v = UNID[e.tipo].vision * noche, rc = v * ECON.visAt, rc2 = rc * rc, rs = v * ECON.visLado, rs2 = rs * rs, rl = v * ECON.visAd, rl2 = rl * rl, R = Math.ceil(rl);
       const ux = Math.cos(e.ang), uy = Math.sin(e.ang), campo = CAMPO[e.tipo], kc = campo.k, redondo = campo.todo || mandado(m, e);
       for (let dy = -R; dy <= R; dy++) {
         const y = cy + dy; if (y < 0 || y >= N) continue;
@@ -1381,25 +1392,25 @@
             const p = dx * ux + dy * uy, s = p * Math.abs(p);
             if (s < kc * d2 && (d2 > rs2 || s < K_PERI * d2)) continue;
           }
-          f[y * N + x] = 2;
+          { const q = y * N + x; if (f[q] !== 2) { f[q] = 2; L[L.n++] = q; } }
         }
       }
     }
-    for (let j = 0; j < 2; j++) if (m.jug[j].tr.mapa) m.niebla[j].fill(2); // ADMIN: todo el mapa a la vista
+    for (let j = 0; j < 2; j++) if (m.jug[j].tr.mapa) { m.niebla[j].fill(2); m.vistas[j].todo = true; } // ADMIN: todo el mapa a la vista
     for (const p of m.puestos) { // una antena capturada da visión de su zona
       if (p.tipo !== 'antena' || p.dueno < 0) continue;
-      const f = m.niebla[p.dueno], R = ECON.antenaRadio, px = Math.floor(p.x), py = Math.floor(p.y);
+      const f = m.niebla[p.dueno], L = m.vistas[p.dueno], R = ECON.antenaRadio, px = Math.floor(p.x), py = Math.floor(p.y);
       for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
         const x = px + dx, y = py + dy;
-        if (x >= 0 && y >= 0 && x < N && y < N && dx * dx + dy * dy <= R * R) f[y * N + x] = 2;
+        if (x >= 0 && y >= 0 && x < N && y < N && dx * dx + dy * dy <= R * R) { const q = y * N + x; if (f[q] !== 2) { f[q] = 2; L[L.n++] = q; } }
       }
     }
     for (let k = m.barridos.length - 1; k >= 0; k--) { // zonas reveladas por inteligencia
-      const b = m.barridos[k], f = m.niebla[b.j], R = b.r;
+      const b = m.barridos[k], f = m.niebla[b.j], L = m.vistas[b.j], R = b.r;
       if (m.t > b.hasta) { m.barridos.splice(k, 1); continue; }
       for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
         const x = Math.floor(b.x) + dx, y = Math.floor(b.y) + dy;
-        if (x >= 0 && y >= 0 && x < N && y < N && dx * dx + dy * dy <= R * R) f[y * N + x] = 2;
+        if (x >= 0 && y >= 0 && x < N && y < N && dx * dx + dy * dy <= R * R) { const q = y * N + x; if (f[q] !== 2) { f[q] = 2; L[L.n++] = q; } }
       }
     }
     m.nieblaV = (m.nieblaV || 0) + 1;

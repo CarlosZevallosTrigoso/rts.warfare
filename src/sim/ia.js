@@ -15,7 +15,7 @@
   // blindados: cuántos blindados ligeros abre. aire: aeródromos que quiere y factor de aviones. extra: edificios añadidos al plan.
   const ESTILOS = {
     equilibrado: { nombre: 'equilibrado', oleada: 1, infMax: 0, blindados: 2, aerodromos: 1, aviones: 1, extra: [] },
-    blindado:    { nombre: 'blindado', tras: 'estacion', oleada: 1.2, infMax: 10, blindados: 1, aerodromos: 1, aviones: 0.6, extra: [['fabrica', 2], ['fabrica', 3]] },
+    blindado:    { nombre: 'blindado', tras: 'estacion', oleada: 1.2, infMax: 10, blindados: 1, aerodromos: 1, aviones: 0.6, extra: [['fabrica', 2]] },
     aereo:       { nombre: 'aéreo', tras: 'estacion', oleada: 1, infMax: 12, blindados: 2, aerodromos: 2, aviones: 2, extra: [['aerodromo', 1], ['aerodromo', 2], ['antiaerea', 2]] },
     defensivo:   { nombre: 'defensivo', oleada: 1.6, infMax: 0, blindados: 0, aerodromos: 1, aviones: 1, extra: [['torreta', 3], ['torreta', 5], ['torreCanon', 3], ['antiaerea', 3]] },
     asalto:      { nombre: 'de asalto', oleada: 0.6, infMax: 0, blindados: 6, aerodromos: 1, aviones: 0.6, extra: [['cuartel', 2], ['fabrica', 2]] },
@@ -216,7 +216,7 @@
       else if (J.nivel >= 2 && (c.ingeniero || 0) + J.colas.ingeniero.n < (ia.estilo === 'defensivo' ? 2 : 1)) inf = 'ingeniero'; // repara la base él solo
       else if (J.nivel >= 2 && (c.francotirador || 0) < 3 && (c.francotirador || 0) * 5 < (c.infanteria || 0)) inf = 'francotirador';
       const topeInf = E.infMax && (c.infanteria || 0) + (c.antitanque || 0) >= E.infMax && (inf === 'infanteria' || inf === 'antitanque');
-      if (c.cuartel && !topeInf && !(ahorra && soldados.length >= 6) && J.colas.infanteria.n + J.colas.antitanque.n + J.colas.explorador.n + J.colas.ingeniero.n + J.colas.francotirador.n < 2 && dinero >= UNID[inf].costo && W.puedePagar(J, UNID[inf])) { W.orden(m, { t: 'entrenar', j, tipo: inf }); dinero -= UNID[inf].costo; }
+      if (c.cuartel && !topeInf && !(ahorra && soldados.length >= 6) && J.colas.infanteria.n + J.colas.antitanque.n + J.colas.explorador.n + J.colas.ingeniero.n + J.colas.francotirador.n < 2 && dinero >= UNID[inf].costo + guardaAire && W.puedePagar(J, UNID[inf])) { W.orden(m, { t: 'entrenar', j, tipo: inf }); dinero -= UNID[inf].costo; }
     }
 
     // Tecnología: la primera pendiente de la lista que se pueda empezar y pagar sin dejar la caja vacía.
