@@ -453,7 +453,7 @@ prueba('colmena: llamada, red, necesidad, modo fijo y misiones', () => {
   const p = W.crearUnidad(m, 0, 'tanque', en(m, 40, 60)), q = W.crearUnidad(m, 0, 'tanque', en(m, 40, 70)), otro = W.crearUnidad(m, 0, 'tanque', en(m, 40, 76));
   W.orden(m, { t: 'mover', j: 0, ids: [p.id, q.id], x: 90.5, y: 64.5, forma: 'linea' }); W.orden(m, { t: 'mover', j: 0, ids: [otro.id], x: 90.5, y: 80.5 });
   avanza(m, 60);
-  for (let k = 0; k < 3; k++) { const emb = W.crearUnidad(m, 1, 'antitanque', en(m, Math.round(p.x) + 3 + k, 56)); emb.orden = 'atacar'; emb.obj = p.id; } // emboscada a uno solo
+  for (let k = 0; k < 3; k++) { const emb = W.crearUnidad(m, 1, 'antitanque', en(m, Math.round(p.x) + 3 + k, Math.round(p.y) - 4)); emb.orden = 'atacar'; emb.obj = p.id; } // emboscada a uno solo
   let acudio = false;
   for (let i = 0; i < 120; i++) { W.tick(m); if (q.acude) acudio = true; }
   assert.ok(acudio, 'la compañera de misión debía acudir aunque tuviera orden');
@@ -1095,6 +1095,36 @@ prueba('camino como infraestructura: tramos con vida, se destruyen por orden y e
   const copia = W.cargar(W.guardar(m)).m;
   for (let i = 0; i < 200; i++) { W.tick(m); W.tick(copia); }
   assert.equal(W.huella(copia), W.huella(m), 'con caminos, la partida cargada sigue igual');
+});
+
+prueba('formación en marcha: el grupo se forma, avanza junto y llega formado', () => {
+  const hacer = (forma) => {
+    const m = W.crearMundo(4242, { N: 128 }), N = m.N;
+    m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+    for (let y = 40; y < 90; y++) for (let x = 20; x < 110; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; } }
+    const us = [];
+    for (let k = 0; k < 8; k++) us.push(W.crearUnidad(m, 0, k < 3 ? 'tanque' : k < 5 ? 'explorador' : 'infanteria', (62 + (k % 4)) * N + 30 + ((k / 4) | 0) * 2)); // un racimo mezclado: rápidos y lentos
+    W.orden(m, { t: 'mover', j: 0, ids: us.map((u) => u.id), x: 95.5, y: 64.5, forma });
+    let peor = 0, muestras = 0, llegada = [];
+    for (let i = 0; i < 4000; i++) {
+      W.tick(m);
+      const cx = us.reduce((s, u) => s + u.x, 0) / us.length;
+      if (cx > 50 && cx < 85 && i % 10 === 0) { const xs = us.map((u) => u.x); peor = Math.max(peor, Math.max(...xs) - Math.min(...xs)); muestras++; } // a media marcha: cuánto se estira el grupo a lo largo
+      us.forEach((u, k) => { if (llegada[k] === undefined && u.orden === 'nada' && u.x > 90) llegada[k] = i; });
+      if (us.every((u, k) => llegada[k] !== undefined)) break;
+    }
+    return { m, us, peor, muestras, llegada };
+  };
+  const linea = hacer('linea'), suelto = hacer(undefined);
+  assert.ok(linea.us.every((u, k) => linea.llegada[k] !== undefined), 'en línea debían llegar todos');
+  assert.ok(linea.muestras > 20 && linea.peor < 2.5, 'en marcha la línea no debía estirarse: ' + linea.peor.toFixed(1));
+  assert.ok(suelto.peor > linea.peor * 2, 'sin formación cada uno va a su paso y el grupo se estira: ' + suelto.peor.toFixed(1) + ' frente a ' + linea.peor.toFixed(1));
+  const l = linea.llegada, xs = linea.us.map((u) => u.x);
+  assert.ok(Math.max(...l) - Math.min(...l) < 240, 'llegan casi a la vez: ' + (Math.max(...l) - Math.min(...l)) + ' ticks');
+  assert.ok(Math.max(...xs) - Math.min(...xs) < 1.2, 'y quedan en línea: ' + xs.map((v) => v.toFixed(1)));
+  for (let i = 0; i < 8; i++) W.tick(linea.m);
+  assert.equal(Object.keys(linea.m.marchas).length, 0, 'terminada la marcha, el grupo se disuelve');
+  console.log('      a media marcha el grupo se estira ' + linea.peor.toFixed(1) + ' celdas en línea, ' + suelto.peor.toFixed(1) + ' sin formación · llegan con ' + (Math.max(...l) - Math.min(...l)) + ' ticks de diferencia');
 });
 
 prueba('puentes: la excavadora cruza el agua, todos lo usan y al caer se cierra', () => {

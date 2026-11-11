@@ -32,7 +32,7 @@
       ocup: new Int32Array(NN), paso: new Uint8Array(NN), pasoV: new Uint8Array(NN), hayCaminos: false, terrenoV: 0, carrilX: new Float32Array(NN), carrilY: new Float32Array(NN), tramoEn: new Int32Array(NN), // carrilX/Y: por cada celda de camino, el punto del carril que le toca (0 = ninguno); tramoEn: el tramo dueño de la celda
       jug: [nuevoJugador(op.inicio), nuevoJugador(op.inicio)],
       niebla: [new Uint8Array(NN), new Uint8Array(NN)],
-      cola: [], colaRutas: [], efectos: [], proy: [], barridos: [], trincheras: new Map(), focos: [[], []], sigFoco: 1, sigMision: 1, minas: [], raros: [], ganador: -1, embarques: [],
+      cola: [], colaRutas: [], efectos: [], proy: [], barridos: [], trincheras: new Map(), focos: [[], []], sigFoco: 1, marchas: {}, sigMarcha: 1, sigMision: 1, minas: [], raros: [], ganador: -1, embarques: [],
       puestos: mapa.puestos.map((p, i) => ({ id: i, tipo: p.tipo, x: p.x + 0.5, y: p.y + 0.5, dueno: -1, prog: 0, quien: -1 })), // puestos neutrales: los captura la infantería
       ruta: W.crearRuta(N),
     };
@@ -276,11 +276,18 @@
       const rumbo = rumboPedido === undefined ? Math.atan2(y - sy / us.length, x - sx / us.length) : rumboPedido, c = Math.cos(rumbo), s = Math.sin(rumbo);
       const orden = us.slice().sort((a, b) => (UNID[a.tipo].cat === 'veh' ? 0 : 1) - (UNID[b.tipo].cat === 'veh' ? 0 : 1) || a.id - b.id); // vehículos delante
       const ps = puestos(forma, orden.length);
+      // Formación en marcha: el grupo se forma primero donde está (si está junto y el viaje es largo) y luego avanza
+      // en bloque: cada puesto se traslada en paralelo, y tickMarchas frena a los que se adelantan.
+      const mx = sx / us.length, my = sy / us.length, viaje = Math.hypot(x - mx, y - my), rm = Math.atan2(y - my, x - mx), cm = Math.cos(rm), sm = Math.sin(rm);
+      let disperso = 0; for (const u of us) disperso = Math.max(disperso, Math.hypot(u.x - mx, u.y - my));
+      const marcha = aire || orden.some((u) => UNID[u.tipo].aire) ? 0 : m.sigMarcha++, formar = marcha && viaje >= 6 && disperso <= 7;
+      if (marcha) { if (!m.marchas) m.marchas = {}; m.marchas[marcha] = orden.map((u) => u.id); }
       for (let i = 0; i < orden.length; i++) {
         const px = x + ps[i][0] * c - ps[i][1] * s, py = y + ps[i][0] * s + ps[i][1] * c, cel = W.cercaLibre(m, px, py);
         const libre = px >= 0 && py >= 0 && px < m.N && py < m.N && (aire || m.paso[Math.floor(py) * m.N + Math.floor(px)]);
-        fn(orden[i], libre ? px : (cel % m.N) + 0.5, libre ? py : ((cel / m.N) | 0) + 0.5);
-        orden[i].tope = tope; orden[i].angFin = rumbo;
+        const qx = mx + ps[i][0] * cm - ps[i][1] * sm, qy = my + ps[i][0] * sm + ps[i][1] * cm; // su puesto al formar, alrededor de donde está el grupo
+        const previo = formar && qx >= 0 && qy >= 0 && qx < m.N && qy < m.N && pasoDe(m, orden[i])[Math.floor(qy) * m.N + Math.floor(qx)] ? { x: qx, y: qy } : null;
+        fn(orden[i], libre ? px : (cel % m.N) + 0.5, libre ? py : ((cel / m.N) | 0) + 0.5, { marcha, tope, angFin: rumbo, previo });
       }
       return;
     }
@@ -307,13 +314,43 @@
       u.orden = 'atacar'; u.obj = ob.id; u.ruta = null; u.pend = null; u.guardia = false;
       return true;
     }
-    u.orden = o.t; u.obj = 0; u.dest = { x: o.x, y: o.y }; u.ruta = null; u.tope = 0; u.angFin = null; u.guardia = false;
+    u.orden = o.t; u.obj = 0; u.dest = { x: o.x, y: o.y }; u.ruta = null; u.tope = o.tope || 0; u.angFin = o.angFin === undefined ? null : o.angFin; u.guardia = false; u.marcha = o.marcha || 0; u.fm = 1; u.suelto = false;
     pedirRuta(m, u, o.x, o.y, 0);
     return true;
   }
   function encargar(m, u, o, enc) {
     if (enc && !u.patrulla && (u.orden !== 'nada' || u.cola.length)) { if (u.cola.length < 16) u.cola.push(o); return; }
     limpiar(u); asignar(m, u, o);
+  }
+  // Una orden de movimiento en formación: si hay que formar antes, primero va a su puesto junto al grupo y luego marcha.
+  function enFormacion(m, u, t, x, y, ex, enc) {
+    const o = { t, x, y };
+    if (ex) { o.marcha = ex.marcha; o.tope = ex.tope; o.angFin = ex.angFin; }
+    if (ex && ex.previo) { encargar(m, u, { t: 'mover', x: ex.previo.x, y: ex.previo.y, angFin: Math.atan2(y - ex.previo.y, x - ex.previo.x) }, enc); encargar(m, u, o, true); }
+    else encargar(m, u, o, enc);
+  }
+  // Cada 4 ticks: en cada grupo en marcha, quien va por delante de la media afloja y quien se queda atrás corre a lo suyo,
+  // de modo que avanzan juntos y la forma se conserva. Quien se para a combatir retiene a los demás cerca.
+  function tickMarchas(m) {
+    for (const gid in m.marchas) {
+      const g = +gid, act = []; let suma = 0;
+      for (const id of m.marchas[gid]) {
+        const u = m.porId.get(id);
+        if (!u || u.vida <= 0) continue;
+        let d = -1;
+        if (u.marcha === g && (u.orden === 'mover' || u.orden === 'amover') && u.dest) d = Math.hypot(u.dest.x - u.x, u.dest.y - u.y);
+        else { const q = u.cola.find((o) => o.marcha === g); if (q) d = Math.hypot(q.x - u.x, q.y - u.y); } // aún formando: cuenta para la media, pero va a su aire
+        if (d < 0) continue;
+        act.push(u, d); suma += d;
+      }
+      if (act.length < 4) { for (let k = 0; k < act.length; k += 2) { act[k].fm = 1; act[k].suelto = false; } if (!act.length) delete m.marchas[gid]; continue; }
+      const media = suma / (act.length / 2);
+      for (let k = 0; k < act.length; k += 2) {
+        const u = act[k], delta = media - act[k + 1]; // > 0: va adelantada
+        if (u.marcha !== g) continue;
+        u.fm = delta > 3 ? 0.2 : delta > 0.6 ? 1 - 0.8 * (delta - 0.6) / 2.4 : 1; u.suelto = delta < -0.6;
+      }
+    }
   }
   function celdaSinExplorar(m, u) {
     const N = m.N, f = m.niebla[u.j], al = m.mapa.alcanzable;
@@ -483,10 +520,10 @@
       }
       // cmd.enc (encadenar): la orden se añade a la cola de la unidad en vez de reemplazar lo que hace.
       case 'mover':
-        destinos(m, propias(m, cmd), cmd.x, cmd.y, (u, x, y) => encargar(m, u, { t: 'mover', x, y }, cmd.enc && u.tipo !== 'cosechadora'), cmd.forma, cmd.rumbo);
+        destinos(m, propias(m, cmd), cmd.x, cmd.y, (u, x, y, ex) => enFormacion(m, u, 'mover', x, y, ex, cmd.enc && u.tipo !== 'cosechadora'), cmd.forma, cmd.rumbo);
         return;
       case 'amover':
-        destinos(m, propias(m, cmd).filter((u) => UNID[u.tipo].arma), cmd.x, cmd.y, (u, x, y) => encargar(m, u, { t: 'amover', x, y }, cmd.enc), cmd.forma, cmd.rumbo);
+        destinos(m, propias(m, cmd).filter((u) => UNID[u.tipo].arma), cmd.x, cmd.y, (u, x, y, ex) => enFormacion(m, u, 'amover', x, y, ex, cmd.enc), cmd.forma, cmd.rumbo);
         return;
       case 'investigar': { // una investigación a la vez por tipo de edificio
         const t = TEC[cmd.clave];
@@ -571,7 +608,7 @@
     if (!d.aire && !pisa(c) && pisa(Math.floor(u.y) * N + Math.floor(u.x))) { replantear(); return false; } // alguien construyó en el punto de paso
     const vel = d.vel * (d.cat === 'veh' && m.jug[u.j].mejoras.motores ? 1.15 : 1);
     const terr = m.mapa.terreno[Math.floor(u.y) * N + Math.floor(u.x)];
-    const vmax = (u.tope && u.tope < vel ? u.tope : vel) * (u.orden === 'trazar' ? ECON.trazaVel : d.cat === 'veh' && terr >= T.CAMINO ? ECON.caminoVel : 1); // por camino los vehículos van más rápido; trazándolo, despacio
+    const vmax = (u.tope && u.tope < vel && !u.suelto ? u.tope : vel) * (u.marcha ? u.fm || 1 : 1) * (u.orden === 'trazar' ? ECON.trazaVel : d.cat === 'veh' && terr >= T.CAMINO ? ECON.caminoVel : 1); // por camino los vehículos van más rápido; trazándolo, despacio
     const alFinal = u.ri === u.ruta.length - 1 && u.fin;
     const carril = !alFinal && d.cat === 'veh' && u.orden !== 'trazar' && m.carrilX && m.carrilX[c] > 0 && m.mapa.terreno[c] >= T.CAMINO; // por camino, los vehículos van por el carril y no por el centro de cada celda
     const tx = alFinal ? u.fin.x : carril ? m.carrilX[c] : (c % N) + 0.5, ty = alFinal ? u.fin.y : carril ? m.carrilY[c] : ((c / N) | 0) + 0.5, dx = tx - u.x, dy = ty - u.y, dd = Math.hypot(dx, dy);
@@ -1537,6 +1574,7 @@
       if (!m.jug[0].vivo || !m.jug[1].vivo) m.ganador = m.jug[0].vivo ? 0 : m.jug[1].vivo ? 1 : 2;
     }
     if (m.t % 10 === 0) { tickPuestos(m); tickMando(m); }
+    if (m.t % 4 === 0 && m.marchas) tickMarchas(m);
     if (m.embarques.length) { // la infantería que ha llegado a su transporte entra en él y deja el mapa
       for (const u of m.embarques) {
         const t = m.porId.get(u.sube);
