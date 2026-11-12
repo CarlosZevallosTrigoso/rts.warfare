@@ -480,24 +480,25 @@
     }
     return true;
   };
-  W.puedeColocar = function (m, j, tipo, x, y) {
+  // Por qué no se puede colocar ese edificio ahí ('' si se puede): la interfaz se lo dice al jugador.
+  W.porQueNo = function (m, j, tipo, x, y) {
     const d = EDIF[tipo], N = m.N, t = d.tam;
-    if (x < 0 || y < 0 || x + t > N || y + t > N) return false;
+    if (x < 0 || y < 0 || x + t > N || y + t > N) return 'fuera del mapa';
     let sitio = false;
     const c0 = y * N + x, mu = murosDe(m)[c0], enMuro = t === 1 && m.muroJ[c0] === j + 1 && (d.sobreMuro ? mu === 3 : d.enMuro ? mu === 2 || mu === 3 : false); // sobre un muro propio
-    if (d.sobreMuro && !enMuro) return false;
+    if (d.sobreMuro && !enMuro) return 'va sobre un muro propio';
     for (let dy = 0; dy < t; dy++) for (let dx = 0; dx < t; dx++) {
       const i = (y + dy) * N + x + dx;
-      if (m.mapa.terreno[i] !== T.LLANO || m.ocup[i] || m.mapa.mineral[i] || (m.muro[i] && !enMuro)) return false;
-      if (m.mapa.sitioEn[i]) { if (!d.sobre || m.mapa.sitioTipo.get(i) !== d.sobre) return false; sitio = true; }
+      if (m.mapa.terreno[i] !== T.LLANO || m.ocup[i] || m.mapa.mineral[i] || (m.muro[i] && !enMuro)) return m.ocup[i] ? 'ese sitio está ocupado' : m.mapa.mineral[i] ? 'hay mineral debajo' : m.muro[i] ? 'hay un muro' : 'hace falta llano despejado';
+      if (m.mapa.sitioEn[i]) { if (!d.sobre || m.mapa.sitioTipo.get(i) !== d.sobre) return 'ese sitio es para otro edificio'; sitio = true; }
     }
-    if (d.sobre && !sitio) return false; // debe cubrir su yacimiento o su campo
+    if (d.sobre && !sitio) return d.sobre === 'petroleo' ? 'va sobre un yacimiento de petróleo' : 'va sobre un campo de conocimiento'; // debe cubrir su yacimiento o su campo
     if (d.juntoA === 'agua') { // debe tener agua a dos celdas o menos
       let agua = false;
       for (let yy = Math.max(0, y - 2); yy < Math.min(N, y + t + 2) && !agua; yy++) for (let xx = Math.max(0, x - 2); xx < Math.min(N, x + t + 2); xx++) if (m.mapa.terreno[yy * N + xx] === T.AGUA) { agua = true; break; }
-      if (!agua) return false;
+      if (!agua) return 'necesita agua a dos celdas o menos';
     }
-    if (d.libre && !m.niebla[j][y * N + x]) return false; // solo en terreno explorado
+    if (d.libre && !m.niebla[j][y * N + x]) return 'terreno sin explorar'; // solo en terreno explorado
     // Territorio: se construye dentro de la cobertura de la red propia (cerca de un patio, de un depósito conectado, de los
     // edificios de la base o junto a un camino conectado). Los edificios de extracción y el depósito van donde haga falta.
     let junto = !!d.libre || enMuro || m.jug[j].tr.libre || (m.logistica !== false && !!W.cobertura(m, j)[(y + (t >> 1)) * N + x + (t >> 1)]); // ADMIN: se construye en cualquier parte
@@ -508,10 +509,11 @@
         if (m.logistica !== false || e.infra || e.j !== j || junto) continue;
         const gx = Math.max(e.x - (x + t), x - (e.x + e.tam), 0), gy = Math.max(e.y - (y + t), y - (e.y + e.tam), 0);
         if (Math.max(gx, gy) <= s) junto = true;
-      } else if (e.x > x - 0.3 && e.x < x + t + 0.3 && e.y > y - 0.3 && e.y < y + t + 0.3) return false;
+      } else if (e.x > x - 0.3 && e.x < x + t + 0.3 && e.y > y - 0.3 && e.y < y + t + 0.3) return 'hay una unidad encima';
     }
-    return junto;
+    return junto ? '' : m.logistica !== false ? 'aquí no llega tu red: se construye dentro de la zona sombreada' : 'demasiado lejos de tus edificios';
   };
+  W.puedeColocar = (m, j, tipo, x, y) => !W.porQueNo(m, j, tipo, x, y);
 
   // ---------- la red ----------
   // Patios, depósitos, edificios cercanos entre sí y caminos propios forman redes. La red que tiene un patio da cobertura:
