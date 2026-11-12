@@ -1080,6 +1080,16 @@
       for (let dy = -r; dy <= r; dy++) { const y = cy + dy; if (y < 0 || y >= N) continue; const w = Math.floor(Math.sqrt(r2 - dy * dy)), x0 = Math.max(0, cx - w), x1 = Math.min(N - 1, cx + w); f.fill(1, y * N + x0, y * N + x1 + 1); }
     }
   }
+  // Radar: cada dos segundos anota dónde hay unidades enemigas dentro de su alcance (un eco: solo la posición, no qué es). No levanta la niebla.
+  function tickRadar(m) {
+    const ecos = [[], []]; let hay = false;
+    for (const e of m.ents) {
+      if (!e.edif || e.vida <= 0) continue; const al = EDIF[e.tipo].radar; if (!al || e.sinLuz || e.hack > m.t || (m.logistica !== false && e.conRed === false)) continue;
+      hay = true; const out = ecos[e.j], a2 = al * al;
+      for (const u of m.ents) { if (u.edif || u.j === e.j || u.vida <= 0 || u.eco === m.t + e.j || UNID[u.tipo].espia) continue; const dx = u.x - e.cx, dy = u.y - e.cy; if (dx * dx + dy * dy <= a2) { u.eco = m.t + e.j; out.push(u.x, u.y); } }
+    }
+    m.ecos = hay ? ecos : null; m.ecosT = m.t;
+  }
   const sinRadio = (m, u) => !!m.radioCob && m.logistica !== false && !UNID[u.tipo].aire && !UNID[u.tipo].enlace && !m.jug[u.j].dios && !m.radioCob[u.j][Math.floor(u.y) * m.N + Math.floor(u.x)];
   W.sinRadio = sinRadio;
   function aplicar(m, cmd) {
@@ -2565,6 +2575,7 @@
     if (m.t % 10 === 0) { tickTrincheras(m); tickCamaras(m); tickPortadores(m); tickPuenteAereo(m); tickEspias(m); }
     if (m.minasT && m.minasT.length && m.t % 2 === 0) tickMinas(m);
     if (m.t % 10 === 5) tickEscoltas(m);
+    if (m.t % 40 === 7) tickRadar(m);
     if (m.t % 10 === 0 && m.logistica !== false) { // suministro: fuera de la cobertura el contador sube; dentro, baja rápido. Los aviones repostan en su base: no cuenta.
       const pts = tickSuministro(m);
       for (const e of m.gr.edifs) { if (!EDIF[e.tipo].arma) continue; const cap = W.munDe(e.tipo, true); if (e.mun === undefined) e.mun = cap; else if (e.mun < cap && e.conRed !== false && !e.sinLuz) e.mun = Math.min(cap, e.mun + Math.ceil(cap / 40)); } // las torres reponen por la red

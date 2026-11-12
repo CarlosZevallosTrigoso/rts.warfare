@@ -332,12 +332,12 @@
   <button type="button" id="empezar">Empezar</button>
   <button type="button" id="tutorial">Tutorial guiado<small style="display:block;color:var(--suave);font-size:10px">ocho pasos, con el rival dormido hasta el final</small></button>
   <button type="button" id="continuar" hidden>Continuar la partida guardada</button>
-  <div id="version">versión 78</div>
+  <div id="version">versión 79</div>
 </div></div>
 <div id="guia" hidden><div class="caja"><div class="cab"><strong>Guía: para qué sirve cada cosa</strong><button type="button" id="cierraGuia">cerrar</button></div><div id="guiaTxt"></div></div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finVer" href="#" title="Vuelve a ver la partida entera, con todo el mapa a la vista y a la velocidad que quieras.">ver repetición</a><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 78' };
+globalThis.W = { VERSION: 'versión 79' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -365,7 +365,7 @@ globalThis.W = { VERSION: 'versión 78' };
   // pero sí sobre su recurso (sobre: tipo de sitio; juntoA: 'agua') y en terreno ya explorado.
   // da: recurso que producen solos y cada cuántos ticks dan una unidad.
   W.EDIF = {
-    patio:     { nombre: 'Patio',     tam: 3, vida: 2000, costo: 0,    tiempo: 0,   energia: 0,   vision: 8, req: [], agua: 8, guarda: { min: 3000, pet: 500 }, radioCom: 45 },
+    patio:     { nombre: 'Patio',     tam: 3, vida: 2000, costo: 0,    tiempo: 0,   energia: 0,   vision: 8, req: [], agua: 8, guarda: { min: 3000, pet: 500 }, radioCom: 60 },
     central:   { nombre: 'Central',   tam: 2, vida: 500,  costo: 300,  tiempo: 200, energia: 100, vision: 5, req: ['patio'], mejora: true },
     refineria: { nombre: 'Refinería', tam: 3, vida: 900,  costo: 1200, tiempo: 400, energia: -30, vision: 6, req: ['central'] },
     bomba:     { nombre: 'Bomba de agua', tam: 2, vida: 450, costo: 400, tiempo: 240, energia: -15, vision: 5, req: ['central'], agua: 12, juntoA: 'agua', libre: true, mejora: true },
@@ -390,7 +390,7 @@ globalThis.W = { VERSION: 'versión 78' };
     // Puente aéreo. Puesto logístico: en la base; de él salen los helicópteros de carga. Puesto de avanzada: no se construye, lo despliega el puesto móvil
     // donde haga falta; mientras le llegue carga está en tu red (cobertura para suministro y para construir), cura a la infantería cercana y tiene pista.
     logistica: { nombre: 'Puesto logístico', tam: 2, vida: 700, costo: 900, tiempo: 300, energia: -20, vision: 6, req: ['fabrica'], pista: true, hangar: 2 }, // (aloja hasta dos helicópteros de suministro)
-    avanzada:  { nombre: 'Puesto de avanzada', tam: 2, vida: 800, costo: 0, tiempo: 1, energia: 0, vision: 8, req: ['logistica'], pista: true, hospital: 5, oculto: true, radioCom: 25 },
+    avanzada:  { nombre: 'Puesto de avanzada', tam: 2, vida: 800, costo: 0, tiempo: 1, energia: 0, vision: 8, req: ['logistica'], pista: true, hospital: 5, oculto: true, radioCom: 35 },
     // Estación de drones: barata; mantiene dos drones de reconocimiento dando vueltas a su alrededor.
     estDrones: { nombre: 'Estación de drones', tam: 1, vida: 350, costo: 300, tiempo: 160, energia: -10, vision: 5, req: ['cuartel'], drones: { rec: 2 }, radioDron: 16, mejora: true, dronesN: { 2: { rec: 2, bomba: 1, radio: 18 }, 3: { rec: 3, bomba: 2, fpv: 2, radio: 20 } } }, // mejorada lleva más drones, y de ataque
     // Torreta de muro: solo se monta sobre un muro reforzado propio (y ahí puede ir fuera de la cobertura). Cámara: ve lejos y en redondo, descubre a los escondidos y avisa; en la cobertura o sobre un muro propio.
@@ -403,7 +403,8 @@ globalThis.W = { VERSION: 'versión 78' };
     almacen:   { nombre: 'Almacén', tam: 2, vida: 700, costo: 500, tiempo: 200, energia: -5, vision: 4, req: ['refineria'], guarda: { min: 3000, pet: 0 } },
     tanqueComb: { nombre: 'Tanque de combustible', tam: 2, vida: 450, costo: 400, tiempo: 200, energia: -5, vision: 4, req: ['refineria'], guarda: { min: 0, pet: 800 } },
     // Torre de radio: va en cualquier terreno explorado, con su propio generador. Dentro de la cobertura de radio se ve lo que ven las unidades y las órdenes llegan al instante.
-    torreRadio: { nombre: 'Torre de radio', tam: 1, vida: 300, costo: 300, tiempo: 160, energia: 0, vision: 6, req: ['cuartel'], libre: true, radioCom: 40 },
+    torreRadio: { nombre: 'Torre de radio', tam: 1, vida: 300, costo: 300, tiempo: 160, energia: 0, vision: 6, req: ['cuartel'], libre: true, radioCom: 60 },
+    radar:     { nombre: 'Radar', tam: 2, vida: 400, costo: 700, tiempo: 300, energia: -40, vision: 6, req: ['fabrica'], nivel: 2, radar: 60 }, // no levanta la niebla: marca con un punto lo que se mueve dentro de su alcance
     // Mina: se construye sobre un yacimiento de minerales y saca de un pozo profundo, de forma continua y sin cosechadoras. Hay que conectarla a la red.
     mina:      { nombre: 'Mina', tam: 2, vida: 800, costo: 1200, tiempo: 400, energia: -30, vision: 5, req: ['refineria'], nivel: 2, sobreMineral: true, libre: true, da: { rec: 'minerales', cada: 3 }, mejora: true },
     deposito:  { nombre: 'Depósito',  tam: 1, vida: 450,  costo: 500,  tiempo: 240, energia: -10, vision: 6, req: ['cuartel'], libre: true },
@@ -470,7 +471,7 @@ globalThis.W = { VERSION: 'versión 78' };
     hacker:      { nombre: 'Hacker',      cat: 'inf', vida: 45,  vel: 0.06, costo: 400, info: 30, tiempo: 240, blindaje: 'ligero', arma: null, vision: 8, radio: 0.105, req: ['estacion'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, hackea: true, alcanceHack: 9 },
     transporte:  { nombre: 'Transporte', cat: 'veh', vida: 260, vel: 0.13, costo: 500, pet: 30, tiempo: 220, blindaje: 'pesado', arma: null, vision: 7, radio: 0.24, req: ['fabrica'], agua: 1, giro: 0.14, acel: 0.008, nivel: 2, plazas: 6 },
     lanzacohetes: { nombre: 'Lanzacohetes', cat: 'veh', vida: 200, vel: 0.07, costo: 1300, pet: 90, raros: 50, tiempo: 480, blindaje: 'pesado', arma: 'salva', vision: 7, radio: 0.23, req: ['fabrica'], agua: 2, giro: 0.07, acel: 0.004, nivel: 3, arco: 0.1, cono: 0.7 },
-    mando:       { nombre: 'Vehículo de mando', cat: 'veh', vida: 300, vel: 0.08, costo: 1200, pet: 60, tiempo: 420, blindaje: 'pesado', arma: null, vision: 8, radio: 0.24, req: ['fabrica'], agua: 2, giro: 0.1, acel: 0.005, nivel: 3, mando: 7, radioCom: 20, enlace: true },
+    mando:       { nombre: 'Vehículo de mando', cat: 'veh', vida: 300, vel: 0.08, costo: 1200, pet: 60, tiempo: 420, blindaje: 'pesado', arma: null, vision: 8, radio: 0.24, req: ['fabrica'], agua: 2, giro: 0.1, acel: 0.005, nivel: 3, mando: 7, radioCom: 30, enlace: true },
     caza:        { nombre: 'Caza',        cat: 'aire', aire: true, vida: 160, vel: 0.22, costo: 900, pet: 120, tiempo: 360, blindaje: 'aire', arma: 'misil', vision: 9, radio: 0.25, req: ['aerodromo'], agua: 1, giro: 0.16, acel: 0.012, nivel: 2, fuel: 1800, arco: 0.3, radioVuelo: 70, pasada: true },
     bombardero:  { nombre: 'Bombardero',  cat: 'aire', aire: true, vida: 260, vel: 0.15, costo: 1600, pet: 200, raros: 40, tiempo: 520, blindaje: 'aire', arma: 'bomba', vision: 8, radio: 0.38, req: ['aerodromo'], agua: 2, giro: 0.09, acel: 0.008, nivel: 3, fuel: 2400, radioVuelo: 90, pasada: true },
     dron:        { nombre: 'Dron', cat: 'aire', aire: true, vida: 50, vel: 0.16, costo: 250, info: 40, tiempo: 200, blindaje: 'aire', arma: null, vision: 12, radio: 0.14, req: ['aerodromo'], agua: 0, giro: 0.2, acel: 0.01, nivel: 2, fuel: 4200, radioVuelo: 110, cono: Math.PI },
@@ -483,10 +484,10 @@ globalThis.W = { VERSION: 'versión 78' };
     // Espía: sin arma y oculto aunque se mueva (solo se le ve de muy cerca o con cámaras). Junto a edificios enemigos, ves lo que produce el rival y gana información.
     espia:       { enlace: true, nombre: 'Espía', cat: 'inf', lugar: 'inteligencia', vida: 35, vel: 0.07, costo: 400, info: 60, tiempo: 300, blindaje: 'ligero', arma: null, vision: 10, radio: 0.105, req: ['inteligencia'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, espia: true, cono: Math.PI },
     // Dron espía: vuela muy lejos y mucho rato desde su central; no ataca.
-    // Radio móvil: llevan la cobertura de radio con el ejército (a pie, 12 celdas; el vehículo, 28; el dron, 22 mientras le dure el combustible).
-    radioOp:     { enlace: true, radioCom: 12, nombre: 'Radioperador', cat: 'inf', vida: 45, vel: 0.075, costo: 140, tiempo: 100, blindaje: 'ligero', arma: 'pistola', vision: 7, radio: 0.105, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, arco: 0.5, cono: 1.4 },
-    vehRadio:    { enlace: true, radioCom: 28, nombre: 'Vehículo de radio', cat: 'veh', vida: 220, vel: 0.09, costo: 500, pet: 20, tiempo: 240, blindaje: 'ligero', arma: null, vision: 7, radio: 0.22, req: ['fabrica'], agua: 2, giro: 0.1, acel: 0.006 },
-    dronRadio:   { radioCom: 22, nombre: 'Dron de radio', cat: 'aire', aire: true, lugar: 'inteligencia', vida: 60, vel: 0.2, costo: 400, tiempo: 240, blindaje: 'aire', arma: null, vision: 8, radio: 0.15, req: ['inteligencia'], agua: 0, giro: 0.2, acel: 0.01, nivel: 2, fuel: 9000, radioVuelo: 220, cono: Math.PI },
+    // Radio móvil: llevan la cobertura de radio con el ejército (a pie, 15 celdas; el vehículo, 36; el dron, 30 mientras le dure el combustible).
+    radioOp:     { enlace: true, radioCom: 15, nombre: 'Radioperador', cat: 'inf', vida: 45, vel: 0.075, costo: 140, tiempo: 100, blindaje: 'ligero', arma: 'pistola', vision: 7, radio: 0.105, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, arco: 0.5, cono: 1.4 },
+    vehRadio:    { enlace: true, radioCom: 36, nombre: 'Vehículo de radio', cat: 'veh', vida: 220, vel: 0.09, costo: 500, pet: 20, tiempo: 240, blindaje: 'ligero', arma: null, vision: 7, radio: 0.22, req: ['fabrica'], agua: 2, giro: 0.1, acel: 0.006 },
+    dronRadio:   { radioCom: 30, nombre: 'Dron de radio', cat: 'aire', aire: true, lugar: 'inteligencia', vida: 60, vel: 0.2, costo: 400, tiempo: 240, blindaje: 'aire', arma: null, vision: 8, radio: 0.15, req: ['inteligencia'], agua: 0, giro: 0.2, acel: 0.01, nivel: 2, fuel: 9000, radioVuelo: 220, cono: Math.PI },
     dronEspia:   { nombre: 'Dron espía', cat: 'aire', aire: true, lugar: 'inteligencia', vida: 60, vel: 0.2, costo: 500, info: 80, tiempo: 300, blindaje: 'aire', arma: null, vision: 14, radio: 0.15, req: ['inteligencia'], agua: 0, giro: 0.2, acel: 0.01, nivel: 2, fuel: 9000, radioVuelo: 220, cono: Math.PI },
     operador:    { misionDron: 45, dronStock: 3, fpvStock: 4, nombre: 'Operador de drones', cat: 'inf', vida: 45, vel: 0.06, costo: 150, tiempo: 120, blindaje: 'ligero', arma: null, vision: 6, radio: 0.105, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, drones: { rec: 1 }, radioDron: 12, quieto: true },
     comandoDrones: { nombre: 'Comando de drones', cat: 'veh', vida: 260, vel: 0.085, costo: 900, pet: 60, tiempo: 360, blindaje: 'pesado', arma: null, vision: 7, radio: 0.24, req: ['fabrica'], agua: 2, giro: 0.1, acel: 0.006, nivel: 2, drones: { rec: 3, bomba: 2, fpv: 5 }, radioDron: 25 },
@@ -675,7 +676,7 @@ globalThis.W = { VERSION: 'versión 78' };
         if (azar < 0.2 + (d / rad) * 0.35) continue;
         const i = y * N + x;
         if (terreno[i] !== T.LLANO || !alcanzable[i] || mineral[i] || dBase(x, y) < 6) continue;
-        const q = Math.round(cant * 1.3 * (0.6 + 0.8 * azar2)); // (yacimientos un 30 % mayores: las partidas largas se quedaban sin minerales)
+        const q = Math.round(cant * 3 * (0.6 + 0.8 * azar2)); // (yacimientos el triple de ricos, sin ocupar más sitio: las partidas largas se quedaban sin minerales)
         mineral[i] = q; tipoMin[i] = tipo; mineral[espejo(i)] = q; tipoMin[espejo(i)] = tipo;
       }
     }
@@ -1980,6 +1981,16 @@ globalThis.W = { VERSION: 'versión 78' };
       const f = m.radioCob[e.j], cx = Math.floor(posX(e)), cy = Math.floor(posY(e)), r2 = r * r;
       for (let dy = -r; dy <= r; dy++) { const y = cy + dy; if (y < 0 || y >= N) continue; const w = Math.floor(Math.sqrt(r2 - dy * dy)), x0 = Math.max(0, cx - w), x1 = Math.min(N - 1, cx + w); f.fill(1, y * N + x0, y * N + x1 + 1); }
     }
+  }
+  // Radar: cada dos segundos anota dónde hay unidades enemigas dentro de su alcance (un eco: solo la posición, no qué es). No levanta la niebla.
+  function tickRadar(m) {
+    const ecos = [[], []]; let hay = false;
+    for (const e of m.ents) {
+      if (!e.edif || e.vida <= 0) continue; const al = EDIF[e.tipo].radar; if (!al || e.sinLuz || e.hack > m.t || (m.logistica !== false && e.conRed === false)) continue;
+      hay = true; const out = ecos[e.j], a2 = al * al;
+      for (const u of m.ents) { if (u.edif || u.j === e.j || u.vida <= 0 || u.eco === m.t + e.j || UNID[u.tipo].espia) continue; const dx = u.x - e.cx, dy = u.y - e.cy; if (dx * dx + dy * dy <= a2) { u.eco = m.t + e.j; out.push(u.x, u.y); } }
+    }
+    m.ecos = hay ? ecos : null; m.ecosT = m.t;
   }
   const sinRadio = (m, u) => !!m.radioCob && m.logistica !== false && !UNID[u.tipo].aire && !UNID[u.tipo].enlace && !m.jug[u.j].dios && !m.radioCob[u.j][Math.floor(u.y) * m.N + Math.floor(u.x)];
   W.sinRadio = sinRadio;
@@ -3466,6 +3477,7 @@ globalThis.W = { VERSION: 'versión 78' };
     if (m.t % 10 === 0) { tickTrincheras(m); tickCamaras(m); tickPortadores(m); tickPuenteAereo(m); tickEspias(m); }
     if (m.minasT && m.minasT.length && m.t % 2 === 0) tickMinas(m);
     if (m.t % 10 === 5) tickEscoltas(m);
+    if (m.t % 40 === 7) tickRadar(m);
     if (m.t % 10 === 0 && m.logistica !== false) { // suministro: fuera de la cobertura el contador sube; dentro, baja rápido. Los aviones repostan en su base: no cuenta.
       const pts = tickSuministro(m);
       for (const e of m.gr.edifs) { if (!EDIF[e.tipo].arma) continue; const cap = W.munDe(e.tipo, true); if (e.mun === undefined) e.mun = cap; else if (e.mun < cap && e.conRed !== false && !e.sinLuz) e.mun = Math.min(cap, e.mun + Math.ceil(cap / 40)); } // las torres reponen por la red
@@ -4801,6 +4813,12 @@ globalThis.W = { VERSION: 'versión 78' };
       c.fillStyle = col.osc; c.beginPath(); c.arc(X(0.36), Y(0.64), t * 0.16, 0, TAU); c.fill();
       c.strokeStyle = col.luz; c.lineWidth = lw * 1.4; c.beginPath(); c.moveTo(X(0.36), Y(0.64)); c.lineTo(X(0.68), Y(0.3)); c.moveTo(X(0.5), Y(0.82)); c.lineTo(X(0.68), Y(0.3)); c.lineTo(X(0.84), Y(0.82)); c.stroke();
       const a = s.deficit ? 0 : (s.tiempo + s.id * 97) * 0.004; c.beginPath(); c.arc(X(0.68), Y(0.3), t * 0.1, 0, TAU); c.moveTo(X(0.68) + Math.cos(a) * t * 0.1, Y(0.3) + Math.sin(a) * t * 0.1); c.lineTo(X(0.68) - Math.cos(a) * t * 0.1, Y(0.3) - Math.sin(a) * t * 0.1); c.stroke();
+    } else if (e.tipo === 'radar') { // plato que gira sobre su base, con el haz de barrido
+      const px = X(0.5), py = Y(0.5), a = s.deficit ? 0.6 : s.tiempo * 0.0016;
+      c.fillStyle = col.osc; c.beginPath(); c.arc(px, py, t * 0.3, 0, TAU); c.fill();
+      c.fillStyle = col.luz; c.globalAlpha = 0.35; c.beginPath(); c.moveTo(px, py); c.arc(px, py, t * 0.3, a - 0.5, a); c.closePath(); c.fill(); c.globalAlpha = 1;
+      c.strokeStyle = col.luz; c.lineWidth = lw * 1.6; c.beginPath(); c.moveTo(px, py); c.lineTo(px + Math.cos(a) * t * 0.3, py + Math.sin(a) * t * 0.3); c.stroke();
+      c.lineWidth = lw; c.beginPath(); c.arc(px, py, t * 0.18, 0, TAU); c.stroke(); c.fillStyle = col.luz; c.beginPath(); c.arc(px, py, t * 0.05, 0, TAU); c.fill();
     } else if (e.tipo === 'torreRadio') { // mástil con tirantes y ondas
       const px = X(0.5), py = Y(0.56);
       c.strokeStyle = col.luz; c.lineWidth = lw * 1.4; c.beginPath(); c.moveTo(px, Y(0.86)); c.lineTo(px, Y(0.2)); c.moveTo(X(0.26), Y(0.86)); c.lineTo(px, Y(0.42)); c.lineTo(X(0.74), Y(0.86)); c.stroke();
@@ -5022,7 +5040,7 @@ globalThis.W = { VERSION: 'versión 78' };
 
     // Volumen: la vista sigue siendo cenital, pero cada cosa tiene altura. Los edificios muestran su pared sur y el tejado
     // se dibuja desplazado hacia arriba; las unidades llevan un canto; la roca y el agua, un escalón.
-    const ALTO = { patio: 0.3, central: 0.36, refineria: 0.32, bomba: 0.2, cuartel: 0.26, extractor: 0.3, fabrica: 0.34, torreta: 0.22, torreCanon: 0.36, aerodromo: 0.08, antiaerea: 0.22, estacion: 0.26, deposito: 0.22, obras: 0.28, misilera: 0.12, interceptor: 0.24, torretaMuro: 0.34, camara: 0.3, estDrones: 0.14, laboratorio: 0.26, logistica: 0.16, avanzada: 0.2, inteligencia: 0.3, pistaAv: 0.04, almacen: 0.22, tanqueComb: 0.18, torreRadio: 0.5, mina: 0.3 };
+    const ALTO = { patio: 0.3, central: 0.36, refineria: 0.32, bomba: 0.2, cuartel: 0.26, extractor: 0.3, fabrica: 0.34, torreta: 0.22, torreCanon: 0.36, aerodromo: 0.08, antiaerea: 0.22, estacion: 0.26, deposito: 0.22, obras: 0.28, misilera: 0.12, interceptor: 0.24, torretaMuro: 0.34, camara: 0.3, estDrones: 0.14, laboratorio: 0.26, logistica: 0.16, avanzada: 0.2, inteligencia: 0.3, pistaAv: 0.04, almacen: 0.22, tanqueComb: 0.18, torreRadio: 0.5, mina: 0.3, radar: 0.3 };
     function entEn(wx, wy, holgura) { // holgura: margen extra (en celdas) para acertar con el dedo
       let mejor = null, md = Infinity;
       for (const e of m.ents) {
@@ -5074,6 +5092,7 @@ globalThis.W = { VERSION: 'versión 78' };
         if (!e.edif && UNID[e.tipo].dronStock && e.j === YO && e.drStock !== undefined) { t += ' · repuestos: ' + e.drStock + (e.drFpv !== undefined ? ' drones y ' + e.drFpv + ' kamikazes' : ' drones'); const q = e.dr && e.dr.rec[0] ? m.porId.get(e.dr.rec[0]) : null; if (q && q.bat !== undefined && conRed) t += ' · batería ' + Math.round(q.bat / W.ECON.dronBat * 100) + ' %' + (q.casa2 ? ' (cargando)' : ''); }
         if (!e.edif && e.orden === 'zapar' && e.zapa && e.zapa.lista[0] && e.j === YO) t += ' · ' + ({ minar: 'minando', desminar: 'desminando', ponton: 'tendiendo un pontón', volar: 'va a volar un camino' })[e.zapa.lista[0].t];
         if (e.ponton) t += ' · pontón';
+        if (e.edif && EDIF[e.tipo].radar && e.j === YO) t += e.sinLuz ? ' · sin energía: no barre' : (conRed && e.conRed === false) ? ' · fuera de la red: no barre' : ' · ' + (m.ecos ? m.ecos[YO].length / 2 : 0) + ' ecos';
         if (e.tipo === 'mina' && e.j === YO && e.pozo !== undefined) t += e.pozo > 0 ? ' · pozo: ' + Math.round(e.pozo) : ' · pozo agotado';
         if (!e.edif && e.j === YO && e.vigila) t += ' · vigila una zona'; if (!e.edif && e.j === YO && e.protege) { const o = m.porId.get(e.protege); if (o) t += ' · protege: ' + (o.edif ? EDIF : UNID)[o.tipo].nombre.toLowerCase(); }
         if (!e.edif && e.j === YO && e.explora) t += e.expG ? ' · explorando en grupo' : ' · explorando';
@@ -5909,6 +5928,23 @@ globalThis.W = { VERSION: 'versión 78' };
         if (zapaQue === 'desminar') { ctx.strokeStyle = P.yo; ctx.lineWidth = 1; ctx.setLineDash([4, 5]); ctx.beginPath(); ctx.arc(raton.x, raton.y, W.ECON.desminaRadio * z, 0, TAU); ctx.stroke(); ctx.setLineDash([]); }
       }
       { // misiones de dron: el alcance mientras se elige el punto, y la línea hasta el punto de cada operador seleccionado
+        if (m.ecos && m.ecos[YO].length) { // ecos del radar: un punto que pulsa donde hay algo que no ves
+          const ec = m.ecos[YO], f = ((performance.now() * 0.001) % 1.2) / 1.2, nb = m.niebla[YO];
+          ctx.strokeStyle = P.mal; ctx.fillStyle = P.mal; ctx.lineWidth = 1.5;
+          for (let k = 0; k < ec.length; k += 2) {
+            if (nb[Math.floor(ec[k + 1]) * N + Math.floor(ec[k])] === 2) continue;
+            const ex = ox + ec[k] * z, ey = oy + ec[k + 1] * z; if (ex < -20 || ey < -20 || ex > cw + 20 || ey > ch + 20) continue;
+            ctx.globalAlpha = 0.9; ctx.beginPath(); ctx.arc(ex, ey, 3, 0, TAU); ctx.fill();
+            ctx.globalAlpha = 0.8 * (1 - f); ctx.beginPath(); ctx.arc(ex, ey, 4 + f * 14, 0, TAU); ctx.stroke();
+          }
+          ctx.globalAlpha = 1;
+        }
+        { // alcance del radar: al colocarlo y con uno seleccionado
+          ctx.strokeStyle = P.mal; ctx.globalAlpha = 0.5; ctx.lineWidth = 1; ctx.setLineDash([3, 6]);
+          if (modo === 'colocar' && tipoColocar === 'radar' && raton.dentro) { ctx.beginPath(); ctx.arc(raton.x, raton.y, EDIF.radar.radar * z, 0, TAU); ctx.stroke(); }
+          if (sel.size) for (const id of sel) { const e = m.porId.get(id); if (e && e.edif && EDIF[e.tipo].radar && e.j === YO) { ctx.beginPath(); ctx.arc(ox + e.cx * z, oy + e.cy * z, EDIF[e.tipo].radar * z, 0, TAU); ctx.stroke(); } }
+          ctx.setLineDash([]); ctx.globalAlpha = 1;
+        }
         const om = modo === 'dronMis' || sel.size ? unidadesSel().filter((u) => u.j === YO && UNID[u.tipo].misionDron) : [];
         ctx.strokeStyle = P.yo; ctx.lineWidth = 1; ctx.setLineDash([4, 5]);
         for (const u of om) {
@@ -6009,6 +6045,7 @@ globalThis.W = { VERSION: 'versión 78' };
         mctx.stroke();
       }
       if (m.muros && m.muros.length) { mctx.fillStyle = P.tinta; for (const c of m.muros) if (f[c] && m.muro[c] >= 2) mctx.fillRect((c % N) * k, ((c / N) | 0) * k, Math.max(1, k), Math.max(1, k)); }
+      if (m.ecos && m.ecos[YO].length) { const ec = m.ecos[YO], nb = m.niebla[YO], on = (performance.now() * 0.001) % 1.2 < 0.8; mctx.fillStyle = P.mal; if (on) for (let q = 0; q < ec.length; q += 2) { if (nb[Math.floor(ec[q + 1]) * N + Math.floor(ec[q])] === 2) continue; mctx.fillRect(ec[q] * k - 1.5, ec[q + 1] * k - 1.5, 3, 3); } } // ecos del radar
       for (const q of m.misiles) { // misiles en el minimapa: un punto que parpadea; el propio, con la línea a su blanco
         mctx.fillStyle = q.j === YO ? P.yo : P.mal; mctx.beginPath(); mctx.arc(q.x * k, q.y * k, 2.5 + ((m.t >> 2) % 2), 0, TAU); mctx.fill();
         if (q.j === YO) { mctx.strokeStyle = P.yo; mctx.lineWidth = 1; mctx.setLineDash([3, 3]); mctx.beginPath(); mctx.moveTo(q.x * k, q.y * k); mctx.lineTo(q.tx * k, q.ty * k); mctx.stroke(); mctx.setLineDash([]); }
@@ -6409,7 +6446,8 @@ globalThis.W = { VERSION: 'versión 78' };
       cuartel: 'Produce la infantería.', extractor: 'Saca petróleo de un yacimiento.', fabrica: 'Produce los vehículos.', torreta: 'Defensa fija contra tierra y aire.', torreCanon: 'Defensa pesada de largo alcance contra blindados.', aerodromo: 'Produce y aloja hasta cinco aviones.',
       antiaerea: 'Defensa fija solo contra el aire: aviones y drones.', estacion: 'Sobre un campo de conocimiento da información rápido; aloja la inteligencia.', laboratorio: 'Da información en la base, sin campo, más despacio. Vale como estación.', obras: 'Produce las unidades civiles: ingeniero civil y excavadora.',
       deposito: 'Conectado a tu red, crea una zona con suministro donde también puedes construir.', misilera: 'Fabrica, guarda y lanza misiles balísticos.', interceptor: 'Derriba los misiles enemigos que entran en su radio.', estDrones: 'Mantiene dos drones de reconocimiento vigilando a su alrededor. Mejorada lleva además bombarderos y kamikazes, y guarda las tecnologías del operador.', inteligencia: 'Entrena espías, aloja dos drones espía de largo alcance y permite el mapeo satelital.',
-      torreRadio: 'Da cobertura de radio a 40 celdas (el patio, 45; el vehículo de mando, 20; el puesto de avanzada, 25). Fuera de la cobertura tus unidades de tierra solo ven lo que tienen encima y obedecen con 3 segundos de retraso. El explorador, el espía y todo lo que vuela llevan radio propia. Se coloca en cualquier terreno explorado.', mina: 'Nivel 2. Se construye sobre un yacimiento de minerales y saca de un pozo profundo (40 000) de forma continua, sin cosechadoras: unos 400 por minuto, más si la mejoras. Hay que conectarla a la red.', almacen: 'Guarda 3000 minerales más. Con los almacenes llenos, lo que cosechas se pierde. Si te lo destruyen pierdes su parte, y la mitad queda en el suelo para quien la recoja.', tanqueComb: 'Guarda 800 de petróleo más. Si te lo destruyen, pierdes su parte.', pistaAv: 'Se coloca en cualquier terreno explorado, sin red ni energía. Clic derecho en ella con helicópteros de combate: la toman por base, repostan allí y su radio de vuelo se cuenta desde allí.', logistica: 'En la base: de aquí salen los camiones y helicópteros de suministro y los vuelos que mantienen los puestos de avanzada; tiene pista para trasladar infantería.', avanzada: 'No se construye: lo despliega el puesto móvil. Con enlace aéreo está en tu red, cura a la infantería cercana y tiene pista.',
+      radar: 'Nivel 2. No levanta la niebla ni dice qué hay, pero marca con un punto que pulsa cada unidad enemiga que esté a 60 celdas; el punto se actualiza cada 2 segundos. No detecta espías ni edificios. Necesita energía y red.',
+      torreRadio: 'Da cobertura de radio a 60 celdas (el patio, 60; el vehículo de mando, 30; el puesto de avanzada, 35). Fuera de la cobertura tus unidades de tierra solo ven lo que tienen encima y obedecen con 3 segundos de retraso. El explorador, el espía y todo lo que vuela llevan radio propia. Se coloca en cualquier terreno explorado.', mina: 'Nivel 2. Se construye sobre un yacimiento de minerales y saca de un pozo profundo (40 000) de forma continua, sin cosechadoras: unos 400 por minuto, más si la mejoras. Hay que conectarla a la red.', almacen: 'Guarda 3000 minerales más. Con los almacenes llenos, lo que cosechas se pierde. Si te lo destruyen pierdes su parte, y la mitad queda en el suelo para quien la recoja.', tanqueComb: 'Guarda 800 de petróleo más. Si te lo destruyen, pierdes su parte.', pistaAv: 'Se coloca en cualquier terreno explorado, sin red ni energía. Clic derecho en ella con helicópteros de combate: la toman por base, repostan allí y su radio de vuelo se cuenta desde allí.', logistica: 'En la base: de aquí salen los camiones y helicópteros de suministro y los vuelos que mantienen los puestos de avanzada; tiene pista para trasladar infantería.', avanzada: 'No se construye: lo despliega el puesto móvil. Con enlace aéreo está en tu red, cura a la infantería cercana y tiene pista.',
       tallerMovil: 'Parado, repara los vehículos que tenga a 4 celdas aunque estén sin suministro, y recupera los vehículos destruidos cercanos (tuyos o del rival) a mitad de precio: va solo, o clic derecho sobre el casco.',
       camionSum: 'Muévelo adonde esté tu ejército: se planta y da munición, combustible, minas y drones de repuesto a todo lo que tenga alrededor mientras le dure la carga (se gasta según cuántas unidades atiende). Vacío, vuelve solo al puesto logístico, recarga y regresa.', heliSum: 'Como el camión de suministro, pero volando: más rápido y sin rodeos; lleva la mitad de carga y la antiaérea lo derriba.',
       avanzadaMovil: 'Se despliega lejos como puesto de avanzada: red, hospital y pista sin tender líneas.',
@@ -6417,7 +6455,7 @@ globalThis.W = { VERSION: 'versión 78' };
       infanteria: 'Barata y versátil; captura puestos, cava y ocupa trincheras.', granadero: 'Desde el nivel 1: granadas de mano a corta distancia, con explosión. La respuesta barata a los primeros vehículos y a la infantería amontonada.', antitanque: 'Infantería con cohetes: contra vehículos y aviones.', explorador: 'Rápido y ve lejos; explora solo con E.', ingeniero: 'Zapador: pone y retira minas, tiende pontones sobre el agua y vuela caminos y puentes (botones al seleccionarlo). Repara solo vehículos y edificios; cava más rápido.', medico: 'Cura solo a la infantería herida cercana.',
       francotirador: 'Mata infantería desde muy lejos; se esconde.', gatling: 'Equipo de dos: tarda en montar, y montada tritura infantería y aviones bajos.', hacker: 'Apaga a distancia un vehículo o edificio enemigo unos segundos; cuesta información.', operador: 'Lleva tres drones: vuela uno y los otros dos son repuestos; cuando se le acaban hay que reponerlos junto a una estación de drones, un puesto logístico, un puesto de avanzada o un camión de suministro. El dron vuelve solo a cambiar la batería y a repararse. Parado, despliega un dron de reconocimiento, y puede mandarlo en misión a vigilar un punto a 45 celdas (tecla O): lo que vea lo ve tu artillería. Con las tecnologías de la estación de drones lleva también kamikazes y un bombardero, que atacan en la zona de la misión.', espia: 'Pasa inadvertido aunque se mueva. Junto a un edificio enemigo ves lo que produce el rival y ganas información.', dronEspia: 'Vuela muy lejos y mucho rato desde su central; no ataca.',
       tanque: 'El vehículo de combate básico.', artilleria: 'Dispara muy lejos, en área, a lo que vea cualquiera de los tuyos.', pesado: 'Tanque lento, muy duro y de gran pegada.', blindado: 'Rápido, con ametralladora: contra infantería.', antiaereoMovil: 'Antiaérea sobre ruedas para acompañar al ejército.',
-      radioOp: 'Lleva la radio a pie: da cobertura a 12 celdas a su alrededor, para que la tropa que acompaña vea y obedezca sin retraso lejos de tus torres.', vehRadio: 'Radio sobre ruedas: cobertura a 28 celdas. Sin armas; llévalo detrás del ejército.', dronRadio: 'Repetidor volante: cobertura a 22 celdas donde lo mandes patrullar, mientras le dure el combustible; luego vuelve a repostar a la central de inteligencia.',
+      radioOp: 'Lleva la radio a pie: da cobertura a 15 celdas a su alrededor, para que la tropa que acompaña vea y obedezca sin retraso lejos de tus torres.', vehRadio: 'Radio sobre ruedas: cobertura a 36 celdas. Sin armas; llévalo detrás del ejército.', dronRadio: 'Repetidor volante: cobertura a 30 celdas donde lo mandes patrullar, mientras le dure el combustible; luego vuelve a repostar a la central de inteligencia.',
       transporte: 'Lleva infantería dentro, rápido.', lanzacohetes: 'Salvas de cohetes a mucha distancia, sobre una zona.', mando: 'Los tuyos a su alrededor ven en redondo y giran más rápido; interfiere drones enemigos. Gasta información.', comandoDrones: 'Lleva drones de reconocimiento, bombarderos y kamikazes que atacan solos.',
       patioMovil: 'Se despliega como un patio nuevo donde lo lleves.', cosechadora: 'Recoge minerales (y chatarra) y los lleva a la refinería.', excavadora: 'Traza caminos militares: abre el bosque y tiende puentes.', civil: 'Conecta edificios con líneas de servicio y levanta muros, puertas y alambradas.',
       caza: 'Avión contra aviones y vehículos; ataca de pasada.', bombardero: 'Suelta bombas en área sobre edificios y tropa.', dron: 'Avión de reconocimiento de largo alcance, sin armas.', helicoptero: 'Se queda sobre el blanco; bueno contra vehículos.',

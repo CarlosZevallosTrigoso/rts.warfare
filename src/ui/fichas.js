@@ -477,6 +477,12 @@
       c.fillStyle = col.osc; c.beginPath(); c.arc(X(0.36), Y(0.64), t * 0.16, 0, TAU); c.fill();
       c.strokeStyle = col.luz; c.lineWidth = lw * 1.4; c.beginPath(); c.moveTo(X(0.36), Y(0.64)); c.lineTo(X(0.68), Y(0.3)); c.moveTo(X(0.5), Y(0.82)); c.lineTo(X(0.68), Y(0.3)); c.lineTo(X(0.84), Y(0.82)); c.stroke();
       const a = s.deficit ? 0 : (s.tiempo + s.id * 97) * 0.004; c.beginPath(); c.arc(X(0.68), Y(0.3), t * 0.1, 0, TAU); c.moveTo(X(0.68) + Math.cos(a) * t * 0.1, Y(0.3) + Math.sin(a) * t * 0.1); c.lineTo(X(0.68) - Math.cos(a) * t * 0.1, Y(0.3) - Math.sin(a) * t * 0.1); c.stroke();
+    } else if (e.tipo === 'radar') { // plato que gira sobre su base, con el haz de barrido
+      const px = X(0.5), py = Y(0.5), a = s.deficit ? 0.6 : s.tiempo * 0.0016;
+      c.fillStyle = col.osc; c.beginPath(); c.arc(px, py, t * 0.3, 0, TAU); c.fill();
+      c.fillStyle = col.luz; c.globalAlpha = 0.35; c.beginPath(); c.moveTo(px, py); c.arc(px, py, t * 0.3, a - 0.5, a); c.closePath(); c.fill(); c.globalAlpha = 1;
+      c.strokeStyle = col.luz; c.lineWidth = lw * 1.6; c.beginPath(); c.moveTo(px, py); c.lineTo(px + Math.cos(a) * t * 0.3, py + Math.sin(a) * t * 0.3); c.stroke();
+      c.lineWidth = lw; c.beginPath(); c.arc(px, py, t * 0.18, 0, TAU); c.stroke(); c.fillStyle = col.luz; c.beginPath(); c.arc(px, py, t * 0.05, 0, TAU); c.fill();
     } else if (e.tipo === 'torreRadio') { // mástil con tirantes y ondas
       const px = X(0.5), py = Y(0.56);
       c.strokeStyle = col.luz; c.lineWidth = lw * 1.4; c.beginPath(); c.moveTo(px, Y(0.86)); c.lineTo(px, Y(0.2)); c.moveTo(X(0.26), Y(0.86)); c.lineTo(px, Y(0.42)); c.lineTo(X(0.74), Y(0.86)); c.stroke();
