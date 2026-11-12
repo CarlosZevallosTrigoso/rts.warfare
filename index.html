@@ -320,12 +320,12 @@
   <button type="button" id="empezar">Empezar</button>
   <button type="button" id="tutorial">Tutorial guiado<small style="display:block;color:var(--suave);font-size:10px">ocho pasos, con el rival dormido hasta el final</small></button>
   <button type="button" id="continuar" hidden>Continuar la partida guardada</button>
-  <div id="version">versión 68</div>
+  <div id="version">versión 69</div>
 </div></div>
 <div id="guia" hidden><div class="caja"><div class="cab"><strong>Guía: para qué sirve cada cosa</strong><button type="button" id="cierraGuia">cerrar</button></div><div id="guiaTxt"></div></div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finVer" href="#" title="Vuelve a ver la partida entera, con todo el mapa a la vista y a la velocidad que quieras.">ver repetición</a><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 68' };
+globalThis.W = { VERSION: 'versión 69' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -3333,8 +3333,8 @@ globalThis.W = { VERSION: 'versión 68' };
       const c = J.cuenta, puede = (t) => W.disponible(m, j, EDIF[t]);
       if (!c.estDrones && m.t > 9000 && J.minerales > 1200 && puede('estDrones')) quiereNuevo = 'estDrones';
       else if (!c.camara && m.t > 14000 && J.minerales > 1200 && puede('camara')) quiereNuevo = 'camara';
+      else if (!c.logistica && m.logistica !== false && m.t > 18000 && J.minerales > 2000 && puede('logistica')) quiereNuevo = 'logistica'; // (antes que la central de inteligencia: sin suministro, sus oleadas pelean a media fuerza)
       else if (!c.inteligencia && m.t > 24000 && J.minerales > 3200 && puede('inteligencia')) quiereNuevo = 'inteligencia';
-      else if (!c.logistica && m.logistica !== false && m.t > 30000 && J.minerales > 3500 && puede('logistica')) quiereNuevo = 'logistica';
     }
     const plan = obra || urgente ? null : planBase || (quiereMisil ? quiereMisil : quiereObras ? 'obras' : quiereDeposito ? 'deposito' : quiereNuevo || siguienteEdificio(m, j, patio, ia.plan));
     if (obra && obra.listo) {
@@ -3565,7 +3565,7 @@ globalThis.W = { VERSION: 'versión 68' };
       // Puente aéreo: con puesto logístico, un puesto móvil que se despliega a medio camino del rival: allí hay suministro, hospital y pista.
       if (c.logistica && m.logistica !== false) {
         const av = sinArma.find((u) => u.tipo === 'avanzadaMovil');
-        if (!c.camionSum && !J.colas.camionSum.n && tk % 10 === 2 && !ahorra && soldados.length >= 10) entrena('camionSum', 600);
+        if ((c.camionSum || 0) + J.colas.camionSum.n < (soldados.length >= 20 ? 2 : 1) && tk % 10 === 2 && !ahorra && soldados.length >= 8) entrena('camionSum', 400);
         if (!av) { if (!c.avanzada && !J.colas.avanzadaMovil.n && tk % 10 === 1 && !ahorra) entrena('avanzadaMovil', 800); }
         else if (av.orden === 'nada') {
           if (!ia.avz) { const cc = W.cercaLibre(m, patio.cx + vx * 0.5, patio.cy + vy * 0.5, true); ia.avz = { x: (cc % m.N) + 0.5, y: ((cc / m.N) | 0) + 0.5, n: 0 }; }

@@ -161,8 +161,8 @@
       const c = J.cuenta, puede = (t) => W.disponible(m, j, EDIF[t]);
       if (!c.estDrones && m.t > 9000 && J.minerales > 1200 && puede('estDrones')) quiereNuevo = 'estDrones';
       else if (!c.camara && m.t > 14000 && J.minerales > 1200 && puede('camara')) quiereNuevo = 'camara';
+      else if (!c.logistica && m.logistica !== false && m.t > 18000 && J.minerales > 2000 && puede('logistica')) quiereNuevo = 'logistica'; // (antes que la central de inteligencia: sin suministro, sus oleadas pelean a media fuerza)
       else if (!c.inteligencia && m.t > 24000 && J.minerales > 3200 && puede('inteligencia')) quiereNuevo = 'inteligencia';
-      else if (!c.logistica && m.logistica !== false && m.t > 30000 && J.minerales > 3500 && puede('logistica')) quiereNuevo = 'logistica';
     }
     const plan = obra || urgente ? null : planBase || (quiereMisil ? quiereMisil : quiereObras ? 'obras' : quiereDeposito ? 'deposito' : quiereNuevo || siguienteEdificio(m, j, patio, ia.plan));
     if (obra && obra.listo) {
@@ -393,7 +393,7 @@
       // Puente aéreo: con puesto logístico, un puesto móvil que se despliega a medio camino del rival: allí hay suministro, hospital y pista.
       if (c.logistica && m.logistica !== false) {
         const av = sinArma.find((u) => u.tipo === 'avanzadaMovil');
-        if (!c.camionSum && !J.colas.camionSum.n && tk % 10 === 2 && !ahorra && soldados.length >= 10) entrena('camionSum', 600);
+        if ((c.camionSum || 0) + J.colas.camionSum.n < (soldados.length >= 20 ? 2 : 1) && tk % 10 === 2 && !ahorra && soldados.length >= 8) entrena('camionSum', 400);
         if (!av) { if (!c.avanzada && !J.colas.avanzadaMovil.n && tk % 10 === 1 && !ahorra) entrena('avanzadaMovil', 800); }
         else if (av.orden === 'nada') {
           if (!ia.avz) { const cc = W.cercaLibre(m, patio.cx + vx * 0.5, patio.cy + vy * 0.5, true); ia.avz = { x: (cc % m.N) + 0.5, y: ((cc / m.N) | 0) + 0.5, n: 0 }; }
