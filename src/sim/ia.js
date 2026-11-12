@@ -391,15 +391,8 @@
         }
         if (b) W.orden(m, { t: 'hackear', j, ids: [u.id], obj: b.id });
       }
-      // Ingeniero civil: una alambrada por delante de la base, de cara al rival (no cierra el paso a los suyos); y cuando queda libre, vuelve al automático.
       const civil = sinArma.find((u) => u.tipo === 'civil');
-      if (c.obras && !ia.alambrada && m.t > (ia.estilo === 'defensivo' ? 8000 : 15000) && J.minerales > 800 && tk % 10 === 5) {
-        if (!civil) { if (!J.colas.civil.n) entrena('civil', 300); }
-        else if (civil.orden === 'nada') {
-          const cx = patio.cx + (vx / vd) * 13, cy = patio.cy + (vy / vd) * 13, px = -vy / vd, py = vx / vd, lim = (v) => Math.max(3, Math.min(m.N - 4, v));
-          W.orden(m, { t: 'murar', j, ids: [civil.id], tipo: 'alambrada', x0: lim(cx + px * 9), y0: lim(cy + py * 9), x1: lim(cx - px * 9), y1: lim(cy - py * 9) }); ia.alambrada = true;
-        }
-      } else if (civil && civil.orden === 'nada' && !civil.auto && tk % 10 === 6) W.orden(m, { t: 'autoCivil', j, ids: [civil.id], on: true });
+      if (civil && civil.orden === 'nada' && !civil.auto && tk % 10 === 6) W.orden(m, { t: 'autoCivil', j, ids: [civil.id], on: true });
       // Ingeniero militar (solo el rival de estilo defensivo): ocho minas en un arco por delante de la base, de cara al rival.
       if (ia.estilo === 'defensivo' && tk % 20 === 11 && m.t > 12000 && J.minerales > 500 && (ia.minasP || 0) < 8 && !urgente) {
         const z = sinArma.find((u) => u.tipo === 'ingeniero' && u.orden === 'nada' && !u.arregla);

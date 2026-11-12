@@ -53,7 +53,6 @@
     // Estación de drones: barata; mantiene dos drones de reconocimiento dando vueltas a su alrededor.
     estDrones: { nombre: 'Estación de drones', tam: 1, vida: 350, costo: 300, tiempo: 160, energia: -10, vision: 5, req: ['cuartel'], drones: { rec: 2 }, radioDron: 16, mejora: true, dronesN: { 2: { rec: 2, bomba: 1, radio: 18 }, 3: { rec: 3, bomba: 2, fpv: 2, radio: 20 } } }, // mejorada lleva más drones, y de ataque
     // Torreta de muro: solo se monta sobre un muro reforzado propio (y ahí puede ir fuera de la cobertura). Cámara: ve lejos y en redondo, descubre a los escondidos y avisa; en la cobertura o sobre un muro propio.
-    torretaMuro: { nombre: 'Torreta de muro', tam: 1, vida: 500, costo: 350, tiempo: 200, energia: -20, vision: 9, req: ['cuartel'], arma: 'bateria', giroT: 0.2, sobreMuro: true },
     camara:    { nombre: 'Cámara', tam: 1, vida: 150, costo: 150, tiempo: 100, energia: -5, vision: 11, req: ['obras'], detecta: 11, enMuro: true },
     // Depósito: nodo de la red. Conectado por camino (o por cercanía) a un patio, extiende la cobertura: suministro, energía y dónde se puede construir.
     // Pista avanzada: va en cualquier terreno explorado, sin red ni energía. Los helicópteros de combate pueden tomarla por base: repostan en ella y su radio de vuelo se cuenta desde allí.
@@ -108,8 +107,8 @@
     // Fase 2a. despliega: se convierte en un patio donde está (orden 'desplegar'); no hay vuelta atrás.
     // traza: con la orden 'trazar' deja camino a su paso (y solo entonces entra al bosque, talándolo).
     excavadora:  { nombre: 'Excavadora', cat: 'veh', vida: 300, vel: 0.07, costo: 500, pet: 20, tiempo: 240, blindaje: 'pesado', arma: null, vision: 6, radio: 0.24, req: ['obras'], lugar: 'obras', agua: 1, giro: 0.12, acel: 0.006, traza: true },
-    // Ingeniero civil: no combate. Con la orden «conectar» va al primer edificio y tiende desde él una línea de servicio hasta el siguiente.
-    civil:       { nombre: 'Ingeniero civil', cat: 'inf', vida: 60, vel: 0.065, costo: 200, tiempo: 160, blindaje: 'ligero', arma: null, vision: 6, radio: 0.11, req: ['obras'], lugar: 'obras', agua: 1, giro: 0.5, acel: 0.02, tiende: true },
+    // Ingeniero civil: no combate. Los edificios se cablean solos al construirse; él repara los edificios y repone los cables cortados (o tiende los que quedan demasiado lejos).
+    civil:       { nombre: 'Ingeniero civil', cat: 'inf', vida: 60, vel: 0.065, costo: 200, tiempo: 160, blindaje: 'ligero', arma: null, vision: 6, radio: 0.11, req: ['obras'], lugar: 'obras', agua: 1, giro: 0.5, acel: 0.02, tiende: true, repara: true, soloEdif: true, reparaR: 40 }, // en automático: repara los edificios dañados de la base y vuelve a tender los cables cortados
     patioMovil:  { nombre: 'Patio móvil', cat: 'veh', vida: 600, vel: 0.05, costo: 2500, pet: 100, tiempo: 600, blindaje: 'pesado', arma: null, vision: 6, radio: 0.30, req: ['fabrica'], agua: 2, giro: 0.07, acel: 0.003, nivel: 2, despliega: true },
     // Puesto móvil: se despliega como puesto de avanzada. Helicópteros (mini: autónomos): el de carga va y viene manteniendo el enlace; el de tropa lleva infantería de una pista a otra.
     // Suministro móvil: va al punto que se le marca, se planta y abastece a las unidades de alrededor mientras le dura la carga
@@ -236,7 +235,7 @@
     minaPozo: 40000, // minerales del pozo de una mina (más lo que hubiera en la superficie que tapa)
     vigilaRadio: 8, vigilaMax: 14, protegeDist: 4,
     espiaRadio: 6, espiaInfo: 2, sumiBase: 1, sumiUnidad: 0.5, sumiCarga: 40, // suministro móvil: gasto por ciclo (medio segundo) en vacío y por unidad atendida; y lo que carga por ciclo en el puesto logístico
-    dronMisRadio: 8, autoReserva: 400, autoLargo: 70,
+    dronMisRadio: 8, autoReserva: 400, autoLargo: 70, cableMax: 24, /* largo máximo del cable que un edificio nuevo tiende solo hasta la red */
     rutaNodos: 30000, // presupuesto de celdas que se exploran por tick buscando rutas
     misilesMax: 10, mejoraMax: 3, mejoraCosto: 0.6, mejoraBono: 0.5, // mejora de un edificio: hasta nivel 3; cada nivel cuesta el 60 % del edificio por el nivel que tiene y rinde un 50 % más
     inicio: 2500, petInicio: 150, cosecha: 5, descarga: 25, colaMax: 9, separacionColocar: 3, goteoCada: 5, vistaInicial: 22, obrasMax: 8, curaUnidad: 0.01, curaEdificio: 0.0025, curaCosto: 0.15, venta: 0.5, trinchera: 0.45, arco: 0.14, arcoTrinchera: 1.05, visAd: 1.3, visLado: 0.75, visAt: 0.3, cono: 1.05, periferia: 1.83, flanco: 1.25, espalda: 1.5, bosqueVeh: 0.6, bosqueCubre: 0.7, reposta: 12, retiroBajo: 0.3, retiroAlto: 0.9, huida: 300, dia: 9600, diaLuz: 6000, nocheVis: 0.7, caminoVel: 1.6, tramoLargo: 4, enlace: 5, cobNodo: 14, cobEdif: 6, lineaVel: 0.12, lineaCelda: 3, sinSum: 400, sinSumRecarga: 1.5, abastDura: 1500, heliRepone: 300, cobAvanzada: 10, hospitalCura: 2, dronFpv: 40, dronBomba: 15, dronRepone: 200, dronFpvCada: 60, hackInfo: 25, hackVeh: 240, hackEdif: 300, hackRecarga: 200, hackCanal: 40, trazaVel: 0.45, caminoLlano: 4, caminoBosque: 12, caminoAgua: 30, mandoCada: 40, mandoGiro: 1.5, captura: 600, capturaRadio: 2, antenaRadio: 12, depositoCada: 8, tallerRadio: 4, ocultaVe: 2.5, chatarra: 0.25, reparaRadio: 8, reparaVeh: 0.5, curaMedico: 0.35, reparaEdif: 0.8, rangos: [2, 5, 10], rangoDano: 0.1, rangoVida: 0.1, cupoAviones: 5, pasada: 7, orbita: 3.5, fuelCae: 80, cavar: 80, aplasta: 10, bonoProd: 0.5, bonoMax: 2.5 };

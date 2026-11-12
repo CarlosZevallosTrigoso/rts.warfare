@@ -73,7 +73,22 @@
       m.terrenoV++;
     }
     m.ents.push(e); m.porId.set(e.id, e); m.redSucia = true;
+    if (m.logistica !== false && m.cob && tipo !== 'patio' && tipo !== 'avanzada') autoCable(m, e);
     return e;
+  }
+  // Cableado automático: un edificio nuevo que no queda pegado a la red tiende solo un cable hasta el edificio conectado más cercano
+  // (gratis, hasta ECON.cableMax celdas). El cable son tramos de línea de servicio: el enemigo puede cortarlos.
+  function autoCable(m, e) {
+    let a = null, da = Infinity;
+    for (const o of m.ents) {
+      if (!o.edif || o.infra || o.j !== e.j || o === e || o.vida <= 0 || !o.conRed) continue;
+      if (Math.max(o.x - (e.x + e.tam), e.x - (o.x + o.tam), 0) <= ECON.enlace && Math.max(o.y - (e.y + e.tam), e.y - (o.y + o.tam), 0) <= ECON.enlace) return; // ya queda unido por cercanía
+      const dd = Math.hypot(o.cx - e.cx, o.cy - e.cy); if (dd < da) { da = dd; a = o; }
+    }
+    if (!a || da > ECON.cableMax) return;
+    const ux = (e.cx - a.cx) / da, uy = (e.cy - a.cy) / da; let ult = a.id, prev = null;
+    for (let h = 0; h < da; h += 5) { const s = Math.min(da, h + 5), tr = crearLinea(m, e.j, a.cx + ux * h, a.cy + uy * h, a.cx + ux * s, a.cy + uy * s, ult); if (prev) prev.a = tr.id; prev = tr; ult = tr.id; }
+    if (prev) prev.a = e.id;
   }
   // Las celdas de camino de cada jugador. En una partida guardada antes de que existieran, se reconstruyen de los tramos.
   function viaDe(m) {
@@ -1200,7 +1215,8 @@
         for (const u of propias(m, cmd)) if (UNID[u.tipo].drones && W.dronesDe(m, u).fpv) { u.dronObj = o.id; u.dronAtk = true; }
         return;
       }
-      case 'murar': { // el ingeniero civil levanta un tramo recto de muro (tipo: clave de W.MUROS) de una celda a otra; con enc, lo añade a lo que lleva
+      case 'murar': return; // (los muros, puertas y alambradas se quitaron del juego: la orden ya no hace nada)
+      case 'murarViejo': { // el ingeniero civil levanta un tramo recto de muro (tipo: clave de W.MUROS) de una celda a otra; con enc, lo añade a lo que lleva
         const u = propias(m, cmd).find((q) => UNID[q.tipo].tiende), d = W.MUROS[cmd.tipo], N = m.N;
         if (!u || !d || (d.nivel || 1) > J.nivel) return;
         let x = Math.floor(cmd.x0), y = Math.floor(cmd.y0); const x1 = Math.floor(cmd.x1), y1 = Math.floor(cmd.y1), celdas = [];
@@ -2059,10 +2075,11 @@
     let o = u.arregla ? m.porId.get(u.arregla) : null;
     if (o && (o.vida <= 0 || o.vida >= o.vidaMax)) { o = null; u.arregla = 0; u.ruta = null; }
     if (!o && (m.t + u.id) % 10 === 0) {
-      let md = u.guardia ? 1.6 : ECON.reparaRadio;
+      const du = UNID[u.tipo]; let md = u.guardia ? 1.6 : du.reparaR || ECON.reparaRadio;
       for (const e of m.ents) {
         if (e.j !== u.j || e.vida >= e.vidaMax || e.vida <= 0 || e.enTierra || e === u) continue;
         if (med ? e.edif || UNID[e.tipo].cat !== 'inf' : !e.edif && UNID[e.tipo].cat !== 'veh') continue;
+        if (du.soloEdif && !e.edif) continue; // el ingeniero civil solo arregla edificios y cables
         const dd = dist(u.x, u.y, e);
         if (dd < md) { md = dd; o = e; }
       }

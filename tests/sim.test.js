@@ -1408,67 +1408,21 @@ prueba('tanda 3: misilera (Scud, Minuteman, Sarmat) e interceptor', () => {
   assert.equal(W.huella(copia), W.huella(m));
 });
 
-prueba('tanda 4: muros, puertas, alambrada, torreta de muro y cámara', () => {
+prueba('los muros se quitaron: la orden no hace nada y no hay torreta de muro; la cámara sigue descubriendo a los escondidos', () => {
   const m = W.crearMundo(4242, { N: 128 }), N = m.N, J = m.jug[0];
   m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
   const cel = (x, y) => y * N + x;
-  const pon = (x, y, t) => { const i = cel(x, y); m.mapa.terreno[i] = t; m.mapa.mineral[i] = 0; m.paso[i] = t === 1 || t === 2 ? 0 : 1; m.pasoV[i] = t === 0 ? 1 : 0; };
-  for (let y = 40; y < 80; y++) for (let x = 30; x < 100; x++) if (!m.ocup[cel(x, y)]) pon(x, y, 0);
-  for (let x = 30; x < 100; x++) { pon(x, 39, 1); pon(x, 80, 1); } for (let y = 39; y <= 80; y++) { pon(29, y, 1); pon(100, y, 1); } // un campo cerrado por roca
+  for (let y = 40; y < 80; y++) for (let x = 30; x < 100; x++) { const i = cel(x, y); if (m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
   const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
-  J.dios = false; J.minerales = 20000; J.nivel = 2; m.jug[1].minerales = 20000;
-  // el ingeniero civil levanta un muro de lado a lado, con una puerta en medio
-  const civ = W.crearUnidad(m, 0, 'civil', cel(58, 42)), min0 = J.minerales;
-  W.orden(m, { t: 'murar', j: 0, ids: [civ.id], tipo: 'reforzado', x0: 60.5, y0: 40.5, x1: 60.5, y1: 58.5 });
-  W.orden(m, { t: 'murar', j: 0, ids: [civ.id], tipo: 'reforzado', x0: 60.5, y0: 61.5, x1: 60.5, y1: 79.5, enc: true });
-  avanza(2); for (let i = 0; i < 20000 && civ.orden === 'murar'; i++) W.tick(m);
-  W.orden(m, { t: 'murar', j: 0, ids: [civ.id], tipo: 'puerta', x0: 60.5, y0: 59.5, x1: 60.5, y1: 60.5 });
-  avanza(2); for (let i = 0; i < 4000 && civ.orden === 'murar'; i++) W.tick(m);
-  let nMuro = 0, nPuerta = 0; for (let y = 40; y < 80; y++) { if (m.muro[cel(60, y)] === 3) nMuro++; if (m.muro[cel(60, y)] === 4) nPuerta++; }
-  assert.ok(nMuro === 38 && nPuerta === 2, 'muro de lado a lado con su puerta: ' + nMuro + ' + ' + nPuerta);
-  assert.ok(min0 - J.minerales >= 38 * 30 + 2 * 40 - 300, 'pagado celda a celda: ' + (min0 - J.minerales));
-  assert.ok(!m.ents.some((e) => e.muro), 'los muros no son entidades');
-  // los propios cruzan por la puerta; el enemigo, sin armas que valgan, no pasa
-  const mio = W.crearUnidad(m, 0, 'tanque', cel(50, 50)), ing = W.crearUnidad(m, 1, 'ingeniero', cel(75, 50));
-  W.orden(m, { t: 'mover', j: 0, ids: [mio.id], x: 75.5, y: 45.5 }); W.orden(m, { t: 'mover', j: 1, ids: [ing.id], x: 45.5, y: 50.5 }); avanza(900);
-  assert.ok(mio.x > 70, 'el tanque propio cruza por la puerta: ' + mio.x.toFixed(1));
-  assert.ok(ing.x > 60.9, 'el enemigo no pasa: ' + ing.x.toFixed(1));
-  // un grupo enemigo con orden de avanzar atacando se abre paso derribando el muro
-  mio.vida = 0; ing.vida = 0; avanza(2);
-  const ene = [0, 1, 2, 3].map((k) => W.crearUnidad(m, 1, 'tanque', cel(75, 48 + k)));
-  W.orden(m, { t: 'amover', j: 1, ids: ene.map((u) => u.id), x: 40.5, y: 50.5 });
-  let roto = -1; for (let i = 0; i < 9000 && roto < 0; i++) { W.tick(m); if (ene.some((u) => u.x < 59.5)) roto = i; }
-  assert.ok(roto > 100, 'derriban el muro y pasan (tick ' + roto + ')');
-  let huecos = 0; for (let y = 40; y < 80; y++) if (!m.muro[cel(60, y)]) huecos++;
-  assert.ok(huecos >= 1 && huecos <= 6, 'abren un hueco, no todo el muro: ' + huecos);
-  ene.forEach((u) => { u.vida = 0; }); avanza(2);
-  // torreta de muro: solo sobre muro reforzado propio; cámara: descubre a un francotirador escondido y avisa
-  assert.ok(!W.puedeColocar(m, 0, 'torretaMuro', 55, 50), 'en el suelo no');
-  assert.ok(W.puedeColocar(m, 0, 'torretaMuro', 60, 44), 'sobre el muro reforzado sí');
-  assert.ok(!W.puedeColocar(m, 1, 'torretaMuro', 60, 44), 'el enemigo no puede usar tu muro');
-  assert.ok(W.puedeColocar(m, 0, 'camara', 60, 70) && !W.puedeColocar(m, 0, 'central', 60, 70), 'la cámara también va sobre el muro; otros edificios no');
+  J.minerales = 20000; J.nivel = 2;
+  const civ = W.crearUnidad(m, 0, 'civil', cel(58, 50));
+  W.orden(m, { t: 'murar', j: 0, ids: [civ.id], tipo: 'muro', x0: 60.5, y0: 45.5, x1: 60.5, y1: 55.5 }); avanza(400);
+  assert.ok(!m.muros || !m.muros.length, 'no se levanta ningún muro'); assert.strictEqual(civ.orden, 'nada'); assert.ok(!W.EDIF.torretaMuro, 'no hay torreta de muro');
   const cam = W.crearEdificio(m, 0, 'camara', 60, 70); cam.sinLuz = false;
   const franco = W.crearUnidad(m, 1, 'francotirador', cel(66, 70)); franco.guardia = true; franco.recarga = 99999;
   let aviso = false; for (let i = 0; i < 60; i++) { W.tick(m); cam.sinLuz = false; if (m.efectos.some((f) => f.tipo === 'camara' && f.j === 0)) aviso = true; }
   assert.ok(!W.oculta(m, franco) && aviso, 'la cámara lo descubre y avisa');
-  cam.vida = 0; avanza(40);
-  assert.ok(W.oculta(m, franco) && m.muro[cel(60, 70)] === 3 && !m.paso[cel(60, 70)], 'sin cámara vuelve a esconderse, y el muro de debajo sigue en pie');
-  // alambrada: frena a la infantería enemiga y un tanque la aplasta
-  franco.vida = 0; avanza(2);
-  W.orden(m, { t: 'murar', j: 0, ids: [civ.id], tipo: 'alambrada', x0: 40.5, y0: 70.5, x1: 46.5, y1: 70.5 }); W.orden(m, { t: 'mover', j: 0, ids: [civ.id], x: 43.5, y: 68.5 });
-  avanza(2); W.orden(m, { t: 'murar', j: 0, ids: [civ.id], tipo: 'alambrada', x0: 40.5, y0: 70.5, x1: 46.5, y1: 70.5 });
-  avanza(2); for (let i = 0; i < 4000 && civ.orden === 'murar'; i++) W.tick(m);
-  assert.equal(m.muro[cel(43, 70)], 1, 'alambrada tendida');
-  const sol = W.crearUnidad(m, 1, 'infanteria', cel(43, 69)); sol.guardia = true;
-  W.orden(m, { t: 'mover', j: 1, ids: [sol.id], x: 43.5, y: 74.5 }); let vmin = 9; for (let i = 0; i < 60; i++) { W.tick(m); if (Math.floor(sol.y) === 70 && sol.v > 0) vmin = Math.min(vmin, sol.v); }
-  assert.ok(vmin < W.UNID.infanteria.vel * 0.5, 'la infantería enemiga cruza la alambrada muy despacio: ' + vmin.toFixed(3));
-  const tq = W.crearUnidad(m, 1, 'tanque', cel(45, 67)); W.orden(m, { t: 'mover', j: 1, ids: [tq.id], x: 45.5, y: 75.5 }); avanza(200);
-  assert.equal(m.muro[cel(45, 70)], 0, 'el tanque aplasta la alambrada');
-  // derribar lo propio devuelve la mitad; guardar y cargar
-  const m1 = J.minerales; W.orden(m, { t: 'quitarMuro', j: 0, c: cel(60, 41) }); avanza(2);
-  assert.ok(!m.muro[cel(60, 41)] && m.paso[cel(60, 41)] && J.minerales >= m1 + 15, 'se quita y devuelve la mitad');
-  const copia = W.cargar(W.guardar(m)).m; for (let i = 0; i < 100; i++) { W.tick(m); W.tick(copia); }
-  assert.equal(W.huella(copia), W.huella(m));
+  cam.vida = 0; avanza(40); assert.ok(W.oculta(m, franco), 'sin cámara vuelve a esconderse');
 });
 
 prueba('drones: estación, operador y comando; kamikaze, bombardero, derribos e interferencia', () => {
@@ -1554,7 +1508,11 @@ prueba('ingeniero civil en automático conecta lo que está fuera de la red; pat
   const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
   J.dios = false; J.minerales = 20000;
   const c1 = W.crearEdificio(m, 0, 'central', px + dir * 22, py - 3), c2 = W.crearEdificio(m, 0, 'central', px + dir * 22, py + 6); avanza(3);
-  assert.ok(!c1.conRed && !c2.conRed, 'las dos centrales lejanas nacen fuera de la red');
+  assert.ok(c1.conRed && c2.conRed && m.ents.some((e) => e.linea && e.j === 0), 'al construirse, cada central tiende sola su cable hasta la red');
+  const j0 = J.minerales; assert.strictEqual(J.minerales, j0, 'y el cable no cuesta nada');
+  const lejosC = W.crearEdificio(m, 0, 'central', px + dir * 52, py); avanza(3); assert.ok(!lejosC.conRed && !m.ents.some((e) => e.linea && e.a === lejosC.id), 'a más de 24 celdas de la red no hay cable automático'); lejosC.vida = 0; avanza(3);
+  for (const e of m.ents) if (e.linea) e.vida = 0; avanza(110); // el enemigo corta los cables
+  assert.ok(!c1.conRed && !c2.conRed, 'con el cable cortado, las dos centrales quedan fuera de la red');
   const ing = W.crearUnidad(m, 0, 'civil', cel(px + dir * 4, py + 1)), ing2 = W.crearUnidad(m, 0, 'civil', cel(px + dir * 4, py + 2));
   assert.ok(ing.auto, 'el ingeniero civil nace en automático');
   avanza(40);
@@ -2159,6 +2117,19 @@ prueba('radar: marca ecos de las unidades enemigas en su alcance sin levantar la
   m.ents.find((e) => e.tipo === 'central' && e.j === 0 && e.x === px + 4).vida = 0; for (const e of m.ents) if (e.j === 0 && e.tipo === 'central') e.vida = 0; avanza(120);
   if (rd.sinLuz) assert.ok(!m.ecos, 'sin energía no barre'); else console.log('      (el patio aún da energía al radar: no se comprueba el apagón)');
   void es; void t2;
+});
+
+prueba('ingeniero civil: en automático repara los edificios dañados de la base, pero no los vehículos', () => {
+  const m = W.crearMundo(31, { N: 128, logistica: true }), N = m.N;
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const patio = m.ents.find((e) => e.j === 0 && e.tipo === 'patio'), px = Math.floor(patio.cx), py = Math.floor(patio.cy);
+  for (let y = py - 10; y <= py + 10; y++) for (let x = px - 10; x <= px + 10; x++) { const i = y * N + x; if (x < 2 || y < 2 || x >= N - 2 || y >= N - 2 || m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  m.terrenoV++;
+  const civ = W.crearUnidad(m, 0, 'civil', W.cercaLibre(m, patio.cx + 7, patio.cy + 7)), tq = W.crearUnidad(m, 0, 'tanque', W.cercaLibre(m, patio.cx + 6, patio.cy + 8));
+  patio.vida = patio.vidaMax * 0.5; tq.vida = tq.vidaMax * 0.5; tq.noRetira = true; const v0 = patio.vida, t0 = tq.vida;
+  for (let i = 0; i < 700; i++) { W.tick(m); tq.vida = Math.min(tq.vida, t0); }
+  assert.ok(patio.vida > v0 + 50, 'va solo hasta el patio dañado y lo repara (' + Math.round(patio.vida - v0) + ')'); assert.ok(civ.arregla === patio.id || patio.vida >= patio.vidaMax);
+  assert.ok(civ.arregla !== tq.id, 'el tanque no es cosa suya');
 });
 
 prueba('tanda 5: puente aéreo, puesto de avanzada, hospital y traslado de infantería', () => {

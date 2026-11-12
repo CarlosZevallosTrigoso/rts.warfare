@@ -185,8 +185,7 @@
       <div><kbd>Mayús</kbd>+clic derecho: encadenar órdenes</div>
       <div><kbd>R</kbd> patrulla: marca los puntos con clic y cierra con clic derecho · <kbd>E</kbd> explorar sola · <kbd>F</kbd> formación</div>
       <div><kbd>L</kbd> vista de la red: cobertura (suministro y dónde construir) y qué está conectado</div>
-      <div>ingeniero civil: muros, puertas y alambradas en línea recta; clic derecho con tropa sobre un muro enemigo lo ataca</div>
-      <div><kbd>J</kbd> con un ingeniero civil: conectar edificios con líneas de servicio · <kbd>K</kbd> con la excavadora: camino militar</div>
+      <div>los edificios tienden solos su cable hasta la red (24 celdas); <kbd>J</kbd> con un ingeniero civil: conectar a mano lo que quede más lejos · <kbd>K</kbd> con la excavadora: camino militar</div>
       <div><kbd>Supr</kbd> demoler el edificio seleccionado</div>
       <div><kbd>G</kbd> guardia: la unidad queda fija · <kbd>C</kbd> colmena sí/no</div>
       <div><kbd>Z</kbd> atrincherarse (infantería quieta): recibe menos daño</div>
@@ -332,12 +331,12 @@
   <button type="button" id="empezar">Empezar</button>
   <button type="button" id="tutorial">Tutorial guiado<small style="display:block;color:var(--suave);font-size:10px">ocho pasos, con el rival dormido hasta el final</small></button>
   <button type="button" id="continuar" hidden>Continuar la partida guardada</button>
-  <div id="version">versión 79</div>
+  <div id="version">versión 80</div>
 </div></div>
 <div id="guia" hidden><div class="caja"><div class="cab"><strong>Guía: para qué sirve cada cosa</strong><button type="button" id="cierraGuia">cerrar</button></div><div id="guiaTxt"></div></div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finVer" href="#" title="Vuelve a ver la partida entera, con todo el mapa a la vista y a la velocidad que quieras.">ver repetición</a><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 79' };
+globalThis.W = { VERSION: 'versión 80' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -394,7 +393,6 @@ globalThis.W = { VERSION: 'versión 79' };
     // Estación de drones: barata; mantiene dos drones de reconocimiento dando vueltas a su alrededor.
     estDrones: { nombre: 'Estación de drones', tam: 1, vida: 350, costo: 300, tiempo: 160, energia: -10, vision: 5, req: ['cuartel'], drones: { rec: 2 }, radioDron: 16, mejora: true, dronesN: { 2: { rec: 2, bomba: 1, radio: 18 }, 3: { rec: 3, bomba: 2, fpv: 2, radio: 20 } } }, // mejorada lleva más drones, y de ataque
     // Torreta de muro: solo se monta sobre un muro reforzado propio (y ahí puede ir fuera de la cobertura). Cámara: ve lejos y en redondo, descubre a los escondidos y avisa; en la cobertura o sobre un muro propio.
-    torretaMuro: { nombre: 'Torreta de muro', tam: 1, vida: 500, costo: 350, tiempo: 200, energia: -20, vision: 9, req: ['cuartel'], arma: 'bateria', giroT: 0.2, sobreMuro: true },
     camara:    { nombre: 'Cámara', tam: 1, vida: 150, costo: 150, tiempo: 100, energia: -5, vision: 11, req: ['obras'], detecta: 11, enMuro: true },
     // Depósito: nodo de la red. Conectado por camino (o por cercanía) a un patio, extiende la cobertura: suministro, energía y dónde se puede construir.
     // Pista avanzada: va en cualquier terreno explorado, sin red ni energía. Los helicópteros de combate pueden tomarla por base: repostan en ella y su radio de vuelo se cuenta desde allí.
@@ -449,8 +447,8 @@ globalThis.W = { VERSION: 'versión 79' };
     // Fase 2a. despliega: se convierte en un patio donde está (orden 'desplegar'); no hay vuelta atrás.
     // traza: con la orden 'trazar' deja camino a su paso (y solo entonces entra al bosque, talándolo).
     excavadora:  { nombre: 'Excavadora', cat: 'veh', vida: 300, vel: 0.07, costo: 500, pet: 20, tiempo: 240, blindaje: 'pesado', arma: null, vision: 6, radio: 0.24, req: ['obras'], lugar: 'obras', agua: 1, giro: 0.12, acel: 0.006, traza: true },
-    // Ingeniero civil: no combate. Con la orden «conectar» va al primer edificio y tiende desde él una línea de servicio hasta el siguiente.
-    civil:       { nombre: 'Ingeniero civil', cat: 'inf', vida: 60, vel: 0.065, costo: 200, tiempo: 160, blindaje: 'ligero', arma: null, vision: 6, radio: 0.11, req: ['obras'], lugar: 'obras', agua: 1, giro: 0.5, acel: 0.02, tiende: true },
+    // Ingeniero civil: no combate. Los edificios se cablean solos al construirse; él repara los edificios y repone los cables cortados (o tiende los que quedan demasiado lejos).
+    civil:       { nombre: 'Ingeniero civil', cat: 'inf', vida: 60, vel: 0.065, costo: 200, tiempo: 160, blindaje: 'ligero', arma: null, vision: 6, radio: 0.11, req: ['obras'], lugar: 'obras', agua: 1, giro: 0.5, acel: 0.02, tiende: true, repara: true, soloEdif: true, reparaR: 40 }, // en automático: repara los edificios dañados de la base y vuelve a tender los cables cortados
     patioMovil:  { nombre: 'Patio móvil', cat: 'veh', vida: 600, vel: 0.05, costo: 2500, pet: 100, tiempo: 600, blindaje: 'pesado', arma: null, vision: 6, radio: 0.30, req: ['fabrica'], agua: 2, giro: 0.07, acel: 0.003, nivel: 2, despliega: true },
     // Puesto móvil: se despliega como puesto de avanzada. Helicópteros (mini: autónomos): el de carga va y viene manteniendo el enlace; el de tropa lleva infantería de una pista a otra.
     // Suministro móvil: va al punto que se le marca, se planta y abastece a las unidades de alrededor mientras le dura la carga
@@ -577,7 +575,7 @@ globalThis.W = { VERSION: 'versión 79' };
     minaPozo: 40000, // minerales del pozo de una mina (más lo que hubiera en la superficie que tapa)
     vigilaRadio: 8, vigilaMax: 14, protegeDist: 4,
     espiaRadio: 6, espiaInfo: 2, sumiBase: 1, sumiUnidad: 0.5, sumiCarga: 40, // suministro móvil: gasto por ciclo (medio segundo) en vacío y por unidad atendida; y lo que carga por ciclo en el puesto logístico
-    dronMisRadio: 8, autoReserva: 400, autoLargo: 70,
+    dronMisRadio: 8, autoReserva: 400, autoLargo: 70, cableMax: 24, /* largo máximo del cable que un edificio nuevo tiende solo hasta la red */
     rutaNodos: 30000, // presupuesto de celdas que se exploran por tick buscando rutas
     misilesMax: 10, mejoraMax: 3, mejoraCosto: 0.6, mejoraBono: 0.5, // mejora de un edificio: hasta nivel 3; cada nivel cuesta el 60 % del edificio por el nivel que tiene y rinde un 50 % más
     inicio: 2500, petInicio: 150, cosecha: 5, descarga: 25, colaMax: 9, separacionColocar: 3, goteoCada: 5, vistaInicial: 22, obrasMax: 8, curaUnidad: 0.01, curaEdificio: 0.0025, curaCosto: 0.15, venta: 0.5, trinchera: 0.45, arco: 0.14, arcoTrinchera: 1.05, visAd: 1.3, visLado: 0.75, visAt: 0.3, cono: 1.05, periferia: 1.83, flanco: 1.25, espalda: 1.5, bosqueVeh: 0.6, bosqueCubre: 0.7, reposta: 12, retiroBajo: 0.3, retiroAlto: 0.9, huida: 300, dia: 9600, diaLuz: 6000, nocheVis: 0.7, caminoVel: 1.6, tramoLargo: 4, enlace: 5, cobNodo: 14, cobEdif: 6, lineaVel: 0.12, lineaCelda: 3, sinSum: 400, sinSumRecarga: 1.5, abastDura: 1500, heliRepone: 300, cobAvanzada: 10, hospitalCura: 2, dronFpv: 40, dronBomba: 15, dronRepone: 200, dronFpvCada: 60, hackInfo: 25, hackVeh: 240, hackEdif: 300, hackRecarga: 200, hackCanal: 40, trazaVel: 0.45, caminoLlano: 4, caminoBosque: 12, caminoAgua: 30, mandoCada: 40, mandoGiro: 1.5, captura: 600, capturaRadio: 2, antenaRadio: 12, depositoCada: 8, tallerRadio: 4, ocultaVe: 2.5, chatarra: 0.25, reparaRadio: 8, reparaVeh: 0.5, curaMedico: 0.35, reparaEdif: 0.8, rangos: [2, 5, 10], rangoDano: 0.1, rangoVida: 0.1, cupoAviones: 5, pasada: 7, orbita: 3.5, fuelCae: 80, cavar: 80, aplasta: 10, bonoProd: 0.5, bonoMax: 2.5 };
@@ -975,7 +973,22 @@ globalThis.W = { VERSION: 'versión 79' };
       m.terrenoV++;
     }
     m.ents.push(e); m.porId.set(e.id, e); m.redSucia = true;
+    if (m.logistica !== false && m.cob && tipo !== 'patio' && tipo !== 'avanzada') autoCable(m, e);
     return e;
+  }
+  // Cableado automático: un edificio nuevo que no queda pegado a la red tiende solo un cable hasta el edificio conectado más cercano
+  // (gratis, hasta ECON.cableMax celdas). El cable son tramos de línea de servicio: el enemigo puede cortarlos.
+  function autoCable(m, e) {
+    let a = null, da = Infinity;
+    for (const o of m.ents) {
+      if (!o.edif || o.infra || o.j !== e.j || o === e || o.vida <= 0 || !o.conRed) continue;
+      if (Math.max(o.x - (e.x + e.tam), e.x - (o.x + o.tam), 0) <= ECON.enlace && Math.max(o.y - (e.y + e.tam), e.y - (o.y + o.tam), 0) <= ECON.enlace) return; // ya queda unido por cercanía
+      const dd = Math.hypot(o.cx - e.cx, o.cy - e.cy); if (dd < da) { da = dd; a = o; }
+    }
+    if (!a || da > ECON.cableMax) return;
+    const ux = (e.cx - a.cx) / da, uy = (e.cy - a.cy) / da; let ult = a.id, prev = null;
+    for (let h = 0; h < da; h += 5) { const s = Math.min(da, h + 5), tr = crearLinea(m, e.j, a.cx + ux * h, a.cy + uy * h, a.cx + ux * s, a.cy + uy * s, ult); if (prev) prev.a = tr.id; prev = tr; ult = tr.id; }
+    if (prev) prev.a = e.id;
   }
   // Las celdas de camino de cada jugador. En una partida guardada antes de que existieran, se reconstruyen de los tramos.
   function viaDe(m) {
@@ -2102,7 +2115,8 @@ globalThis.W = { VERSION: 'versión 79' };
         for (const u of propias(m, cmd)) if (UNID[u.tipo].drones && W.dronesDe(m, u).fpv) { u.dronObj = o.id; u.dronAtk = true; }
         return;
       }
-      case 'murar': { // el ingeniero civil levanta un tramo recto de muro (tipo: clave de W.MUROS) de una celda a otra; con enc, lo añade a lo que lleva
+      case 'murar': return; // (los muros, puertas y alambradas se quitaron del juego: la orden ya no hace nada)
+      case 'murarViejo': { // el ingeniero civil levanta un tramo recto de muro (tipo: clave de W.MUROS) de una celda a otra; con enc, lo añade a lo que lleva
         const u = propias(m, cmd).find((q) => UNID[q.tipo].tiende), d = W.MUROS[cmd.tipo], N = m.N;
         if (!u || !d || (d.nivel || 1) > J.nivel) return;
         let x = Math.floor(cmd.x0), y = Math.floor(cmd.y0); const x1 = Math.floor(cmd.x1), y1 = Math.floor(cmd.y1), celdas = [];
@@ -2961,10 +2975,11 @@ globalThis.W = { VERSION: 'versión 79' };
     let o = u.arregla ? m.porId.get(u.arregla) : null;
     if (o && (o.vida <= 0 || o.vida >= o.vidaMax)) { o = null; u.arregla = 0; u.ruta = null; }
     if (!o && (m.t + u.id) % 10 === 0) {
-      let md = u.guardia ? 1.6 : ECON.reparaRadio;
+      const du = UNID[u.tipo]; let md = u.guardia ? 1.6 : du.reparaR || ECON.reparaRadio;
       for (const e of m.ents) {
         if (e.j !== u.j || e.vida >= e.vidaMax || e.vida <= 0 || e.enTierra || e === u) continue;
         if (med ? e.edif || UNID[e.tipo].cat !== 'inf' : !e.edif && UNID[e.tipo].cat !== 'veh') continue;
+        if (du.soloEdif && !e.edif) continue; // el ingeniero civil solo arregla edificios y cables
         const dd = dist(u.x, u.y, e);
         if (dd < md) { md = dd; o = e; }
       }
@@ -3957,15 +3972,8 @@ globalThis.W = { VERSION: 'versión 79' };
         }
         if (b) W.orden(m, { t: 'hackear', j, ids: [u.id], obj: b.id });
       }
-      // Ingeniero civil: una alambrada por delante de la base, de cara al rival (no cierra el paso a los suyos); y cuando queda libre, vuelve al automático.
       const civil = sinArma.find((u) => u.tipo === 'civil');
-      if (c.obras && !ia.alambrada && m.t > (ia.estilo === 'defensivo' ? 8000 : 15000) && J.minerales > 800 && tk % 10 === 5) {
-        if (!civil) { if (!J.colas.civil.n) entrena('civil', 300); }
-        else if (civil.orden === 'nada') {
-          const cx = patio.cx + (vx / vd) * 13, cy = patio.cy + (vy / vd) * 13, px = -vy / vd, py = vx / vd, lim = (v) => Math.max(3, Math.min(m.N - 4, v));
-          W.orden(m, { t: 'murar', j, ids: [civil.id], tipo: 'alambrada', x0: lim(cx + px * 9), y0: lim(cy + py * 9), x1: lim(cx - px * 9), y1: lim(cy - py * 9) }); ia.alambrada = true;
-        }
-      } else if (civil && civil.orden === 'nada' && !civil.auto && tk % 10 === 6) W.orden(m, { t: 'autoCivil', j, ids: [civil.id], on: true });
+      if (civil && civil.orden === 'nada' && !civil.auto && tk % 10 === 6) W.orden(m, { t: 'autoCivil', j, ids: [civil.id], on: true });
       // Ingeniero militar (solo el rival de estilo defensivo): ocho minas en un arco por delante de la base, de cara al rival.
       if (ia.estilo === 'defensivo' && tk % 20 === 11 && m.t > 12000 && J.minerales > 500 && (ia.minasP || 0) < 8 && !urgente) {
         const z = sinArma.find((u) => u.tipo === 'ingeniero' && u.orden === 'nada' && !u.arregla);
@@ -5331,13 +5339,13 @@ globalThis.W = { VERSION: 'versión 79' };
       if (lineas.length) { // líneas de servicio: un trazo fino con sus postes; en rojo las propias que no llegan a la red
         const ancho = Math.max(1, z * (verRed ? 0.14 : 0.08));
         for (const pasada of [0, 1]) {
-          ctx.strokeStyle = pasada ? P.mal : P.tinta; ctx.globalAlpha = pasada ? 0.9 : verRed ? 0.85 : 0.5; ctx.lineWidth = ancho; ctx.beginPath();
+          ctx.strokeStyle = pasada ? P.mal : P.tinta; ctx.globalAlpha = pasada ? 0.9 : verRed ? 0.85 : 0.28; ctx.lineWidth = ancho; /* el cableado, apenas visible salvo en la vista de la red */ ctx.beginPath();
           for (const e of lineas) { if ((e.j === YO && conRed && !e.conRed) !== !!pasada) continue; const p = e.pts; ctx.moveTo(ox + p[0] * z, oy + p[1] * z); ctx.lineTo(ox + p[2] * z, oy + p[3] * z); }
           ctx.stroke();
         }
         ctx.globalAlpha = 1;
         if (z >= 9) { // postes: uno por celda, más o menos
-          ctx.fillStyle = P.tinta; ctx.beginPath();
+          ctx.fillStyle = P.tinta; ctx.globalAlpha = verRed ? 1 : 0.4; ctx.beginPath();
           for (const e of lineas) { const p = e.pts, n = Math.max(1, Math.round(e.largo)); for (let k = 0; k <= n; k += 2) { const x = ox + (p[0] + ((p[2] - p[0]) * k) / n) * z, y = oy + (p[1] + ((p[3] - p[1]) * k) / n) * z; ctx.moveTo(x + z * 0.09, y); ctx.arc(x, y, Math.max(1.2, z * 0.09), 0, TAU); } }
           ctx.fill();
         }
@@ -6445,19 +6453,19 @@ globalThis.W = { VERSION: 'versión 79' };
       patio: 'El centro de la base: desde él se encargan los edificios. Si pierdes todos, pierdes la partida.', central: 'Da energía a los edificios de su red.', refineria: 'Donde descargan las cosechadoras; trae una.', bomba: 'Da agua, que es el tope de tropa. Va junto al agua.',
       cuartel: 'Produce la infantería.', extractor: 'Saca petróleo de un yacimiento.', fabrica: 'Produce los vehículos.', torreta: 'Defensa fija contra tierra y aire.', torreCanon: 'Defensa pesada de largo alcance contra blindados.', aerodromo: 'Produce y aloja hasta cinco aviones.',
       antiaerea: 'Defensa fija solo contra el aire: aviones y drones.', estacion: 'Sobre un campo de conocimiento da información rápido; aloja la inteligencia.', laboratorio: 'Da información en la base, sin campo, más despacio. Vale como estación.', obras: 'Produce las unidades civiles: ingeniero civil y excavadora.',
-      deposito: 'Conectado a tu red, crea una zona con suministro donde también puedes construir.', misilera: 'Fabrica, guarda y lanza misiles balísticos.', interceptor: 'Derriba los misiles enemigos que entran en su radio.', estDrones: 'Mantiene dos drones de reconocimiento vigilando a su alrededor. Mejorada lleva además bombarderos y kamikazes, y guarda las tecnologías del operador.', inteligencia: 'Entrena espías, aloja dos drones espía de largo alcance y permite el mapeo satelital.',
+      deposito: 'Crea una zona con suministro donde también puedes construir. Como todo edificio, tiende solo su cable hasta la red si está a menos de 24 celdas.', misilera: 'Fabrica, guarda y lanza misiles balísticos.', interceptor: 'Derriba los misiles enemigos que entran en su radio.', estDrones: 'Mantiene dos drones de reconocimiento vigilando a su alrededor. Mejorada lleva además bombarderos y kamikazes, y guarda las tecnologías del operador.', inteligencia: 'Entrena espías, aloja dos drones espía de largo alcance y permite el mapeo satelital.',
       radar: 'Nivel 2. No levanta la niebla ni dice qué hay, pero marca con un punto que pulsa cada unidad enemiga que esté a 60 celdas; el punto se actualiza cada 2 segundos. No detecta espías ni edificios. Necesita energía y red.',
       torreRadio: 'Da cobertura de radio a 60 celdas (el patio, 60; el vehículo de mando, 30; el puesto de avanzada, 35). Fuera de la cobertura tus unidades de tierra solo ven lo que tienen encima y obedecen con 3 segundos de retraso. El explorador, el espía y todo lo que vuela llevan radio propia. Se coloca en cualquier terreno explorado.', mina: 'Nivel 2. Se construye sobre un yacimiento de minerales y saca de un pozo profundo (40 000) de forma continua, sin cosechadoras: unos 400 por minuto, más si la mejoras. Hay que conectarla a la red.', almacen: 'Guarda 3000 minerales más. Con los almacenes llenos, lo que cosechas se pierde. Si te lo destruyen pierdes su parte, y la mitad queda en el suelo para quien la recoja.', tanqueComb: 'Guarda 800 de petróleo más. Si te lo destruyen, pierdes su parte.', pistaAv: 'Se coloca en cualquier terreno explorado, sin red ni energía. Clic derecho en ella con helicópteros de combate: la toman por base, repostan allí y su radio de vuelo se cuenta desde allí.', logistica: 'En la base: de aquí salen los camiones y helicópteros de suministro y los vuelos que mantienen los puestos de avanzada; tiene pista para trasladar infantería.', avanzada: 'No se construye: lo despliega el puesto móvil. Con enlace aéreo está en tu red, cura a la infantería cercana y tiene pista.',
       tallerMovil: 'Parado, repara los vehículos que tenga a 4 celdas aunque estén sin suministro, y recupera los vehículos destruidos cercanos (tuyos o del rival) a mitad de precio: va solo, o clic derecho sobre el casco.',
       camionSum: 'Muévelo adonde esté tu ejército: se planta y da munición, combustible, minas y drones de repuesto a todo lo que tenga alrededor mientras le dure la carga (se gasta según cuántas unidades atiende). Vacío, vuelve solo al puesto logístico, recarga y regresa.', heliSum: 'Como el camión de suministro, pero volando: más rápido y sin rodeos; lleva la mitad de carga y la antiaérea lo derriba.',
       avanzadaMovil: 'Se despliega lejos como puesto de avanzada: red, hospital y pista sin tender líneas.',
-      torretaMuro: 'Torreta que se monta sobre un muro reforzado tuyo.', camara: 'Ve lejos y en redondo, descubre a los escondidos y avisa si entra un enemigo.',
+      camara: 'Ve lejos y en redondo, descubre a los escondidos y avisa si entra un enemigo.',
       infanteria: 'Barata y versátil; captura puestos, cava y ocupa trincheras.', granadero: 'Desde el nivel 1: granadas de mano a corta distancia, con explosión. La respuesta barata a los primeros vehículos y a la infantería amontonada.', antitanque: 'Infantería con cohetes: contra vehículos y aviones.', explorador: 'Rápido y ve lejos; explora solo con E.', ingeniero: 'Zapador: pone y retira minas, tiende pontones sobre el agua y vuela caminos y puentes (botones al seleccionarlo). Repara solo vehículos y edificios; cava más rápido.', medico: 'Cura solo a la infantería herida cercana.',
       francotirador: 'Mata infantería desde muy lejos; se esconde.', gatling: 'Equipo de dos: tarda en montar, y montada tritura infantería y aviones bajos.', hacker: 'Apaga a distancia un vehículo o edificio enemigo unos segundos; cuesta información.', operador: 'Lleva tres drones: vuela uno y los otros dos son repuestos; cuando se le acaban hay que reponerlos junto a una estación de drones, un puesto logístico, un puesto de avanzada o un camión de suministro. El dron vuelve solo a cambiar la batería y a repararse. Parado, despliega un dron de reconocimiento, y puede mandarlo en misión a vigilar un punto a 45 celdas (tecla O): lo que vea lo ve tu artillería. Con las tecnologías de la estación de drones lleva también kamikazes y un bombardero, que atacan en la zona de la misión.', espia: 'Pasa inadvertido aunque se mueva. Junto a un edificio enemigo ves lo que produce el rival y ganas información.', dronEspia: 'Vuela muy lejos y mucho rato desde su central; no ataca.',
       tanque: 'El vehículo de combate básico.', artilleria: 'Dispara muy lejos, en área, a lo que vea cualquiera de los tuyos.', pesado: 'Tanque lento, muy duro y de gran pegada.', blindado: 'Rápido, con ametralladora: contra infantería.', antiaereoMovil: 'Antiaérea sobre ruedas para acompañar al ejército.',
       radioOp: 'Lleva la radio a pie: da cobertura a 15 celdas a su alrededor, para que la tropa que acompaña vea y obedezca sin retraso lejos de tus torres.', vehRadio: 'Radio sobre ruedas: cobertura a 36 celdas. Sin armas; llévalo detrás del ejército.', dronRadio: 'Repetidor volante: cobertura a 30 celdas donde lo mandes patrullar, mientras le dure el combustible; luego vuelve a repostar a la central de inteligencia.',
       transporte: 'Lleva infantería dentro, rápido.', lanzacohetes: 'Salvas de cohetes a mucha distancia, sobre una zona.', mando: 'Los tuyos a su alrededor ven en redondo y giran más rápido; interfiere drones enemigos. Gasta información.', comandoDrones: 'Lleva drones de reconocimiento, bombarderos y kamikazes que atacan solos.',
-      patioMovil: 'Se despliega como un patio nuevo donde lo lleves.', cosechadora: 'Recoge minerales (y chatarra) y los lleva a la refinería.', excavadora: 'Traza caminos militares: abre el bosque y tiende puentes.', civil: 'Conecta edificios con líneas de servicio y levanta muros, puertas y alambradas.',
+      patioMovil: 'Se despliega como un patio nuevo donde lo lleves.', cosechadora: 'Recoge minerales (y chatarra) y los lleva a la refinería.', excavadora: 'Traza caminos militares: abre el bosque y tiende puentes.', civil: 'En automático repara los edificios dañados y vuelve a tender los cables que corte el enemigo. También conecta a mano edificios que queden a más de 24 celdas de la red.',
       caza: 'Avión contra aviones y vehículos; ataca de pasada.', bombardero: 'Suelta bombas en área sobre edificios y tropa.', dron: 'Avión de reconocimiento de largo alcance, sin armas.', helicoptero: 'Se queda sobre el blanco; bueno contra vehículos.',
     };
     function pintarGuia() {
@@ -6468,7 +6476,6 @@ globalThis.W = { VERSION: 'versión 79' };
       const grupos = [['cuartel', 'Infantería (cuartel)'], ['fabrica', 'Vehículos (fábrica)'], ['obras', 'Civiles (obras civiles)'], ['aerodromo', 'Aviación (aeródromo)'], ['inteligencia', 'Inteligencia (central de inteligencia)'], ['logistica', 'Suministro (puesto logístico)']];
       for (const [lugar, titulo] of grupos) { h += '<h3>' + titulo + '</h3>'; for (const t in UNID) if (!UNID[t].mini && W.lugarDe(UNID[t]) === lugar) h += fila(t, UNID[t].nombre, precio(UNID[t]), (QUE[t] || '') + pide(UNID[t])); }
       h += '<h3>Drones (los saca su portador)</h3>' + fila('dronRec', 'De reconocimiento', '40', 'Da vueltas alrededor del portador y ve.') + fila('dronFpv', 'Kamikaze', '40 por salida', 'Un solo uso, contra vehículos y edificios armados.') + fila('dronBomba', 'Bombardero', '15 por salida', 'Suelta una granada sobre la infantería y vuelve a recargar.');
-      h += '<h3>Muros (ingeniero civil)</h3>'; for (const k in W.MUROS) h += fila('', W.MUROS[k].nombre, W.MUROS[k].costo + ' por celda', W.MUROS[k].que + (W.MUROS[k].nivel ? ' Nivel ' + W.MUROS[k].nivel + '.' : ''));
       h += '<h3>Misiles (misilera)</h3>'; for (const k in W.MISILES) h += fila('', W.MISILES[k].nombre, precio(W.MISILES[k]), W.MISILES[k].que + ' Nivel ' + W.MISILES[k].nivel + '.');
       h += '<h3>Infraestructura</h3>' + fila('', 'Camino militar', '4 a 30 por celda', 'Lo traza la excavadora. Solo tus vehículos corren por él.') + fila('', 'Línea de servicio', '3 por celda', 'La tiende el ingeniero civil entre dos edificios: lleva energía y mete el edificio en tu red.') + fila('', 'Trinchera', 'gratis', 'La cava la infantería (Z). Cuatro puestos a cubierto; clic derecho para ocuparla.');
       $('guiaTxt').innerHTML = h;
@@ -6763,7 +6770,7 @@ globalThis.W = { VERSION: 'versión 79' };
       ['Economía: en el menú de la derecha, encarga una central y una refinería. Cuando la casilla diga «colocar», haz clic en ella y ponla cerca del patio. La refinería trae una cosechadora.', () => J.cuenta.central >= 1 && J.cuenta.refineria >= 1],
       ['Tropa: construye un cuartel. Selecciónalo, pasa a la pestaña de unidades y entrena tres soldados. Selecciónalos con una caja y muévelos con clic derecho.', () => { if (!tuto.inf0) tuto.inf0 = (J.cuenta.infanteria || 0) + 1; return J.cuenta.cuartel >= 1 && (J.cuenta.infanteria || 0) >= tuto.inf0 + 2; }],
       ['La red: pulsa L. Lo sombreado es tu red: ahí hay energía y suministro, y solo ahí se construye. Algunos edificios van fuera: encarga un depósito y colócalo fuera de la zona sombreada, no muy lejos.', () => m.ents.some((e) => e.tipo === 'deposito' && e.j === YO)],
-      ['El depósito lleva un icono rojo: está fuera de la red y no sirve. Construye «Obras civiles» y entrena un ingeniero civil: en automático irá solo a tenderle una línea. Mira también el panel de alertas, arriba a la izquierda.', () => m.ents.some((e) => e.tipo === 'deposito' && e.j === YO && e.conRed)],
+      ['El depósito ha tendido solo un cable fino hasta tu red: todo lo que construyas a menos de 24 celdas se conecta así, gratis. Si el enemigo corta un cable, el edificio queda fuera de la red (icono rojo) hasta que un ingeniero civil, del edificio «Obras civiles», lo reponga; él también repara los edificios dañados. Mira el panel de alertas, arriba a la izquierda.', () => m.ents.some((e) => e.tipo === 'deposito' && e.j === YO && e.conRed)],
       ['Vehículos: construye una fábrica y un tanque. Con el tanque seleccionado pulsa R, marca tres puntos con clic y cierra con clic derecho: patrullará ese circuito.', () => m.ents.some((e) => !e.edif && e.j === YO && e.patrulla && e.patrulla.pts.length >= 2)],
       ['Tecnología: selecciona el patio y, en la pestaña de tecnología, investiga «Nivel 2». Cuesta información, que dan los laboratorios y las estaciones; aquí ya tienes la necesaria.', () => J.nivel >= 2 || J.inv.some((q) => q.clave === 'nivel2')],
       ['Eso es lo esencial. El botón «guía» explica cada edificio y unidad. El rival despierta ahora: defiende tu base y destruye la suya.', () => m.t - tuto.t0 > 400],
@@ -6848,7 +6855,7 @@ globalThis.W = { VERSION: 'versión 79' };
       bt.hidden = !cav && !dentroT;
       if (dentroT) { const t = 'Salir de la trinchera · ' + dentroT; if (bt.textContent !== t) bt.textContent = t; }
       $('desplegar').hidden = !paraDesplegar().length;
-      { const hay = unidadesSel().some((u) => UNID[u.tipo].tiende), bm = $('bMuro'); bm.hidden = !hay; if (!hay && (modo === 'murar' || modo === 'quitarMuro')) modo = null; for (const b of bm.querySelectorAll('[data-m]')) b.classList.toggle('on', (modo === 'murar' || modo === 'quitarMuro') && muroTipo === b.dataset.m); }
+      { const hay = false, bm = $('bMuro'); /* (los muros se quitaron) */ bm.hidden = !hay; if (!hay && (modo === 'murar' || modo === 'quitarMuro')) modo = null; for (const b of bm.querySelectorAll('[data-m]')) b.classList.toggle('on', (modo === 'murar' || modo === 'quitarMuro') && muroTipo === b.dataset.m); }
       { const cs = unidadesSel().filter((u) => UNID[u.tipo].tiende), hay = cs.length > 0, bc = $('conectar'), ba = $('autoCivil'); ba.hidden = !hay || m.logistica === false; if (hay) { const on = cs.every((u) => u.auto), tx = on ? 'Automático: sí' : 'Automático: no'; if (ba.textContent !== tx) ba.textContent = tx; ba.classList.toggle('listo', on); } bc.hidden = !hay; bc.classList.toggle('listo', modo === 'conectar'); if (!hay && modo === 'conectar') modo = null; }
       { const hay = unidadesSel().some((u) => UNID[u.tipo].traza), bz = $('trazar'); bz.hidden = !hay; bz.classList.toggle('listo', modo === 'trazar'); }
       { const us = conCarga(), bd = $('descargar'); bd.hidden = !us.length; if (us.length) { const t = 'Descargar · ' + us.reduce((a, u) => a + u.pasajeros.length, 0) + ' dentro'; if (bd.textContent !== t) bd.textContent = t; } }
