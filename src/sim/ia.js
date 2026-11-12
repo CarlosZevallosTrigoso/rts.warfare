@@ -384,7 +384,7 @@
       } else if (civil && civil.orden === 'nada' && !civil.auto && tk % 10 === 6) W.orden(m, { t: 'autoCivil', j, ids: [civil.id], on: true });
       // Central de inteligencia: un dron espía y un espía; y con información de sobra, mapeo satelital sobre el objetivo (así sus misiles y bombarderos lo ven).
       if (c.inteligencia && tk % 10 === 8 && !ahorra) {
-        const cupo = W.cupoAire(m, j, true);
+        const cupo = W.cupoAire(m, j, 'inteligencia');
         if (!c.dronEspia && !J.colas.dronEspia.n && cupo.hay < cupo.cupo) entrena('dronEspia', 800);
         else if (!c.espia && !J.colas.espia.n) entrena('espia', 800);
         if (objetivo && J.info > 500 && (c.misilera || c.bombardero) && m.t - (ia.tSat || -9999) > 6000) { W.orden(m, { t: 'intel', j, clave: 'satelite', x: objetivo.cx, y: objetivo.cy }); ia.tSat = m.t; }
@@ -393,6 +393,7 @@
       // Puente aéreo: con puesto logístico, un puesto móvil que se despliega a medio camino del rival: allí hay suministro, hospital y pista.
       if (c.logistica && m.logistica !== false) {
         const av = sinArma.find((u) => u.tipo === 'avanzadaMovil');
+        if (!c.camionSum && !J.colas.camionSum.n && tk % 10 === 2 && !ahorra && soldados.length >= 10) entrena('camionSum', 600);
         if (!av) { if (!c.avanzada && !J.colas.avanzadaMovil.n && tk % 10 === 1 && !ahorra) entrena('avanzadaMovil', 800); }
         else if (av.orden === 'nada') {
           if (!ia.avz) { const cc = W.cercaLibre(m, patio.cx + vx * 0.5, patio.cy + vy * 0.5, true); ia.avz = { x: (cc % m.N) + 0.5, y: ((cc / m.N) | 0) + 0.5, n: 0 }; }
@@ -473,6 +474,7 @@
     if (tk % 5 === 1) { // hackers y operadores de drones: con la oleada, unos pasos por detrás; sin oleada, en el punto de reunión
       let ax = 0, ay = 0, na = 0; for (const u of soldados) if (ia.atacantes.has(u.id)) { ax += u.x; ay += u.y; na++; }
       const tx = na >= 4 ? ax / na - (dx / dd) * 4 : rx - (dx / dd) * 2, ty = na >= 4 ? ay / na - (dy / dd) * 4 : ry - (dy / dd) * 2;
+      if (na >= 4) for (const u of sinArma) if (u.tipo === 'camionSum' && (!u.sumi || Math.hypot(u.sumi.x - tx, u.sumi.y - ty) > 14)) { const cc = W.cercaLibre(m, tx, ty, true); W.orden(m, { t: 'mover', j, ids: [u.id], x: (cc % m.N) + 0.5, y: ((cc / m.N) | 0) + 0.5 }); } // el camión de suministro, detrás de la oleada
       if (objetivo) for (const u of sinArma) if (u.tipo === 'operador' && u.orden === 'nada' && !u.dronMis && Math.hypot(u.x - tx, u.y - ty) <= 8 && Math.hypot(objetivo.cx - u.x, objetivo.cy - u.y) <= UNID.operador.misionDron) W.orden(m, { t: 'dronMision', j, ids: [u.id], x: objetivo.cx, y: objetivo.cy }); // el operador, en su sitio y con el objetivo a tiro: dron en misión sobre él
       for (const u of sinArma) if ((u.tipo === 'hacker' || u.tipo === 'operador') && u.orden === 'nada' && Math.hypot(u.x - tx, u.y - ty) > 8) { const cc = W.cercaLibre(m, tx, ty); W.orden(m, { t: 'mover', j, ids: [u.id], x: (cc % m.N) + 0.5, y: ((cc / m.N) | 0) + 0.5 }); }
     }

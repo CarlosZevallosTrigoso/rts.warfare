@@ -252,6 +252,42 @@
       if (blanco) for (const id of e.dr.bomba) { const q = m.porId.get(id); if (q.est === 'espera' && q.recarga <= 0 && (J.minerales >= ECON.dronBomba || J.dios)) { if (!J.dios) J.minerales -= ECON.dronBomba; q.obj = blanco.id; q.est = 'ir'; break; } }
     }
   }
+  // ---------- suministro móvil ----------
+  // Camiones y helicópteros de suministro: ida al punto, plantados mientras dura la carga, vuelta al puesto logístico, recarga y otra vez.
+  // Devuelve los que están plantados y con carga (para el reparto del suministro de este ciclo).
+  function tickSuministro(m) {
+    const pts = [];
+    for (const u of m.ents) {
+      if (u.edif || u.vida <= 0) continue;
+      const cfg = UNID[u.tipo].suministro; if (!cfg) continue;
+      if (u.sumC === undefined) u.sumC = cfg.carga;
+      const s = u.sumi, J = m.jug[u.j], aire = UNID[u.tipo].aire;
+      if (!s) { u.sumiN = 0; continue; }
+      if (s.est === 'puesto') { u.sumC = Math.max(0, u.sumC - ECON.sumiBase - ECON.sumiUnidad * (u.sumiN || 0)); u.sumiAt = u.sumiN || 0; } // lo gastado en el ciclo anterior
+      u.sumiN = 0;
+      const parado = u.orden === 'nada' && !u.pend;
+      if (s.est === 'ida') {
+        if (aire && (u.enTierra || u.repostando)) { if (u.enTierra && !u.repostando && parado) asignar(m, u, { t: 'mover', x: s.x, y: s.y }); }
+        else if (parado) { if (Math.hypot(u.x - s.x, u.y - s.y) < 3.5) s.est = 'puesto'; else if ((s.n = (s.n || 0) + 1) > 6) { s.x = u.x; s.y = u.y; s.est = 'puesto'; } else asignar(m, u, { t: 'mover', x: s.x, y: s.y }); } // (si no consigue llegar, se planta donde está)
+      } else if (s.est === 'puesto') {
+        if (u.sumC <= 0 || (aire && u.repostando)) {
+          let base = null, md = Infinity; for (const b of m.ents) { if (b.tipo !== 'logistica' || b.j !== u.j || b.vida <= 0) continue; const d0 = Math.hypot(b.cx - u.x, b.cy - u.y); if (d0 < md) { md = d0; base = b; } }
+          if (base) { s.est = 'vuelta'; s.base = base.id; s.n = 0; m.efectos.push({ tipo: 'sumiVacio', x1: u.x, y1: u.y, j: u.j, t: m.t }); if (!aire) { const c = W.cercaLibre(m, base.cx, base.cy + base.tam / 2 + 1.5, true); asignar(m, u, { t: 'mover', x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 }); } }
+        } else pts.push({ x: u.x, y: u.y, r2: cfg.radio * cfg.radio, j: u.j, u });
+      } else if (s.est === 'vuelta') {
+        const base = m.porId.get(s.base);
+        if (!base || base.vida <= 0) { s.est = 'puesto'; continue; } // sin puesto logístico al que volver: se queda donde está (vacío) hasta que haya otro
+        if (aire ? u.enTierra : parado && Math.hypot(u.x - base.cx, u.y - base.cy) < 6) { s.est = 'carga'; s.pagado = false; }
+        else if (!aire && parado) { const c = W.cercaLibre(m, base.cx, base.cy + base.tam / 2 + 1.5, true); asignar(m, u, { t: 'mover', x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 }); }
+      } else if (s.est === 'carga') {
+        if (!s.pagado) { if (J.minerales < cfg.recarga && !J.dios) continue; if (!J.dios) J.minerales -= cfg.recarga; s.pagado = true; } // la recarga se paga; sin minerales, espera
+        const base = m.porId.get(s.base); if (base && (base.sinLuz || base.hack > m.t)) continue; // el puesto apagado no carga
+        u.sumC = Math.min(cfg.carga, u.sumC + ECON.sumiCarga);
+        if (u.sumC >= cfg.carga && !(aire && u.repostando)) { s.est = 'ida'; s.n = 0; asignar(m, u, { t: 'mover', x: s.x, y: s.y }); }
+      }
+    }
+    return pts;
+  }
   // ---------- espías ----------
   // Un espía a pocas celdas de un edificio enemigo: su bando ve los recursos del rival y lo que produce (como «interceptar»), y gana información.
   function tickEspias(m) {
@@ -1014,7 +1050,7 @@
       case 'entrenar': {
         const d = UNID[cmd.tipo];
         if (!d || !W.disponible(m, cmd.j, d) || !W.puedePagar(J, d)) return;
-        if (d.aire) { const c = W.cupoAire(m, cmd.j, d.lugar === 'inteligencia'); if (c.hay >= c.cupo) return; } // cada aeródromo aloja un número limitado de aviones
+        if (d.aire) { const c = W.cupoAire(m, cmd.j, W.hangarDe(d)); if (c.hay >= c.cupo) return; } // cada aeródromo aloja un número limitado de aviones
         // Va a la cola de un edificio: de los indicados (cmd.ids) o de todos los del tipo, el que la tenga más corta.
         let fab = null;
         for (const e of m.ents) {
@@ -1058,7 +1094,7 @@
       }
       // cmd.enc (encadenar): la orden se añade a la cola de la unidad en vez de reemplazar lo que hace.
       case 'mover':
-        destinos(m, reaccion(m, propias(m, cmd)), cmd.x, cmd.y, (u, x, y, ex) => enFormacion(m, u, 'mover', x, y, ex, cmd.enc && u.tipo !== 'cosechadora'), cmd.forma, cmd.rumbo);
+        destinos(m, reaccion(m, propias(m, cmd)), cmd.x, cmd.y, (u, x, y, ex) => { enFormacion(m, u, 'mover', x, y, ex, cmd.enc && u.tipo !== 'cosechadora'); if (UNID[u.tipo].suministro) u.sumi = { x, y, est: 'ida' }; }, cmd.forma, cmd.rumbo); // al suministro móvil, mover es marcarle su punto
         return;
       case 'amover':
         destinos(m, reaccion(m, propias(m, cmd).filter((u) => UNID[u.tipo].arma)), cmd.x, cmd.y, (u, x, y, ex) => enFormacion(m, u, 'amover', x, y, ex, cmd.enc), cmd.forma, cmd.rumbo);
@@ -1137,7 +1173,7 @@
         return;
       }
       case 'detener':
-        for (const u of propias(m, cmd)) { limpiar(u); u.orden = 'nada'; u.obj = 0; u.ruta = null; u.pend = null; if (u.tipo === 'cosechadora') u.est = 'quieto'; }
+        for (const u of propias(m, cmd)) { limpiar(u); u.orden = 'nada'; u.obj = 0; u.ruta = null; u.pend = null; if (u.tipo === 'cosechadora') u.est = 'quieto'; if (u.sumi) u.sumi = null; }
         return;
       case 'cosechar':
         for (const u of propias(m, cmd)) if (u.tipo === 'cosechadora') { limpiar(u); u.orden = 'nada'; u.ruta = null; u.pend = null; u.est = 'buscar'; u.pref = { x: cmd.x, y: cmd.y };
@@ -1599,7 +1635,7 @@
   function aerodromoLibre(m, u) {
     let mejor = null, md = Infinity;
     for (const e of m.ents) {
-      if (!e.edif || e.j !== u.j || e.tipo !== (W.lugarDe(UNID[u.tipo]) === 'inteligencia' ? 'inteligencia' : 'aerodromo') || e.vida <= 0) continue; // el dron espía vive en su central
+      if (!e.edif || e.j !== u.j || e.tipo !== (W.hangarDe(UNID[u.tipo]) || 'aerodromo') || e.vida <= 0) continue; // el dron espía vive en su central
       const dd = Math.hypot(e.cx - u.x, e.cy - u.y);
       if (dd < md && avionesDe(m, e) - (u.casa === e.id ? 1 : 0) < (EDIF[e.tipo].hangar || ECON.cupoAviones)) { md = dd; mejor = e; }
     }
@@ -1613,10 +1649,12 @@
     u.x = base.cx + SLOTS[s][0]; u.y = base.cy + SLOTS[s][1]; u.px = u.x; u.py = u.y; u.ang = u.angT = -Math.PI / 2;
   }
   // Aviones y cupo de un jugador (los que vuelan, los posados y los encargados).
-  W.cupoAire = function (m, j, esp) { // esp: el cupo de drones espía (por central de inteligencia), aparte del de los aeródromos
-    const J = m.jug[j]; let hay = 0;
-    for (const t in UNID) if (UNID[t].aire && !UNID[t].mini && (UNID[t].lugar === 'inteligencia') === !!esp) hay += (J.cuenta[t] || 0) + J.colas[t].n;
-    return { hay, cupo: esp ? EDIF.inteligencia.hangar * (J.cuenta.inteligencia || 0) : ECON.cupoAviones * (J.cuenta.aerodromo || 0) };
+  // El edificio con hangar propio del que sale una unidad aérea (central de inteligencia, puesto logístico), o '' si vive en un aeródromo.
+  W.hangarDe = (d) => (d.lugar && EDIF[d.lugar] && EDIF[d.lugar].hangar ? d.lugar : '');
+  W.cupoAire = function (m, j, esp) { // esp: el edificio con hangar cuyo cupo se pregunta; sin él, el de los aeródromos
+    const J = m.jug[j]; let hay = 0; esp = esp || '';
+    for (const t in UNID) if (UNID[t].aire && !UNID[t].mini && W.hangarDe(UNID[t]) === esp) hay += (J.cuenta[t] || 0) + J.colas[t].n;
+    return { hay, cupo: esp ? EDIF[esp].hangar * (J.cuenta[esp] || 0) : ECON.cupoAviones * (J.cuenta.aerodromo || 0) };
   };
   // Devuelve true si este tick el avión lo pasa posado o volviendo a su aeródromo.
   function tickVuelo(m, u) {
@@ -1627,7 +1665,7 @@
       if (u.enTierra) { u.vida = 0; return true; } // estaba dentro del aeródromo destruido
       base = aerodromoLibre(m, u); u.casa = base ? base.id : 0;
     }
-    const conOrden = u.orden !== 'nada' || u.obj || u.cola.length > 0 || !!u.patrulla || u.acude;
+    const conOrden = u.orden !== 'nada' || u.obj || u.cola.length > 0 || !!u.patrulla || u.acude || (u.sumi && u.sumi.est === 'puesto'); // (el helicóptero de suministro se queda sobre su punto)
     if (u.enTierra) {
       u.fuel = Math.min(d.fuel, u.fuel + ECON.reposta);
       if (u.fuel >= d.fuel) u.repostando = false;
@@ -2003,7 +2041,7 @@
       if (fab.prog > q.prog) q.prog = fab.prog;
       if (fab.prog < UNID[tipo].tiempo) continue;
       fab.cola.shift(); fab.pago.shift(); fab.prog = 0; q.n--; J.aguaUso += UNID[tipo].agua || 0;
-      if (fab.bucle && (cat !== 'aire' || W.cupoAire(m, j, UNID[tipo].lugar === 'inteligencia').hay + 1 < W.cupoAire(m, j, UNID[tipo].lugar === 'inteligencia').cupo)) { fab.cola.push(tipo); fab.pago.push(false); q.n++; }
+      if (fab.bucle && (cat !== 'aire' || W.cupoAire(m, j, W.hangarDe(UNID[tipo])).hay + 1 < W.cupoAire(m, j, W.hangarDe(UNID[tipo])).cupo)) { fab.cola.push(tipo); fab.pago.push(false); q.n++; }
       const u = crearUnidad(m, j, tipo, cat === 'aire' ? Math.floor(fab.cy) * m.N + Math.floor(fab.cx) : W.cercaLibre(m, fab.cx, fab.y + fab.tam + 0.5, cat === 'veh'));
       if (cat === 'aire') { const casa = aerodromoLibre(m, u) || fab; posar(m, u, casa); } // el avión nace posado en un aeródromo con sitio
       if (fab.reunion) { // va al punto de reunión del edificio
@@ -2025,7 +2063,7 @@
   // todos: patio) y los edificios se reparan solos, más despacio.
   const LUGAR = { inf: 'cuartel', veh: 'fabrica', aire: 'aerodromo' }; // dónde se produce y se repara cada categoría
   W.lugarDe = (d) => d.lugar || LUGAR[d.cat]; // las unidades civiles salen de Obras civiles
-  W.PRODUCE = { cuartel: true, fabrica: true, aerodromo: true, obras: true, inteligencia: true };
+  W.PRODUCE = { cuartel: true, fabrica: true, aerodromo: true, obras: true, inteligencia: true, logistica: true };
   function curar(m) {
     const talleres = [[], []];
     for (const e of m.ents) if (e.edif && (e.tipo === 'patio' || e.tipo === 'cuartel' || e.tipo === 'fabrica' || e.tipo === 'aerodromo')) talleres[e.j].push(e);
@@ -2202,7 +2240,10 @@
     if (m.redSucia || !m.cob || m.t - m.redT >= 100) calcularRed(m);
     if (m.t % 10 === 0) { tickTrincheras(m); tickCamaras(m); tickPortadores(m); tickPuenteAereo(m); tickEspias(m); }
     if (m.t % 10 === 0 && m.logistica !== false) { // suministro: fuera de la cobertura el contador sube; dentro, baja rápido. Los aviones repostan en su base: no cuenta.
-      for (const u of m.ents) { if (u.edif || UNID[u.tipo].aire) continue; const dentro = m.cob[u.j][Math.floor(u.y) * m.N + Math.floor(u.x)] || m.jug[u.j].dios; u.sinSum = dentro ? Math.max(0, (u.sinSum || 0) - 40) : Math.min(ECON.sinSum + 200, (u.sinSum || 0) + 10); }
+      const pts = tickSuministro(m);
+      for (const u of m.ents) { if (u.edif || UNID[u.tipo].aire || UNID[u.tipo].suministro) continue; let dentro = m.cob[u.j][Math.floor(u.y) * m.N + Math.floor(u.x)] || m.jug[u.j].dios;
+        if (!dentro) for (const q of pts) if (q.j === u.j && (u.x - q.x) * (u.x - q.x) + (u.y - q.y) * (u.y - q.y) <= q.r2) { dentro = 1; q.u.sumiN++; break; } /* fuera de la red, pero junto a un camión o helicóptero de suministro plantado: gasta de su carga */
+        u.sinSum = dentro ? Math.max(0, (u.sinSum || 0) - 40) : Math.min(ECON.sinSum + 200, (u.sinSum || 0) + 10); }
     }
     let muertos = false;
     const apeados = [];

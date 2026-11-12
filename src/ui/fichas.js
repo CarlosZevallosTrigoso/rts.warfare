@@ -129,6 +129,11 @@
       c.fillStyle = col.base; c.fillRect(-L * 0.32, -L * 0.26, L * 0.64, L * 0.52);
       if (u.tipo === 'dronFpv') { c.fillStyle = col.mal; c.beginPath(); c.arc(L * 0.5, 0, L * 0.22, 0, TAU); c.fill(); }
       if (u.tipo === 'dronBomba') { c.fillStyle = col.tinta; c.beginPath(); c.arc(0, 0, L * 0.2, 0, TAU); c.fill(); }
+    } else if (u.tipo === 'camionSum') { // camión de caja abierta con tres cajones
+      const L = r * 1.3, w = r * 0.72;
+      c.fillStyle = col.osc; c.fillRect(-L, -w, L * 2, w * 2);
+      c.fillStyle = col.base; c.fillRect(L * 0.5, -w * 0.75, L * 0.42, w * 1.5);
+      c.fillStyle = col.luz; for (let k = 0; k < 3; k++) c.fillRect(-L * 0.9 + k * L * 0.45, -w * 0.6, L * 0.36, w * 1.2);
     } else if (u.tipo === 'avanzadaMovil') { // camión largo con la cruz del hospital en el techo
       const L = r * 1.45, w = r * 0.8;
       c.fillStyle = col.osc; c.fillRect(-L, -w, L * 2, w * 2);
@@ -218,7 +223,7 @@
       c.beginPath(); c.arc(0, 0, w * 0.5, -1.1, 1.1); c.moveTo(0, 0); c.lineTo(w * 0.5, 0); c.stroke(); c.restore();
       c.fillStyle = col.luz; c.beginPath(); c.arc(-L * 0.3, 0, w * 0.14, 0, TAU); c.fill();
       c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.moveTo(L * 0.2, w * 0.5); c.lineTo(L * 0.2 - r * 1.4, w * 0.5 + r * 0.9); c.stroke(); // antena
-    } else if (u.tipo === 'helicoptero' || W.UNID[u.tipo].heli) { // fuselaje con cola larga y el disco del rotor girando
+    } else if (u.tipo === 'helicoptero' || u.tipo === 'heliSum' || W.UNID[u.tipo].heli) { // fuselaje con cola larga y el disco del rotor girando
       const L = r * 1.6;
       c.fillStyle = col.osc; c.fillRect(-L * 1.2, -L * 0.07, L * 1.1, L * 0.14); c.fillRect(-L * 1.3, -L * 0.3, L * 0.12, L * 0.6); // cola y rotor de cola
       c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.ellipse(L * 0.15, 0, L * 0.62, L * 0.32, 0, 0, TAU); c.fill(); c.stroke();

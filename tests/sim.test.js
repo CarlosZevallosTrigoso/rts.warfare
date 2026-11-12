@@ -1700,6 +1700,61 @@ prueba('operador: misión de dron a un punto lejano (vigila y, con la tecnologí
   assert.strictEqual(a.forma, 'linea'); assert.ok(!b.forma, 'la formación se aplica solo a las unidades de la orden');
 });
 
+prueba('suministro móvil: el camión va, abastece mientras le dura la carga, vuelve a recargar y regresa; el helicóptero, más rápido', () => {
+  const m = W.crearMundo(31, { N: 128, logistica: true }), N = m.N, J = m.jug[0];
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const cel = (x, y) => y * N + x, patio = m.ents.find((e) => e.j === 0 && e.tipo === 'patio'), px = Math.floor(patio.cx), py = Math.floor(patio.cy), dir = px < 64 ? 1 : -1;
+  for (let y = py - 12; y <= py + 12; y++) for (let x = Math.min(px, px + dir * 80) - 2; x <= Math.max(px, px + dir * 80) + 2; x++) { const i = cel(x, y); if (x < 2 || y < 2 || x >= N - 2 || y >= N - 2 || m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  m.terrenoV++;
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  J.minerales = 20000; J.petroleo = 2000; J.nivel = 2;
+  W.crearEdificio(m, 0, 'central', px + dir * 4, py + 4); W.crearEdificio(m, 0, 'fabrica', px + dir * 4, py - 5);
+  W.crearEdificio(m, 0, 'bomba', px, py + 5); W.crearEdificio(m, 0, 'bomba', px, py - 4);
+  const lg = W.crearEdificio(m, 0, 'logistica', px + dir * 8, py); avanza(3);
+  const fx = px + dir * 50, tropa = []; for (let k = 0; k < 6; k++) tropa.push(W.crearUnidad(m, 0, k % 2 ? 'tanque' : 'infanteria', cel(fx + (k % 3), py + ((k / 3) | 0))));
+  avanza(1200);
+  assert.ok(tropa.every((u) => u.sinSum >= W.ECON.sinSum), 'lejos de la red, la tropa se queda sin suministro');
+  W.orden(m, { t: 'entrenar', j: 0, tipo: 'camionSum' }); avanza(W.UNID.camionSum.tiempo + 40);
+  const cam = m.ents.find((e) => e.tipo === 'camionSum'); assert.ok(cam, 'el camión sale del puesto logístico');
+  assert.ok(Math.hypot(cam.x - lg.cx, cam.y - lg.cy) < 8);
+  W.orden(m, { t: 'mover', j: 0, ids: [cam.id], x: fx + 1.5, y: py + 3.5 }); avanza(3);
+  assert.strictEqual(cam.sumi.est, 'ida');
+  for (let i = 0; i < 3000 && cam.sumi.est !== 'puesto'; i++) W.tick(m);
+  assert.strictEqual(cam.sumi.est, 'puesto', 'llega y se planta'); const t0 = m.t; avanza(260);
+  if (process.env.DEP) console.log(cam.x, cam.y, JSON.stringify(cam.sumi), cam.sumC, cam.sumiAt, tropa.map((u) => [u.x.toFixed(1), u.y.toFixed(1), u.sinSum, m.cob[0][cel(Math.floor(u.x), Math.floor(u.y))]].join('/')).join(' '));
+  assert.ok(tropa.every((u) => u.sinSum < W.ECON.sinSum), 'y abastece a infantería y tanques por igual');
+  assert.strictEqual(cam.sumiAt, 6, 'atiende a las seis unidades');
+  const gasto6 = W.UNID.camionSum.suministro.carga - cam.sumC;
+  assert.ok(Math.abs(gasto6 - 26 * (W.ECON.sumiBase + 6 * W.ECON.sumiUnidad)) < 12, 'la carga se gasta según cuántas atiende (' + gasto6 + ')');
+  assert.notStrictEqual(m.cob[0][cel(fx, py)], 1, 'no amplía la zona donde se puede construir');
+  for (let i = 0; i < 9000 && cam.sumi.est === 'puesto'; i++) W.tick(m);
+  assert.strictEqual(cam.sumi.est, 'vuelta', 'vacío, emprende la vuelta solo'); const dura = m.t - t0;
+  for (let i = 0; i < 4000 && cam.sumi.est !== 'carga'; i++) W.tick(m);
+  assert.strictEqual(cam.sumi.est, 'carga');
+  assert.ok(tropa.some((u) => u.sinSum >= W.ECON.sinSum), 'mientras no está, la zona vuelve a quedarse sin suministro');
+  const min0 = J.minerales; avanza(25);
+  assert.ok(min0 - J.minerales >= W.UNID.camionSum.suministro.recarga - 10, 'la recarga se paga');
+  for (let i = 0; i < 2000 && cam.sumi.est === 'carga'; i++) W.tick(m);
+  assert.ok(cam.sumC > W.UNID.camionSum.suministro.carga * 0.9, 'recarga en el puesto logístico');
+  for (let i = 0; i < 4000 && cam.sumi.est !== 'puesto'; i++) W.tick(m);
+  assert.ok(cam.sumi.est === 'puesto' && Math.hypot(cam.x - fx - 1.5, cam.y - py - 3.5) < 4, 'y regresa al mismo punto');
+  W.orden(m, { t: 'detener', j: 0, ids: [cam.id] }); avanza(3); assert.ok(!cam.sumi, 'detenerlo le quita el punto');
+  // helicóptero de suministro: nivel 2, sale del mismo edificio, cupo de dos
+  for (let k = 0; k < 3; k++) W.orden(m, { t: 'entrenar', j: 0, tipo: 'heliSum' }); avanza(W.UNID.heliSum.tiempo * 2 + 100);
+  const hs = m.ents.filter((e) => e.tipo === 'heliSum'); assert.strictEqual(hs.length, 2, 'el puesto logístico aloja dos helicópteros');
+  assert.ok(hs[0].casa === lg.id && hs[0].enTierra, 'posados en él');
+  tropa.forEach((u) => { u.sinSum = W.ECON.sinSum + 100; });
+  W.orden(m, { t: 'mover', j: 0, ids: [hs[0].id], x: fx + 1.5, y: py - 2.5 }); const th = m.t;
+  for (let i = 0; i < 2000 && !(hs[0].sumi && hs[0].sumi.est === 'puesto'); i++) W.tick(m);
+  assert.strictEqual(hs[0].sumi.est, 'puesto', 'el helicóptero llega y se queda sobre su punto');
+  assert.ok(m.t - th < 420, 'en mucho menos tiempo que el camión (' + (m.t - th) + ' ticks)');
+  avanza(260); assert.ok(tropa.every((u) => u.sinSum < W.ECON.sinSum), 'y abastece igual');
+  for (let i = 0; i < 6000 && hs[0].sumi.est === 'puesto'; i++) W.tick(m);
+  for (let i = 0; i < 3000 && hs[0].sumi.est !== 'puesto'; i++) W.tick(m);
+  assert.ok(hs[0].sumi.est === 'puesto' && hs[0].sumC > 400 && hs[0].vida > 0, 'vacío, vuelve a su puesto, recarga y regresa');
+  void dura;
+});
+
 prueba('tanda 5: puente aéreo, puesto de avanzada, hospital y traslado de infantería', () => {
   const m = W.crearMundo(31, { N: 128, logistica: true }), N = m.N, J = m.jug[0];
   m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);

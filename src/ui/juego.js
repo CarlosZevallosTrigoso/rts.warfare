@@ -194,6 +194,7 @@
         if (!e.edif && UNID[e.tipo].tiende && e.j === YO && m.logistica !== false) t += e.orden === 'conectar' ? ' · tendiendo línea' : e.auto ? ' · automático' : ' · manual';
         if (!e.edif && UNID[e.tipo].espia && e.j === YO) t += e.infiltrado ? ' · infiltrado: informando' : ' · acércalo a un edificio enemigo';
         if (!e.edif && e.dronMis && e.j === YO) t += ' · dron en misión lejana';
+        if (!e.edif && UNID[e.tipo].suministro && e.j === YO && e.sumC !== undefined) { const cf = UNID[e.tipo].suministro, pc = Math.round(e.sumC / cf.carga * 100), s = e.sumi; t += ' · carga ' + pc + ' % · ' + (!s ? 'sin punto: muévelo adonde deba abastecer' : s.est === 'ida' ? 'de camino a su punto' : s.est === 'puesto' ? (e.sumC > 0 ? 'abasteciendo a ' + (e.sumiAt || 0) + (e.sumiAt === 1 ? ' unidad' : ' unidades') : 'vacío: no hay puesto logístico al que volver') : s.est === 'vuelta' ? 'vacío: vuelve a recargar' : 'recargando (' + cf.recarga + ' minerales)'); }
         if (e.cava > 0) t += ' · cavando'; else if (e.guardia && e.j === YO && !W.enTrinchera(m, e)) t += ' · en guardia';
         if (UNID[e.tipo] && UNID[e.tipo].aire && e.j === YO) t += (e.enTierra ? ' · en tierra' : e.repostando ? ' · vuelve a repostar' : e.patrulla ? ' · patrulla' : '') + ' · combustible ' + Math.round(e.fuel / UNID[e.tipo].fuel * 100) + ' %';
         if (!e.edif && e.rango) t += ' · veterano ' + '▲'.repeat(e.rango);
@@ -745,6 +746,12 @@
           const gx = px, gy = py - r * 1.6 - 6; ctx.strokeStyle = P.mal; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(gx - 5, gy - 4); ctx.lineTo(gx + 1, gy - 1); ctx.lineTo(gx - 2, gy + 1); ctx.lineTo(gx + 5, gy + 5); ctx.stroke();
         }
         if (lod && e.j === YO && !rep && problema(e)) iconos.push([px + r * 1.2 + 7, py - r - 7, 'sum']); // sin suministro
+        if (UNID[e.tipo].suministro && (e.j === YO || rep) && e.sumC !== undefined) { // suministro móvil: su carga y, plantado, la zona que abastece
+          const cf = UNID[e.tipo].suministro, f = Math.max(0, e.sumC / cf.carga), w = Math.max(14, r * 2.4);
+          ctx.fillStyle = P.linea; ctx.fillRect(px - w / 2, py + r + 5, w, 3); ctx.fillStyle = f > 0.25 ? P.bien : P.mal; ctx.fillRect(px - w / 2, py + r + 5, w * f, 3);
+          if (e.sumi && e.sumi.est === 'puesto' && e.sumC > 0) { ctx.strokeStyle = P.bien; ctx.lineWidth = 1; ctx.setLineDash([3, 5]); ctx.beginPath(); ctx.arc(px, py, cf.radio * z, 0, TAU); ctx.stroke(); ctx.setLineDash([]); }
+          else if (e.sumi && sel.has(e.id)) { ctx.strokeStyle = P.suave; ctx.lineWidth = 1; ctx.setLineDash([3, 5]); ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(ox + e.sumi.x * z, oy + e.sumi.y * z); ctx.stroke(); ctx.beginPath(); ctx.arc(ox + e.sumi.x * z, oy + e.sumi.y * z, cf.radio * z, 0, TAU); ctx.stroke(); ctx.setLineDash([]); }
+        }
         if (e.rango && lod) { // galones de veteranía, junto a la unidad
           ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.2; ctx.beginPath();
           for (let g2 = 0; g2 < e.rango; g2++) { const gx = px + r * 1.2 + 3, gy = py - r - g2 * 4; ctx.moveTo(gx - 3, gy + 2); ctx.lineTo(gx, gy - 1); ctx.lineTo(gx + 3, gy + 2); }
@@ -1099,6 +1106,8 @@
           if (d.derribo) { estallido(d.x2, d.y2, 2); aviso(d.j === YO ? 'Misil enemigo derribado' : 'Te han derribado un misil'); son.explosion(Math.max(0.2, cerca(d.x2, d.y2)), paneo(d.x2), false); }
         } else if (d.tipo === 'misilListo') {
           if (d.j === YO) { aviso(MIS[d.clase].nombre + ' listo en la misilera'); son.unidadLista(); }
+        } else if (d.tipo === 'sumiVacio') {
+          if (d.j === YO) aviso('Suministro agotado: vuelve a recargar');
         } else if (d.tipo === 'infiltrado') {
           if (d.j === YO) { aviso('Espía infiltrado: ves lo que produce el rival'); senales.push({ k: 'onda', x: d.x1, y: d.y1, r: 2, t0: performance.now(), dur: 900 }); }
         } else if (d.tipo === 'sinEnlace') {
@@ -1404,7 +1413,8 @@
       cuartel: 'Produce la infantería.', extractor: 'Saca petróleo de un yacimiento.', fabrica: 'Produce los vehículos.', torreta: 'Defensa fija contra tierra y aire.', torreCanon: 'Defensa pesada de largo alcance contra blindados.', aerodromo: 'Produce y aloja hasta cinco aviones.',
       antiaerea: 'Defensa fija solo contra el aire: aviones y drones.', estacion: 'Sobre un campo de conocimiento da información rápido; aloja la inteligencia.', laboratorio: 'Da información en la base, sin campo, más despacio. Vale como estación.', obras: 'Produce las unidades civiles: ingeniero civil y excavadora.',
       deposito: 'Conectado a tu red, crea una zona con suministro donde también puedes construir.', misilera: 'Fabrica, guarda y lanza misiles balísticos.', interceptor: 'Derriba los misiles enemigos que entran en su radio.', estDrones: 'Mantiene dos drones de reconocimiento vigilando a su alrededor. Mejorada lleva además bombarderos y kamikazes, y guarda las tecnologías del operador.', inteligencia: 'Entrena espías, aloja dos drones espía de largo alcance y permite el mapeo satelital.',
-      logistica: 'En la base: de aquí salen los helicópteros que mantienen los puestos de avanzada, y tiene pista para trasladar infantería.', avanzada: 'No se construye: lo despliega el puesto móvil. Con enlace aéreo está en tu red, cura a la infantería cercana y tiene pista.',
+      logistica: 'En la base: de aquí salen los camiones y helicópteros de suministro y los vuelos que mantienen los puestos de avanzada; tiene pista para trasladar infantería.', avanzada: 'No se construye: lo despliega el puesto móvil. Con enlace aéreo está en tu red, cura a la infantería cercana y tiene pista.',
+      camionSum: 'Muévelo adonde esté tu ejército: se planta y abastece a todo lo que tenga alrededor mientras le dure la carga (se gasta según cuántas unidades atiende). Vacío, vuelve solo al puesto logístico, recarga y regresa.', heliSum: 'Como el camión de suministro, pero volando: más rápido y sin rodeos; lleva la mitad de carga y la antiaérea lo derriba.',
       avanzadaMovil: 'Se despliega lejos como puesto de avanzada: red, hospital y pista sin tender líneas.',
       torretaMuro: 'Torreta que se monta sobre un muro reforzado tuyo.', camara: 'Ve lejos y en redondo, descubre a los escondidos y avisa si entra un enemigo.',
       infanteria: 'Barata y versátil; captura puestos, cava y ocupa trincheras.', antitanque: 'Infantería con cohetes: contra vehículos y aviones.', explorador: 'Rápido y ve lejos; explora solo con E.', ingeniero: 'Repara solo vehículos y edificios; cava más rápido.', medico: 'Cura solo a la infantería herida cercana.',
@@ -1419,7 +1429,7 @@
       const pide = (d) => (d.nivel > 1 ? ' Nivel ' + d.nivel + '.' : '') + (d.req && d.req.length ? ' Pide: ' + d.req.map((r) => EDIF[r].nombre.toLowerCase()).join(', ') + '.' : '');
       let h = '<h3>Edificios (desde el patio)</h3>';
       for (const t in EDIF) if (!EDIF[t].infra) h += fila(t, EDIF[t].nombre, EDIF[t].oculto ? 'se despliega' : precio(EDIF[t]) || '—', (QUE[t] || '') + pide(EDIF[t]));
-      const grupos = [['cuartel', 'Infantería (cuartel)'], ['fabrica', 'Vehículos (fábrica)'], ['obras', 'Civiles (obras civiles)'], ['aerodromo', 'Aviación (aeródromo)'], ['inteligencia', 'Inteligencia (central de inteligencia)']];
+      const grupos = [['cuartel', 'Infantería (cuartel)'], ['fabrica', 'Vehículos (fábrica)'], ['obras', 'Civiles (obras civiles)'], ['aerodromo', 'Aviación (aeródromo)'], ['inteligencia', 'Inteligencia (central de inteligencia)'], ['logistica', 'Suministro (puesto logístico)']];
       for (const [lugar, titulo] of grupos) { h += '<h3>' + titulo + '</h3>'; for (const t in UNID) if (!UNID[t].mini && W.lugarDe(UNID[t]) === lugar) h += fila(t, UNID[t].nombre, precio(UNID[t]), (QUE[t] || '') + pide(UNID[t])); }
       h += '<h3>Drones (los saca su portador)</h3>' + fila('dronRec', 'De reconocimiento', '40', 'Da vueltas alrededor del portador y ve.') + fila('dronFpv', 'Kamikaze', '40 por salida', 'Un solo uso, contra vehículos y edificios armados.') + fila('dronBomba', 'Bombardero', '15 por salida', 'Suelta una granada sobre la infantería y vuelve a recargar.');
       h += '<h3>Muros (ingeniero civil)</h3>'; for (const k in W.MUROS) h += fila('', W.MUROS[k].nombre, W.MUROS[k].costo + ' por celda', W.MUROS[k].que + (W.MUROS[k].nivel ? ' Nivel ' + W.MUROS[k].nivel + '.' : ''));
@@ -1632,7 +1642,7 @@
         if (faltan.length) return 'antes hay que construir ' + faltan.map((q) => EDIF[q].nombre.toLowerCase()).join(' y ');
         if (!esEdif && !J.cuenta[W.lugarDe(d)]) return 'se entrena en ' + EDIF[W.lugarDe(d)].nombre.toLowerCase();
       }
-      if (!esEdif && d.aire && !d.mini) { const c = W.cupoAire(m, YO, d.lugar === 'inteligencia'); if (c.hay >= c.cupo) return 'cupo lleno (' + c.hay + '/' + c.cupo + '): hace falta otro ' + EDIF[W.lugarDe(d)].nombre.toLowerCase(); }
+      if (!esEdif && d.aire && !d.mini) { const c = W.cupoAire(m, YO, W.hangarDe(d)); if (c.hay >= c.cupo) return 'cupo lleno (' + c.hay + '/' + c.cupo + '): hace falta otro ' + EDIF[W.lugarDe(d)].nombre.toLowerCase(); }
       if (!W.puedePagar(J, d)) { const f = []; if (J.minerales < (d.costo || 0)) f.push('minerales'); if (J.petroleo < (d.pet || 0)) f.push('petróleo'); if (J.raros < (d.raros || 0)) f.push('minerales raros'); if (J.info < (d.info || 0)) f.push('información'); return 'falta ' + (f.join(' y ') || 'recursos'); }
       if (!W.disponible(m, YO, d)) return 'todavía no disponible';
       return '';
@@ -1749,7 +1759,7 @@
           const q = { sinAgua: !!enCurso && enCurso.sinAgua };
           if (n) { cuenta = '×' + n; clase += ' hay'; }
           if (enCurso) { p = enCurso.prog / d.tiempo; if (q.sinAgua) txt = 'falta agua'; }
-          if (d.aire && J.cuenta[W.lugarDe(d)]) { const c = W.cupoAire(m, YO, d.lugar === 'inteligencia'); if (c.hay >= c.cupo) { txt = 'cupo ' + c.hay + '/' + c.cupo; clase += ' caro'; } }
+          if (d.aire && J.cuenta[W.lugarDe(d)]) { const c = W.cupoAire(m, YO, W.hangarDe(d)); if (c.hay >= c.cupo) { txt = 'cupo ' + c.hay + '/' + c.cupo; clase += ' caro'; } }
           if (!req) clase += ' no'; else if (caro || (n && q.sinAgua)) clase += ' caro';
         }
         if (o.b.className !== clase) o.b.className = clase;
