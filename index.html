@@ -327,12 +327,12 @@
   <button type="button" id="empezar">Empezar</button>
   <button type="button" id="tutorial">Tutorial guiado<small style="display:block;color:var(--suave);font-size:10px">ocho pasos, con el rival dormido hasta el final</small></button>
   <button type="button" id="continuar" hidden>Continuar la partida guardada</button>
-  <div id="version">versión 71</div>
+  <div id="version">versión 72</div>
 </div></div>
 <div id="guia" hidden><div class="caja"><div class="cab"><strong>Guía: para qué sirve cada cosa</strong><button type="button" id="cierraGuia">cerrar</button></div><div id="guiaTxt"></div></div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finVer" href="#" title="Vuelve a ver la partida entera, con todo el mapa a la vista y a la velocidad que quieras.">ver repetición</a><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 71' };
+globalThis.W = { VERSION: 'versión 72' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -548,6 +548,7 @@ globalThis.W = { VERSION: 'versión 71' };
   W.ECON = {
     minaCosto: 40, minaTiempo: 40, minasMax: 60, minaPisa: 0.7, minaVe: 4, desminaRadio: 5, desminaTiempo: 30, volarTiempo: 60, pontonMax: 14, pontonCelda: 12, pontonCada: 12, pontonVida: 160,
     recuperaTiempo: 160, recuperaCosto: 0.5, recuperaVida: 0.5, recuperaAuto: 10, cascoDura: 3600,
+    combMax: 450, combCarga: 30, combPet: 0.02, // combustible de los vehículos de combate: celdas de autonomía, lo que repostan por ciclo (medio segundo) y el petróleo que cuesta cada celda repostada
     espiaRadio: 6, espiaInfo: 2, sumiBase: 1, sumiUnidad: 0.5, sumiCarga: 40, // suministro móvil: gasto por ciclo (medio segundo) en vacío y por unidad atendida; y lo que carga por ciclo en el puesto logístico
     dronMisRadio: 8, autoReserva: 400, autoLargo: 70,
     rutaNodos: 30000, // presupuesto de celdas que se exploran por tick buscando rutas
@@ -1465,6 +1466,8 @@ globalThis.W = { VERSION: 'versión 71' };
   }
   W.alcance = alcance;
 
+  // Los vehículos de combate gastan combustible al moverse (los civiles, las cosechadoras y los de suministro, no; los aviones llevan el suyo).
+  W.gastaComb = (d) => d.cat === 'veh' && !d.aire && !!d.arma;
   function crearUnidad(m, j, tipo, celda) {
     const d = UNID[tipo], N = m.N, x = (celda % N) + 0.5, y = ((celda / N) | 0) + 0.5;
     const u = {
@@ -1475,7 +1478,7 @@ globalThis.W = { VERSION: 'versión 71' };
       carga: 0, est: tipo === 'cosechadora' ? 'buscar' : '', celda: -1, ref: 0, espera: 0, pref: null,
       quiere: 1, cargaTipo: 1, // cosechadora: qué busca y qué lleva (1 minerales, 2 raros)
       fuel: d.fuel || 0, repostando: false, casa: 0, enTierra: false, slot: 0, // aviación: su aeródromo y si está posado en él
-      auto: !!d.tiende, cola: [], patrulla: null, explora: false, // órdenes encadenadas, ruta de patrulla, exploración automática
+      auto: !!d.tiende, comb: W.gastaComb(d) && m.logistica !== false ? ECON.combMax : undefined, cola: [], patrulla: null, explora: false, // órdenes encadenadas, ruta de patrulla, exploración automática
       retira: m.jug[j].retiro, retirando: false, volver: null, tRet: 0, huye: 0, // retirada automática a reparar; cosechadora que huye
       bajas: 0, rango: 0, // veteranía
       trazas: [], // excavadora: tramos de camino pendientes
@@ -2238,7 +2241,7 @@ globalThis.W = { VERSION: 'versión 71' };
     const terr = m.mapa.terreno[Math.floor(u.y) * N + Math.floor(u.x)];
     let freno = 1; // alambrada enemiga: a la infantería la frena mucho; un vehículo la aplasta al pasar
     if (m.muro && !d.aire) { const ca = Math.floor(u.y) * N + Math.floor(u.x); if (m.muro[ca] === 1 && m.muroJ[ca] - 1 !== u.j) { if (d.cat === 'veh') quitarMuro(m, ca); else freno = 0.3; } }
-    const vmax = freno * (u.tope && u.tope < vel && !u.suelto ? u.tope : vel) * (u.marcha ? u.fm || 1 : 1) * (u.orden === 'trazar' && !(viaDe(m)[u.j][Math.floor(u.y) * N + Math.floor(u.x)] && m.via[u.j][c]) ? ECON.trazaVel : d.cat === 'veh' && terr >= T.CAMINO && viaDe(m)[u.j][Math.floor(u.y) * N + Math.floor(u.x)] ? ECON.caminoVel : 1); // (trazando sobre camino ya hecho va a su paso normal) // por camino los vehículos van más rápido; trazándolo, despacio
+    const vmax = (u.comb !== undefined && u.comb <= 0 ? 0 : 1) * freno * (u.tope && u.tope < vel && !u.suelto ? u.tope : vel) * (u.marcha ? u.fm || 1 : 1) * (u.orden === 'trazar' && !(viaDe(m)[u.j][Math.floor(u.y) * N + Math.floor(u.x)] && m.via[u.j][c]) ? ECON.trazaVel : d.cat === 'veh' && terr >= T.CAMINO && viaDe(m)[u.j][Math.floor(u.y) * N + Math.floor(u.x)] ? ECON.caminoVel : 1); // (trazando sobre camino ya hecho va a su paso normal) // por camino los vehículos van más rápido; trazándolo, despacio
     const alFinal = u.ri === u.ruta.length - 1 && u.fin;
     const carril = !alFinal && d.cat === 'veh' && u.orden !== 'trazar' && m.carrilX && m.carrilX[c] > 0 && m.mapa.terreno[c] >= T.CAMINO && viaDe(m)[u.j][c]; // por camino, los vehículos van por el carril y no por el centro de cada celda
     const tx = alFinal ? u.fin.x : carril ? m.carrilX[c] : (c % N) + 0.5, ty = alFinal ? u.fin.y : carril ? m.carrilY[c] : ((c / N) | 0) + 0.5, dx = tx - u.x, dy = ty - u.y, dd = Math.hypot(dx, dy);
@@ -3265,7 +3268,8 @@ globalThis.W = { VERSION: 'versión 71' };
     tickProduccion(m, 0); tickProduccion(m, 1);
     for (let k = 0, n = m.ents.length; k < n; k++) {
       const e = m.ents[k];
-      if (!e.edif) tickUnidad(m, e);
+      if (!e.edif) { if (e.comb === 0 && (e.orden === 'mover' || e.orden === 'amover' || e.patrulla)) { e.orden = 'nada'; e.ruta = null; e.pend = null; e.cola.length = 0; e.patrulla = null; } // sin combustible no hay marcha: se queda de guardia donde está
+        tickUnidad(m, e); if (e.comb !== undefined && e.comb > 0) { e.comb -= Math.hypot(e.x - e.px, e.y - e.py); if (e.comb <= 0) { e.comb = 0; m.efectos.push({ tipo: 'sinComb', x1: e.x, y1: e.y, j: e.j, t: m.t }); } } } // lo que anda, lo gasta
       else if (e.hack > m.t) { e.obj = 0; } // edificio hackeado: apagado
       else if (EDIF[e.tipo].arma) tickTorreta(m, e);
       else if (EDIF[e.tipo].da) { // extracción continua; con déficit de energía rinde la mitad
@@ -3287,7 +3291,11 @@ globalThis.W = { VERSION: 'versión 71' };
       const pts = tickSuministro(m);
       for (const u of m.ents) { if (u.edif || UNID[u.tipo].aire || UNID[u.tipo].suministro) continue; let dentro = m.cob[u.j][Math.floor(u.y) * m.N + Math.floor(u.x)] || m.jug[u.j].dios;
         if (!dentro) for (const q of pts) if (q.j === u.j && (u.x - q.x) * (u.x - q.x) + (u.y - q.y) * (u.y - q.y) <= q.r2) { dentro = 1; q.u.sumiN++; break; } /* fuera de la red, pero junto a un camión o helicóptero de suministro plantado: gasta de su carga */
-        u.sinSum = dentro ? Math.max(0, (u.sinSum || 0) - 40) : Math.min(ECON.sinSum + 200, (u.sinSum || 0) + 10); }
+        u.sinSum = dentro ? Math.max(0, (u.sinSum || 0) - 40) : Math.min(ECON.sinSum + 200, (u.sinSum || 0) + 10);
+        if (dentro && u.comb !== undefined && u.comb < ECON.combMax) { // reposta: dentro de la red o junto a un suministro móvil, y pagando petróleo
+          const J = m.jug[u.j], cuanto = Math.min(ECON.combMax - u.comb, ECON.combCarga), precio = cuanto * ECON.combPet;
+          if (J.dios || J.petroleo >= precio) { if (!J.dios) J.petroleo -= precio; u.comb += cuanto; }
+        } }
     }
     let muertos = false;
     const apeados = [];
@@ -4821,6 +4829,7 @@ globalThis.W = { VERSION: 'versión 71' };
         if (e.tipo === 'cosechadora' && e.j === YO) t += ' · carga ' + e.carga;
         if (!e.edif && UNID[e.tipo].tiende && e.j === YO && m.logistica !== false) t += e.orden === 'conectar' ? ' · tendiendo línea' : e.auto ? ' · automático' : ' · manual';
         if (!e.edif && UNID[e.tipo].espia && e.j === YO) t += e.infiltrado ? ' · infiltrado: informando' : ' · acércalo a un edificio enemigo';
+        if (!e.edif && e.comb !== undefined && e.j === YO) t += e.comb > 0 ? ' · combustible ' + Math.round(e.comb / W.ECON.combMax * 100) + ' %' : ' · sin combustible';
         if (!e.edif && e.dronMis && e.j === YO) t += ' · dron en misión lejana';
         if (!e.edif && e.orden === 'zapar' && e.zapa && e.zapa.lista[0] && e.j === YO) t += ' · ' + ({ minar: 'minando', desminar: 'desminando', ponton: 'tendiendo un pontón', volar: 'va a volar un camino' })[e.zapa.lista[0].t];
         if (e.ponton) t += ' · pontón';
@@ -4916,6 +4925,7 @@ globalThis.W = { VERSION: 'versión 71' };
         if (e.cola && e.cola.length && e.sinAgua) return 'agua';
         return '';
       }
+      if (e.comb !== undefined && e.comb <= 0) return 'comb';
       return conRed && UNID[e.tipo].arma && e.sinSum >= W.ECON.sinSum ? 'sum' : ''; // (a quien no dispara, el suministro no le cambia nada)
     }
     const REMEDIO = {
@@ -4924,12 +4934,15 @@ globalThis.W = { VERSION: 'versión 71' };
       agua: 'falta agua para entrenar · otra bomba de agua',
       sum: 'sin suministro: dispara lento y no se repara · acércale un camión de suministro',
       enlace: 'sin enlace aéreo: fuera de la red · hace falta un puesto logístico',
+      comb: 'parado · acércale un camión de suministro',
       hack: 'hackeado: apagado unos segundos',
     };
     function icono(x, y, k) { // disco rojo con el dibujo en blanco
       ctx.fillStyle = P.mal; ctx.beginPath(); ctx.arc(x, y, 8, 0, TAU); ctx.fill();
       ctx.strokeStyle = '#ffffff'; ctx.fillStyle = '#ffffff'; ctx.lineWidth = 1.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath();
-      if (k === 'red') { // enchufe tachado
+      if (k === 'comb') { // bidón
+        ctx.rect(x - 3.5, y - 3, 7, 8); ctx.moveTo(x - 1.5, y - 3); ctx.lineTo(x - 1.5, y - 5.5); ctx.lineTo(x + 2, y - 5.5); ctx.moveTo(x - 3.5, y + 1); ctx.lineTo(x + 3.5, y - 1); ctx.stroke();
+      } else if (k === 'red') { // enchufe tachado
         ctx.moveTo(x - 2, y - 5); ctx.lineTo(x - 2, y - 2); ctx.moveTo(x + 2, y - 5); ctx.lineTo(x + 2, y - 2); ctx.rect(x - 3.5, y - 2, 7, 3.5); ctx.moveTo(x, y + 1.5); ctx.lineTo(x, y + 5); ctx.moveTo(x - 5, y + 4.5); ctx.lineTo(x + 5, y - 4.5); ctx.stroke();
       } else if (k === 'luz') { // rayo
         ctx.moveTo(x + 1.5, y - 5.5); ctx.lineTo(x - 3, y + 0.8); ctx.lineTo(x, y + 0.8); ctx.lineTo(x - 1.5, y + 5.5); ctx.lineTo(x + 3, y - 0.8); ctx.lineTo(x, y - 0.8); ctx.closePath(); ctx.fill();
@@ -5377,7 +5390,8 @@ globalThis.W = { VERSION: 'versión 71' };
         if (e.hack > m.t && lod) { // hackeado: un rayo quebrado encima
           const gx = px, gy = py - r * 1.6 - 6; ctx.strokeStyle = P.mal; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(gx - 5, gy - 4); ctx.lineTo(gx + 1, gy - 1); ctx.lineTo(gx - 2, gy + 1); ctx.lineTo(gx + 5, gy + 5); ctx.stroke();
         }
-        if (lod && e.j === YO && !rep && problema(e)) iconos.push([px + r * 1.2 + 7, py - r - 7, 'sum']); // sin suministro
+        if (lod && e.j === YO && !rep) { const pb = problema(e); if (pb) iconos.push([px + r * 1.2 + 7, py - r - 7, pb]); } // sin suministro o sin combustible
+        if (lod && e.comb !== undefined && (e.j === YO || rep) && e.comb < W.ECON.combMax * 0.3) { const w = Math.max(14, r * 2.4); ctx.fillStyle = P.linea; ctx.fillRect(px - w / 2, py + r + 5, w, 3); ctx.fillStyle = e.comb > 0 ? '#c8922a' : P.mal; ctx.fillRect(px - w / 2, py + r + 5, w * Math.max(0.04, e.comb / W.ECON.combMax), 3); } // poco combustible: una barra ámbar
         if (UNID[e.tipo].suministro && (e.j === YO || rep) && e.sumC !== undefined) { // suministro móvil: su carga y, plantado, la zona que abastece
           const cf = UNID[e.tipo].suministro, f = Math.max(0, e.sumC / cf.carga), w = Math.max(14, r * 2.4);
           ctx.fillStyle = P.linea; ctx.fillRect(px - w / 2, py + r + 5, w, 3); ctx.fillStyle = f > 0.25 ? P.bien : P.mal; ctx.fillRect(px - w / 2, py + r + 5, w * f, 3);
@@ -5775,6 +5789,8 @@ globalThis.W = { VERSION: 'versión 71' };
         } else if (d.tipo === 'minaFuera') {
           if (d.j === YO) aviso('Mina retirada');
         } else if (d.tipo === 'minaPuesta') {
+        } else if (d.tipo === 'sinComb') {
+          if (d.j === YO) { aviso('Un vehículo se ha quedado sin combustible'); son.alerta(); }
         } else if (d.tipo === 'sumiVacio') {
           if (d.j === YO) aviso('Suministro agotado: vuelve a recargar');
         } else if (d.tipo === 'infiltrado') {
@@ -6084,7 +6100,7 @@ globalThis.W = { VERSION: 'versión 71' };
       deposito: 'Conectado a tu red, crea una zona con suministro donde también puedes construir.', misilera: 'Fabrica, guarda y lanza misiles balísticos.', interceptor: 'Derriba los misiles enemigos que entran en su radio.', estDrones: 'Mantiene dos drones de reconocimiento vigilando a su alrededor. Mejorada lleva además bombarderos y kamikazes, y guarda las tecnologías del operador.', inteligencia: 'Entrena espías, aloja dos drones espía de largo alcance y permite el mapeo satelital.',
       pistaAv: 'Se coloca en cualquier terreno explorado, sin red ni energía. Clic derecho en ella con helicópteros de combate: la toman por base, repostan allí y su radio de vuelo se cuenta desde allí.', logistica: 'En la base: de aquí salen los camiones y helicópteros de suministro y los vuelos que mantienen los puestos de avanzada; tiene pista para trasladar infantería.', avanzada: 'No se construye: lo despliega el puesto móvil. Con enlace aéreo está en tu red, cura a la infantería cercana y tiene pista.',
       tallerMovil: 'Parado, repara los vehículos que tenga a 4 celdas aunque estén sin suministro, y recupera los vehículos destruidos cercanos (tuyos o del rival) a mitad de precio: va solo, o clic derecho sobre el casco.',
-      camionSum: 'Muévelo adonde esté tu ejército: se planta y abastece a todo lo que tenga alrededor mientras le dure la carga (se gasta según cuántas unidades atiende). Vacío, vuelve solo al puesto logístico, recarga y regresa.', heliSum: 'Como el camión de suministro, pero volando: más rápido y sin rodeos; lleva la mitad de carga y la antiaérea lo derriba.',
+      camionSum: 'Muévelo adonde esté tu ejército: se planta y abastece y reposta a todo lo que tenga alrededor mientras le dure la carga (se gasta según cuántas unidades atiende). Vacío, vuelve solo al puesto logístico, recarga y regresa.', heliSum: 'Como el camión de suministro, pero volando: más rápido y sin rodeos; lleva la mitad de carga y la antiaérea lo derriba.',
       avanzadaMovil: 'Se despliega lejos como puesto de avanzada: red, hospital y pista sin tender líneas.',
       torretaMuro: 'Torreta que se monta sobre un muro reforzado tuyo.', camara: 'Ve lejos y en redondo, descubre a los escondidos y avisa si entra un enemigo.',
       infanteria: 'Barata y versátil; captura puestos, cava y ocupa trincheras.', antitanque: 'Infantería con cohetes: contra vehículos y aviones.', explorador: 'Rápido y ve lejos; explora solo con E.', ingeniero: 'Zapador: pone y retira minas, tiende pontones sobre el agua y vuela caminos y puentes (botones al seleccionarlo). Repara solo vehículos y edificios; cava más rápido.', medico: 'Cura solo a la infantería herida cercana.',
@@ -6356,6 +6372,7 @@ globalThis.W = { VERSION: 'versión 71' };
       red: (n) => (n === 1 ? '1 edificio fuera de la red' : n + ' edificios fuera de la red') + ' <small>· ingeniero civil</small>',
       luz: (n) => 'Falta energía: ' + n + (n === 1 ? ' edificio' : ' edificios') + ' a media marcha <small>· otra central</small>',
       agua: () => 'Falta agua para entrenar <small>· otra bomba</small>',
+      comb: (n) => (n === 1 ? '1 vehículo sin combustible' : n + ' vehículos sin combustible') + ' <small>· camión de suministro</small>',
       sum: (n) => (n === 1 ? '1 unidad sin suministro' : n + ' unidades sin suministro') + ' <small>· fuera de tu red</small>',
       enlace: (n) => (n === 1 ? 'Puesto de avanzada sin enlace aéreo' : n + ' puestos de avanzada sin enlace aéreo'),
       hack: (n) => (n === 1 ? '1 edificio hackeado' : n + ' edificios hackeados'),

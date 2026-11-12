@@ -1853,6 +1853,38 @@ prueba('tanda B: el taller de campaña repara sin suministro y recupera vehícul
   assert.notStrictEqual(caza.casa, pa.id, 'un caza no cabe en una pista avanzada');
 });
 
+prueba('tanda C: los vehículos de combate gastan combustible, se paran sin él y repostan en la red o junto a un camión, pagando petróleo', () => {
+  const m = W.crearMundo(31, { N: 128, logistica: true }), N = m.N, J = m.jug[0];
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const cel = (x, y) => y * N + x, patio = m.ents.find((e) => e.j === 0 && e.tipo === 'patio'), px = Math.floor(patio.cx), py = Math.floor(patio.cy), dir = px < 64 ? 1 : -1;
+  for (let y = py - 12; y <= py + 12; y++) for (let x = Math.min(px, px + dir * 80) - 2; x <= Math.max(px, px + dir * 80) + 2; x++) { const i = cel(x, y); if (x < 2 || y < 2 || x >= N - 2 || y >= N - 2 || m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  m.terrenoV++;
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  J.minerales = 20000; J.petroleo = 500;
+  const fx = px + dir * 30, tq = W.crearUnidad(m, 0, 'tanque', cel(fx, py)), inf = W.crearUnidad(m, 0, 'infanteria', cel(fx, py + 2)), cos = W.crearUnidad(m, 0, 'cosechadora', cel(fx, py + 4));
+  assert.strictEqual(tq.comb, W.ECON.combMax, 'el tanque sale con el depósito lleno'); assert.strictEqual(inf.comb, undefined, 'la infantería no gasta'); assert.strictEqual(cos.comb, undefined, 'ni la cosechadora');
+  // ida y vuelta fuera de la red: gasta lo que anda
+  W.orden(m, { t: 'mover', j: 0, ids: [tq.id], x: fx + dir * 40 + 0.5, y: py + 0.5 }); avanza(3); for (let i = 0; i < 2000 && tq.orden !== 'nada'; i++) W.tick(m);
+  assert.ok(Math.abs((W.ECON.combMax - tq.comb) - 40) < 6, 'cuarenta celdas, cuarenta de combustible (gastó ' + (W.ECON.combMax - tq.comb).toFixed(1) + ')');
+  tq.comb = 6; W.orden(m, { t: 'mover', j: 0, ids: [tq.id], x: fx + 0.5, y: py + 0.5 }); avanza(3); const x0 = tq.x; avanza(600);
+  assert.strictEqual(tq.comb, 0); assert.ok(Math.abs(tq.x - x0) < 9 && Math.abs(tq.x - fx) > 20, 'sin combustible se queda parado a medio camino');
+  const en = W.crearUnidad(m, 1, 'infanteria', cel(Math.floor(tq.x) + dir * 3, py)); avanza(200);
+  assert.ok(en.vida < en.vidaMax || en.vida <= 0, 'pero sigue disparando'); en.vida = 0; avanza(2);
+  // un camión de suministro lo reposta, y cuesta petróleo
+  W.crearEdificio(m, 0, 'central', px + dir * 4, py + 4); W.crearEdificio(m, 0, 'logistica', px + dir * 8, py); avanza(3);
+  const cam = W.crearUnidad(m, 0, 'camionSum', cel(Math.floor(tq.x) - dir * 3, py + 2)); const pet0 = J.petroleo;
+  W.orden(m, { t: 'mover', j: 0, ids: [cam.id], x: tq.x, y: tq.y + 2 }); avanza(3); for (let i = 0; i < 1500 && tq.comb < W.ECON.combMax; i++) W.tick(m);
+  assert.strictEqual(tq.comb, W.ECON.combMax, 'el camión lo deja lleno');
+  assert.ok(Math.abs((pet0 - J.petroleo) - W.ECON.combMax * W.ECON.combPet) < 1.5, 'y el repostaje se paga en petróleo (' + (pet0 - J.petroleo).toFixed(1) + ')');
+  W.orden(m, { t: 'mover', j: 0, ids: [tq.id], x: fx + 0.5, y: py + 0.5 }); avanza(3); for (let i = 0; i < 2000 && tq.orden !== 'nada'; i++) W.tick(m);
+  assert.ok(Math.abs(tq.x - fx) < 3, 'y vuelve a andar');
+  // sin petróleo no hay repostaje
+  tq.comb = 100; J.petroleo = 0; W.orden(m, { t: 'mover', j: 0, ids: [tq.id], x: cam.x, y: cam.y - 2 }); avanza(600);
+  assert.ok(tq.comb < 100, 'sin petróleo en la reserva, no reposta');
+  // partida clásica: no hay combustible
+  const mc = W.crearMundo(31, { N: 128, logistica: false }); assert.strictEqual(W.crearUnidad(mc, 0, 'tanque', cel(64, 64)).comb, undefined);
+});
+
 prueba('tanda 5: puente aéreo, puesto de avanzada, hospital y traslado de infantería', () => {
   const m = W.crearMundo(31, { N: 128, logistica: true }), N = m.N, J = m.jug[0];
   m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);

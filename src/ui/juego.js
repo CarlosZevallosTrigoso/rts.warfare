@@ -193,6 +193,7 @@
         if (e.tipo === 'cosechadora' && e.j === YO) t += ' · carga ' + e.carga;
         if (!e.edif && UNID[e.tipo].tiende && e.j === YO && m.logistica !== false) t += e.orden === 'conectar' ? ' · tendiendo línea' : e.auto ? ' · automático' : ' · manual';
         if (!e.edif && UNID[e.tipo].espia && e.j === YO) t += e.infiltrado ? ' · infiltrado: informando' : ' · acércalo a un edificio enemigo';
+        if (!e.edif && e.comb !== undefined && e.j === YO) t += e.comb > 0 ? ' · combustible ' + Math.round(e.comb / W.ECON.combMax * 100) + ' %' : ' · sin combustible';
         if (!e.edif && e.dronMis && e.j === YO) t += ' · dron en misión lejana';
         if (!e.edif && e.orden === 'zapar' && e.zapa && e.zapa.lista[0] && e.j === YO) t += ' · ' + ({ minar: 'minando', desminar: 'desminando', ponton: 'tendiendo un pontón', volar: 'va a volar un camino' })[e.zapa.lista[0].t];
         if (e.ponton) t += ' · pontón';
@@ -288,6 +289,7 @@
         if (e.cola && e.cola.length && e.sinAgua) return 'agua';
         return '';
       }
+      if (e.comb !== undefined && e.comb <= 0) return 'comb';
       return conRed && UNID[e.tipo].arma && e.sinSum >= W.ECON.sinSum ? 'sum' : ''; // (a quien no dispara, el suministro no le cambia nada)
     }
     const REMEDIO = {
@@ -296,12 +298,15 @@
       agua: 'falta agua para entrenar · otra bomba de agua',
       sum: 'sin suministro: dispara lento y no se repara · acércale un camión de suministro',
       enlace: 'sin enlace aéreo: fuera de la red · hace falta un puesto logístico',
+      comb: 'parado · acércale un camión de suministro',
       hack: 'hackeado: apagado unos segundos',
     };
     function icono(x, y, k) { // disco rojo con el dibujo en blanco
       ctx.fillStyle = P.mal; ctx.beginPath(); ctx.arc(x, y, 8, 0, TAU); ctx.fill();
       ctx.strokeStyle = '#ffffff'; ctx.fillStyle = '#ffffff'; ctx.lineWidth = 1.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath();
-      if (k === 'red') { // enchufe tachado
+      if (k === 'comb') { // bidón
+        ctx.rect(x - 3.5, y - 3, 7, 8); ctx.moveTo(x - 1.5, y - 3); ctx.lineTo(x - 1.5, y - 5.5); ctx.lineTo(x + 2, y - 5.5); ctx.moveTo(x - 3.5, y + 1); ctx.lineTo(x + 3.5, y - 1); ctx.stroke();
+      } else if (k === 'red') { // enchufe tachado
         ctx.moveTo(x - 2, y - 5); ctx.lineTo(x - 2, y - 2); ctx.moveTo(x + 2, y - 5); ctx.lineTo(x + 2, y - 2); ctx.rect(x - 3.5, y - 2, 7, 3.5); ctx.moveTo(x, y + 1.5); ctx.lineTo(x, y + 5); ctx.moveTo(x - 5, y + 4.5); ctx.lineTo(x + 5, y - 4.5); ctx.stroke();
       } else if (k === 'luz') { // rayo
         ctx.moveTo(x + 1.5, y - 5.5); ctx.lineTo(x - 3, y + 0.8); ctx.lineTo(x, y + 0.8); ctx.lineTo(x - 1.5, y + 5.5); ctx.lineTo(x + 3, y - 0.8); ctx.lineTo(x, y - 0.8); ctx.closePath(); ctx.fill();
@@ -749,7 +754,8 @@
         if (e.hack > m.t && lod) { // hackeado: un rayo quebrado encima
           const gx = px, gy = py - r * 1.6 - 6; ctx.strokeStyle = P.mal; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(gx - 5, gy - 4); ctx.lineTo(gx + 1, gy - 1); ctx.lineTo(gx - 2, gy + 1); ctx.lineTo(gx + 5, gy + 5); ctx.stroke();
         }
-        if (lod && e.j === YO && !rep && problema(e)) iconos.push([px + r * 1.2 + 7, py - r - 7, 'sum']); // sin suministro
+        if (lod && e.j === YO && !rep) { const pb = problema(e); if (pb) iconos.push([px + r * 1.2 + 7, py - r - 7, pb]); } // sin suministro o sin combustible
+        if (lod && e.comb !== undefined && (e.j === YO || rep) && e.comb < W.ECON.combMax * 0.3) { const w = Math.max(14, r * 2.4); ctx.fillStyle = P.linea; ctx.fillRect(px - w / 2, py + r + 5, w, 3); ctx.fillStyle = e.comb > 0 ? '#c8922a' : P.mal; ctx.fillRect(px - w / 2, py + r + 5, w * Math.max(0.04, e.comb / W.ECON.combMax), 3); } // poco combustible: una barra ámbar
         if (UNID[e.tipo].suministro && (e.j === YO || rep) && e.sumC !== undefined) { // suministro móvil: su carga y, plantado, la zona que abastece
           const cf = UNID[e.tipo].suministro, f = Math.max(0, e.sumC / cf.carga), w = Math.max(14, r * 2.4);
           ctx.fillStyle = P.linea; ctx.fillRect(px - w / 2, py + r + 5, w, 3); ctx.fillStyle = f > 0.25 ? P.bien : P.mal; ctx.fillRect(px - w / 2, py + r + 5, w * f, 3);
@@ -1147,6 +1153,8 @@
         } else if (d.tipo === 'minaFuera') {
           if (d.j === YO) aviso('Mina retirada');
         } else if (d.tipo === 'minaPuesta') {
+        } else if (d.tipo === 'sinComb') {
+          if (d.j === YO) { aviso('Un vehículo se ha quedado sin combustible'); son.alerta(); }
         } else if (d.tipo === 'sumiVacio') {
           if (d.j === YO) aviso('Suministro agotado: vuelve a recargar');
         } else if (d.tipo === 'infiltrado') {
@@ -1456,7 +1464,7 @@
       deposito: 'Conectado a tu red, crea una zona con suministro donde también puedes construir.', misilera: 'Fabrica, guarda y lanza misiles balísticos.', interceptor: 'Derriba los misiles enemigos que entran en su radio.', estDrones: 'Mantiene dos drones de reconocimiento vigilando a su alrededor. Mejorada lleva además bombarderos y kamikazes, y guarda las tecnologías del operador.', inteligencia: 'Entrena espías, aloja dos drones espía de largo alcance y permite el mapeo satelital.',
       pistaAv: 'Se coloca en cualquier terreno explorado, sin red ni energía. Clic derecho en ella con helicópteros de combate: la toman por base, repostan allí y su radio de vuelo se cuenta desde allí.', logistica: 'En la base: de aquí salen los camiones y helicópteros de suministro y los vuelos que mantienen los puestos de avanzada; tiene pista para trasladar infantería.', avanzada: 'No se construye: lo despliega el puesto móvil. Con enlace aéreo está en tu red, cura a la infantería cercana y tiene pista.',
       tallerMovil: 'Parado, repara los vehículos que tenga a 4 celdas aunque estén sin suministro, y recupera los vehículos destruidos cercanos (tuyos o del rival) a mitad de precio: va solo, o clic derecho sobre el casco.',
-      camionSum: 'Muévelo adonde esté tu ejército: se planta y abastece a todo lo que tenga alrededor mientras le dure la carga (se gasta según cuántas unidades atiende). Vacío, vuelve solo al puesto logístico, recarga y regresa.', heliSum: 'Como el camión de suministro, pero volando: más rápido y sin rodeos; lleva la mitad de carga y la antiaérea lo derriba.',
+      camionSum: 'Muévelo adonde esté tu ejército: se planta y abastece y reposta a todo lo que tenga alrededor mientras le dure la carga (se gasta según cuántas unidades atiende). Vacío, vuelve solo al puesto logístico, recarga y regresa.', heliSum: 'Como el camión de suministro, pero volando: más rápido y sin rodeos; lleva la mitad de carga y la antiaérea lo derriba.',
       avanzadaMovil: 'Se despliega lejos como puesto de avanzada: red, hospital y pista sin tender líneas.',
       torretaMuro: 'Torreta que se monta sobre un muro reforzado tuyo.', camara: 'Ve lejos y en redondo, descubre a los escondidos y avisa si entra un enemigo.',
       infanteria: 'Barata y versátil; captura puestos, cava y ocupa trincheras.', antitanque: 'Infantería con cohetes: contra vehículos y aviones.', explorador: 'Rápido y ve lejos; explora solo con E.', ingeniero: 'Zapador: pone y retira minas, tiende pontones sobre el agua y vuela caminos y puentes (botones al seleccionarlo). Repara solo vehículos y edificios; cava más rápido.', medico: 'Cura solo a la infantería herida cercana.',
@@ -1728,6 +1736,7 @@
       red: (n) => (n === 1 ? '1 edificio fuera de la red' : n + ' edificios fuera de la red') + ' <small>· ingeniero civil</small>',
       luz: (n) => 'Falta energía: ' + n + (n === 1 ? ' edificio' : ' edificios') + ' a media marcha <small>· otra central</small>',
       agua: () => 'Falta agua para entrenar <small>· otra bomba</small>',
+      comb: (n) => (n === 1 ? '1 vehículo sin combustible' : n + ' vehículos sin combustible') + ' <small>· camión de suministro</small>',
       sum: (n) => (n === 1 ? '1 unidad sin suministro' : n + ' unidades sin suministro') + ' <small>· fuera de tu red</small>',
       enlace: (n) => (n === 1 ? 'Puesto de avanzada sin enlace aéreo' : n + ' puestos de avanzada sin enlace aéreo'),
       hack: (n) => (n === 1 ? '1 edificio hackeado' : n + ' edificios hackeados'),
