@@ -26,7 +26,7 @@
   // op: { N: lado del mapa, inicio: minerales iniciales }
   W.crearMundo = function (semilla, op) {
     op = op || {};
-    const mapa = W.generarMapa(semilla, op.N), N = mapa.N, NN = N * N;
+    const mapa = W.generarMapa(semilla, op.N, op.mapa), N = mapa.N, NN = N * N;
     W.vetaDe({ mapa });
     const m = {
       N, semilla, mapa, t: 0, ents: [], porId: new Map(), sigId: 1,

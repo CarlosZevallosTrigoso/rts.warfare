@@ -2222,6 +2222,31 @@ prueba('hospital y ambulancia: cura cerca, la ambulancia sale a por los heridos,
   assert.strictEqual(m.ents.filter((e) => e.tipo === 'ambulancia' && e.j === 0).length, 3, 'tres ambulancias por hospital');
 });
 
+prueba('tipos de mapa: todos simétricos, con paso de vehículos entre bases y recursos; el clásico no cambia; la IA juega en cada uno', () => {
+  const T = W.TERRENO, firma = (mp) => { let h = 7; for (let i = 0; i < mp.terreno.length; i++) h = (h * 31 + mp.terreno[i] * 7 + mp.mineral[i]) % 1000000007; return h; };
+  assert.strictEqual(firma(W.generarMapa(2026, 128)), firma(W.generarMapa(2026, 128, 'clasico')), 'sin tipo, sale el clásico');
+  assert.strictEqual(W.generarMapa(2026, 128).tipo, 'clasico'); assert.ok(W.MAPAS_AZAR.includes(W.generarMapa(5, 128, 'azar').tipo), 'al azar: uno de la lista');
+  assert.strictEqual(W.generarMapa(5, 128, 'azar').tipo, W.generarMapa(5, 128, 'azar').tipo, 'y siempre el mismo para la misma semilla');
+  const pct = {};
+  for (const tipo of W.MAPAS_AZAR) for (const semilla of [3, 2026]) for (const N of [128, 256]) {
+    const mp = W.generarMapa(semilla, N, tipo), NN = N * N, n = [0, 0, 0, 0, 0, 0];
+    for (let i = 0; i < NN; i++) { n[mp.terreno[i]]++; assert.ok(mp.terreno[i] === mp.terreno[NN - 1 - i] && mp.mineral[i] === mp.mineral[NN - 1 - i], tipo + ': simétrico'); }
+    const visto = new Uint8Array(NN), cola = [mp.bases[0].y * N + mp.bases[0].x]; visto[cola[0]] = 1;
+    while (cola.length) { const c = cola.pop(), x = c % N; for (const d of [1, -1, N, -N]) { const q = c + d; if (q < 0 || q >= NN || visto[q] || (d === 1 && x === N - 1) || (d === -1 && x === 0) || mp.terreno[q] !== T.LLANO) continue; visto[q] = 1; cola.push(q); } }
+    assert.ok(visto[mp.bases[1].y * N + mp.bases[1].x], tipo + ' ' + semilla + ' ' + N + ': los vehículos llegan de una base a la otra por llano');
+    let min = 0; for (let i = 0; i < NN; i++) if (mp.tipoMin[i] === 1) min += mp.mineral[i]; assert.ok(min > 150000 * (N / 128), tipo + ': minerales de sobra (' + min + ')');
+    assert.ok(mp.sitios.filter((q) => q.tipo === 'petroleo').length >= 4, tipo + ': petróleo');
+    if (N === 256 && semilla === 2026) pct[tipo] = { roca: Math.round(n[T.ROCA] / NN * 100), agua: Math.round(n[T.AGUA] / NN * 100), bosque: Math.round(n[T.BOSQUE] / NN * 100) };
+  }
+  console.log('      ' + JSON.stringify(pct));
+  assert.ok(pct.equilibrado.bosque >= 24 && pct.selva.bosque >= 45 && pct.llanura.bosque <= 12 && pct.llanura.roca <= 6 && pct.desfiladeros.roca >= 33 && pct.rios.agua > pct.llanura.agua + 3, 'cada tipo, con su carácter');
+  for (const tipo of W.MAPAS_AZAR) { // la IA arranca y juega unos minutos en cada uno
+    const m = W.crearMundo(2026, { N: 128, logistica: true, mapa: tipo }), a = W.iaCrear(0), b = W.iaCrear(1);
+    assert.strictEqual(m.mapa.tipo, tipo); for (let i = 0; i < 5000; i++) { W.iaTick(m, a); W.iaTick(m, b); W.tick(m); }
+    assert.ok(m.jug[0].cuenta.cuartel && m.jug[1].cuenta.cuartel && m.jug[0].cosechado > 500, tipo + ': la IA levanta su base y cosecha (' + m.jug[0].cosechado + ')');
+  }
+});
+
 prueba('tanda 5: puente aéreo, puesto de avanzada, hospital y traslado de infantería', () => {
   const m = W.crearMundo(31, { N: 128, logistica: true }), N = m.N, J = m.jug[0];
   m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);

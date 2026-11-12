@@ -18,7 +18,7 @@
     const $ = (id) => document.getElementById(id);
     const params = new URLSearchParams(location.search);
     try { if (localStorage.getItem('rts.tema') === 'oscura') document.body.dataset.tema = 'oscura'; } catch (e) { /* tema por defecto */ }
-    const op = { n: '512', min: '2500', ia: 'normal', est: 'azar', red: 'si' };
+    const op = { n: '512', min: '2500', ia: 'normal', est: 'azar', red: 'si', map: 'azar' };
     for (const k in op) {
       const cont = $('op-' + k), v = params.get(k);
       if (v && cont.querySelector('[data-v="' + CSS.escape(v) + '"]')) op[k] = v;
@@ -31,15 +31,15 @@
     const empezar = () => {
       let semilla = parseInt($('op-s').value, 10);
       if (!Number.isFinite(semilla) || semilla < 0) semilla = Math.floor(Date.now() % 1000000);
-      const q = 's=' + semilla + '&n=' + op.n + '&min=' + op.min + '&ia=' + op.ia + '&est=' + op.est + '&red=' + op.red + (tut ? '&tut=1' : '');
+      const q = 's=' + semilla + '&n=' + op.n + '&min=' + op.min + '&ia=' + op.ia + '&est=' + op.est + '&red=' + op.red + '&map=' + op.map + (tut ? '&tut=1' : '');
       try { history.replaceState(null, '', location.pathname + '?' + q); } catch (e) { /* en file:// puede no dejar */ }
       $('menu').hidden = true;
       let rep = null; // ?rep=1: se vuelve a ver la partida apuntada en esta pestaña
       if (params.get('rep')) { try { const g = JSON.parse(sessionStorage.getItem('rts.rep')); if (g && g.q === q && Array.isArray(g.c)) rep = g; } catch (e) { /* sin repetición: partida normal */ } }
-      W.jugar({ semilla, N: +op.n, inicio: +op.min, ia: op.ia, estilo: op.est, red: op.red, consulta: q, repeticion: rep, tutorial: tut && !rep });
+      W.jugar({ semilla, N: +op.n, inicio: +op.min, ia: op.ia, estilo: op.est, red: op.red, mapa: op.map, consulta: q, repeticion: rep, tutorial: tut && !rep });
     };
     $('empezar').addEventListener('click', () => { tut = false; empezar(); });
-    $('tutorial').addEventListener('click', () => { tut = true; op.n = '256'; op.min = '6000'; op.ia = 'tranquilo'; op.red = 'si'; $('op-s').value = '2026'; empezar(); });
+    $('tutorial').addEventListener('click', () => { tut = true; op.n = '256'; op.min = '6000'; op.ia = 'tranquilo'; op.red = 'si'; op.map = 'clasico'; $('op-s').value = '2026'; empezar(); });
     // Partida guardada: se ofrece continuarla, y con ?cargar=1 se entra directo (así funciona «cargar la guardada» desde dentro).
     const continuar = () => {
       try {
@@ -62,7 +62,7 @@
     const $ = (id) => document.getElementById(id);
     const semilla = op.semilla;
     const cargado = op.guardado || null; // partida guardada: el mundo y la IA vienen ya hechos
-    const m = cargado ? cargado.m : W.crearMundo(semilla, { N: op.N, inicio: op.inicio, logistica: op.red !== 'no' }), estilos = Object.keys(W.ESTILOS_IA);
+    const m = cargado ? cargado.m : W.crearMundo(semilla, { N: op.N, inicio: op.inicio, logistica: op.red !== 'no', mapa: op.mapa }), estilos = Object.keys(W.ESTILOS_IA);
     const rep = op.repeticion ? op.repeticion.c : null, repFin = op.repeticion ? op.repeticion.fin : 0; // repetición: las órdenes apuntadas de una partida; se reproducen solas, sin rival que piense ni jugador que mande
     if (rep) m.soloRep = true; else if (!cargado) m.registro = [];
     let repI = 0, repVel = 1, repAvisado = false;
@@ -1601,7 +1601,7 @@
     $('cierraGuia').addEventListener('click', () => { $('guia').hidden = true; });
     $('guia').addEventListener('click', (ev) => { if (ev.target === $('guia')) $('guia').hidden = true; });
     const conDrones = () => unidadesSel().filter((u) => u.j === YO && UNID[u.tipo].drones && (W.dronesDe(m, u).fpv || W.dronesDe(m, u).bomba));
-    $('rSem').textContent = semilla + ' · ' + m.N;
+    $('rSem').textContent = semilla + ' · ' + m.N + (m.mapa.tipo && m.mapa.tipo !== 'clasico' ? ' · ' + W.MAPAS[m.mapa.tipo].nombre : '');
     $('rSem').addEventListener('click', () => { const t = String(semilla); try { navigator.clipboard.writeText(t).then(() => aviso('Semilla ' + t + ' copiada'), () => aviso('Semilla: ' + t)); } catch (e) { aviso('Semilla: ' + t); } });
     const armadas = () => unidadesSel().filter((u) => u.j === YO && !UNID[u.tipo].aire && u.tipo !== 'cosechadora');
     $('bProteger').addEventListener('click', () => { if (armadas().length) { modo = 'proteger'; aviso('Elige a quién proteger: una unidad o un edificio tuyo'); } });

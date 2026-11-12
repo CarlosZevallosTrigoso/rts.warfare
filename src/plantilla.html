@@ -165,6 +165,7 @@
   #menu .caja { width: min(440px, 92vw); display: flex; flex-direction: column; gap: 16px; }
   #menu h1 { font-size: 22px; }
   #menu .ops { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; }
+  #menu #op-map { grid-auto-flow: row; grid-template-columns: repeat(4, 1fr); }
   #menu .ops button, #op-s { font: inherit; color: var(--tinta); background: var(--panel); border: 1px solid var(--linea); border-radius: 2px; padding: 7px 6px; cursor: pointer; }
   #menu .ops button small { display: block; color: var(--suave); font-size: 10px; }
   #menu .ops button.on { background: var(--tinta); color: var(--fondo); border-color: var(--tinta); }
@@ -319,6 +320,10 @@
   <div><h2>Tamaño del mapa</h2><div class="ops" id="op-n">
     <button type="button" data-v="128">pequeño<small>128</small></button><button type="button" data-v="256">mediano<small>256</small></button>
     <button type="button" data-v="512">grande<small>512</small></button><button type="button" data-v="1024">enorme<small>1024 · experimental</small></button></div></div>
+  <div><h2>Tipo de mapa</h2><div class="ops" id="op-map">
+    <button type="button" data-v="azar">al azar<small>sorpresa</small></button><button type="button" data-v="equilibrado">equilibrado<small>de todo, con bosque</small></button><button type="button" data-v="llanura">llanura<small>abierto</small></button>
+    <button type="button" data-v="desfiladeros">desfiladeros<small>roca y pasos</small></button><button type="button" data-v="selva">selva<small>hay que abrir camino</small></button><button type="button" data-v="rios">ríos<small>vados y puentes</small></button>
+    <button type="button" data-v="fortalezas">fortalezas<small>bases en hoyas</small></button><button type="button" data-v="clasico">clásico<small>el de antes</small></button></div></div>
   <div><h2>Minerales iniciales</h2><div class="ops" id="op-min">
     <button type="button" data-v="1500">escasos<small>1500</small></button><button type="button" data-v="2500">normales<small>2500</small></button><button type="button" data-v="6000">abundantes<small>6000</small></button></div></div>
   <div><h2>Rival</h2><div class="ops" id="op-ia">
