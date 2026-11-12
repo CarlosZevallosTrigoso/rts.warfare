@@ -356,6 +356,7 @@
         if (!cand && J.minerales > 4000) cand = busca('estDrones') || busca('laboratorio') || busca('estacion') || busca('extractor');
         if (cand && J.minerales > W.costoMejora(cand) + 1500) W.orden(m, { t: 'mejorarEdif', j, id: cand.id });
       }
+      if (c.fabrica && J.nivel >= 2 && !ahorra && !urgente && tk % 10 === 4 && !(c.tallerMovil || 0) && !J.colas.tallerMovil.n && soldados.length >= 12) entrena('tallerMovil', 800); // un taller de campaña
       // Infantería especial: dos gatling para sostener el punto de reunión, un hacker y dos operadores de drones.
       if (c.cuartel && !ahorra && !urgente && tk % 5 === 3) {
         if ((c.gatling || 0) + J.colas.gatling.n < 2 && (c.infanteria || 0) >= 8) entrena('gatling', 500);
@@ -486,6 +487,7 @@
     if (tk % 5 === 1) { // hackers y operadores de drones: con la oleada, unos pasos por detrás; sin oleada, en el punto de reunión
       let ax = 0, ay = 0, na = 0; for (const u of soldados) if (ia.atacantes.has(u.id)) { ax += u.x; ay += u.y; na++; }
       const tx = na >= 4 ? ax / na - (dx / dd) * 4 : rx - (dx / dd) * 2, ty = na >= 4 ? ay / na - (dy / dd) * 4 : ry - (dy / dd) * 2;
+      if (na >= 4) for (const u of sinArma) if (u.tipo === 'tallerMovil' && u.orden === 'nada' && Math.hypot(u.x - tx, u.y - ty) > 12) { const cc = W.cercaLibre(m, tx, ty, true); W.orden(m, { t: 'mover', j, ids: [u.id], x: (cc % m.N) + 0.5, y: ((cc / m.N) | 0) + 0.5 }); } // el taller de campaña, detrás de la oleada: repara y recupera cascos él solo
       if (na >= 4) for (const u of sinArma) if (u.tipo === 'camionSum' && (!u.sumi || Math.hypot(u.sumi.x - tx, u.sumi.y - ty) > 14)) { const cc = W.cercaLibre(m, tx, ty, true); W.orden(m, { t: 'mover', j, ids: [u.id], x: (cc % m.N) + 0.5, y: ((cc / m.N) | 0) + 0.5 }); } // el camión de suministro, detrás de la oleada
       if (objetivo) for (const u of sinArma) if (u.tipo === 'operador' && u.orden === 'nada' && !u.dronMis && Math.hypot(u.x - tx, u.y - ty) <= 8 && Math.hypot(objetivo.cx - u.x, objetivo.cy - u.y) <= UNID.operador.misionDron) W.orden(m, { t: 'dronMision', j, ids: [u.id], x: objetivo.cx, y: objetivo.cy }); // el operador, en su sitio y con el objetivo a tiro: dron en misión sobre él
       for (const u of sinArma) if ((u.tipo === 'hacker' || u.tipo === 'operador') && u.orden === 'nada' && Math.hypot(u.x - tx, u.y - ty) > 8) { const cc = W.cercaLibre(m, tx, ty); W.orden(m, { t: 'mover', j, ids: [u.id], x: (cc % m.N) + 0.5, y: ((cc / m.N) | 0) + 0.5 }); }
@@ -500,23 +502,38 @@
       if (ids.length) { W.orden(m, { t: 'amover', j, ids, x: rx, y: ry, rumbo: Math.atan2(dy, dx) }); for (const id of ids) ia.reunidos.add(id); } // esperan encarados al rival
     }
     if (objetivo) {
+      // La oleada no entra en goteo: primero se junta en un punto a unas 26 celdas del objetivo (fuera del alcance de sus torres);
+      // cuando ha llegado la mayoría —o ha pasado demasiado tiempo— entra toda a la vez, en pinza.
+      if (!ia.espera) ia.espera = new Set();
+      for (const id of ia.espera) if (!vivos.has(id)) ia.espera.delete(id);
+      const ox = objetivo.cx - patio.cx, oy = objetivo.cy - patio.cy, od = Math.hypot(ox, oy) || 1, lim = (v) => Math.max(4, Math.min(m.N - 4, v));
       if (reserva.length >= ia.oleada) {
-        // Ataque en pinza: la mitad va de frente; la otra rodea por un costado (que alterna) y entra por el flanco.
-        const frente = reserva.filter((u, i) => i % 2 === 0), flanco = reserva.filter((u, i) => i % 2 === 1);
-        W.orden(m, { t: 'amover', j, ids: frente.map((u) => u.id), x: objetivo.cx, y: objetivo.cy });
-        if (flanco.length) {
-          const ox = objetivo.cx - patio.cx, oy = objetivo.cy - patio.cy, od = Math.hypot(ox, oy) || 1, lim = (v) => Math.max(4, Math.min(m.N - 4, v));
-          const c = W.cercaLibre(m, lim(objetivo.cx - (ox / od) * 10 - (oy / od) * 16 * ia.lado), lim(objetivo.cy - (oy / od) * 10 + (ox / od) * 16 * ia.lado));
-          const ids = flanco.map((u) => u.id);
-          W.orden(m, { t: 'amover', j, ids, x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 });
-          W.orden(m, { t: 'amover', j, ids, x: objetivo.cx, y: objetivo.cy, enc: true });
-          ia.lado = -ia.lado;
-        }
-        for (const u of reserva) ia.atacantes.add(u.id);
+        if (!ia.espera.size || !ia.punto) { const c = W.cercaLibre(m, lim(objetivo.cx - (ox / od) * Math.min(26, od * 0.5)), lim(objetivo.cy - (oy / od) * Math.min(26, od * 0.5))); ia.punto = { x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 }; ia.tOla = m.t; }
+        W.orden(m, { t: 'amover', j, ids: reserva.map((u) => u.id), x: ia.punto.x, y: ia.punto.y });
+        for (const u of reserva) { ia.atacantes.add(u.id); ia.espera.add(u.id); }
         const tope = Math.round((m.t > 48000 ? 28 : 18) * E.oleada); // pasados 40 minutos, oleadas mayores para romper el empate
         ia.oleada = Math.min(ia.oleada + 2, tope);
       }
-      const ociosos = soldados.filter((u) => ia.atacantes.has(u.id) && u.orden === 'nada' && !u.obj).map((u) => u.id);
+      if (ia.espera.size && ia.punto) {
+        let cerca = 0; const grupo = soldados.filter((u) => ia.espera.has(u.id));
+        for (const u of grupo) if (Math.hypot(u.x - ia.punto.x, u.y - ia.punto.y) < 12) cerca++;
+        if (cerca >= Math.max(3, grupo.length * 0.7) || m.t - ia.tOla > od / 0.045 + 1500) { // (el plazo da tiempo a que llegue la infantería a pie desde su base) // ya están: al asalto. La mitad de frente; la otra rodea por un costado (que alterna) y entra por el flanco.
+          const frente = grupo.filter((u, i) => i % 2 === 0), flanco = grupo.filter((u, i) => i % 2 === 1);
+          if (frente.length) W.orden(m, { t: 'amover', j, ids: frente.map((u) => u.id), x: objetivo.cx, y: objetivo.cy });
+          if (flanco.length) {
+            const c = W.cercaLibre(m, lim(objetivo.cx - (ox / od) * 10 - (oy / od) * 16 * ia.lado), lim(objetivo.cy - (oy / od) * 10 + (ox / od) * 16 * ia.lado));
+            const ids = flanco.map((u) => u.id);
+            W.orden(m, { t: 'amover', j, ids, x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 });
+            W.orden(m, { t: 'amover', j, ids, x: objetivo.cx, y: objetivo.cy, enc: true });
+            ia.lado = -ia.lado;
+          }
+          ia.espera.clear();
+        } else { // los que se han quedado parados por el camino, al punto
+          const ids = grupo.filter((u) => u.orden === 'nada' && !u.obj && Math.hypot(u.x - ia.punto.x, u.y - ia.punto.y) >= 12).map((u) => u.id);
+          if (ids.length) W.orden(m, { t: 'amover', j, ids, x: ia.punto.x, y: ia.punto.y });
+        }
+      }
+      const ociosos = soldados.filter((u) => ia.atacantes.has(u.id) && !ia.espera.has(u.id) && u.orden === 'nada' && !u.obj).map((u) => u.id);
       if (ociosos.length) W.orden(m, { t: 'amover', j, ids: ociosos, x: objetivo.cx, y: objetivo.cy });
     }
   };

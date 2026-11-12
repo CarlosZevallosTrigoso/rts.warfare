@@ -252,6 +252,33 @@
       if (blanco) for (const id of e.dr.bomba) { const q = m.porId.get(id); if (q.est === 'espera' && q.recarga <= 0 && (J.minerales >= ECON.dronBomba || J.dios)) { if (!J.dios) J.minerales -= ECON.dronBomba; q.obj = blanco.id; q.est = 'ir'; break; } }
     }
   }
+  // ---------- taller de campaña: recuperar vehículos destruidos ----------
+  function autoRecuperar(m, u) { // parado y sin nada que hacer: si hay un casco cerca y dinero de sobra, va por él
+    const J = m.jug[u.j]; let k = null, md = ECON.recuperaAuto;
+    for (const q of m.cascos) { if (m.t - q.t >= ECON.cascoDura) continue; const d0 = Math.hypot(q.x - u.x, q.y - u.y); if (d0 < md && (J.minerales >= UNID[q.tipo].costo * ECON.recuperaCosto + 300 || J.dios)) { md = d0; k = q; } }
+    if (k) { u.orden = 'recuperar'; u.rec = { c: k.c, prog: 0, auto: true }; u.ruta = null; u.pend = null; u.fallo = false; }
+  }
+  function tickRecuperar(m, u) {
+    const J = m.jug[u.j], r = u.rec, fin = () => { u.orden = 'nada'; u.rec = null; u.ruta = null; u.pend = null; };
+    const q = r && m.cascos ? m.cascos.find((k) => k.c === r.c) : null;
+    if (!q || m.t - q.t >= ECON.cascoDura || m.mapa.mineral[q.c] <= 0) { fin(); return; } // ya no está: caducó, lo recicló una cosechadora o se lo llevó otro
+    if (Math.hypot(u.x - q.x, u.y - q.y) > 1.9) {
+      if (u.fallo) { u.fallo = false; fin(); return; }
+      if (!u.pend && !u.ruta) pedirRuta(m, u, q.x, q.y, 1.3);
+      avanzar(m, u); return;
+    }
+    u.ruta = null; u.pend = null; u.v = 0; u.ang = Math.atan2(q.y - u.y, q.x - u.x);
+    if (++r.prog < ECON.recuperaTiempo) return;
+    const d = UNID[q.tipo], precio = Math.round(d.costo * ECON.recuperaCosto);
+    if (J.minerales < precio && !J.dios) { if (!r.avisado) { r.avisado = true; m.efectos.push({ tipo: 'sinRecuperar', x1: u.x, y1: u.y, j: u.j, t: m.t }); } if (r.auto) fin(); return; } // sin dinero: espera (si iba por su cuenta, lo deja)
+    if (!J.dios) J.minerales -= precio;
+    m.mapa.mineral[q.c] = Math.max(0, m.mapa.mineral[q.c] - Math.round(d.costo * ECON.chatarra)); // el casco deja de ser chatarra
+    if (m.mapa.mineral[q.c] <= 0 && m.mapa.tipoMin[q.c] === 3) { quitarMina(m, q.c); m.terrenoV++; }
+    m.cascos.splice(m.cascos.indexOf(q), 1);
+    const n = crearUnidad(m, u.j, q.tipo, W.cercaLibre(m, q.x, q.y, true)); n.vida = Math.max(1, Math.round(n.vidaMax * ECON.recuperaVida));
+    m.efectos.push({ tipo: 'recuperado', x1: n.x, y1: n.y, j: u.j, clase: q.tipo, t: m.t });
+    fin();
+  }
   // ---------- zapadores: minas, pontones y voladuras ----------
   // Por dónde cruzaría un pontón que pase por la celda de agua (x, y): de los cuatro ejes, el más corto que toque tierra firme por los dos lados.
   // Devuelve las filas de celdas (dos de ancho, para que quepan los vehículos), empezando por la orilla más cercana al ingeniero, y esa orilla.
@@ -997,6 +1024,23 @@
           if (cmd.enc && u.orden === 'zapar' && u.zapa) { if (u.zapa.lista.length < 24) u.zapa.lista.push(mio); return; }
           limpiar(u); u.arregla = 0; u.obj = 0; u.ruta = null; u.pend = null; u.fallo = false; u.orden = 'zapar'; u.zapa = { lista: [mio], prog: 0 };
         });
+        return;
+      }
+      case 'basar': { // los aviones toman por base ese edificio (un aeródromo; el helicóptero, también una pista avanzada), si les vale y hay sitio
+        const b = m.porId.get(cmd.en); if (!b || !b.edif || b.j !== cmd.j || b.vida <= 0) return;
+        for (const u of propias(m, cmd)) {
+          const d = UNID[u.tipo]; if (!d.aire || d.mini || u.casa === b.id) continue;
+          if (!(b.tipo === (W.hangarDe(d) || 'aerodromo') || (EDIF[b.tipo].helipuerto && d.enPista))) continue;
+          if (avionesDe(m, b) >= (EDIF[b.tipo].hangar || ECON.cupoAviones)) { m.efectos.push({ tipo: 'sinPista', x1: b.cx, y1: b.cy, j: cmd.j, t: m.t }); continue; }
+          limpiar(u); u.orden = 'nada'; u.obj = 0; u.ruta = null; u.pend = null; u.casa = b.id; u.enTierra = false; // despega y va a posarse en su nueva base
+        }
+        return;
+      }
+      case 'recuperar': { // el taller de campaña va por el vehículo destruido más cercano al punto
+        const cs = m.cascos || []; let k = null, md = 2.5;
+        for (const q of cs) { const d0 = Math.hypot(q.x - cmd.x, q.y - cmd.y); if (d0 < md) { md = d0; k = q; } }
+        if (!k) return;
+        for (const u of propias(m, cmd)) if (UNID[u.tipo].recupera) { limpiar(u); u.obj = 0; u.ruta = null; u.pend = null; u.fallo = false; u.orden = 'recuperar'; u.rec = { c: k.c, prog: 0 }; break; }
         return;
       }
       case 'formar': // la formación con la que esas unidades llegarán a destino (cada una recuerda la suya)
@@ -1751,7 +1795,7 @@
   function aerodromoLibre(m, u) {
     let mejor = null, md = Infinity;
     for (const e of m.ents) {
-      if (!e.edif || e.j !== u.j || e.tipo !== (W.hangarDe(UNID[u.tipo]) || 'aerodromo') || e.vida <= 0) continue; // el dron espía vive en su central
+      if (!e.edif || e.j !== u.j || e.vida <= 0 || !(e.tipo === (W.hangarDe(UNID[u.tipo]) || 'aerodromo') || (EDIF[e.tipo].helipuerto && UNID[u.tipo].enPista))) continue; // cada avión, en lo suyo; el helicóptero de combate vale también en una pista avanzada
       const dd = Math.hypot(e.cx - u.x, e.cy - u.y);
       if (dd < md && avionesDe(m, e) - (u.casa === e.id ? 1 : 0) < (EDIF[e.tipo].hangar || ECON.cupoAviones)) { md = dd; mejor = e; }
     }
@@ -1942,7 +1986,9 @@
       if (u.orden === 'hackear') { tickHackear(m, u); return; }
       if (u.orden === 'murar') { tickMurar(m, u); return; }
       if (u.orden === 'zapar') { tickZapar(m, u); return; }
+      if (u.orden === 'recuperar') { tickRecuperar(m, u); return; }
       if (u.orden !== 'nada') { u.arregla = 0; if (avanzar(m, u) || (!u.ruta && !u.pend)) u.orden = 'nada'; return; }
+      if (d.recupera && (m.t + u.id) % 40 === 0 && m.cascos && m.cascos.length) autoRecuperar(m, u);
       if (d.tiende && u.auto && m.logistica !== false && (m.t + u.id) % 30 === 0 && m.t >= (u.autoT || 0)) autoConectar(m, u);
       if (d.repara || d.cura) tickIngeniero(m, u);
       return;
@@ -2185,6 +2231,7 @@
     const talleres = [[], []];
     for (const e of m.ents) if (e.edif && (e.tipo === 'patio' || e.tipo === 'cuartel' || e.tipo === 'fabrica' || e.tipo === 'aerodromo')) talleres[e.j].push(e);
     const puestosTaller = m.puestos.filter((p) => p.tipo === 'taller' && p.dueno >= 0);
+    const campana = [[], []]; for (const e of m.ents) if (!e.edif && e.vida > 0 && UNID[e.tipo].taller && e.orden === 'nada' && e.v < 0.001) campana[e.j].push(e);
     for (const e of m.ents) {
       if (e.vida >= e.vidaMax || e.vida <= 0) continue; // los caídos en este tick no se reaniman
       const calma = m.t - (e.tDano === undefined ? -999 : e.tDano);
@@ -2197,7 +2244,12 @@
         return true;
       };
       if (e.edif) { if (calma > 300) sanar(ECON.curaEdificio); continue; }
-      if (calma < 100 || sinSuministro(e)) continue; // sin suministro no hay reparación
+      if (calma < 100) continue;
+      if (UNID[e.tipo].cat === 'veh' && !UNID[e.tipo].aire) { // taller de campaña parado y cerca: repara aunque no haya suministro
+        let hay = false; for (const tl of campana[e.j]) if (tl !== e && Math.hypot(tl.x - e.x, tl.y - e.y) <= UNID[tl.tipo].taller) { hay = true; break; }
+        if (hay) { sanar(ECON.curaUnidad * 2); continue; }
+      }
+      if (sinSuministro(e)) continue; // sin suministro no hay reparación
       const quiere = LUGAR[UNID[e.tipo].cat];
       if (!UNID[e.tipo].aire && puestosTaller.some((p) => p.dueno === e.j && Math.hypot(p.x - e.x, p.y - e.y) <= ECON.tallerRadio)) { sanar(ECON.curaUnidad); continue; } // taller capturado: repara a cualquiera de los suyos
       for (const b of talleres[e.j]) {
@@ -2384,6 +2436,7 @@
         if (m.paso[c] && !m.ocup[c] && !m.mapa.sitioEn[c] && tm !== 2) {
           if (!tm) { m.mapa.tipoMin[c] = 3; m.minas.push(c); }
           m.mapa.mineral[c] += Math.round(UNID[e.tipo].costo * ECON.chatarra);
+          if (UNID[e.tipo].costo > 0 && !e.recuperado) { if (!m.cascos) m.cascos = []; m.cascos = m.cascos.filter((q) => q.c !== c && m.t - q.t < ECON.cascoDura); if (m.cascos.length >= 40) m.cascos.shift(); m.cascos.push({ c, x: e.x, y: e.y, tipo: e.tipo, t: m.t }); } // el casco queda un rato: un taller de campaña puede recuperarlo
         }
       }
       m.efectos.push({ tipo: e.vendido ? 'venta' : 'muerte', x2: posX(e), y2: posY(e), edif: e.edif, tam: e.tam || 0, clase: e.tipo, ang: e.ang || 0, j: e.j, t: m.t });

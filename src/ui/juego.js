@@ -148,7 +148,7 @@
 
     // Volumen: la vista sigue siendo cenital, pero cada cosa tiene altura. Los edificios muestran su pared sur y el tejado
     // se dibuja desplazado hacia arriba; las unidades llevan un canto; la roca y el agua, un escalón.
-    const ALTO = { patio: 0.3, central: 0.36, refineria: 0.32, bomba: 0.2, cuartel: 0.26, extractor: 0.3, fabrica: 0.34, torreta: 0.22, torreCanon: 0.36, aerodromo: 0.08, antiaerea: 0.22, estacion: 0.26, deposito: 0.22, obras: 0.28, misilera: 0.12, interceptor: 0.24, torretaMuro: 0.34, camara: 0.3, estDrones: 0.14, laboratorio: 0.26, logistica: 0.16, avanzada: 0.2, inteligencia: 0.3 };
+    const ALTO = { patio: 0.3, central: 0.36, refineria: 0.32, bomba: 0.2, cuartel: 0.26, extractor: 0.3, fabrica: 0.34, torreta: 0.22, torreCanon: 0.36, aerodromo: 0.08, antiaerea: 0.22, estacion: 0.26, deposito: 0.22, obras: 0.28, misilera: 0.12, interceptor: 0.24, torretaMuro: 0.34, camara: 0.3, estDrones: 0.14, laboratorio: 0.26, logistica: 0.16, avanzada: 0.2, inteligencia: 0.3, pistaAv: 0.04 };
     function entEn(wx, wy, holgura) { // holgura: margen extra (en celdas) para acertar con el dedo
       let mejor = null, md = Infinity;
       for (const e of m.ents) {
@@ -196,6 +196,8 @@
         if (!e.edif && e.dronMis && e.j === YO) t += ' · dron en misión lejana';
         if (!e.edif && e.orden === 'zapar' && e.zapa && e.zapa.lista[0] && e.j === YO) t += ' · ' + ({ minar: 'minando', desminar: 'desminando', ponton: 'tendiendo un pontón', volar: 'va a volar un camino' })[e.zapa.lista[0].t];
         if (e.ponton) t += ' · pontón';
+        if (e.edif && EDIF[e.tipo].helipuerto && e.j === YO) t += ' · helicópteros ' + m.ents.filter((u) => !u.edif && u.casa === e.id).length + '/' + EDIF[e.tipo].hangar + ' · clic derecho aquí con un helicóptero para que la tome por base';
+        if (!e.edif && UNID[e.tipo].taller && e.j === YO) t += e.orden === 'recuperar' ? ' · recuperando un vehículo' : e.orden === 'nada' ? ' · reparando a los vehículos cercanos' : ' · parado repara y recupera';
         if (!e.edif && UNID[e.tipo].suministro && e.j === YO && e.sumC !== undefined) { const cf = UNID[e.tipo].suministro, pc = Math.round(e.sumC / cf.carga * 100), s = e.sumi; t += ' · carga ' + pc + ' % · ' + (!s ? 'sin punto: muévelo adonde deba abastecer' : s.est === 'ida' ? 'de camino a su punto' : s.est === 'puesto' ? (e.sumC > 0 ? 'abasteciendo a ' + (e.sumiAt || 0) + (e.sumiAt === 1 ? ' unidad' : ' unidades') : 'vacío: no hay puesto logístico al que volver') : s.est === 'vuelta' ? 'vacío: vuelve a recargar' : 'recargando (' + cf.recarga + ' minerales)'); }
         if (e.cava > 0) t += ' · cavando'; else if (e.guardia && e.j === YO && !W.enTrinchera(m, e)) t += ' · en guardia';
         if (UNID[e.tipo] && UNID[e.tipo].aire && e.j === YO) t += (e.enTierra ? ' · en tierra' : e.repostando ? ' · vuelve a repostar' : e.patrulla ? ' · patrulla' : '') + ' · combustible ' + Math.round(e.fuel / UNID[e.tipo].fuel * 100) + ' %';
@@ -281,19 +283,19 @@
         if (e.infra || e.vida <= 0) return '';
         if (e.hack > m.t) return 'hack';
         if (e.tipo === 'avanzada') return e.abast > m.t ? '' : 'enlace';
-        if (conRed && e.conRed === false) return 'red';
+        if (conRed && e.conRed === false && !EDIF[e.tipo].helipuerto) return 'red'; // (la pista avanzada va fuera de la red a propósito)
         if (e.sinLuz) return 'luz';
         if (e.cola && e.cola.length && e.sinAgua) return 'agua';
         return '';
       }
-      return conRed && e.sinSum >= W.ECON.sinSum ? 'sum' : '';
+      return conRed && UNID[e.tipo].arma && e.sinSum >= W.ECON.sinSum ? 'sum' : ''; // (a quien no dispara, el suministro no le cambia nada)
     }
     const REMEDIO = {
-      red: 'fuera de la red: no rinde. Un ingeniero civil en automático lo conecta (si está a menos de ' + W.ECON.autoLargo + ' celdas de tu red y te sobran minerales); más lejos, ordénaselo con «Conectar edificios»',
-      luz: 'sin energía suficiente en su red: a media marcha. Construye o mejora una central en esta red',
-      agua: 'falta agua para entrenar: construye o mejora una bomba de agua',
-      sum: 'sin suministro: dispara más lento y no se repara. Vuelve a la zona de tu red o lleva un depósito conectado o un puesto de avanzada',
-      enlace: 'sin enlace aéreo: fuera de la red. Hace falta un puesto logístico en pie y con energía',
+      red: 'fuera de la red: no rinde · conéctalo con un ingeniero civil',
+      luz: 'falta energía en su red: va a media marcha · otra central',
+      agua: 'falta agua para entrenar · otra bomba de agua',
+      sum: 'sin suministro: dispara lento y no se repara · acércale un camión de suministro',
+      enlace: 'sin enlace aéreo: fuera de la red · hace falta un puesto logístico',
       hack: 'hackeado: apagado unos segundos',
     };
     function icono(x, y, k) { // disco rojo con el dibujo en blanco
@@ -952,6 +954,14 @@
           ctx.strokeStyle = mn.j === YO ? P.yo : P.mal; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(px, py, r * 2, 0, TAU); ctx.stroke();
         }
       }
+      { const tls = sel.size ? unidadesSel().filter((u) => u.j === YO && UNID[u.tipo].taller) : []; // taller de campaña seleccionado: su radio de reparación y los cascos que puede recuperar
+        if (tls.length) {
+          ctx.strokeStyle = P.bien; ctx.lineWidth = 1; ctx.setLineDash([3, 5]);
+          for (const u of tls) { ctx.beginPath(); ctx.arc(ox + u.x * z, oy + u.y * z, UNID[u.tipo].taller * z, 0, TAU); ctx.stroke(); }
+          ctx.setLineDash([]);
+          if (m.cascos) for (const q of m.cascos) { const px = ox + q.x * z, py = oy + q.y * z; ctx.beginPath(); ctx.arc(px, py, Math.max(7, z * 0.55), 0, TAU); ctx.stroke(); if (z >= 12) { ctx.fillStyle = P.bien; ctx.fillText(Math.round(UNID[q.tipo].costo * W.ECON.recuperaCosto) + '', px + z * 0.6, py - z * 0.5); } }
+        }
+      }
       if (modo === 'zapar' && raton.dentro) {
         ctx.fillStyle = P.tinta; ctx.fillText(ZAPA[zapaQue], raton.x + 14, raton.y - 8);
         if (zapaQue === 'desminar') { ctx.strokeStyle = P.yo; ctx.lineWidth = 1; ctx.setLineDash([4, 5]); ctx.beginPath(); ctx.arc(raton.x, raton.y, W.ECON.desminaRadio * z, 0, TAU); ctx.stroke(); ctx.setLineDash([]); }
@@ -1122,6 +1132,12 @@
           if (d.derribo) { estallido(d.x2, d.y2, 2); aviso(d.j === YO ? 'Misil enemigo derribado' : 'Te han derribado un misil'); son.explosion(Math.max(0.2, cerca(d.x2, d.y2)), paneo(d.x2), false); }
         } else if (d.tipo === 'misilListo') {
           if (d.j === YO) { aviso(MIS[d.clase].nombre + ' listo en la misilera'); son.unidadLista(); }
+        } else if (d.tipo === 'recuperado') {
+          if (d.j === YO) { aviso('Recuperado: ' + UNID[d.clase].nombre.toLowerCase()); son.listo && son.listo(); }
+        } else if (d.tipo === 'sinRecuperar') {
+          if (d.j === YO) aviso('Faltan minerales para recuperar ese vehículo');
+        } else if (d.tipo === 'sinPista') {
+          if (d.j === YO) aviso('Esa base está llena');
         } else if (d.tipo === 'sinPonton') {
           if (d.j === YO) aviso('Ahí no cabe un pontón: hace falta tierra firme a los dos lados, a 14 celdas como mucho');
         } else if (d.tipo === 'pontonListo') {
@@ -1438,7 +1454,8 @@
       cuartel: 'Produce la infantería.', extractor: 'Saca petróleo de un yacimiento.', fabrica: 'Produce los vehículos.', torreta: 'Defensa fija contra tierra y aire.', torreCanon: 'Defensa pesada de largo alcance contra blindados.', aerodromo: 'Produce y aloja hasta cinco aviones.',
       antiaerea: 'Defensa fija solo contra el aire: aviones y drones.', estacion: 'Sobre un campo de conocimiento da información rápido; aloja la inteligencia.', laboratorio: 'Da información en la base, sin campo, más despacio. Vale como estación.', obras: 'Produce las unidades civiles: ingeniero civil y excavadora.',
       deposito: 'Conectado a tu red, crea una zona con suministro donde también puedes construir.', misilera: 'Fabrica, guarda y lanza misiles balísticos.', interceptor: 'Derriba los misiles enemigos que entran en su radio.', estDrones: 'Mantiene dos drones de reconocimiento vigilando a su alrededor. Mejorada lleva además bombarderos y kamikazes, y guarda las tecnologías del operador.', inteligencia: 'Entrena espías, aloja dos drones espía de largo alcance y permite el mapeo satelital.',
-      logistica: 'En la base: de aquí salen los camiones y helicópteros de suministro y los vuelos que mantienen los puestos de avanzada; tiene pista para trasladar infantería.', avanzada: 'No se construye: lo despliega el puesto móvil. Con enlace aéreo está en tu red, cura a la infantería cercana y tiene pista.',
+      pistaAv: 'Se coloca en cualquier terreno explorado, sin red ni energía. Clic derecho en ella con helicópteros de combate: la toman por base, repostan allí y su radio de vuelo se cuenta desde allí.', logistica: 'En la base: de aquí salen los camiones y helicópteros de suministro y los vuelos que mantienen los puestos de avanzada; tiene pista para trasladar infantería.', avanzada: 'No se construye: lo despliega el puesto móvil. Con enlace aéreo está en tu red, cura a la infantería cercana y tiene pista.',
+      tallerMovil: 'Parado, repara los vehículos que tenga a 4 celdas aunque estén sin suministro, y recupera los vehículos destruidos cercanos (tuyos o del rival) a mitad de precio: va solo, o clic derecho sobre el casco.',
       camionSum: 'Muévelo adonde esté tu ejército: se planta y abastece a todo lo que tenga alrededor mientras le dure la carga (se gasta según cuántas unidades atiende). Vacío, vuelve solo al puesto logístico, recarga y regresa.', heliSum: 'Como el camión de suministro, pero volando: más rápido y sin rodeos; lleva la mitad de carga y la antiaérea lo derriba.',
       avanzadaMovil: 'Se despliega lejos como puesto de avanzada: red, hospital y pista sin tender líneas.',
       torretaMuro: 'Torreta que se monta sobre un muro reforzado tuyo.', camara: 'Ve lejos y en redondo, descubre a los escondidos y avisa si entra un enemigo.',
@@ -1955,6 +1972,13 @@
           if (!us.some((u) => UNID[u.tipo].arma && W.puedeAtacar(u, o))) aviso(UNID[o.tipo] && UNID[o.tipo].aire ? 'Estas unidades no alcanzan a los aviones' : 'Estas unidades no pueden atacar eso');
           W.orden(m, { t: 'atacar', j: YO, ids, obj: o.id, enc }); marca(wx, wy, P.mal); return;
         }
+        if (o && o.j === YO && o.edif && (o.tipo === 'aerodromo' || EDIF[o.tipo].hangar) && us.some((u) => UNID[u.tipo].aire)) { // clic derecho sobre un aeródromo o una pista con aviones seleccionados: la toman por base
+          const av = us.filter((u) => UNID[u.tipo].aire && (o.tipo === (W.hangarDe(UNID[u.tipo]) || 'aerodromo') || (EDIF[o.tipo].helipuerto && UNID[u.tipo].enPista)));
+          if (av.length) { W.orden(m, { t: 'basar', j: YO, ids: av.map((u) => u.id), en: o.id }); marca(wx, wy, P.bien); son.orden(); aviso('Nueva base: ' + EDIF[o.tipo].nombre.toLowerCase()); return; }
+          if (EDIF[o.tipo].helipuerto) { aviso('En la pista avanzada solo caben helicópteros de combate'); return; }
+        }
+        { const tl = us.filter((u) => UNID[u.tipo].recupera); // clic derecho sobre un vehículo destruido con un taller de campaña: lo recupera
+          if (tl.length && m.cascos && m.cascos.some((q) => Math.hypot(q.x - wx, q.y - wy) < 1.5)) { W.orden(m, { t: 'recuperar', j: YO, ids: tl.map((u) => u.id), x: wx, y: wy }); marca(wx, wy, P.bien); son.orden(); return; } }
         if (o && o.j === YO && o.edif && EDIF[o.tipo].pista && us.some((u) => UNID[u.tipo].cat === 'inf')) { // clic derecho sobre una pista propia: la infantería que esté junto a otra pista vuela hasta ella
           const infs = us.filter((u) => UNID[u.tipo].cat === 'inf');
           let de = null; for (const b of m.ents) { if (!b.edif || b.j !== YO || b === o || !EDIF[b.tipo].pista) continue; if (infs.some((u) => Math.max(Math.abs(u.x - b.cx), Math.abs(u.y - b.cy)) <= 6 + b.tam / 2)) { de = b; break; } }

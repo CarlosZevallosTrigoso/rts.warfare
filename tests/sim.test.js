@@ -1809,6 +1809,50 @@ prueba('zapadores: minas y desminado, pontón sobre el agua y voladura', () => {
   assert.ok(quedan > 0 && m.minasT.length === 0, 'el zapador enemigo limpia la zona');
 });
 
+prueba('tanda B: el taller de campaña repara sin suministro y recupera vehículos destruidos; la pista avanzada aloja helicópteros', () => {
+  const m = W.crearMundo(31, { N: 128, logistica: true }), N = m.N, J = m.jug[0];
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const cel = (x, y) => y * N + x, patio = m.ents.find((e) => e.j === 0 && e.tipo === 'patio'), px = Math.floor(patio.cx), py = Math.floor(patio.cy), dir = px < 64 ? 1 : -1;
+  for (let y = py - 12; y <= py + 12; y++) for (let x = Math.min(px, px + dir * 80) - 2; x <= Math.max(px, px + dir * 80) + 2; x++) { const i = cel(x, y); if (x < 2 || y < 2 || x >= N - 2 || y >= N - 2 || m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.mapa.tipoMin[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  m.terrenoV++;
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  J.minerales = 20000; J.petroleo = 3000; J.nivel = 3;
+  const fx = px + dir * 50;
+  const tq = W.crearUnidad(m, 0, 'tanque', cel(fx, py)); avanza(1000);
+  tq.vida = tq.vidaMax * 0.4; tq.tDano = m.t - 500; avanza(300);
+  assert.ok(tq.sinSum >= W.ECON.sinSum && tq.vida < tq.vidaMax * 0.41, 'lejos de la red, el tanque dañado no se repara');
+  const tl = W.crearUnidad(m, 0, 'tallerMovil', cel(fx + 2, py + 1)); avanza(400);
+  assert.ok(tq.vida > tq.vidaMax * 0.6, 'con el taller de campaña al lado, sí (vida ' + Math.round(tq.vida) + ')');
+  // recuperación: el tanque cae y deja un casco; el taller lo recupera a mitad de precio y a media vida
+  W.orden(m, { t: 'mover', j: 0, ids: [tl.id], x: fx + 14.5, y: py + 1.5 }); avanza(400); // (lo aparto para que no vaya solo todavía)
+  const costo = W.UNID.tanque.costo; tq.vida = 0; avanza(3);
+  assert.strictEqual(m.cascos.length, 1, 'el vehículo destruido deja un casco'); assert.ok(m.mapa.mineral[m.cascos[0].c] > 0);
+  const min0 = J.minerales;
+  W.orden(m, { t: 'recuperar', j: 0, ids: [tl.id], x: m.cascos[0].x, y: m.cascos[0].y }); avanza(3);
+  assert.strictEqual(tl.orden, 'recuperar'); for (let i = 0; i < 2000 && tl.orden === 'recuperar'; i++) W.tick(m);
+  const nuevo = m.ents.find((e) => e.tipo === 'tanque' && e.j === 0 && e.vida > 0);
+  assert.ok(nuevo, 'el tanque vuelve'); assert.ok(Math.abs(nuevo.vida - nuevo.vidaMax * 0.5) < nuevo.vidaMax * 0.15, 'a media vida');
+  assert.ok(Math.abs((min0 - J.minerales) - costo * 0.5) < 120, 'a mitad de precio (' + Math.round(min0 - J.minerales) + ' de ' + costo + ')');
+  assert.strictEqual(m.cascos.length, 0); assert.strictEqual(m.mapa.tipoMin[cel(Math.floor(tq.x), Math.floor(tq.y))], 0, 'y la chatarra desaparece');
+  // un casco enemigo también se recupera, y solo: el taller parado va por los que tenga cerca
+  const en = W.crearUnidad(m, 1, 'tanque', cel(Math.floor(tl.x) + 4, Math.floor(tl.y))); en.vida = 0; avanza(3);
+  for (let i = 0; i < 2500 && m.ents.filter((e) => e.tipo === 'tanque' && e.j === 0).length < 2; i++) W.tick(m);
+  assert.strictEqual(m.ents.filter((e) => e.tipo === 'tanque' && e.j === 0).length, 2, 'el casco enemigo pasa a ser tuyo');
+  // pista avanzada: el helicóptero la toma por base y reposta en ella
+  W.crearEdificio(m, 0, 'central', px + dir * 4, py + 4); const ae = W.crearEdificio(m, 0, 'aerodromo', px + dir * 6, py - 5); avanza(3);
+  const he = W.crearUnidad(m, 0, 'helicoptero', cel(px + dir * 7, py - 4)); avanza(40);
+  assert.strictEqual(he.casa, ae.id, 'el helicóptero nace en su aeródromo');
+  assert.strictEqual(W.porQueNo(m, 0, 'pistaAv', fx - 4, py - 6), '', 'la pista avanzada se coloca fuera de la red');
+  const pa = W.crearEdificio(m, 0, 'pistaAv', fx - 4, py - 6); avanza(3);
+  W.orden(m, { t: 'basar', j: 0, ids: [he.id], en: pa.id }); avanza(3);
+  assert.strictEqual(he.casa, pa.id); for (let i = 0; i < 1500 && !he.enTierra; i++) W.tick(m);
+  assert.ok(he.enTierra && Math.hypot(he.x - pa.cx, he.y - pa.cy) < 2, 'vuela a la pista y se posa');
+  he.fuel = 300; avanza(600); assert.ok(he.fuel > 1500, 'y reposta allí (' + Math.round(he.fuel) + ')');
+  const caza = W.crearUnidad(m, 0, 'caza', cel(px + dir * 8, py - 4)); avanza(40);
+  W.orden(m, { t: 'basar', j: 0, ids: [caza.id], en: pa.id }); avanza(3);
+  assert.notStrictEqual(caza.casa, pa.id, 'un caza no cabe en una pista avanzada');
+});
+
 prueba('tanda 5: puente aéreo, puesto de avanzada, hospital y traslado de infantería', () => {
   const m = W.crearMundo(31, { N: 128, logistica: true }), N = m.N, J = m.jug[0];
   m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
@@ -2046,23 +2090,25 @@ if (!process.env.RAPIDO) prueba('fase 2c: los cinco estilos de rival juegan medi
 
 if (!process.env.RAPIDO) prueba('partidas completas IA contra IA', () => {
   const LIMITE = 20 * 60 * 90; // 90 minutos de juego
-  let conGanador = 0;
-  for (const s of [3, 101, 2026, 555]) {
-    const m = W.crearMundo(s, { logistica: true }), a = W.iaCrear(0), b = W.iaCrear(1);
+  // Seis partidas en mapa mediano, donde la IA tiene que saber rematar; y dos en el mapa gigante (bases a 650 celdas), donde lo que se
+  // comprueba es que la economía y el combate no se paran: ahí que haya ganador en 90 minutos depende demasiado del azar de cada cambio.
+  let conGanador = 0, medianas = 0;
+  for (const [s, lado] of [[3, 256], [101, 256], [2026, 256], [555, 256], [7, 256], [42, 256], [3, 512], [2026, 512]]) {
+    const m = W.crearMundo(s, { N: lado, logistica: true }), a = W.iaCrear(0), b = W.iaCrear(1);
     const t0 = Date.now();
     let maxEnts = 0;
     while (m.ganador < 0 && m.t < LIMITE) { W.iaTick(m, a); W.iaTick(m, b); W.tick(m); if (m.ents.length > maxEnts) maxEnts = m.ents.length; }
     const [J0, J1] = m.jug;
-    console.log(`      semilla ${s}: ganador ${m.ganador} en ${(m.t / 1200).toFixed(1)} min de juego · cosechado ${J0.cosechado}/${J1.cosechado} · producidas ${J0.producidas}/${J1.producidas} · bajas ${J0.bajas}/${J1.bajas} · petróleo ${J0.extraido}/${J1.extraido} · info ${J0.info}/${J1.info} · nivel ${J0.nivel}/${J1.nivel} · mejoras ${Object.keys(J0.mejoras).length}/${Object.keys(J1.mejoras).length} · máx entidades ${maxEnts} · ${(Date.now() - t0)} ms (${((Date.now() - t0) / m.t).toFixed(3)} ms/tick)`);
+    console.log(`      semilla ${s} (${lado}): ganador ${m.ganador} en ${(m.t / 1200).toFixed(1)} min de juego · cosechado ${J0.cosechado}/${J1.cosechado} · producidas ${J0.producidas}/${J1.producidas} · bajas ${J0.bajas}/${J1.bajas} · petróleo ${J0.extraido}/${J1.extraido} · info ${J0.info}/${J1.info} · nivel ${J0.nivel}/${J1.nivel} · mejoras ${Object.keys(J0.mejoras).length}/${Object.keys(J1.mejoras).length} · máx entidades ${maxEnts} · ${(Date.now() - t0)} ms (${((Date.now() - t0) / m.t).toFixed(3)} ms/tick)`);
     for (const J of [J0, J1]) {
       assert.ok(J.cosechado > 3000, 'economía parada, semilla ' + s);
       assert.ok(J.producidas > 8, 'sin producción, semilla ' + s);
       assert.ok(J.extraido > 0, 'la IA no extrajo petróleo, semilla ' + s);
     }
     assert.ok(J0.bajas + J1.bajas > 5, 'sin combate, semilla ' + s);
-    if (m.ganador >= 0) conGanador++;
+    if (lado === 256) { medianas++; if (m.ganador >= 0) conGanador++; }
   }
-  assert.ok(conGanador >= 2, 'pocas partidas terminan: ' + conGanador);
+  assert.ok(conGanador >= 4, 'pocas partidas terminan en mapa mediano: ' + conGanador + ' de ' + medianas);
 });
 
 console.log(ok + ' pruebas correctas');
