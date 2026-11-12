@@ -265,6 +265,7 @@
       let veh = (c.blindado || 0) < E.blindados && (c.tanque || 0) < Math.max(2, E.blindados) ? 'blindado' : 'tanque'; // blindados ligeros para empezar, según el estilo
       if (J.nivel >= 3 && (c.lanzacohetes || 0) < 2 && (c.lanzacohetes || 0) * 5 < (c.tanque || 0) + (c.pesado || 0) && W.puedePagar(J, UNID.lanzacohetes)) veh = 'lanzacohetes';
       else if (J.nivel >= 3 && !c.mando && J.info > 250 && soldados.length >= 8) veh = 'mando';
+      else if (m.logistica !== false && !c.vehRadio && !J.colas.vehRadio.n && soldados.length >= 8 && m.t > 6000) veh = 'vehRadio'; // la radio va con el ejército
       // Segunda base: un patio móvil cuando la economía lo permite y aún solo hay un patio.
       const paraBase = quiereBase && ia.tAhorro > 0;
       if (paraBase) veh = 'patioMovil'; // (solo cuando ahorra para la segunda base: si ahorra para subir de nivel, no compra vehículos)
@@ -499,7 +500,7 @@
     }
     // El vehículo de mando y los ingenieros sobrantes acompañan al punto de reunión.
     if (J.nivel >= 2 && ia.estilo !== 'aereo' && !J.cuenta.comandoDrones && !J.colas.comandoDrones.n && soldados.length >= 10 && J.cuenta.fabrica && W.puedePagar(J, UNID.comandoDrones) && J.minerales > 1600) W.orden(m, { t: 'entrenar', j, tipo: 'comandoDrones' }); // un comando de drones que acompaña al grueso
-    for (const u of sinArma) if ((u.tipo === 'mando' || u.tipo === 'comandoDrones') && u.orden === 'nada' && Math.hypot(u.x - rx, u.y - ry) > 7) W.orden(m, { t: 'mover', j, ids: [u.id], x: rx - (dx / dd) * 2, y: ry - (dy / dd) * 2 });
+    for (const u of sinArma) if ((u.tipo === 'mando' || u.tipo === 'comandoDrones' || u.tipo === 'vehRadio') && u.orden === 'nada' && Math.hypot(u.x - rx, u.y - ry) > 7) W.orden(m, { t: 'mover', j, ids: [u.id], x: rx - (dx / dd) * 2, y: ry - (dy / dd) * 2 });
     if (tk % 5 === 1) { // hackers y operadores de drones: con la oleada, unos pasos por detrás; sin oleada, en el punto de reunión
       let ax = 0, ay = 0, na = 0; for (const u of soldados) if (ia.atacantes.has(u.id)) { ax += u.x; ay += u.y; na++; }
       const tx = na >= 4 ? ax / na - (dx / dd) * 4 : rx - (dx / dd) * 2, ty = na >= 4 ? ay / na - (dy / dd) * 4 : ry - (dy / dd) * 2;

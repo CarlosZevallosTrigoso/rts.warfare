@@ -2121,6 +2121,27 @@ prueba('drones de reconocimiento: se les ordena patrullar por puntos, ir a un pu
   assert.ok(!dr.dpat && dr.vida > 0, 'si el portador se aleja, el dron deja la patrulla y lo sigue');
 });
 
+prueba('radio móvil: el radioperador, el vehículo de radio y el dron de radio llevan la cobertura consigo', () => {
+  const m = W.crearMundo(31, { N: 256, logistica: true }), N = m.N;
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  const patio = m.ents.find((e) => e.j === 0 && e.tipo === 'patio'), lx = patio.cx < 128 ? patio.cx + 110 : patio.cx - 110, ly = patio.cy < 128 ? patio.cy + 110 : patio.cy - 110;
+  for (let y = Math.floor(ly) - 45; y <= ly + 45; y++) for (let x = Math.floor(lx) - 45; x <= lx + 45; x++) { const i = y * N + x; if (x < 2 || y < 2 || x >= N - 2 || y >= N - 2 || m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  m.terrenoV++;
+  const en = (dx, dy) => Math.floor(ly + dy) * N + Math.floor(lx + dx);
+  const s1 = W.crearUnidad(m, 0, 'infanteria', en(0, 0)), s2 = W.crearUnidad(m, 0, 'infanteria', en(20, 0)), s3 = W.crearUnidad(m, 0, 'infanteria', en(-36, 0)); avanza(21);
+  assert.ok(W.sinRadio(m, s1) && W.sinRadio(m, s2) && W.sinRadio(m, s3), 'lejos de la base no hay radio');
+  const r = W.crearUnidad(m, 0, 'radioOp', en(3, 0)); avanza(21);
+  assert.ok(!W.sinRadio(m, s1) && W.sinRadio(m, s2), 'el radioperador cubre 12 celdas'); assert.ok(!W.sinRadio(m, r), 'y él mismo tiene enlace');
+  const v = W.crearUnidad(m, 0, 'vehRadio', en(4, 2)); avanza(21);
+  assert.ok(!W.sinRadio(m, s2) && W.sinRadio(m, s3), 'el vehículo cubre 28');
+  W.orden(m, { t: 'mover', j: 0, ids: [v.id], x: lx - 20, y: ly + 2 }); avanza(600);
+  assert.ok(!W.sinRadio(m, s3) && W.sinRadio(m, s2), 'la cobertura se mueve con el vehículo');
+  r.vida = 0; v.vida = 0; avanza(21); assert.ok(W.sinRadio(m, s1), 'sin ellos, vuelve el silencio');
+  const d = W.crearUnidad(m, 0, 'dronRadio', en(1, 1)); avanza(21);
+  assert.ok(W.UNID.dronRadio.radioCom === 22 && !W.sinRadio(m, s1) && !W.sinRadio(m, s2) && W.sinRadio(m, s3), 'el dron de radio cubre 22 donde esté');
+});
+
 prueba('tanda 5: puente aéreo, puesto de avanzada, hospital y traslado de infantería', () => {
   const m = W.crearMundo(31, { N: 128, logistica: true }), N = m.N, J = m.jug[0];
   m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);

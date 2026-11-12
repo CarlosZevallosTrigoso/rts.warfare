@@ -8,7 +8,7 @@
   // El contexto llega trasladado al centro de la unidad. r = radio en píxeles.
   // e = { ang, angT, retro (0..1), anda, tiempo, carga (0..1), cosecha }
   W.fichaUnidad = function (c, u, r, lod, col, e) {
-    const inf = W.UNID[u.tipo].cat === 'inf', at = u.tipo === 'antitanque', pesado = u.tipo === 'pesado', expl = u.tipo === 'explorador', ing = u.tipo === 'ingeniero', med = u.tipo === 'medico', civ = u.tipo === 'civil', hk = u.tipo === 'hacker', op = u.tipo === 'operador', franco = u.tipo === 'francotirador', esp = u.tipo === 'espia', gra = u.tipo === 'granadero';
+    const inf = W.UNID[u.tipo].cat === 'inf', at = u.tipo === 'antitanque', pesado = u.tipo === 'pesado', expl = u.tipo === 'explorador', ing = u.tipo === 'ingeniero', med = u.tipo === 'medico', civ = u.tipo === 'civil', hk = u.tipo === 'hacker', op = u.tipo === 'operador', rad = u.tipo === 'radioOp', franco = u.tipo === 'francotirador', esp = u.tipo === 'espia', gra = u.tipo === 'granadero';
     if (lod === 0) {
       c.fillStyle = col.base; c.beginPath();
       if (inf) c.arc(0, 0, r, 0, TAU);
@@ -44,6 +44,8 @@
       c.strokeStyle = col.osc; c.lineCap = at ? 'butt' : 'round'; c.lineWidth = Math.max(1.4, R * (at ? 0.55 : 0.3)); // fusil, o tubo lanzacohetes al hombro
       if (ing) { // sin arma: lleva una llave inglesa por delante
         c.lineWidth = Math.max(1.2, R * 0.26); c.beginPath(); c.moveTo(R * 0.3, R * 0.45); c.lineTo(R * 1.25, R * 0.45); c.moveTo(R * 1.25, R * 0.15); c.lineTo(R * 1.25, R * 0.75); c.stroke();
+      } else if (rad) { // la radio a la espalda y una antena larga, doblada hacia atrás
+        c.fillStyle = col.osc; c.fillRect(-R * 1.05, -R * 0.5, R * 0.45, R * 1.0); c.strokeStyle = col.luz; c.lineWidth = Math.max(1, R * 0.16); c.beginPath(); c.moveTo(-R * 0.85, -R * 0.35); c.quadraticCurveTo(-R * 1.3, -R * 1.5, -R * 2.3, -R * 1.5); c.stroke(); c.fillStyle = col.osc; c.fillRect(R * 0.75, R * 0.15, R * 0.55, R * 0.16);
       } else if (op) { // sin arma: el mando a dos manos y una antena corta
         c.fillStyle = col.osc; c.fillRect(R * 0.65, -R * 0.45, R * 0.3, R * 0.9); c.lineWidth = 1; c.beginPath(); c.moveTo(R * 0.8, -R * 0.45); c.lineTo(R * 1.25, -R * 1.0); c.stroke();
       } else if (hk) { // sin arma: un portátil abierto por delante y una antena
@@ -156,13 +158,14 @@
       c.strokeStyle = col.luz; c.lineWidth = Math.max(1, r * 0.1); c.beginPath(); c.arc(-L * 0.35, 0, w * 0.55, 0, TAU); c.stroke(); // plataforma
       c.beginPath(); c.moveTo(-L * 0.35 - w * 0.3, 0); c.lineTo(-L * 0.35 + w * 0.3, 0); c.moveTo(-L * 0.35, -w * 0.3); c.lineTo(-L * 0.35, w * 0.3); c.stroke();
       c.strokeStyle = col.osc; c.beginPath(); c.moveTo(L * 0.2, -w * 0.7); c.lineTo(L * 0.2, -w * 1.5); c.stroke(); // antena
-    } else if (u.tipo === 'dron' || u.tipo === 'dronEspia') { // ala fina y larga, cola en V, hélice detrás
+    } else if (u.tipo === 'dron' || u.tipo === 'dronEspia' || u.tipo === 'dronRadio') { // ala fina y larga, cola en V, hélice detrás
       const L = r * 1.8;
       c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1;
       c.beginPath(); c.rect(-L * 0.05, -L * 1.25, L * 0.24, L * 2.5); c.fill(); c.stroke(); // ala
       c.beginPath(); c.moveTo(-L * 0.85, 0); c.lineTo(-L * 1.1, -L * 0.42); c.moveTo(-L * 0.85, 0); c.lineTo(-L * 1.1, L * 0.42); c.stroke(); // cola en V
       c.fillStyle = col.osc; c.beginPath(); c.ellipse(-L * 0.05, 0, L * 0.95, L * 0.13, 0, 0, TAU); c.fill(); // fuselaje
       if (lod === 2) { c.fillStyle = col.luz; c.beginPath(); c.arc(L * 0.55, 0, L * 0.11, 0, TAU); c.fill(); } // cámara
+      if (u.tipo === 'dronRadio') { c.strokeStyle = col.luz; c.lineWidth = 1; const k = (e.tiempo * 0.0012) % 1; c.globalAlpha = 0.8 * (1 - k); c.beginPath(); c.arc(0, 0, L * (0.3 + k * 0.9), 0, TAU); c.stroke(); c.globalAlpha = 1; } // ondas de radio
       if (e.anda) { c.strokeStyle = col.luz; c.globalAlpha = 0.6; const a = Math.cos(e.tiempo * 0.05) * L * 0.3; c.beginPath(); c.moveTo(-L, -a); c.lineTo(-L, a); c.stroke(); c.globalAlpha = 1; }
     } else if (u.tipo === 'caza') { // ala en delta, morro afilado
       const L = r * 1.9;
@@ -220,6 +223,14 @@
       c.fillStyle = col.luz; c.strokeStyle = col.osc; c.beginPath(); c.rect(-L * 0.85 - e.retro * L * 0.1, -w * 0.56, L * 1.25, w * 1.12); c.fill(); c.stroke(); // lanzador
       c.fillStyle = col.osc; for (let fy = 0; fy < 2; fy++) for (let fx = 0; fx < 4; fx++) { c.beginPath(); c.arc(-L * 0.68 + fx * L * 0.3 - e.retro * L * 0.1, -w * 0.26 + fy * w * 0.52, Math.max(0.8, w * 0.13), 0, TAU); c.fill(); }
       if (e.retro > 0.5) { c.fillStyle = col.fuego; c.beginPath(); c.arc(-L * 1.1, 0, w * 0.5, 0, TAU); c.fill(); } // rebufo
+    } else if (u.tipo === 'vehRadio') { // camioneta con caseta y un mástil alto de antena con ondas
+      const L = r * 1.3, w = r * 0.8;
+      c.fillStyle = col.osc; for (const x of [-L * 0.8, L * 0.35]) { c.fillRect(x, -w * 1.05, L * 0.45, w * 0.3); c.fillRect(x, w * 0.75, L * 0.45, w * 0.3); }
+      c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.rect(-L, -w * 0.78, L * 2, w * 1.56); c.fill(); c.stroke();
+      c.fillStyle = col.osc; c.fillRect(L * 0.45, -w * 0.58, L * 0.4, w * 1.16); c.fillStyle = col.luz; c.fillRect(-L * 0.85, -w * 0.5, L * 1.0, w * 1.0);
+      c.fillStyle = col.osc; c.beginPath(); c.arc(-L * 0.35, 0, w * 0.2, 0, TAU); c.fill();
+      c.strokeStyle = col.osc; c.lineWidth = Math.max(1, r * 0.1); const k = (e.tiempo * 0.0012) % 1;
+      for (const q of [k, (k + 0.5) % 1]) { c.globalAlpha = 0.7 * (1 - q); c.beginPath(); c.arc(-L * 0.35, 0, w * (0.35 + q * 1.3), 0, TAU); c.stroke(); } c.globalAlpha = 1;
     } else if (u.tipo === 'mando') { // furgón con antena y plato giratorio
       const L = r * 1.35, w = r * 0.9;
       c.fillStyle = col.osc;
