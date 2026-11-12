@@ -5,15 +5,18 @@
   W.crearRuta = function (N) {
     const NN = N * N;
     const g = new Float32Array(NN), padre = new Int32Array(NN), visto = new Uint32Array(NN), cerrado = new Uint32Array(NN);
-    const hI = [], hF = [];
+    // El montículo va en tablas de tamaño fijo que crecen si hace falta: sin basura que recoger en cada búsqueda.
+    let hI = new Int32Array(4096), hF = new Float64Array(4096), hn = 0;
     let gen = 0;
     function mete(i, f) {
-      let k = hI.length; hI.push(i); hF.push(f);
+      if (hn === hI.length) { const a = new Int32Array(hn * 2), b = new Float64Array(hn * 2); a.set(hI); b.set(hF); hI = a; hF = b; }
+      let k = hn++;
       while (k > 0) { const p = (k - 1) >> 1; if (hF[p] <= f) break; hI[k] = hI[p]; hF[k] = hF[p]; k = p; }
       hI[k] = i; hF[k] = f;
     }
     function saca() {
-      const top = hI[0], li = hI.pop(), lf = hF.pop(), n = hI.length;
+      const top = hI[0]; hn--;
+      const li = hI[hn], lf = hF[hn], n = hn;
       if (n > 0) {
         let k = 0;
         for (;;) {
@@ -34,21 +37,24 @@
     // via: las celdas de camino propias (solo esas abaratan la ruta: el camino ajeno se cruza, pero no se busca).
     // abre: celdas que para esta unidad también son transitables (sus puertas; o todos los muros, cuando busca por dónde abrirse paso).
     // caro: celdas que cuestan mucho más (los muros que tendría que derribar).
-    return function (paso, terreno, x0, y0, mx, my, radio, kh, via, abre, caro) {
+    // max: tope de celdas exploradas (0 = sin tope); pasado el tope, la búsqueda se rinde (null). buscar.nodos: cuántas exploró la última.
+    const buscar = function (paso, terreno, x0, y0, mx, my, radio, kh, via, abre, caro, max) {
       kh = kh || 1;
-      gen++; hI.length = 0; hF.length = 0;
+      gen++; hn = 0; let nn = 0;
       const r2 = Math.max(radio, 0.75) ** 2, ini = y0 * N + x0;
       const h = (x, y) => { const dx = Math.abs(x + 0.5 - mx), dy = Math.abs(y + 0.5 - my); return (Math.max(dx, dy) + 0.4142 * Math.min(dx, dy)) * kh; };
       g[ini] = 0; padre[ini] = -1; visto[ini] = gen; mete(ini, h(x0, y0));
-      while (hI.length) {
+      while (hn) {
         const c = saca();
         if (cerrado[c] === gen) continue;
         cerrado[c] = gen;
+        if (max && ++nn > max) { buscar.nodos = nn; return null; }
+        if (!max) nn++;
         const cx = c % N, cy = (c / N) | 0, ex = cx + 0.5 - mx, ey = cy + 0.5 - my;
         if (ex * ex + ey * ey <= r2) {
           const out = [];
           for (let k = c; k !== ini; k = padre[k]) out.push(k);
-          return out.reverse();
+          buscar.nodos = nn; return out.reverse();
         }
         for (let d = 0; d < 8; d++) {
           const nx = cx + DX[d], ny = cy + DY[d];
@@ -60,7 +66,9 @@
           if (visto[n] !== gen || ng < g[n]) { visto[n] = gen; g[n] = ng; padre[n] = c; mete(n, ng + h(nx, ny)); }
         }
       }
-      return null;
+      buscar.nodos = nn; return null;
     };
+    buscar.nodos = 0;
+    return buscar;
   };
 })();

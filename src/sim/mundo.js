@@ -551,6 +551,26 @@
   const posX = (e) => (e.edif ? e.cx : e.x), posY = (e) => (e.edif ? e.cy : e.y);
   W.dist = dist;
 
+  // ---------- rejilla espacial ----------
+  // Una vez por tick, las unidades se reparten en casillas de 8×8 celdas (y los edificios que no son tendido, en una lista aparte):
+  // buscar enemigo, separar y aplastar miran solo las casillas vecinas en vez de comparar cada ficha con todas las demás.
+  const GC = 8;
+  function rejilla(m) {
+    const C = Math.ceil(m.N / GC); let g = m.gr;
+    if (!g || g.C !== C) g = m.gr = { C, ini: new Int32Array(C * C + 1), cur: new Int32Array(C * C), us: [], edifs: [], t: -1 };
+    const ini = g.ini, cur = g.cur, us = g.us, ed = g.edifs, ents = m.ents; ini.fill(0); ed.length = 0; let n = 0;
+    for (let k = 0; k < ents.length; k++) {
+      const e = ents[k];
+      if (e.edif) { if (!e.infra) ed.push(e); continue; }
+      const cx = Math.min(C - 1, Math.max(0, (e.x / GC) | 0)), cy = Math.min(C - 1, Math.max(0, (e.y / GC) | 0));
+      e.gc = cy * C + cx; ini[e.gc + 1]++; n++;
+    }
+    for (let c = 0; c < C * C; c++) { ini[c + 1] += ini[c]; cur[c] = ini[c]; }
+    us.length = n;
+    for (let k = 0; k < ents.length; k++) { const e = ents[k]; if (!e.edif) { e.gi = cur[e.gc]++; us[e.gi] = e; } }
+    g.t = m.t;
+  }
+
   function contar(m) {
     for (let j = 0; j < 2; j++) { const J = m.jug[j]; J.prod = 0; J.uso = 0; J.aguaProd = 0; J.aguaUso = 0; J.cuenta = {}; }
     for (let k = 0; k < m.ents.length; k++) {
@@ -1172,19 +1192,44 @@
   }
 
   function procesarRutas(m) {
-    const N = m.N;
-    let n = 0;
-    while (m.colaRutas.length && n < 12) {
+    // Cada tick se gasta en rutas un presupuesto de celdas exploradas (no de tiempo: así la partida sigue siendo reproducible):
+    // las rutas largas de un ejército entero se reparten entre varios ticks en vez de congelar uno.
+    // Las unidades de una misma orden (u.mision) comparten el tramo largo: solo la primera lo calcula entero; las demás
+    // buscan cómo llegar a él y, desde su final, a su propio puesto.
+    const N = m.N, terr = m.mapa.terreno;
+    let n = 0, nodos = 0;
+    if (!m.rc) m.rc = [];
+    if (m.rc.length && m.t - m.rc[0].t > 60) m.rc = m.rc.filter((q) => m.t - q.t <= 60);
+    while (m.colaRutas.length && n < 40 && nodos < ECON.rutaNodos) {
       const u = m.porId.get(m.colaRutas.shift());
       if (!u || !u.pend) continue;
       const p = u.pend; u.pend = null; n++;
-      const traza = u.orden === 'trazar', paso = traza ? tablaTraza(m) : pasoDe(m, u);
-      const kh = viaDe(m) && m.viaN[u.j] > 0 ? 0.62 : 1, hayMuros = murosDe(m) && m.muros.length > 0;
-      let camino = m.ruta(paso, m.mapa.terreno, Math.floor(u.x), Math.floor(u.y), p.x, p.y, p.radio, kh, m.via[u.j], hayMuros ? m.puertas[u.j] : null);
+      const traza = u.orden === 'trazar', paso = traza ? tablaTraza(m) : pasoDe(m, u), tb = paso === m.pasoV ? 1 : 0;
+      conVia = viaDe(m) && m.viaN[u.j] > 0, kh = conVia && Math.max(Math.abs(p.x - u.x), Math.abs(p.y - u.y)) < 70 ? 0.62 : 1, hayMuros = murosDe(m) && m.muros.length > 0, puertas = hayMuros ? m.puertas[u.j] : null;
+      // kh: con caminos propios y en trayectos cortos, 0,62 (la búsqueda los encuentra y los prefiere); en los largos, 1: con 0,62 exploraba medio mapa por ruta, y con 1 sale a lo sumo un 2-3 % peor por la tercera parte.
+      const x0 = Math.floor(u.x), y0 = Math.floor(u.y);
+      let camino = null;
       u.rompe = false;
-      if (!camino && hayMuros && !traza) { // cerrado por muros: la ruta que menos muro tenga que derribar
-        camino = m.ruta(paso, m.mapa.terreno, Math.floor(u.x), Math.floor(u.y), p.x, p.y, p.radio, kh, m.via[u.j], m.muroTodo, m.muroTodo);
-        if (camino) u.rompe = true;
+      if (!traza && u.mision) { // ¿ya hay un tramo largo calculado para esta misma orden?
+        let q = null; for (const r of m.rc) if (r.mi === u.mision && r.j === u.j && r.tb === tb && Math.abs(r.x - p.x) <= 10 && Math.abs(r.y - p.y) <= 10) { q = r; break; }
+        if (q) {
+          const c = q.c; let k = -1, md = 144;
+          for (let i = 0; i < c.length; i++) { const dx = (c[i] % N) + 0.5 - u.x, dy = ((c[i] / N) | 0) + 0.5 - u.y, d = dx * dx + dy * dy; if (d < md) { md = d; k = i; } }
+          if (k >= 0 && k < c.length - 8) {
+            const fin = c[c.length - 1];
+            const a1 = m.ruta(paso, terr, x0, y0, (c[k] % N) + 0.5, ((c[k] / N) | 0) + 0.5, 0.75, conVia ? 0.62 : 1, m.via[u.j], puertas, null, 1500); nodos += m.ruta.nodos || 0;
+            const a2 = a1 ? m.ruta(paso, terr, fin % N, (fin / N) | 0, p.x, p.y, p.radio, conVia ? 0.62 : 1, m.via[u.j], puertas, null, 1500) : null; if (a1) nodos += m.ruta.nodos || 0;
+            if (a1 && a2) camino = a1.concat(c.slice(k + 1), a2);
+          }
+        }
+      }
+      if (!camino) {
+        camino = m.ruta(paso, terr, x0, y0, p.x, p.y, p.radio, kh, m.via[u.j], puertas); nodos += m.ruta.nodos || 0;
+        if (!camino && hayMuros && !traza) { // cerrado por muros: la ruta que menos muro tenga que derribar
+          camino = m.ruta(paso, terr, x0, y0, p.x, p.y, p.radio, kh, m.via[u.j], m.muroTodo, m.muroTodo); nodos += m.ruta.nodos || 0;
+          if (camino) u.rompe = true;
+        }
+        if (camino && !u.rompe && !traza && u.mision && camino.length > 24) { if (m.rc.length >= 16) m.rc.shift(); m.rc.push({ mi: u.mision, j: u.j, tb, x: p.x, y: p.y, t: m.t, c: camino.slice() }); }
       }
       if (camino) {
         u.fin = null;
@@ -1198,13 +1243,15 @@
   }
 
   function separar(m) {
-    const N = m.N, us = [];
-    for (let k = 0; k < m.ents.length; k++) if (!m.ents[k].edif && !UNID[m.ents[k].tipo].mini) us.push(m.ents[k]); // (los drones pequeños no estorban a nadie)
+    const N = m.N, g = m.gr, C = g.C, ini = g.ini, us = g.us;
     for (let a = 0; a < us.length; a++) {
-      const A = us[a], ra = UNID[A.tipo].radio;
-      for (let b = a + 1; b < us.length; b++) {
+      const A = us[a]; if (UNID[A.tipo].mini || A.enTierra) continue; // (los drones pequeños no estorban a nadie; los aviones posados tienen su sitio)
+      const ra = UNID[A.tipo].radio, gx = A.gc % C, gy = (A.gc / C) | 0;
+      for (let cy = Math.max(0, gy - 1); cy <= Math.min(C - 1, gy + 1); cy++) for (let cx = Math.max(0, gx - 1); cx <= Math.min(C - 1, gx + 1); cx++) {
+       const cc = cy * C + cx;
+       for (let b = Math.max(ini[cc], a + 1), fb = ini[cc + 1]; b < fb; b++) { // cada pareja, una sola vez: la que va después en la rejilla
         const B = us[b];
-        if (A.enTierra || B.enTierra) continue; // los aviones posados tienen su sitio
+        if (UNID[B.tipo].mini || B.enTierra) continue;
         let dx = B.x - A.x; if (dx > 1 || dx < -1) continue;
         let dy = B.y - A.y; if (dy > 1 || dy < -1) continue;
         if (!UNID[A.tipo].aire !== !UNID[B.tipo].aire) continue; // los aviones pasan por encima de todo lo demás
@@ -1219,6 +1266,7 @@
         const ux = ex * 0.88 - ey * 0.48, uy = ex * 0.48 + ey * 0.88;
         const pa = A.fijo ? 0 : B.fijo ? 1 : 0.5, pb = B.fijo ? 0 : A.fijo ? 1 : 0.5;
         mover(A, -ux * emp * pa, -uy * emp * pa); mover(B, ux * emp * pb, uy * emp * pb);
+       }
       }
     }
     function mover(u, dx, dy) {
@@ -1283,17 +1331,23 @@
   function buscarEnemigo(m, a, x, y, rango) {
     const arma = ARMAS[a.edif ? EDIF[a.tipo].arma : UNID[a.tipo].arma];
     let mejor = null, md = rango;
-    for (let k = 0; k < m.ents.length; k++) {
-      const e = m.ents[k];
-      if (e.j === a.j || e.vida <= 0 || e.infra || !puede(arma, e)) continue; // a los caminos no se les dispara por iniciativa propia: solo por orden
+    const mira = (e) => {
+      if (e.j === a.j || e.vida <= 0 || e.infra || !puede(arma, e)) return; // a los caminos no se les dispara por iniciativa propia: solo por orden
       const d = dist(x, y, e);
-      if (d > md) continue;
-      if (oculta(m, e)) { if (d > ECON.ocultaVe) continue; e.delatada = m.t; } // escondida: solo se la ve de muy cerca
+      if (d > md) return;
+      if (oculta(m, e)) { if (d > ECON.ocultaVe) return; e.delatada = m.t; } // escondida: solo se la ve de muy cerca
       if (!a.edif) { // una unidad solo detecta por sí misma lo que cae en su visión; el arma indirecta, lo que vea cualquiera de los suyos
-        if (arma.indirecto ? m.niebla[a.j][Math.floor(posY(e)) * m.N + Math.floor(posX(e))] !== 2 : !veDir(m, a, e, d)) continue;
+        if (arma.indirecto ? m.niebla[a.j][Math.floor(posY(e)) * m.N + Math.floor(posX(e))] !== 2 : !veDir(m, a, e, d)) return;
       }
       md = d; mejor = e;
-    }
+    };
+    const g = m.gr;
+    if (g && g.t === m.t) { // dentro del tick: solo las casillas que caen en el alcance (con un margen por lo que se hayan movido), y los edificios
+      const C = g.C, R = rango + 1.5, ini = g.ini, us = g.us;
+      const c0 = Math.max(0, ((x - R) / GC) | 0), c1 = Math.min(C - 1, ((x + R) / GC) | 0), r0 = Math.max(0, ((y - R) / GC) | 0), r1 = Math.min(C - 1, ((y + R) / GC) | 0);
+      for (let cy = r0; cy <= r1; cy++) for (let cx = c0; cx <= c1; cx++) { const c = cy * C + cx; for (let k = ini[c], f = ini[c + 1]; k < f; k++) mira(us[k]); }
+      const ed = g.edifs; for (let k = 0; k < ed.length; k++) mira(ed[k]);
+    } else for (let k = 0; k < m.ents.length; k++) mira(m.ents[k]);
     return mejor;
   }
 
@@ -1982,7 +2036,7 @@
   function tickPuestos(m) {
     for (const p of m.puestos) {
       const n = [0, 0];
-      for (const e of m.ents) if (!e.edif && e.vida > 0 && UNID[e.tipo].cat === 'inf' && Math.hypot(e.x - p.x, e.y - p.y) <= ECON.capturaRadio) n[e.j] += UNID[e.tipo].repara ? 2 : 1;
+      for (const e of m.gr.us) if (e.vida > 0 && UNID[e.tipo].cat === 'inf' && Math.hypot(e.x - p.x, e.y - p.y) <= ECON.capturaRadio) n[e.j] += UNID[e.tipo].repara ? 2 : 1;
       const j = n[0] && !n[1] ? 0 : n[1] && !n[0] ? 1 : -1;
       if (j >= 0 && j !== p.dueno) {
         if (p.quien !== j) { p.quien = j; p.prog = 0; }
@@ -1995,10 +2049,14 @@
   // Los vehículos en marcha aplastan a la infantería enemiga que pisan: daño fuerte cada tick mientras la tienen
   // debajo. Pasarle por encima de lleno la mata; un roce solo la hiere.
   function aplastar(m) {
-    for (const a of m.ents) {
-      if (a.edif || UNID[a.tipo].cat !== 'veh' || a.v < 0.03) continue;
-      for (const b of m.ents) {
-        if (b.edif || UNID[b.tipo].cat !== 'inf' || b.j === a.j || b.vida <= 0 || enTrinchera(m, b)) continue;
+    const g = m.gr, C = g.C, ini = g.ini, us = g.us;
+    for (let ka = 0; ka < us.length; ka++) {
+      const a = us[ka];
+      if (UNID[a.tipo].cat !== 'veh' || a.v < 0.03) continue;
+      const gx = Math.min(C - 1, Math.max(0, (a.x / GC) | 0)), gy = Math.min(C - 1, Math.max(0, (a.y / GC) | 0));
+      for (let cy = Math.max(0, gy - 1); cy <= Math.min(C - 1, gy + 1); cy++) for (let cx = Math.max(0, gx - 1); cx <= Math.min(C - 1, gx + 1); cx++) for (let kb = ini[cy * C + cx], fb = ini[cy * C + cx + 1]; kb < fb; kb++) {
+        const b = us[kb];
+        if (UNID[b.tipo].cat !== 'inf' || b.j === a.j || b.vida <= 0 || enTrinchera(m, b)) continue;
         const dx = b.x - a.x; if (dx > 0.5 || dx < -0.5) continue;
         const dy = b.y - a.y; if (dy > 0.5 || dy < -0.5) continue;
         const lim = UNID[a.tipo].radio + UNID[b.tipo].radio + 0.08; // la tiene debajo
@@ -2080,6 +2138,7 @@
     const cmds = m.cola; m.cola = [];
     for (let k = 0; k < cmds.length; k++) aplicar(m, cmds[k]);
     contar(m);
+    rejilla(m);
     procesarRutas(m);
     tickProduccion(m, 0); tickProduccion(m, 1);
     for (let k = 0, n = m.ents.length; k < n; k++) {

@@ -1585,6 +1585,35 @@ prueba('ingeniero civil en automático conecta lo que está fuera de la red; pat
   assert.strictEqual(i1.patrulla.pts.length, 2, 'con un punto, va y vuelve');
 });
 
+prueba('rendimiento: un grupo comparte el tramo largo de la ruta y las búsquedas se reparten por presupuesto', () => {
+  const m = W.crearMundo(31, { N: 128 }), N = m.N;
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const cel = (x, y) => y * N + x;
+  for (let y = 20; y < 110; y++) for (let x = 20; x < 110; x++) { const i = cel(x, y); if (m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  for (let y = 30; y < 100; y++) { const i = cel(64, y); m.mapa.terreno[i] = 1; m.paso[i] = 0; m.pasoV[i] = 0; } // un muro de roca en medio: hay que rodearlo
+  m.terrenoV++;
+  const us = []; for (let k = 0; k < 16; k++) us.push(W.crearUnidad(m, 0, k % 2 ? 'tanque' : 'infanteria', cel(26 + (k % 4), 60 + ((k / 4) | 0))));
+  let enteras = 0, cortas = 0, maxNodos = 0; const r0 = m.ruta;
+  m.ruta = function (...a) { const r = r0.apply(this, a); m.ruta.nodos = r0.nodos; if (a[11]) cortas++; else enteras++; return r; };
+  W.orden(m, { t: 'mover', j: 0, ids: us.map((u) => u.id), x: 100.5, y: 62.5 });
+  for (let i = 0; i < 12; i++) W.tick(m);
+  assert.ok(us.every((u) => u.ruta && !u.pend), 'todas tienen ruta a los pocos ticks');
+  assert.ok(enteras <= 4, 'solo se calcula entera una ruta por tipo de paso (fueron ' + enteras + ')');
+  assert.ok(cortas >= 20, 'las demás se enganchan al tramo compartido (' + cortas + ' búsquedas cortas)');
+  for (let i = 0; i < 3000 && us.some((u) => u.orden !== 'nada'); i++) W.tick(m);
+  assert.ok(us.every((u) => Math.hypot(u.x - 100.5, u.y - 62.5) < 6), 'y todas llegan al otro lado del muro');
+  // el presupuesto: muchas rutas largas pedidas a la vez no se resuelven todas en el mismo tick
+  const vs = []; for (let k = 0; k < 30; k++) vs.push(W.crearUnidad(m, 1, 'infanteria', cel(24 + (k % 6), 24 + ((k / 6) | 0))));
+  W.tick(m); enteras = 0;
+  for (const u of vs) W.orden(m, { t: 'mover', j: 1, ids: [u.id], x: 104.5 - (u.id % 5) * 12, y: 104.5 }); // 30 órdenes distintas: nada que compartir
+  const antes = W.ECON.rutaNodos; W.ECON.rutaNodos = 3000; // (en un mapa tan pequeño el presupuesto normal alcanza para todas)
+  W.tick(m); W.tick(m);
+  assert.ok(vs.some((u) => u.pend), 'quedan rutas pendientes para los ticks siguientes');
+  for (let i = 0; i < 60; i++) W.tick(m);
+  W.ECON.rutaNodos = antes;
+  assert.ok(vs.every((u) => !u.pend), 'y en pocos ticks están todas');
+});
+
 prueba('tanda 5: puente aéreo, puesto de avanzada, hospital y traslado de infantería', () => {
   const m = W.crearMundo(31, { N: 128, logistica: true }), N = m.N, J = m.jug[0];
   m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
