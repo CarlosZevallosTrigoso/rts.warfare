@@ -332,12 +332,12 @@
   <button type="button" id="empezar">Empezar</button>
   <button type="button" id="tutorial">Tutorial guiado<small style="display:block;color:var(--suave);font-size:10px">ocho pasos, con el rival dormido hasta el final</small></button>
   <button type="button" id="continuar" hidden>Continuar la partida guardada</button>
-  <div id="version">versión 77</div>
+  <div id="version">versión 78</div>
 </div></div>
 <div id="guia" hidden><div class="caja"><div class="cab"><strong>Guía: para qué sirve cada cosa</strong><button type="button" id="cierraGuia">cerrar</button></div><div id="guiaTxt"></div></div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finVer" href="#" title="Vuelve a ver la partida entera, con todo el mapa a la vista y a la velocidad que quieras.">ver repetición</a><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 77' };
+globalThis.W = { VERSION: 'versión 78' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -5074,7 +5074,7 @@ globalThis.W = { VERSION: 'versión 77' };
         if (!e.edif && UNID[e.tipo].dronStock && e.j === YO && e.drStock !== undefined) { t += ' · repuestos: ' + e.drStock + (e.drFpv !== undefined ? ' drones y ' + e.drFpv + ' kamikazes' : ' drones'); const q = e.dr && e.dr.rec[0] ? m.porId.get(e.dr.rec[0]) : null; if (q && q.bat !== undefined && conRed) t += ' · batería ' + Math.round(q.bat / W.ECON.dronBat * 100) + ' %' + (q.casa2 ? ' (cargando)' : ''); }
         if (!e.edif && e.orden === 'zapar' && e.zapa && e.zapa.lista[0] && e.j === YO) t += ' · ' + ({ minar: 'minando', desminar: 'desminando', ponton: 'tendiendo un pontón', volar: 'va a volar un camino' })[e.zapa.lista[0].t];
         if (e.ponton) t += ' · pontón';
-        if (e.tipo === 'mina' && e.j === YO && e.pozo !== undefined) t += e.pozo > 0 ? ' · pozo: ' + num(e.pozo) : ' · pozo agotado';
+        if (e.tipo === 'mina' && e.j === YO && e.pozo !== undefined) t += e.pozo > 0 ? ' · pozo: ' + Math.round(e.pozo) : ' · pozo agotado';
         if (!e.edif && e.j === YO && e.vigila) t += ' · vigila una zona'; if (!e.edif && e.j === YO && e.protege) { const o = m.porId.get(e.protege); if (o) t += ' · protege: ' + (o.edif ? EDIF : UNID)[o.tipo].nombre.toLowerCase(); }
         if (!e.edif && e.j === YO && e.explora) t += e.expG ? ' · explorando en grupo' : ' · explorando';
         if (e.edif && EDIF[e.tipo].guarda && e.j === YO && isFinite(J.capMin)) { const g = EDIF[e.tipo].guarda; t += ' · guarda' + (g.min ? ' ' + Math.round(J.minerales * g.min / Math.max(1, J.capMin)) + ' de ' + g.min + ' minerales' : '') + (g.min && g.pet ? ' y' : '') + (g.pet ? ' ' + Math.round(J.petroleo * g.pet / Math.max(1, J.capPet)) + ' de ' + g.pet + ' de petróleo' : ''); }
