@@ -274,13 +274,13 @@
       if (c.fabrica && !enFabrica && !(paraNivel && !paraBase) && dinero >= UNID[veh].costo + guardaAire && W.puedePagar(J, UNID[veh])) { W.orden(m, { t: 'entrenar', j, tipo: veh }); dinero -= UNID[veh].costo; }
       if (av && !ahorra && dinero >= UNID[av].costo + (E.aviones > 1 ? 0 : 600) && W.puedePagar(J, UNID[av])) { W.orden(m, { t: 'entrenar', j, tipo: av }); dinero -= UNID[av].costo; }
       // Infantería: un antitanque por cada dos fusileros desde el nivel 2.
-      let inf = J.nivel >= 2 && (c.antitanque || 0) * 2 < (c.infanteria || 0) ? 'antitanque' : 'infanteria';
+      let inf = J.nivel >= 2 && (c.antitanque || 0) * 2 < (c.infanteria || 0) ? 'antitanque' : J.nivel < 2 && (c.infanteria || 0) >= 4 && (c.granadero || 0) * 3 < (c.infanteria || 0) ? 'granadero' : 'infanteria'; // en nivel 1, un granadero por cada tres fusileros
       if (!c.explorador && !J.colas.explorador.n && ((c.extractor || 0) < 2 || !c.estacion)) inf = 'explorador'; // uno para descubrir yacimientos
       else if (J.nivel >= 2 && (c.ingeniero || 0) + J.colas.ingeniero.n < (ia.estilo === 'defensivo' ? 2 : 1)) inf = 'ingeniero'; // repara la base él solo
       else if ((c.medico || 0) + J.colas.medico.n < 1 && (c.infanteria || 0) >= 6) inf = 'medico'; // uno, para la tropa que vuelve herida
       else if (J.nivel >= 2 && (c.francotirador || 0) < 3 && (c.francotirador || 0) * 5 < (c.infanteria || 0)) inf = 'francotirador';
       const topeInf = E.infMax && (c.infanteria || 0) + (c.antitanque || 0) >= E.infMax && (inf === 'infanteria' || inf === 'antitanque');
-      if (c.cuartel && !topeInf && !(ahorra && soldados.length >= 6) && J.colas.infanteria.n + J.colas.antitanque.n + J.colas.explorador.n + J.colas.ingeniero.n + J.colas.francotirador.n < 2 && dinero >= UNID[inf].costo + guardaAire && W.puedePagar(J, UNID[inf])) { W.orden(m, { t: 'entrenar', j, tipo: inf }); dinero -= UNID[inf].costo; }
+      if (c.cuartel && !topeInf && !(ahorra && soldados.length >= 6) && J.colas.infanteria.n + J.colas.granadero.n + J.colas.antitanque.n + J.colas.explorador.n + J.colas.ingeniero.n + J.colas.francotirador.n < 2 && dinero >= UNID[inf].costo + guardaAire && W.puedePagar(J, UNID[inf])) { W.orden(m, { t: 'entrenar', j, tipo: inf }); dinero -= UNID[inf].costo; }
     }
 
     // Tecnología: la primera pendiente de la lista que se pueda empezar y pagar sin dejar la caja vacía.
@@ -496,8 +496,9 @@
       const tx = na >= 4 ? ax / na - (dx / dd) * 4 : rx - (dx / dd) * 2, ty = na >= 4 ? ay / na - (dy / dd) * 4 : ry - (dy / dd) * 2;
       if (na >= 4) for (const u of sinArma) if (u.tipo === 'tallerMovil' && u.orden === 'nada' && Math.hypot(u.x - tx, u.y - ty) > 12) { const cc = W.cercaLibre(m, tx, ty, true); W.orden(m, { t: 'mover', j, ids: [u.id], x: (cc % m.N) + 0.5, y: ((cc / m.N) | 0) + 0.5 }); } // el taller de campaña, detrás de la oleada: repara y recupera cascos él solo
       if (na >= 4) for (const u of sinArma) if (u.tipo === 'camionSum' && (!u.sumi || Math.hypot(u.sumi.x - tx, u.sumi.y - ty) > 14)) { const cc = W.cercaLibre(m, tx, ty, true); W.orden(m, { t: 'mover', j, ids: [u.id], x: (cc % m.N) + 0.5, y: ((cc / m.N) | 0) + 0.5 }); } // el camión de suministro, detrás de la oleada
-      if (objetivo) for (const u of sinArma) if (u.tipo === 'operador' && u.orden === 'nada' && !u.dronMis && Math.hypot(u.x - tx, u.y - ty) <= 8 && Math.hypot(objetivo.cx - u.x, objetivo.cy - u.y) <= UNID.operador.misionDron) W.orden(m, { t: 'dronMision', j, ids: [u.id], x: objetivo.cx, y: objetivo.cy }); // el operador, en su sitio y con el objetivo a tiro: dron en misión sobre él
-      for (const u of sinArma) if ((u.tipo === 'hacker' || u.tipo === 'operador') && u.orden === 'nada' && Math.hypot(u.x - tx, u.y - ty) > 8) { const cc = W.cercaLibre(m, tx, ty); W.orden(m, { t: 'mover', j, ids: [u.id], x: (cc % m.N) + 0.5, y: ((cc / m.N) | 0) + 0.5 }); }
+      for (const u of sinArma) if (u.tipo === 'operador' && u.sinDron && u.orden === 'nada') { const b = m.ents.find((e) => e.edif && e.j === j && (e.tipo === 'estDrones' || e.tipo === 'logistica') && e.vida > 0); if (b && Math.hypot(u.x - b.cx, u.y - b.cy) > 4) { const cc = W.cercaLibre(m, b.cx, b.cy + b.tam / 2 + 1.5); W.orden(m, { t: 'mover', j, ids: [u.id], x: (cc % m.N) + 0.5, y: ((cc / m.N) | 0) + 0.5 }); } } // el operador sin drones vuelve a reponer
+      if (objetivo) for (const u of sinArma) if (u.tipo === 'operador' && !u.sinDron && u.orden === 'nada' && !u.dronMis && Math.hypot(u.x - tx, u.y - ty) <= 8 && Math.hypot(objetivo.cx - u.x, objetivo.cy - u.y) <= UNID.operador.misionDron) W.orden(m, { t: 'dronMision', j, ids: [u.id], x: objetivo.cx, y: objetivo.cy }); // el operador, en su sitio y con el objetivo a tiro: dron en misión sobre él
+      for (const u of sinArma) if ((u.tipo === 'hacker' || (u.tipo === 'operador' && !u.sinDron)) && u.orden === 'nada' && Math.hypot(u.x - tx, u.y - ty) > 8) { const cc = W.cercaLibre(m, tx, ty); W.orden(m, { t: 'mover', j, ids: [u.id], x: (cc % m.N) + 0.5, y: ((cc / m.N) | 0) + 0.5 }); }
     }
     const reserva = soldados.filter((u) => !ia.atacantes.has(u.id) && u.id !== ia.explorador && !ia.capturan.has(u.id));
 

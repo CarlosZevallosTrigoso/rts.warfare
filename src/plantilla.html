@@ -128,7 +128,7 @@
   #admin .fila2 .grupo::before { content: none; }
   #finGraf { display: block; margin: 12px auto 4px; max-width: 100%; }
   #continuar { margin-top: 6px; font: inherit; padding: 8px 14px; cursor: pointer; background: var(--panel); color: var(--tinta); border: 1px solid var(--linea); border-radius: 2px; }
-  #zapa[hidden] { display: none !important; }
+  #zapa[hidden], #escolta[hidden] { display: none !important; }
   #alertas { position: fixed; top: 38px; left: 8px; z-index: 2; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
   #alertas button { font: inherit; font-size: 11px; text-align: left; color: var(--tinta); background: var(--panel); border: 1px solid var(--linea); border-left: 3px solid var(--mal); border-radius: 2px; padding: 3px 8px; cursor: pointer; opacity: 0.94; }
   body.contuto #alertas { max-width: 226px; }
@@ -261,6 +261,7 @@
   <aside id="barra">
     <h1 id="titulo" title="Recargar">rts<span>.</span>warfare<b id="dios" hidden>GOD</b><b id="sinColmena" hidden>SIN COLMENA</b></h1>
     <div id="recursos">
+      <div class="fila" title="La semilla de este mapa. Clic para copiarla: con la misma semilla y el mismo tamaño, en el menú inicial, sale el mismo mapa."><span>semilla</span><b id="rSem" style="cursor:pointer;text-decoration:underline dotted"></b></div>
       <div class="fila" title="Se guardan en el patio y en los almacenes. Con todo lleno, lo que entra se pierde."><span>minerales</span><b id="rMin">0</b></div>
       <div class="fila" title="Lo da el extractor, sobre un yacimiento. Lo piden la fábrica y los vehículos."><span>petróleo</span><b id="rPet">0</b></div>
       <div class="fila" title="Vetas violetas: señálalas con una cosechadora. Se usarán en lo avanzado."><span>raros</span><b id="rRar">0</b></div>
@@ -294,6 +295,10 @@
     <button type="button" id="descargar" class="btn" hidden></button>
     <button type="button" id="desplegar" class="btn" hidden title="Convierte el vehículo en su edificio, donde está: el patio móvil en un patio; el puesto móvil en un puesto de avanzada. No se puede replegar.">Desplegar</button>
     <button type="button" id="mejorar" class="btn" hidden title="Sube un nivel el rendimiento de este edificio: un 50 % más por nivel, hasta el nivel 3."></button>
+    <div id="escolta" hidden style="display:flex;flex-wrap:wrap;gap:4px">
+      <button type="button" class="btn" id="bProteger" title="Elige después una unidad o edificio tuyo: lo siguen, se quedan a su lado y atacan a quien lo ataque. Tecla Y.">Proteger</button>
+      <button type="button" class="btn" id="bVigilar" title="Marca una zona: van allí, se quedan dentro y atacan a todo enemigo que entre y esté a la vista; no lo persiguen fuera. Con Mayús, zona más grande. Tecla W.">Vigilar zona</button>
+    </div>
     <div id="zapa" hidden style="display:flex;flex-wrap:wrap;gap:4px">
       <button type="button" class="btn" data-z="minar" title="El ingeniero pone una mina donde hagas clic (40 minerales). Con Mayús sigues poniendo. No la ve el enemigo (salvo sus ingenieros y sus cámaras) y estalla cuando la pisa una unidad de tierra suya. Los tuyos pasan sin peligro.">Minar</button>
       <button type="button" class="btn" data-z="desminar" title="El ingeniero va al punto y retira todas las minas enemigas en 5 celdas a la redonda. Los ingenieros nunca las pisan.">Desminar</button>

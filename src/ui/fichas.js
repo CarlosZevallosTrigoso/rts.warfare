@@ -8,7 +8,7 @@
   // El contexto llega trasladado al centro de la unidad. r = radio en píxeles.
   // e = { ang, angT, retro (0..1), anda, tiempo, carga (0..1), cosecha }
   W.fichaUnidad = function (c, u, r, lod, col, e) {
-    const inf = W.UNID[u.tipo].cat === 'inf', at = u.tipo === 'antitanque', pesado = u.tipo === 'pesado', expl = u.tipo === 'explorador', ing = u.tipo === 'ingeniero', med = u.tipo === 'medico', civ = u.tipo === 'civil', hk = u.tipo === 'hacker', op = u.tipo === 'operador', franco = u.tipo === 'francotirador', esp = u.tipo === 'espia';
+    const inf = W.UNID[u.tipo].cat === 'inf', at = u.tipo === 'antitanque', pesado = u.tipo === 'pesado', expl = u.tipo === 'explorador', ing = u.tipo === 'ingeniero', med = u.tipo === 'medico', civ = u.tipo === 'civil', hk = u.tipo === 'hacker', op = u.tipo === 'operador', franco = u.tipo === 'francotirador', esp = u.tipo === 'espia', gra = u.tipo === 'granadero';
     if (lod === 0) {
       c.fillStyle = col.base; c.beginPath();
       if (inf) c.arc(0, 0, r, 0, TAU);
@@ -53,6 +53,8 @@
         c.lineWidth = Math.max(1, R * 0.16); c.beginPath(); c.arc(R * 0.75, R * 0.55, R * 0.32, 0, TAU); c.stroke();
       } else if (med) { // sin arma: un maletín por delante
         c.fillStyle = col.luz; c.fillRect(R * 0.75, R * 0.2, R * 0.6, R * 0.5); c.lineWidth = 1; c.strokeRect(R * 0.75, R * 0.2, R * 0.6, R * 0.5);
+      } else if (gra) { // una granada en la mano adelantada y la bolsa al costado
+        c.fillStyle = col.osc; c.beginPath(); c.arc(R * 1.15, R * 0.35, R * 0.3, 0, TAU); c.fill(); c.fillRect(-R * 0.5, R * 0.55, R * 0.7, R * 0.4);
       } else if (esp) { // sin arma: un maletín fino al costado
         c.fillStyle = col.osc; c.fillRect(R * 0.55, R * 0.45, R * 0.55, R * 0.3);
       } else if (expl) { // pistola corta

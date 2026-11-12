@@ -84,6 +84,8 @@
   W.UNID = {
     infanteria:  { nombre: 'Infantería',  cat: 'inf', vida: 60,  vel: 0.06, costo: 100, tiempo: 100, blindaje: 'ligero', arma: 'fusil', vision: 6, radio: 0.11, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, arco: 0.5 },
     tanque:      { nombre: 'Tanque',      cat: 'veh', vida: 300, vel: 0.10, costo: 600, pet: 50, tiempo: 300, blindaje: 'pesado', arma: 'canon', vision: 7, radio: 0.20, req: ['fabrica'], agua: 2, giro: 0.13, acel: 0.006, giroT: 0.16, cono: 0.85 },
+    // Granadero: desde el nivel 1; granadas de mano a corta distancia, con explosión en área. La respuesta temprana a los primeros vehículos.
+    granadero:   { nombre: 'Granadero',   cat: 'inf', vida: 65,  vel: 0.058, costo: 160, tiempo: 130, blindaje: 'ligero', arma: 'granadaMano', vision: 6, radio: 0.11, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, arco: 0.5 },
     antitanque:  { nombre: 'Antitanque',  cat: 'inf', vida: 70,  vel: 0.055, costo: 250, tiempo: 160, blindaje: 'ligero', arma: 'cohete', vision: 6, radio: 0.115, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, arco: 0.35 },
     artilleria:  { nombre: 'Artillería',  cat: 'veh', vida: 180, vel: 0.06, costo: 900, pet: 70, tiempo: 400, blindaje: 'pesado', arma: 'obus', vision: 7, radio: 0.21, req: ['fabrica'], agua: 2, giro: 0.08, acel: 0.004, nivel: 2, cono: 0.7 },
     pesado:      { nombre: 'Tanque pesado', cat: 'veh', vida: 700, vel: 0.07, costo: 1500, pet: 120, raros: 60, tiempo: 520, blindaje: 'pesado', arma: 'canonPesado', vision: 7, radio: 0.27, req: ['fabrica'], agua: 3, giro: 0.08, acel: 0.004, nivel: 3, giroT: 0.1, cono: 0.8 },
@@ -139,7 +141,7 @@
     espia:       { enlace: true, nombre: 'Espía', cat: 'inf', lugar: 'inteligencia', vida: 35, vel: 0.07, costo: 400, info: 60, tiempo: 300, blindaje: 'ligero', arma: null, vision: 10, radio: 0.105, req: ['inteligencia'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, espia: true, cono: Math.PI },
     // Dron espía: vuela muy lejos y mucho rato desde su central; no ataca.
     dronEspia:   { nombre: 'Dron espía', cat: 'aire', aire: true, lugar: 'inteligencia', vida: 60, vel: 0.2, costo: 500, info: 80, tiempo: 300, blindaje: 'aire', arma: null, vision: 14, radio: 0.15, req: ['inteligencia'], agua: 0, giro: 0.2, acel: 0.01, nivel: 2, fuel: 9000, radioVuelo: 220, cono: Math.PI },
-    operador:    { misionDron: 45, nombre: 'Operador de drones', cat: 'inf', vida: 45, vel: 0.06, costo: 150, tiempo: 120, blindaje: 'ligero', arma: null, vision: 6, radio: 0.105, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, drones: { rec: 1 }, radioDron: 12, quieto: true },
+    operador:    { misionDron: 45, dronStock: 3, fpvStock: 4, nombre: 'Operador de drones', cat: 'inf', vida: 45, vel: 0.06, costo: 150, tiempo: 120, blindaje: 'ligero', arma: null, vision: 6, radio: 0.105, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, drones: { rec: 1 }, radioDron: 12, quieto: true },
     comandoDrones: { nombre: 'Comando de drones', cat: 'veh', vida: 260, vel: 0.085, costo: 900, pet: 60, tiempo: 360, blindaje: 'pesado', arma: null, vision: 7, radio: 0.24, req: ['fabrica'], agua: 2, giro: 0.1, acel: 0.006, nivel: 2, drones: { rec: 3, bomba: 2, fpv: 5 }, radioDron: 25 },
     helicoptero: { enPista: true, nombre: 'Helicóptero', cat: 'aire', aire: true, vida: 180, vel: 0.13, costo: 1400, pet: 150, tiempo: 460, blindaje: 'aire', arma: 'coheteAire', vision: 8, radio: 0.27, req: ['aerodromo'], agua: 2, giro: 0.2, acel: 0.01, nivel: 3, fuel: 2000, radioVuelo: 45, arco: 0.3 },
     cosechadora: { nombre: 'Cosechadora', cat: 'veh', vida: 450, vel: 0.07, costo: 900, pet: 30, tiempo: 360, blindaje: 'pesado', arma: null,    vision: 5, radio: 0.25, req: ['fabrica', 'refineria'], carga: 500, agua: 1, giro: 0.1, acel: 0.004, cono: 0.9 },
@@ -167,6 +169,7 @@
     ametralladora: { alcance: 4.5, dano: 6, recarga: 5, vs: { ligero: 1, pesado: 0.15, edificio: 0.15, aire: 0.25 } },
     fpv:     { dano: 150, area: 0.9, vs: { ligero: 0.5, pesado: 1, edificio: 0.5 } }, // el dron kamikaze al estrellarse
     mina:    { dano: 150, area: 1.3, vs: { ligero: 1, pesado: 1, edificio: 0 } }, // mina terrestre: la pisa quien no sea zapador
+    granadaMano: { alcance: 4.5, alcanceMin: 1, area: 1.1, dano: 38, recarga: 70, vuelo: 0.3, vs: { ligero: 0.8, pesado: 0.75, edificio: 0.4 } }, // la del granadero
     granada: { dano: 42, area: 1.2, vs: { ligero: 1, pesado: 0.25, edificio: 0.15 } }, // lo que suelta el dron bombardero
     gatling: { alcance: 5.5, dano: 5, recarga: 2, vs: { ligero: 1, pesado: 0.2, edificio: 0.2, aire: 0.5 } }, // diez tiros por segundo: tritura infantería y aviones bajos
     misil:   { alcance: 6,   dano: 40, recarga: 14, vuelo: 1.0, vs: { ligero: 0.6, pesado: 0.6, edificio: 0.3, aire: 1.3 } },
@@ -219,6 +222,8 @@
     recuperaTiempo: 160, recuperaCosto: 0.5, recuperaVida: 0.5, recuperaAuto: 10, cascoDura: 3600,
     combMax: 450, combCarga: 30, combPet: 0.02, // combustible de los vehículos de combate: celdas de autonomía, lo que repostan por ciclo (medio segundo) y el petróleo que cuesta cada celda repostada
     radioDemora: 60, // ticks que tarda en llegar una orden a quien está fuera de la cobertura de radio
+    dronBat: 1800, dronCargaT: 200, dronCura: 0.15, dronVuelve: 0.4, dronReponeDist: 5, dronReponeCada: 60, dronReponeCarga: 150, // drones: batería (ticks de vuelo), lo que tarda en cargarla, lo que se repara por tick posado, con cuánta vida se retira; y la reposición del operador
+    vigilaRadio: 8, vigilaMax: 14, protegeDist: 4,
     espiaRadio: 6, espiaInfo: 2, sumiBase: 1, sumiUnidad: 0.5, sumiCarga: 40, // suministro móvil: gasto por ciclo (medio segundo) en vacío y por unidad atendida; y lo que carga por ciclo en el puesto logístico
     dronMisRadio: 8, autoReserva: 400, autoLargo: 70,
     rutaNodos: 30000, // presupuesto de celdas que se exploran por tick buscando rutas

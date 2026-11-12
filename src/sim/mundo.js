@@ -224,12 +224,33 @@
       if (!e.dr) e.dr = { rec: [], bomba: [], fpv: [] };
       for (const k in e.dr) e.dr[k] = e.dr[k].filter((id) => { const q = m.porId.get(id); return q && q.vida > 0; });
       const activo = !(e.edif && e.sinLuz) && !(e.hack > m.t) && !(d.quieto && (e.orden !== 'nada' || e.v > 0.001)); // el operador solo trabaja parado
+      // Existencias (el operador): lleva un número fijo de drones y de kamikazes; los que pierde no vuelven solos, hay que reponerlos
+      // junto a una estación de drones, un puesto logístico, un puesto de avanzada o un camión de suministro plantado.
+      const conStock = !!d.dronStock;
+      if (conStock) {
+        if (e.drStock === undefined) e.drStock = d.dronStock - e.dr.rec.length - e.dr.bomba.length;
+        const capF = dn.fpv ? d.fpvStock : 0; if (capF && e.drFpv === undefined) e.drFpv = capF;
+        const falta = e.drStock + e.dr.rec.length + e.dr.bomba.length < d.dronStock ? 'dron' : capF && (e.drFpv || 0) < capF ? 'fpv' : '';
+        if (falta && (e.drRep = (e.drRep || 0) + 10) >= ECON.dronReponeCada) {
+          let fuente = null;
+          for (const o of m.ents) {
+            if (o.j !== e.j || o.vida <= 0 || o === e) continue;
+            const vale = o.edif ? ((o.tipo === 'estDrones' || o.tipo === 'logistica') && !o.sinLuz && o.conRed !== false) || (o.tipo === 'avanzada' && o.abast > m.t) : UNID[o.tipo].suministro && o.sumi && o.sumi.est === 'puesto' && o.sumC >= ECON.dronReponeCarga;
+            if (vale && Math.hypot(posX(o) - x, posY(o) - y) <= ECON.dronReponeDist + (o.edif ? o.tam / 2 : 0)) { fuente = o; break; }
+          }
+          const precio = UNID[DRON.rec].costo;
+          if (fuente && (J.minerales >= precio || J.dios)) { e.drRep = 0; if (!J.dios) J.minerales -= precio; if (!fuente.edif) fuente.sumC -= ECON.dronReponeCarga; if (falta === 'dron') e.drStock++; else e.drFpv = (e.drFpv || 0) + 1; m.efectos.push({ tipo: 'dronRepuesto', x1: x, y1: y, j: e.j, t: m.t }); }
+        }
+        e.sinDron = e.drStock <= 0 && !e.dr.rec.length && !e.dr.bomba.length; // (para la alerta)
+      }
       if (!activo) { if (d.quieto && e.dronMis && e.orden !== 'nada') e.dronMis = null; continue; } // si echa a andar, la misión se acaba
+      if (!conStock && !e.edif && m.logistica !== false && sinSuministro(e)) continue; // el comando de drones, sin suministro, no repone ni lanza
       const mis = e.dronMis || null;
       const saca = (rol, obj) => { const q = crearUnidad(m, e.j, DRON[rol], Math.floor(y) * N + Math.floor(x)); q.x = q.px = x; q.y = q.py = y; q.base = e.id; q.rol = rol; q.fase = (e.id * 1.7 + e.dr[rol].length * 2.1) % TAU; q.obj = obj || 0; q.est = rol === 'bomba' ? 'espera' : ''; e.dr[rol].push(q.id); return q; };
       for (const rol of ['rec', 'bomba']) { // reconocimiento y bombarderos: se reponen de uno en uno
         if (!dn[rol] || e.dr[rol].length >= dn[rol] || m.t < (e.drListo || 0)) continue;
-        const precio = UNID[DRON[rol]].costo, primero = !e.drHubo; // los primeros vienen con el portador; los repuestos se pagan
+        const precio = UNID[DRON[rol]].costo, primero = !e.drHubo || conStock; // los primeros vienen con el portador; los repuestos se pagan (los del operador salen de sus existencias, ya pagadas)
+        if (conStock) { if (e.drStock <= 0) continue; e.drStock--; }
         if (!primero && J.minerales < precio && !J.dios) continue;
         if (!primero && !J.dios) J.minerales -= precio;
         saca(rol); e.drListo = m.t + (e.dr.rec.length + e.dr.bomba.length >= (dn.rec || 0) + (dn.bomba || 0) ? ECON.dronRepone : 20);
@@ -247,9 +268,9 @@
         if (o.edif ? !!EDIF[o.tipo].arma || o === pri : UNID[o.tipo].cat === 'veh') { const yaVan = e.dr.fpv.filter((id) => m.porId.get(id).obj === o.id).length; if (yaVan < 2 && dd + k + (o.edif ? 6 : 0) < dv) { dv = dd + k + (o.edif ? 6 : 0); veh = o; } }
         else if (!o.edif && dd + k < di) { di = dd + k; inf = o; }
       }
-      if (dn.fpv && veh && e.dr.fpv.length < dn.fpv && m.t >= (e.fpvT || 0) && (J.minerales >= ECON.dronFpv || J.dios)) { if (!J.dios) J.minerales -= ECON.dronFpv; saca('fpv', veh.id); e.fpvT = m.t + ECON.dronFpvCada; }
+      if (dn.fpv && veh && e.dr.fpv.length < dn.fpv && m.t >= (e.fpvT || 0) && (conStock ? e.drFpv > 0 : J.minerales >= ECON.dronFpv || J.dios)) { if (conStock) e.drFpv--; else if (!J.dios) J.minerales -= ECON.dronFpv; saca('fpv', veh.id); e.fpvT = m.t + ECON.dronFpvCada; }
       const blanco = inf || veh;
-      if (blanco) for (const id of e.dr.bomba) { const q = m.porId.get(id); if (q.est === 'espera' && q.recarga <= 0 && (J.minerales >= ECON.dronBomba || J.dios)) { if (!J.dios) J.minerales -= ECON.dronBomba; q.obj = blanco.id; q.est = 'ir'; break; } }
+      if (blanco) for (const id of e.dr.bomba) { const q = m.porId.get(id); if (q.est === 'espera' && !q.casa2 && q.recarga <= 0 && (J.minerales >= ECON.dronBomba || J.dios)) { if (!J.dios) J.minerales -= ECON.dronBomba; q.obj = blanco.id; q.est = 'ir'; break; } }
     }
   }
   // ---------- taller de campaña: recuperar vehículos destruidos ----------
@@ -414,6 +435,33 @@
     }
     return pts;
   }
+  // ---------- proteger y vigilar ----------
+  function tickEscoltas(m) {
+    const g = m.gr;
+    for (const u of g.us) {
+      if (u.vida <= 0) continue;
+      if (u.protege) { // escolta: junto a su protegido; si lo atacan, a por el agresor
+        const o = m.porId.get(u.protege);
+        if (!o || o.vida <= 0 || o.j !== u.j) { u.protege = 0; continue; }
+        const ox = posX(o), oy = posY(o), arma = UNID[u.tipo].arma ? ARMAS[UNID[u.tipo].arma] : null;
+        const ag = o.agresor && m.t - (o.tDano === undefined ? -999 : o.tDano) < 60 ? m.porId.get(o.agresor) : null;
+        if (arma && ag && ag.vida > 0 && ag.j !== u.j && puede(arma, ag) && Math.hypot(posX(ag) - ox, posY(ag) - oy) < 16) { if (u.obj !== ag.id) { const p = u.protege; asignar(m, u, { t: 'atacar', obj: ag.id }); u.protege = p; } continue; }
+        if (u.obj) { const b = m.porId.get(u.obj); if (b && b.vida > 0 && Math.hypot(posX(b) - ox, posY(b) - oy) < 14) continue; u.obj = 0; u.orden = 'nada'; } // lo que perseguía ya está lejos del protegido: lo deja
+        const a = (u.id * 2.399) % TAU, r = (o.edif ? o.tam / 2 : 0) + 1.6 + (u.id % 3) * 0.8, tx = ox + Math.cos(a) * r, ty = oy + Math.sin(a) * r;
+        if (Math.hypot(u.x - tx, u.y - ty) > ECON.protegeDist && (u.orden === 'nada' || !u.dest || Math.hypot(u.dest.x - tx, u.dest.y - ty) > 3)) { const p = u.protege; asignar(m, u, { t: arma ? 'amover' : 'mover', x: tx, y: ty }); u.protege = p; }
+        continue;
+      }
+      const v = u.vigila; if (!v) continue;
+      const arma = ARMAS[UNID[u.tipo].arma];
+      if (u.obj) { const b = m.porId.get(u.obj); if (b && b.vida > 0 && (Math.hypot(posX(b) - v.x, posY(b) - v.y) <= v.r + 3 || Math.hypot(posX(b) - u.x, posY(b) - u.y) <= (arma.alcance || 4) + 1)) continue; u.obj = 0; u.orden = 'nada'; u.ruta = null; } // salió de la zona y ya no lo tiene a tiro: no lo persigue
+      let mejor = null, md = Infinity; const C = g.C, R = v.r + 1;
+      const mira = (e) => { if (e.j === u.j || e.vida <= 0 || e.infra || !puede(arma, e)) return; const ex = posX(e), ey = posY(e); if (Math.hypot(ex - v.x, ey - v.y) > v.r || m.niebla[u.j][Math.floor(ey) * m.N + Math.floor(ex)] !== 2 || oculta(m, e)) return; const d0 = Math.hypot(ex - u.x, ey - u.y); if (d0 < md) { md = d0; mejor = e; } };
+      for (let cy = Math.max(0, ((v.y - R) / GC) | 0); cy <= Math.min(C - 1, ((v.y + R) / GC) | 0); cy++) for (let cx = Math.max(0, ((v.x - R) / GC) | 0); cx <= Math.min(C - 1, ((v.x + R) / GC) | 0); cx++) for (let k = g.ini[cy * C + cx], f = g.ini[cy * C + cx + 1]; k < f; k++) mira(g.us[k]);
+      for (const e of g.edifs) mira(e);
+      if (mejor) { asignar(m, u, { t: 'atacar', obj: mejor.id }); u.vigila = v; }
+      else if (u.orden === 'nada' && Math.hypot(u.x - v.px, u.y - v.py) > 1.5) { asignar(m, u, { t: 'amover', x: v.px, y: v.py }); u.vigila = v; } // sin nadie dentro: de vuelta a su puesto
+    }
+  }
   // ---------- espías ----------
   // Un espía a pocas celdas de un edificio enemigo: su bando ve los recursos del rival y lo que produce (como «interceptar»), y gana información.
   function tickEspias(m) {
@@ -474,6 +522,19 @@
     const orbita = (r, cx, cy) => { const a = u.fase + m.t * (0.6 / Math.max(3, r)) * 0.33; ir((cx === undefined ? bx : cx) + Math.cos(a) * r, (cy === undefined ? by : cy) + Math.sin(a) * r, d.vel); };
     const mis = base.dronMis || null;
     const parado = base.edif || (base.orden === 'nada' && base.v < 0.001);
+    if (u.rol !== 'fpv') { // batería y daños: con poca carga o muy tocado, vuelve a su portador, se posa, carga y se repara, y sale otra vez
+      const conBat = m.logistica !== false; if (u.bat === undefined) u.bat = ECON.dronBat;
+      if (u.casa2) {
+        if (u.rol === 'bomba') { u.est = 'espera'; u.obj = 0; }
+        if (ir(bx, by, d.vel) > 0.9) { if (conBat && --u.bat <= 0) u.vida = 0; return; } // no llegó: cae
+        const abastecido = base.edif ? !base.sinLuz && base.conRed !== false : !(conBat && sinSuministro(base)); // sin suministro no hay baterías cargadas ni repuestos
+        if (abastecido) { u.bat = Math.min(ECON.dronBat, u.bat + ECON.dronBat / ECON.dronCargaT); u.vida = Math.min(u.vidaMax, u.vida + ECON.dronCura); }
+        if (u.bat >= ECON.dronBat && u.vida >= u.vidaMax * 0.95) u.casa2 = false;
+        return;
+      }
+      if (conBat) u.bat--;
+      if ((conBat && u.bat < Math.hypot(u.x - bx, u.y - by) / d.vel + 80) || u.vida < u.vidaMax * ECON.dronVuelve) { u.casa2 = true; return; }
+    }
     if (u.rol === 'rec') { if (parado && mis) orbita(3.5, mis.x, mis.y); else orbita(parado ? cfg.radioDron * 0.55 : 2.2); return; } // en misión, da vueltas sobre el punto lejano
     const o = u.obj ? m.porId.get(u.obj) : null, vivo = o && o.vida > 0;
     if (u.rol === 'fpv') {
@@ -887,7 +948,7 @@
   }
 
   // ---------- órdenes de unidad: directa, encadenada, patrulla y exploración ----------
-  function limpiar(u) { u.cola.length = 0; u.patrulla = null; u.explora = false; u.acude = 0; }
+  function limpiar(u) { u.cola.length = 0; u.patrulla = null; u.explora = false; u.acude = 0; u.protege = 0; u.vigila = null; u.expG = 0; }
   function asignar(m, u, o) {
     if (o.t === 'atacar') {
       const ob = m.porId.get(o.obj);
@@ -956,6 +1017,14 @@
         p.a = (p.a === undefined ? u.id * 2.4 : p.a) + 0.8; // cada avión entra en la órbita por un punto distinto, para no ir encimados
         asignar(m, u, { t: 'amover', x: p.pts[0].x + Math.cos(p.a) * ECON.orbita, y: p.pts[0].y + Math.sin(p.a) * ECON.orbita });
       } else asignar(m, u, { t: 'amover', x: p.pts[p.i].x, y: p.pts[p.i].y, tope: p.tope || 0 });
+    } else if (u.explora && u.expG) { // exploración en grupo: decide la de menor número; las demás esperan a que mande
+      let lider = u; const grupo = [];
+      for (const q of m.ents) if (!q.edif && q.expG === u.expG && q.explora && q.vida > 0) { grupo.push(q); if (q.id < lider.id) lider = q; }
+      if (lider !== u) return;
+      const c = celdaSinExplorar(m, u);
+      if (c < 0) { for (const q of grupo) { q.explora = false; q.expG = 0; } m.efectos.push({ tipo: 'explorado', x1: u.x, y1: u.y, j: u.j, t: m.t }); return; }
+      let tope = Infinity; for (const q of grupo) tope = Math.min(tope, UNID[q.tipo].vel);
+      destinos(m, grupo, (c % m.N) + 0.5, ((c / m.N) | 0) + 0.5, (q, x, y) => { const g = q.expG; asignar(m, q, { t: 'amover', x, y, tope }); q.explora = true; q.expG = g; }); // juntas y al paso de la más lenta
     } else if (u.explora) {
       const c = celdaSinExplorar(m, u);
       if (c < 0) { u.explora = false; m.efectos.push({ tipo: 'explorado', x1: u.x, y1: u.y, j: u.j, t: m.t }); } else asignar(m, u, { t: 'mover', x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 });
@@ -1361,9 +1430,23 @@
           u.patrulla = UNID[u.tipo].aire ? { pts: [{ x, y }], i: 0 } : { pts: [{ x: u.x, y: u.y }, { x, y }], i: 0 }; // el avión patrulla el punto, no el trayecto
         });
         return;
-      case 'explorar': // recorre sola lo que aún no se ha visto
-        for (const u of propias(m, cmd)) if (u.tipo !== 'cosechadora' && !UNID[u.tipo].aire) { limpiar(u); u.explora = true; u.orden = 'nada'; u.obj = 0; u.ruta = null; u.pend = null; }
+      case 'explorar': { // recorre lo que aún no se ha visto; varias a la vez van juntas, como un solo grupo
+        const us = propias(m, cmd).filter((u) => u.tipo !== 'cosechadora' && !UNID[u.tipo].aire), g = us.length > 1 ? m.sigMision++ : 0;
+        for (const u of us) { limpiar(u); u.explora = true; u.expG = g; u.orden = 'nada'; u.obj = 0; u.ruta = null; u.pend = null; }
         return;
+      }
+      case 'proteger': { // esas unidades escoltan a una ficha propia: la siguen, se quedan a su lado y atacan a quien la ataque
+        const o = m.porId.get(cmd.obj); if (!o || o.j !== cmd.j || o.vida <= 0 || o.infra) return;
+        for (const u of propias(m, cmd)) if (u !== o && !UNID[u.tipo].aire && u.tipo !== 'cosechadora') { limpiar(u); u.orden = 'nada'; u.obj = 0; u.ruta = null; u.pend = null; u.guardia = false; u.protege = o.id; }
+        return;
+      }
+      case 'vigilar': { // esas unidades van a la zona, se quedan dentro y atacan a todo enemigo que entre y esté a la vista
+        const r = Math.max(4, Math.min(ECON.vigilaMax, cmd.r || ECON.vigilaRadio)), us = propias(m, cmd).filter((u) => UNID[u.tipo].arma && !UNID[u.tipo].aire);
+        if (!(cmd.x >= 0 && cmd.y >= 0 && cmd.x < m.N && cmd.y < m.N) || !us.length) return;
+        for (const u of us) { limpiar(u); u.obj = 0; u.guardia = false; }
+        destinos(m, us, cmd.x, cmd.y, (u, x, y) => { u.vigila = { x: cmd.x, y: cmd.y, r, px: x, py: y }; asignar(m, u, { t: 'amover', x, y }); u.vigila = { x: cmd.x, y: cmd.y, r, px: x, py: y }; });
+        return;
+      }
       case 'reunion': { // punto de reunión de un cuartel o una fábrica
         const e = m.porId.get(cmd.id);
         if (e && e.edif && e.j === cmd.j && W.PRODUCE[e.tipo]) e.reunion = { x: cmd.x, y: cmd.y };
@@ -1714,7 +1797,7 @@
         if (e.j !== j || e.infra || e.tDano === undefined || m.t - e.tDano > 40 || !e.agresor) continue; // un camino atacado no llama a nadie
         const x = posX(e), y = posY(e);
         let f = focos.find((q) => Math.hypot(q.x - x, q.y - y) < 7);
-        if (!f) { f = { id: m.sigFoco++, x, y, radio: 8, resp: [], victimas: [], agresores: [], visto: m.t }; focos.push(f); }
+        if (!f) { f = { id: m.sigFoco++, x, y, radio: 14, resp: [], victimas: [], agresores: [], visto: m.t }; focos.push(f); }
         f.victimas.push(e); f.visto = m.t;
         const a = m.porId.get(e.agresor); if (a && !f.agresores.includes(a)) f.agresores.push(a);
       }
@@ -1746,10 +1829,10 @@
         }
         if (f.necesidad <= 0) continue;
         const nodos = [{ x: f.x, y: f.y, r: f.radio, salto: 0 }]; // la red: el foco y quienes ya acuden, que retransmiten
-        for (const id of f.resp) { const u = m.porId.get(id); nodos.push({ x: u.x, y: u.y, r: 8, salto: u.salto }); }
+        for (const id of f.resp) { const u = m.porId.get(id); nodos.push({ x: u.x, y: u.y, r: 12, salto: u.salto }); }
         const cand = [];
         for (const u of m.ents) {
-          if (u.j !== j || u.edif || u.acude || u.guardia || u.retirando || u.vida <= 0 || vict.has(u.id) || !UNID[u.tipo].arma || sinSuministro(u)) continue; // fuera de la red no llega la llamada
+          if (u.j !== j || u.edif || u.acude || u.guardia || u.retirando || u.vida <= 0 || vict.has(u.id) || !UNID[u.tipo].arma || u.vigila || u.protege) continue; // (quien vigila una zona o protege a alguien no deja su puesto)
           const libre = (u.orden === 'nada' || u.orden === 'amover') && !u.obj;
           // Con una orden directa solo acude si atacan a una compañera que marcha en su misma misión.
           if (!libre && !(u.orden !== 'nada' && u.mision && f.victimas.some((v) => !v.edif && v.mision === u.mision && v.orden !== 'nada'))) continue;
@@ -1768,7 +1851,7 @@
           f.resp.push(u.id); f.necesidad -= valor(u);
           m.efectos.push({ tipo: 'oye', x1: u.x, y1: u.y, x2: f.x, y2: f.y, j, t: m.t });
         }
-        f.radio = Math.min(30, f.radio + 1); // nadie basta todavía: la llamada llega más lejos
+        f.radio = Math.min(40, f.radio + 2); // nadie basta todavía: la llamada llega más lejos
       }
     }
   }
@@ -2450,6 +2533,7 @@
     if (m.logistica !== false && (!m.radioCob || m.t % 20 === 0)) calcularRadio(m);
     if (m.t % 10 === 0) { tickTrincheras(m); tickCamaras(m); tickPortadores(m); tickPuenteAereo(m); tickEspias(m); }
     if (m.minasT && m.minasT.length && m.t % 2 === 0) tickMinas(m);
+    if (m.t % 10 === 5) tickEscoltas(m);
     if (m.t % 10 === 0 && m.logistica !== false) { // suministro: fuera de la cobertura el contador sube; dentro, baja rápido. Los aviones repostan en su base: no cuenta.
       const pts = tickSuministro(m);
       for (const u of m.ents) { if (u.edif || UNID[u.tipo].aire || UNID[u.tipo].suministro) continue; let dentro = m.cob[u.j][Math.floor(u.y) * m.N + Math.floor(u.x)] || m.jug[u.j].dios;

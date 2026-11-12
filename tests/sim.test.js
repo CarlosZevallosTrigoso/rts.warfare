@@ -1955,6 +1955,89 @@ prueba('tanda E: fuera de la cobertura de radio las unidades casi no ven y obede
   const mc = W.crearMundo(31, { N: 128, logistica: false }); const uc = W.crearUnidad(mc, 0, 'infanteria', cel(100, 100)); for (let i = 0; i < 25; i++) W.tick(mc); assert.ok(!W.sinRadio(mc, uc));
 });
 
+prueba('v1, primera entrega: granadero, alerta amplia, explorar en grupo, proteger y vigilar una zona', () => {
+  const m = W.crearMundo(31, { N: 128 }), N = m.N, J = m.jug[0];
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const cel = (x, y) => y * N + x;
+  for (let y = 30; y < 100; y++) for (let x = 20; x < 110; x++) { const i = cel(x, y); if (m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  m.terrenoV++;
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  // granadero: nivel 1, y le hace daño de verdad a un tanque (el fusilero, casi nada)
+  assert.ok(!W.UNID.granadero.nivel || W.UNID.granadero.nivel === 1, 'el granadero es de nivel 1'); assert.ok(W.disponible(m, 0, W.UNID.granadero) || !J.cuenta.cuartel);
+  const tq = W.crearUnidad(m, 1, 'tanque', cel(60, 40)), tq2 = W.crearUnidad(m, 1, 'tanque', cel(60, 50)); tq.guardia = tq2.guardia = true; m.jug[1].tr.invulnerable = false;
+  const gr = [0, 1, 2].map((k) => W.crearUnidad(m, 0, 'granadero', cel(57, 39 + k))), fu = [0, 1, 2].map((k) => W.crearUnidad(m, 0, 'infanteria', cel(57, 49 + k)));
+  tq.recarga = tq2.recarga = 99999; avanza(170);
+  assert.ok(tq.vidaMax - tq.vida > (tq2.vidaMax - tq2.vida) * 1.6 && tq.vidaMax - tq.vida > 100, 'tres granaderos dañan al tanque mucho más que tres fusileros (' + Math.round(tq.vidaMax - tq.vida) + ' contra ' + Math.round(tq2.vidaMax - tq2.vida) + ')');
+  for (const u of [tq, tq2, ...gr, ...fu]) u.vida = 0; avanza(3);
+  // alerta amplia: atacan a una unidad y acude otra que está a 13 celdas, en el primer aviso
+  const vict = W.crearUnidad(m, 0, 'infanteria', cel(40, 70)), amiga = W.crearUnidad(m, 0, 'tanque', cel(53, 70)), mala = W.crearUnidad(m, 1, 'infanteria', cel(37, 70)); avanza(60);
+  assert.ok(amiga.acude || Math.hypot(amiga.x - vict.x, amiga.y - vict.y) < 10 || mala.vida <= 0, 'la compañera a 13 celdas acude enseguida');
+  for (const u of [vict, amiga, mala]) u.vida = 0; avanza(3);
+  // explorar en grupo: van juntas
+  m.niebla[0].fill(0); const ex = [0, 1, 2, 3].map((k) => W.crearUnidad(m, 0, k % 2 ? 'tanque' : 'infanteria', cel(30 + k, 60)));
+  W.orden(m, { t: 'explorar', j: 0, ids: ex.map((u) => u.id) }); avanza(5);
+  assert.ok(ex.every((u) => u.explora && u.expG === ex[0].expG && u.expG), 'las cuatro exploran como un grupo');
+  let sep = 0; for (let i = 0; i < 1500; i++) { W.tick(m); if (i > 200 && i % 20 === 0) for (const u of ex) sep = Math.max(sep, Math.hypot(u.x - ex[0].x, u.y - ex[0].y)); }
+  assert.ok(sep < 9, 'no se separan (separación máxima ' + sep.toFixed(1) + ')'); assert.ok(Math.hypot(ex[0].x - 30, ex[0].y - 60) > 10, 'y avanzan');
+  for (const u of ex) u.vida = 0; avanza(3);
+  // proteger: la escolta sigue a su protegido y ataca a quien lo ataca
+  const vip = W.crearUnidad(m, 0, 'excavadora', cel(40, 40)), esc = [0, 1].map((k) => W.crearUnidad(m, 0, 'tanque', cel(30, 38 + k * 3)));
+  W.orden(m, { t: 'proteger', j: 0, ids: esc.map((u) => u.id), obj: vip.id }); avanza(400);
+  assert.ok(esc.every((u) => u.protege === vip.id && Math.hypot(u.x - vip.x, u.y - vip.y) < 6), 'la escolta se pone a su lado');
+  W.orden(m, { t: 'mover', j: 0, ids: [vip.id], x: 70.5, y: 44.5 }); avanza(3); for (let i = 0; i < 1500 && vip.orden !== 'nada'; i++) W.tick(m); avanza(200);
+  assert.ok(esc.every((u) => Math.hypot(u.x - vip.x, u.y - vip.y) < 7), 'y lo sigue cuando se mueve');
+  const ag = W.crearUnidad(m, 1, 'francotirador', cel(80, 44)); ag.ang = Math.PI; avanza(700);
+  assert.ok(ag.vida <= 0 || ag.vida < ag.vidaMax, 'atacan a quien dispara a su protegido');
+  ag.vida = 0; W.orden(m, { t: 'mover', j: 0, ids: [esc[0].id], x: 50.5, y: 60.5 }); avanza(5); assert.ok(!esc[0].protege && esc[1].protege, 'otra orden le quita la escolta');
+  for (const u of [vip, ...esc]) u.vida = 0; avanza(3);
+  // vigilar: van a la zona; lo que entra y se ve, lo atacan; lo que pasa por fuera, no; y no persiguen fuera
+  const vg = [0, 1, 2].map((k) => W.crearUnidad(m, 0, 'tanque', cel(30, 80 + k * 2)));
+  W.orden(m, { t: 'vigilar', j: 0, ids: vg.map((u) => u.id), x: 60.5, y: 84.5, r: 8 }); avanza(3); for (let i = 0; i < 1500 && vg.some((u) => u.orden !== 'nada'); i++) W.tick(m);
+  assert.ok(vg.every((u) => u.vigila && Math.hypot(u.x - 60.5, u.y - 84.5) < 5), 'el grupo va a la zona y se queda dentro');
+  const fuera = W.crearUnidad(m, 1, 'cosechadora', cel(60, 62)); avanza(200);
+  assert.ok(fuera.vida === fuera.vidaMax && vg.every((u) => Math.hypot(u.x - 60.5, u.y - 84.5) < 5), 'lo que pasa fuera de la zona no les saca de ella');
+  const dentro = W.crearUnidad(m, 1, 'cosechadora', cel(66, 88)); avanza(300);
+  assert.ok(dentro.vida < dentro.vidaMax, 'lo que entra en la zona es atacado');
+  fuera.vida = 0; dentro.vida = 0; avanza(400);
+  assert.ok(vg.every((u) => u.vigila && Math.hypot(u.x - u.vigila.px, u.y - u.vigila.py) < 3), 'y después vuelven a su puesto');
+});
+
+prueba('v1, drones: batería, retirada para repararse, tres drones por operador y reposición', () => {
+  const m = W.crearMundo(31, { N: 128, logistica: true }), N = m.N, J = m.jug[0];
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const cel = (x, y) => y * N + x, patio = m.ents.find((e) => e.j === 0 && e.tipo === 'patio'), px = Math.floor(patio.cx), py = Math.floor(patio.cy), dir = px < 64 ? 1 : -1;
+  for (let y = py - 12; y <= py + 12; y++) for (let x = Math.min(px, px + dir * 70) - 2; x <= Math.max(px, px + dir * 70) + 2; x++) { const i = cel(x, y); if (x < 2 || y < 2 || x >= N - 2 || y >= N - 2 || m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  m.terrenoV++;
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  J.minerales = 5000;
+  const op = W.crearUnidad(m, 0, 'operador', cel(px + dir * 8, py + 3)); avanza(80);
+  assert.strictEqual(op.dr.rec.length, 1, 'vuela un dron'); assert.strictEqual(op.drStock, 2, 'y lleva dos de repuesto');
+  const dr = m.porId.get(op.dr.rec[0]);
+  // batería: se gasta volando; con poca, vuelve, carga y sale otra vez
+  assert.ok(dr.bat < W.ECON.dronBat && dr.bat > W.ECON.dronBat - 120, 'la batería se va gastando');
+  dr.bat = 100; avanza(40); assert.ok(dr.casa2, 'con poca batería vuelve con su operador');
+  for (let i = 0; i < 600 && dr.casa2; i++) W.tick(m);
+  assert.ok(!dr.casa2 && dr.bat > W.ECON.dronBat * 0.9 && dr.vida > 0, 'carga y vuelve a salir');
+  // daños: muy tocado, se retira a repararse en vez de caer
+  dr.vida = dr.vidaMax * 0.3; avanza(30); assert.ok(dr.casa2, 'muy dañado, se retira');
+  for (let i = 0; i < 600 && dr.casa2; i++) W.tick(m); assert.ok(dr.vida >= dr.vidaMax * 0.95, 'y sale reparado');
+  // tres drones y no más: los destruidos salen de las existencias; a la tercera se queda sin ninguno
+  dr.vida = 0; avanza(120); assert.strictEqual(op.dr.rec.length, 1, 'sale el primer repuesto'); assert.strictEqual(op.drStock, 1);
+  m.porId.get(op.dr.rec[0]).vida = 0; avanza(120); m.porId.get(op.dr.rec[0]).vida = 0; avanza(120);
+  assert.strictEqual(op.dr.rec.length, 0); assert.strictEqual(op.drStock, 0); assert.ok(op.sinDron, 'perdidos los tres, se queda sin drones');
+  avanza(400); assert.strictEqual(op.dr.rec.length, 0, 'y no le vuelven solos');
+  // reposición: junto a una estación de drones conectada, pagando
+  W.crearEdificio(m, 0, 'central', px + dir * 4, py - 4); W.crearEdificio(m, 0, 'cuartel', px, py + 5); const est = W.crearEdificio(m, 0, 'estDrones', px + dir * 9, py - 3); avanza(5);
+  const min0 = J.minerales; W.orden(m, { t: 'mover', j: 0, ids: [op.id], x: est.cx + dir * 2.5, y: est.cy + 0.5 }); avanza(3); for (let i = 0; i < 1500 && op.orden !== 'nada'; i++) W.tick(m);
+  avanza(500); assert.ok(op.drStock + op.dr.rec.length === 3, 'junto a la estación recupera los tres (' + op.drStock + ' + ' + op.dr.rec.length + ')'); assert.ok(!op.sinDron);
+  assert.ok(min0 - J.minerales >= 3 * W.UNID.dronRec.costo - 110, 'pagando cada uno');
+  // con la tecnología de ataque lleva cuatro kamikazes, que también se gastan y se reponen
+  J.mejoras.dronesFpv = true; avanza(20); assert.strictEqual(op.drFpv, 4);
+  W.orden(m, { t: 'mover', j: 0, ids: [op.id], x: px + dir * 30.5, y: py + 0.5 }); avanza(3); for (let i = 0; i < 2500 && op.orden !== 'nada'; i++) W.tick(m);
+  const t1 = W.crearUnidad(m, 1, 'tanque', cel(px + dir * 38, py)); t1.guardia = true; t1.recarga = 99999; avanza(500);
+  assert.ok(op.drFpv < 4 && t1.vida < t1.vidaMax, 'cada kamikaze lanzado sale de las existencias (quedan ' + op.drFpv + ')');
+});
+
 prueba('tanda 5: puente aéreo, puesto de avanzada, hospital y traslado de infantería', () => {
   const m = W.crearMundo(31, { N: 128, logistica: true }), N = m.N, J = m.jug[0];
   m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
