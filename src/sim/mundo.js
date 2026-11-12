@@ -541,6 +541,11 @@
       if (conBat) u.bat--;
       if ((conBat && u.bat < Math.hypot(u.x - bx, u.y - by) / d.vel + 80) || u.vida < u.vidaMax * ECON.dronVuelve) { u.casa2 = true; return; }
     }
+    if (u.rol === 'rec' && u.dpat) { // patrulla propia: recorre sus puntos (uno solo: da vueltas encima), sin salir del alcance de su portador
+      const p = u.dpat, q = p.pts[p.i], al = W.alcanceDron(m, u);
+      if (Math.hypot(q.x - bx, q.y - by) > al + 2) u.dpat = null; // el portador se alejó: vuelve con él
+      else { if (p.pts.length === 1) orbita(2.5, q.x, q.y); else if (ir(q.x, q.y, d.vel) <= 0.4) p.i = (p.i + 1) % p.pts.length; return; }
+    }
     if (u.rol === 'rec') { if (parado && mis) orbita(3.5, mis.x, mis.y); else orbita(parado ? cfg.radioDron * 0.55 : 2.2); return; } // en misión, da vueltas sobre el punto lejano
     const o = u.obj ? m.porId.get(u.obj) : null, vivo = o && o.vida > 0;
     if (u.rol === 'fpv') {
@@ -898,9 +903,19 @@
     u.pend = { x, y, radio }; u.meta = u.pend;
   }
 
+  // Los drones de reconocimiento también reciben órdenes: patrullar por puntos, ir a un punto o volver con su portador.
+  W.alcanceDron = (m, u) => { const b = m.porId.get(u.base); if (!b) return 0; const d = b.edif ? null : UNID[b.tipo]; return d && d.misionDron ? d.misionDron : W.dronesDe(m, b).radio; };
+  function dronesOrden(m, cmd, pts) {
+    for (let k = 0; k < cmd.ids.length; k++) {
+      const u = m.porId.get(cmd.ids[k]); if (!u || u.edif || u.j !== cmd.j || !UNID[u.tipo].mini || u.rol !== 'rec') continue;
+      const b = m.porId.get(u.base); if (!b || !pts) { u.dpat = null; continue; }
+      const al = W.alcanceDron(m, u), bx = posX(b), by = posY(b), ok = pts.filter((q) => q.x >= 0 && q.y >= 0 && q.x < m.N && q.y < m.N && Math.hypot(q.x - bx, q.y - by) <= al).slice(0, 12).map((q) => ({ x: q.x, y: q.y }));
+      u.dpat = ok.length ? { pts: ok, i: 0 } : null;
+    }
+  }
   function propias(m, cmd) {
     const out = [];
-    for (let k = 0; k < cmd.ids.length; k++) { const u = m.porId.get(cmd.ids[k]); if (u && !u.edif && u.j === cmd.j) { u.retirando = false; u.volver = null; u.noRetira = true; out.push(u); } } // una orden directa anula la retirada (hasta que se repare)
+    for (let k = 0; k < cmd.ids.length; k++) { const u = m.porId.get(cmd.ids[k]); if (u && !u.edif && u.j === cmd.j && !UNID[u.tipo].mini) { u.retirando = false; u.volver = null; u.noRetira = true; out.push(u); } } // una orden directa anula la retirada (hasta que se repare)
     return out;
   }
   // En un grupo, cada unidad tarda unas décimas distintas en reaccionar a la orden: no arrancan todas en el mismo instante.
@@ -1368,6 +1383,7 @@
       }
       // cmd.enc (encadenar): la orden se añade a la cola de la unidad en vez de reemplazar lo que hace.
       case 'mover':
+        dronesOrden(m, cmd, [{ x: cmd.x, y: cmd.y }]);
         destinos(m, reaccion(m, propias(m, cmd)), cmd.x, cmd.y, (u, x, y, ex) => { enFormacion(m, u, 'mover', x, y, ex, cmd.enc && u.tipo !== 'cosechadora'); if (UNID[u.tipo].suministro) u.sumi = { x, y, est: 'ida' }; }, cmd.forma, cmd.rumbo); // al suministro móvil, mover es marcarle su punto
         return;
       case 'amover':
@@ -1420,6 +1436,7 @@
         return;
       }
       case 'patrulla': // va y vuelve entre puntos, atacando lo que encuentre; con enc se añade otro punto
+        if (cmd.pts && cmd.pts.length) dronesOrden(m, cmd, cmd.pts);
         if (cmd.pts && cmd.pts.length) { // ruta entera, compartida por el grupo: cada unidad lleva su puesto en cada punto y todas van al paso de la más lenta
           const us = propias(m, cmd).filter((u) => u.tipo !== 'cosechadora'), pts = cmd.pts.slice(0, 12), rutas = new Map();
           let tope = Infinity; for (const u of us) tope = Math.min(tope, UNID[u.tipo].vel);
@@ -1461,6 +1478,7 @@
         return;
       }
       case 'detener':
+        dronesOrden(m, cmd, null);
         for (const u of propias(m, cmd)) { limpiar(u); u.orden = 'nada'; u.obj = 0; u.ruta = null; u.pend = null; if (u.tipo === 'cosechadora') u.est = 'quieto'; if (u.sumi) u.sumi = null; }
         return;
       case 'cosechar':

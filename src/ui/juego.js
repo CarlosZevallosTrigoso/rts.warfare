@@ -208,7 +208,8 @@
         if (!e.edif && UNID[e.tipo].taller && e.j === YO) t += e.orden === 'recuperar' ? ' · recuperando un vehículo' : e.orden === 'nada' ? ' · reparando a los vehículos cercanos' : ' · parado repara y recupera';
         if (!e.edif && UNID[e.tipo].suministro && e.j === YO && e.sumC !== undefined) { const cf = UNID[e.tipo].suministro, pc = Math.round(e.sumC / cf.carga * 100), s = e.sumi; t += ' · carga ' + pc + ' % · ' + (!s ? 'sin punto: muévelo adonde deba abastecer' : s.est === 'ida' ? 'de camino a su punto' : s.est === 'puesto' ? (e.sumC > 0 ? 'abasteciendo a ' + (e.sumiAt || 0) + (e.sumiAt === 1 ? ' unidad' : ' unidades') : 'vacío: no hay puesto logístico al que volver') : s.est === 'vuelta' ? 'vacío: vuelve a recargar' : 'recargando (' + cf.recarga + ' minerales)'); }
         if (e.cava > 0) t += ' · cavando'; else if (e.guardia && e.j === YO && !W.enTrinchera(m, e)) t += ' · en guardia';
-        if (UNID[e.tipo] && UNID[e.tipo].aire && e.j === YO) t += (e.enTierra ? ' · en tierra' : e.repostando ? ' · vuelve a repostar' : e.patrulla ? ' · patrulla' : '') + ' · combustible ' + Math.round(e.fuel / UNID[e.tipo].fuel * 100) + ' %';
+        if (!e.edif && UNID[e.tipo].mini && e.j === YO) { if (e.rol === 'rec') t += (e.casa2 ? ' · vuelve a cargar' : e.dpat ? (e.dpat.pts.length > 1 ? ' · patrulla' : ' · vigila un punto') : ' · con su portador') + (e.bat !== undefined ? ' · batería ' + Math.round(e.bat / W.ECON.dronBat * 100) + ' %' : '') + ' · R: patrulla · clic derecho: ir a un punto'; }
+        else if (UNID[e.tipo] && UNID[e.tipo].aire && e.j === YO) t += (e.enTierra ? ' · en tierra' : e.repostando ? ' · vuelve a repostar' : e.patrulla ? ' · patrulla' : '') + ' · combustible ' + Math.round(e.fuel / UNID[e.tipo].fuel * 100) + ' %';
         if (!e.edif && e.rango) t += ' · veterano ' + '▲'.repeat(e.rango);
         if (!e.edif && e.j === YO && e.bajas) t += ' · ' + e.bajas + (e.bajas === 1 ? ' baja' : ' bajas');
         if (e.arregla && e.j === YO) t += ' · reparando';
@@ -698,11 +699,11 @@
           ctx.globalAlpha = 1;
         }
         // Puntos encadenados (línea fina) y circuito de patrulla (cerrado).
-        const puntos = u.patrulla ? u.patrulla.pts : u.cola.filter((q) => q.t !== 'atacar');
+        const pat = u.patrulla || u.dpat, puntos = pat ? pat.pts : (u.cola || []).filter((q) => q.t !== 'atacar');
         if (puntos.length) {
-          ctx.strokeStyle = u.patrulla ? P.mal : color; ctx.fillStyle = ctx.strokeStyle; ctx.globalAlpha = 0.55; ctx.setLineDash([2, 4]);
+          ctx.strokeStyle = pat ? P.mal : color; ctx.fillStyle = ctx.strokeStyle; ctx.globalAlpha = 0.55; ctx.setLineDash([2, 4]);
           ctx.beginPath();
-          if (u.patrulla) { ctx.moveTo(ox + puntos[0].x * z, oy + puntos[0].y * z); for (const q of puntos) ctx.lineTo(ox + q.x * z, oy + q.y * z); ctx.closePath(); }
+          if (pat) { ctx.moveTo(ox + puntos[0].x * z, oy + puntos[0].y * z); for (const q of puntos) ctx.lineTo(ox + q.x * z, oy + q.y * z); ctx.closePath(); }
           else { const d0 = u.dest && u.orden !== 'nada' ? u.dest : u; ctx.moveTo(ox + d0.x * z, oy + d0.y * z); for (const q of puntos) ctx.lineTo(ox + q.x * z, oy + q.y * z); }
           ctx.stroke(); ctx.setLineDash([]);
           for (const q of puntos) { ctx.beginPath(); ctx.arc(ox + q.x * z, oy + q.y * z, 2.5, 0, TAU); ctx.fill(); }
@@ -1506,6 +1507,11 @@
     let rutaP = [];
     function cerrarPatrulla() {
       const ids = unidadesSel().map((u) => u.id);
+      const drs = unidadesSel().filter((u) => UNID[u.tipo].mini);
+      if (rutaP.length && drs.length) { // los drones no salen del alcance de su portador
+        const fuera = drs.filter((u) => { const b = m.porId.get(u.base), al = W.alcanceDron(m, u); return !b || rutaP.some((q) => Math.hypot(q.x - (b.edif ? b.cx : b.x), q.y - (b.edif ? b.cy : b.y)) > al); });
+        if (fuera.length) aviso('Algún punto queda fuera del alcance del dron (' + W.alcanceDron(m, fuera[0]) + ' celdas desde su portador): ese punto se omite');
+      }
       if (rutaP.length && ids.length) { W.orden(m, { t: 'patrulla', j: YO, ids, pts: rutaP }); son.orden(); aviso(rutaP.length === 1 ? 'Patrulla: ida y vuelta' : rutaP.length === 2 ? 'Patrulla entre dos puntos' : 'Patrulla en circuito de ' + rutaP.length + ' puntos'); }
       modo = null; rutaP = [];
     }
@@ -2140,7 +2146,7 @@
       if (!ev.shiftKey) sel.clear();
       if (clic) {
         const e = entEn(aMundoX(raton.x), aMundoY(raton.y));
-        if (e && e.j === YO && !(UNID[e.tipo] && UNID[e.tipo].mini)) { if (ev.shiftKey && sel.has(e.id)) sel.delete(e.id); else sel.add(e.id); } // los drones pequeños no se seleccionan: van con su portador
+        if (e && e.j === YO && !(UNID[e.tipo] && UNID[e.tipo].mini && e.rol !== 'rec')) { if (ev.shiftKey && sel.has(e.id)) sel.delete(e.id); else sel.add(e.id); } // de los drones pequeños solo se selecciona el de reconocimiento (para darle patrulla)
         const ahora = performance.now();
         if (e && e.j === YO && !e.edif && ultClic.id === e.id && ahora - ultClic.t < 380) { // doble clic: todas las de su tipo que estén en pantalla
           const c = lienzo.getBoundingClientRect(), ax = aMundoX(0), bx = aMundoX(c.width), ay = aMundoY(0), by = aMundoY(c.height);
@@ -2152,6 +2158,7 @@
       const ax = aMundoX(Math.min(raton.x, raton.x0)), bx = aMundoX(Math.max(raton.x, raton.x0));
       const ay = aMundoY(Math.min(raton.y, raton.y0)), by = aMundoY(Math.max(raton.y, raton.y0));
       for (const e of m.ents) if (!e.edif && e.j === YO && !UNID[e.tipo].mini && e.x >= ax && e.x <= bx && e.y >= ay && e.y <= by) sel.add(e.id);
+      if (!sel.size) for (const e of m.ents) if (!e.edif && e.j === YO && UNID[e.tipo].mini && e.rol === 'rec' && e.x >= ax && e.x <= bx && e.y >= ay && e.y <= by) sel.add(e.id); // caja solo con drones de reconocimiento: se seleccionan ellos
       // La caja prioriza tropa: suelta edificios y, si hay combatientes, también cosechadoras.
       const cosas = [...sel].map((id) => m.porId.get(id)).filter(Boolean);
       const hayTropa = cosas.some((e) => !e.edif && UNID[e.tipo].arma);

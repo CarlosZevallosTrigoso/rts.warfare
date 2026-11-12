@@ -2100,6 +2100,27 @@ prueba('v1, la mina: va sobre un yacimiento, saca minerales de un pozo sin cosec
   mi.pozo = 3; const m1 = J.minerales; avanza(400); assert.ok(mi.pozo <= 0 && J.minerales - m1 < 90, 'agotado el pozo, deja de sacar');
 });
 
+prueba('drones de reconocimiento: se les ordena patrullar por puntos, ir a un punto y volver; no salen del alcance de su portador', () => {
+  const m = W.crearMundo(31, { N: 128 }), N = m.N;
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  for (let y = 30; y < 100; y++) for (let x = 20; x < 110; x++) { const i = y * N + x; if (m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  m.terrenoV++;
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  const op = W.crearUnidad(m, 0, 'operador', 64 * N + 40); avanza(60);
+  const dr = m.ents.find((e) => !e.edif && e.tipo === 'dronRec' && e.base === op.id); assert.ok(dr, 'el operador saca su dron');
+  const al = W.alcanceDron(m, dr); assert.strictEqual(al, W.UNID.operador.misionDron);
+  const A = { x: op.x + 20, y: op.y - 6 }, B = { x: op.x + 20, y: op.y + 6 }, lejos = { x: op.x + al + 15, y: op.y };
+  W.orden(m, { t: 'patrulla', j: 0, ids: [dr.id], pts: [A, lejos, B] }); avanza(3);
+  assert.ok(dr.dpat && dr.dpat.pts.length === 2, 'el punto fuera de alcance se omite'); assert.ok(!dr.patrulla && dr.orden === 'nada', 'no recibe la orden de las unidades normales');
+  let enA = false, enB = false, vueltas = 0, antes = false; for (let k = 0; k < 900; k++) { W.tick(m); const a = Math.hypot(dr.x - A.x, dr.y - A.y) < 1; if (a && !antes && enB) vueltas++; antes = a; if (a) enA = true; if (Math.hypot(dr.x - B.x, dr.y - B.y) < 1) enB = true; }
+  assert.ok(enA && enB && vueltas >= 1, 'va y vuelve entre los dos puntos'); assert.ok(op.orden === 'nada' && Math.hypot(op.x - 40.5, op.y - 64.5) < 1, 'el operador no se mueve');
+  W.orden(m, { t: 'mover', j: 0, ids: [dr.id], x: op.x + 10, y: op.y + 12 }); avanza(200);
+  assert.ok(dr.dpat && dr.dpat.pts.length === 1 && Math.abs(Math.hypot(dr.x - op.x - 10, dr.y - op.y - 12) - 2.5) < 1, 'mover: da vueltas sobre el punto');
+  W.orden(m, { t: 'detener', j: 0, ids: [dr.id] }); avanza(300); assert.ok(!dr.dpat && Math.hypot(dr.x - op.x, dr.y - op.y) < 12, 'detener: vuelve con su portador');
+  W.orden(m, { t: 'patrulla', j: 0, ids: [dr.id], pts: [A, B] }); avanza(3); W.orden(m, { t: 'mover', j: 0, ids: [op.id], x: op.x - 50, y: op.y }); avanza(1200);
+  assert.ok(!dr.dpat && dr.vida > 0, 'si el portador se aleja, el dron deja la patrulla y lo sigue');
+});
+
 prueba('tanda 5: puente aéreo, puesto de avanzada, hospital y traslado de infantería', () => {
   const m = W.crearMundo(31, { N: 128, logistica: true }), N = m.N, J = m.jug[0];
   m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
