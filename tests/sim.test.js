@@ -2045,6 +2045,7 @@ prueba('v1, la mina: va sobre un yacimiento, saca minerales de un pozo sin cosec
   W.crearEdificio(m, 0, 'central', px + dir * 4, py + 4); W.crearEdificio(m, 0, 'central', px + dir * 4, py - 6); W.crearEdificio(m, 0, 'refineria', px - dir * 1, py + 5); avanza(3);
   const mx = px + dir * 9, my = py; // un yacimiento pegado a la base (dentro de la red)
   for (const [dx, dy] of [[0, 0], [1, 0], [0, 1]]) { const c = cel(mx + dx, my + dy); m.mapa.mineral[c] = 500; m.mapa.tipoMin[c] = 1; m.minas.push(c); }
+  m.mapa.veta = null;
   assert.strictEqual(W.porQueNo(m, 0, 'mina', mx + 4, my + 4), 'va sobre un yacimiento de minerales', 'fuera del mineral no se puede');
   assert.strictEqual(W.porQueNo(m, 0, 'mina', mx, my), '', 'sobre el yacimiento, sí'); assert.ok(W.porQueNo(m, 0, 'cuartel', mx, my), 'los demás edificios siguen sin poder ir sobre mineral');
   const mi = W.crearEdificio(m, 0, 'mina', mx, my); avanza(3);
@@ -2053,7 +2054,12 @@ prueba('v1, la mina: va sobre un yacimiento, saca minerales de un pozo sin cosec
   assert.ok(J.minerales - m0 >= 190, 'los minerales entran en caja'); const sube = pz - mi.pozo; assert.ok(sube > 150 && sube < 260, 'saca unos 200 en medio minuto, sin cosechadoras (' + Math.round(sube) + ')'); assert.ok(J.cosechado - c0 > 150); assert.ok(mi.pozo < W.ECON.minaPozo + 1500);
   // sin red no saca nada
   const mx2 = px + dir * 34; for (const [dx, dy] of [[0, 0], [1, 0]]) { const c = cel(mx2 + dx, my + dy); m.mapa.mineral[c] = 500; m.mapa.tipoMin[c] = 1; m.minas.push(c); }
+  m.mapa.veta = null;
   const lejos = W.crearEdificio(m, 0, 'mina', mx2, my); avanza(5); assert.ok(!lejos.conRed); const p0 = lejos.pozo; avanza(300); assert.strictEqual(lejos.pozo, p0, 'una mina fuera de la red no rinde');
+  // agotado el mineral de superficie, la veta sigue ahí: se puede poner la mina
+  const mx3 = px + dir * 16; for (const [dx, dy] of [[0, 0], [1, 0]]) { const c = cel(mx3 + dx, my - 6 + dy); m.mapa.mineral[c] = 500; m.mapa.tipoMin[c] = 1; m.minas.push(c); }
+  m.mapa.veta = null; W.vetaDe(m); for (const [dx, dy] of [[0, 0], [1, 0]]) { const c = cel(mx3 + dx, my - 6 + dy); m.mapa.mineral[c] = 0; m.mapa.tipoMin[c] = 0; const k = m.minas.indexOf(c); m.minas.splice(k, 1); }
+  assert.strictEqual(W.porQueNo(m, 0, 'mina', mx3, my - 6), '', 'sobre la veta ya cosechada se puede construir la mina'); assert.ok(m.mapa.vetas.includes(cel(mx3, my - 6)));
   // pozo agotado: se para
   mi.pozo = 3; const m1 = J.minerales; avanza(400); assert.ok(mi.pozo <= 0 && J.minerales - m1 < 90, 'agotado el pozo, deja de sacar');
 });
@@ -2130,6 +2136,80 @@ prueba('ingeniero civil: en automático repara los edificios dañados de la base
   for (let i = 0; i < 700; i++) { W.tick(m); tq.vida = Math.min(tq.vida, t0); }
   assert.ok(patio.vida > v0 + 50, 'va solo hasta el patio dañado y lo repara (' + Math.round(patio.vida - v0) + ')'); assert.ok(civ.arregla === patio.id || patio.vida >= patio.vidaMax);
   assert.ok(civ.arregla !== tq.id, 'el tanque no es cosa suya');
+});
+
+prueba('defensas: búnker (entrar, protección, salir), torre de vigilancia y artillería fija con distancia mínima', () => {
+  const m = W.crearMundo(4242, { N: 128 }), N = m.N, J = m.jug[0];
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const cel = (x, y) => y * N + x;
+  for (let y = 40; y < 80; y++) for (let x = 30; x < 100; x++) { const i = cel(x, y); if (m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  m.terrenoV++;
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  assert.ok(W.EDIF.torreta.costo === 350 && W.EDIF.torreCanon.costo === 900 && W.EDIF.antiaerea.costo === 450, 'defensas más baratas');
+  // búnker: entran cuatro, el quinto se queda fuera
+  const b = W.crearEdificio(m, 0, 'bunker', 50, 60), inf = [0, 1, 2, 3, 4].map((k) => W.crearUnidad(m, 0, 'infanteria', cel(46 + k, 63)));
+  W.orden(m, { t: 'guarnecer', j: 0, ids: inf.map((u) => u.id), en: b.id }); avanza(300);
+  assert.strictEqual(W.enBunker(m, b), 4, 'entran cuatro'); assert.strictEqual(inf.filter((u) => !u.bunk).length, 1, 'el quinto no cabe');
+  const dentro = inf.filter((u) => u.bunk); assert.ok(dentro.every((u) => Math.hypot(u.x - b.cx, u.y - b.cy) < 0.01));
+  // protección: el mismo tiro hace la cuarta parte del daño dentro que fuera
+  const fuera = inf.find((u) => !u.bunk), ene = W.crearUnidad(m, 1, 'infanteria', cel(53, 61)); ene.recarga = 99999;
+  const v1 = dentro[0].vida, v2 = fuera.vida; W.herir(m, dentro[0], W.ARMAS.fusil, 1, ene.id); W.herir(m, fuera, W.ARMAS.fusil, 1, ene.id);
+  assert.ok(Math.abs((v1 - dentro[0].vida) - (v2 - fuera.vida) * W.ECON.bunkerDano) < 0.01, 'dentro reciben la cuarta parte');
+  // disparan desde dentro
+  const ve = ene.vida; avanza(200); assert.ok(ene.vida < ve || !m.porId.has(ene.id), 'los de dentro disparan al enemigo que se acerca'); assert.strictEqual(W.enBunker(m, b), 4, 'y no salen a perseguirlo');
+  // salir a un punto
+  W.orden(m, { t: 'vaciar', j: 0, id: b.id, x: 44.5, y: 70.5 }); avanza(400);
+  assert.strictEqual(W.enBunker(m, b), 0); assert.ok(dentro.every((u) => !u.bunk && Math.hypot(u.x - 44.5, u.y - 70.5) < 4), 'salen y van al punto');
+  // si el búnker cae, salen heridos
+  W.orden(m, { t: 'guarnecer', j: 0, ids: [dentro[1].id], en: b.id }); avanza(400); assert.ok(dentro[1].bunk); const vv = dentro[1].vida; b.vida = 0; avanza(3);
+  assert.ok(!dentro[1].bunk && dentro[1].vida < vv && dentro[1].vida > 0, 'destruido el búnker, sale tocado');
+  // torre de vigilancia: ve lejos
+  m.niebla[0].fill(1); const vg = W.crearEdificio(m, 0, 'vigia', 40, 45); avanza(8);
+  assert.strictEqual(m.niebla[0][cel(40 + 14, 45)], 2, 'la torre de vigilancia ve a 14 celdas'); assert.ok(!W.EDIF.vigia.arma); void vg;
+  // artillería fija: tira lejos sobre lo que ve otro, y no a lo que tiene encima
+  for (const u of m.ents) if (!u.edif) u.vida = 0; avanza(2);
+  const art = W.crearEdificio(m, 0, 'artFija', 60, 50); art.sinLuz = false;
+  const cerca = W.crearUnidad(m, 1, 'tanque', cel(64, 51)); cerca.recarga = 99999; const vc = cerca.vida;
+  for (let i = 0; i < 300; i++) { W.tick(m); art.sinLuz = false; cerca.recarga = 99999; }
+  assert.strictEqual(cerca.vida, vc, 'a 3 celdas no le dispara');
+  cerca.vida = 0; const lejos = W.crearUnidad(m, 1, 'tanque', cel(77, 51)); lejos.recarga = 99999; const vl = lejos.vida;
+  for (let i = 0; i < 200; i++) { W.tick(m); art.sinLuz = false; lejos.recarga = 99999; }
+  assert.strictEqual(lejos.vida, vl, 'a 16 celdas, sin nadie que lo vea, tampoco');
+  const ojo = W.crearEdificio(m, 0, 'vigia', 72, 55);
+  for (let i = 0; i < 500; i++) { W.tick(m); art.sinLuz = false; lejos.recarga = 99999; lejos.orden = 'nada'; lejos.obj = 0; }
+  assert.ok(lejos.vida < vl, 'con una torre de vigilancia viéndolo, la artillería fija le alcanza a 16 celdas'); void J; void ojo;
+});
+
+prueba('hospital y ambulancia: cura cerca, la ambulancia sale a por los heridos, vuelve a recargar y se la puede destacar a un punto', () => {
+  const m = W.crearMundo(4242, { N: 128 }), N = m.N, J = m.jug[0];
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const cel = (x, y) => y * N + x;
+  for (let y = 40; y < 80; y++) for (let x = 30; x < 110; x++) { const i = cel(x, y); if (m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  m.terrenoV++; J.minerales = 20000; J.petroleo = 500;
+  const avanza = (n) => { for (let i = 0; i < n; i++) { W.tick(m); h.sinLuz = false; } };
+  let h = { sinLuz: false }; h = W.crearEdificio(m, 0, 'hospital', 45, 55);
+  const amb = W.crearUnidad(m, 0, 'ambulancia', cel(46, 59)); avanza(15);
+  assert.strictEqual(amb.amb.casa, h.id, 'la ambulancia toma el hospital como casa');
+  // el hospital cura a quien tiene al lado
+  const junto = W.crearUnidad(m, 0, 'infanteria', cel(49, 56)); junto.vida = 10; junto.noRetira = true; avanza(60); assert.ok(junto.vida > 25, 'el hospital cura a la infantería cercana (' + junto.vida.toFixed(0) + ')');
+  junto.vida = junto.vidaMax;
+  // un herido a 20 celdas: la ambulancia va sola, lo cura y vuelve
+  const her = W.crearUnidad(m, 0, 'infanteria', cel(66, 58)); her.vida = 12; her.noRetira = true; her.guardia = true; const c0 = amb.ambC;
+  avanza(500);
+  assert.ok(her.vida >= her.vidaMax * 0.99, 'sale sola y cura al herido (' + her.vida.toFixed(0) + ')'); assert.ok(amb.ambC < c0, 'gastando material');
+  avanza(500); assert.ok(Math.hypot(amb.x - h.cx, amb.y - h.cy) < 7, 'sin más heridos, vuelve junto al hospital'); assert.ok(amb.ambC >= W.UNID.ambulancia.ambu.carga, 'y recarga');
+  // un herido fuera del radio no se atiende
+  const lejos = W.crearUnidad(m, 0, 'infanteria', cel(95, 58)); lejos.vida = 12; lejos.noRetira = true; lejos.guardia = true; avanza(300);
+  assert.ok(lejos.vida < 30 && Math.hypot(amb.x - h.cx, amb.y - h.cy) < 7, 'a 50 celdas del hospital no llega sola');
+  // destacada a un punto: se queda allí y cura a los de esa zona; sin material vuelve a recargar y regresa
+  W.orden(m, { t: 'mover', j: 0, ids: [amb.id], x: 90.5, y: 60.5 }); avanza(700);
+  assert.ok(lejos.vida >= lejos.vidaMax * 0.99, 'destacada, cura a los de su nueva zona');
+  amb.ambC = 0; avanza(12); assert.strictEqual(amb.amb.est, 'vuelve'); avanza(1400);
+  assert.ok(amb.ambC > 0 && Math.hypot(amb.x - 90.5, amb.y - 60.5) < 6, 'recarga en el hospital y regresa a su punto (' + amb.x.toFixed(0) + ', ' + amb.amb.est + ')');
+  W.orden(m, { t: 'detener', j: 0, ids: [amb.id] }); avanza(900); assert.ok(Math.hypot(amb.x - h.cx, amb.y - h.cy) < 7 && !amb.amb.punto, 'con detener vuelve al hospital');
+  // cupo: tres por hospital
+  for (let k = 0; k < 5; k++) W.orden(m, { t: 'entrenar', j: 0, tipo: 'ambulancia' }); avanza(1500);
+  assert.strictEqual(m.ents.filter((e) => e.tipo === 'ambulancia' && e.j === 0).length, 3, 'tres ambulancias por hospital');
 });
 
 prueba('tanda 5: puente aéreo, puesto de avanzada, hospital y traslado de infantería', () => {

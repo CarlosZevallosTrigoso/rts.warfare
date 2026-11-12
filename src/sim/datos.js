@@ -31,10 +31,10 @@
     cuartel:   { nombre: 'Cuartel',   tam: 2, vida: 700,  costo: 400,  tiempo: 300, energia: -20, vision: 5, req: ['central'] },
     extractor: { nombre: 'Extractor', tam: 2, vida: 600,  costo: 700,  tiempo: 300, energia: -20, vision: 5, req: ['refineria'], sobre: 'petroleo', libre: true, da: { rec: 'petroleo', cada: 6 }, mejora: true },
     fabrica:   { nombre: 'Fábrica',   tam: 3, vida: 1000, costo: 1400, pet: 100, tiempo: 500, energia: -40, vision: 5, req: ['refineria'] },
-    torreta:   { nombre: 'Torreta',   tam: 1, vida: 600,  costo: 500,  tiempo: 300, energia: -25, vision: 8, req: ['cuartel'], arma: 'bateria', giroT: 0.2 },
-    torreCanon: { nombre: 'Torre de cañón', tam: 2, vida: 1100, costo: 1200, pet: 60, tiempo: 500, energia: -40, vision: 9, req: ['fabrica'], arma: 'canonTorre', nivel: 2, giroT: 0.1 },
+    torreta:   { nombre: 'Torreta',   tam: 1, vida: 600,  costo: 350,  tiempo: 300, energia: -25, vision: 8, req: ['cuartel'], arma: 'bateria', giroT: 0.2 },
+    torreCanon: { nombre: 'Torre de cañón', tam: 2, vida: 1100, costo: 900, pet: 60, tiempo: 500, energia: -40, vision: 9, req: ['fabrica'], arma: 'canonTorre', nivel: 2, giroT: 0.1 },
     aerodromo: { nombre: 'Aeródromo', tam: 3, vida: 900,  costo: 1600, pet: 150, tiempo: 500, energia: -40, vision: 6, req: ['fabrica'], nivel: 2 },
-    antiaerea: { nombre: 'Antiaérea', tam: 1, vida: 500,  costo: 600,  tiempo: 300, energia: -20, vision: 9, req: ['cuartel'], arma: 'flak', nivel: 2, giroT: 0.28 },
+    antiaerea: { nombre: 'Antiaérea', tam: 1, vida: 500,  costo: 450,  tiempo: 300, energia: -20, vision: 9, req: ['cuartel'], arma: 'flak', nivel: 2, giroT: 0.28 },
     estacion:  { nombre: 'Estación',  tam: 2, vida: 500,  costo: 900,  tiempo: 400, energia: -30, vision: 7, req: ['cuartel'], sobre: 'conocimiento', libre: true, da: { rec: 'info', cada: 20 }, mejora: true },
     // Obras civiles: produce las unidades civiles (el ingeniero civil, que conecta edificios con líneas de servicio, y la excavadora).
     obras:     { nombre: 'Obras civiles', tam: 2, vida: 600, costo: 500, tiempo: 240, energia: -15, vision: 5, req: ['central'] },
@@ -62,6 +62,14 @@
     tanqueComb: { nombre: 'Tanque de combustible', tam: 2, vida: 450, costo: 400, tiempo: 200, energia: -5, vision: 4, req: ['refineria'], guarda: { min: 0, pet: 800 } },
     // Torre de radio: va en cualquier terreno explorado, con su propio generador. Dentro de la cobertura de radio se ve lo que ven las unidades y las órdenes llegan al instante.
     torreRadio: { nombre: 'Torre de radio', tam: 1, vida: 300, costo: 300, tiempo: 160, energia: 0, vision: 6, req: ['cuartel'], libre: true, radioCom: 60 },
+    // Defensas baratas. Búnker: hasta 4 de infantería entran (clic derecho sobre él) y disparan desde dentro recibiendo la cuarta parte del daño.
+    // Torre de vigilancia: sin armas, ve muy lejos y descubre a los escondidos. Artillería fija: mucho alcance, no dispara a lo que tiene encima.
+    bunker:    { nombre: 'Búnker', tam: 1, vida: 900, costo: 250, tiempo: 200, energia: 0, vision: 7, req: ['cuartel'], bunker: 4 },
+    vigia:     { nombre: 'Torre de vigilancia', tam: 1, vida: 250, costo: 150, tiempo: 120, energia: 0, vision: 16, req: ['cuartel'], libre: true, detecta: 8 },
+    artFija:   { nombre: 'Artillería fija', tam: 2, vida: 700, costo: 1000, pet: 50, tiempo: 450, energia: -30, vision: 8, req: ['fabrica'], arma: 'obusFijo', nivel: 2, giroT: 0.06 },
+    // Hospital: cura a la infantería que tenga a 6 celdas y aloja hasta 3 ambulancias (llega con una). Las ambulancias salen solas a curar a los heridos
+    // que haya a 30 celdas de su puesto (el hospital, o el punto adonde las mandes), y vuelven a recargar cuando se les acaba el material.
+    hospital:  { nombre: 'Hospital', tam: 2, vida: 700, costo: 600, tiempo: 300, energia: -20, vision: 6, req: ['cuartel'], cura: 6, ambulancias: 3, radioAmb: 30 },
     radar:     { nombre: 'Radar', tam: 2, vida: 400, costo: 700, tiempo: 300, energia: -40, vision: 6, req: ['fabrica'], nivel: 2, radar: 60 }, // no levanta la niebla: marca con un punto lo que se mueve dentro de su alcance
     // Mina: se construye sobre un yacimiento de minerales y saca de un pozo profundo, de forma continua y sin cosechadoras. Hay que conectarla a la red.
     mina:      { nombre: 'Mina', tam: 2, vida: 800, costo: 1200, tiempo: 400, energia: -30, vision: 5, req: ['refineria'], nivel: 2, sobreMineral: true, libre: true, da: { rec: 'minerales', cada: 3 }, mejora: true },
@@ -115,6 +123,7 @@
     // (se gasta según a cuántas atiende); vacío, vuelve solo al puesto logístico, recarga y regresa al mismo punto.
     // Taller de campaña: parado, repara los vehículos que tenga a 4 celdas aunque no haya suministro; y recupera vehículos destruidos (propios o enemigos) a mitad de precio.
     tallerMovil: { nombre: 'Taller de campaña', cat: 'veh', vida: 320, vel: 0.07, costo: 700, pet: 40, tiempo: 300, blindaje: 'pesado', arma: null, vision: 5, radio: 0.27, req: ['fabrica'], agua: 1, giro: 0.1, acel: 0.005, nivel: 2, taller: 4, recupera: true },
+    ambulancia:  { nombre: 'Ambulancia', cat: 'veh', lugar: 'hospital', vida: 180, vel: 0.11, costo: 250, pet: 10, tiempo: 160, blindaje: 'ligero', arma: null, vision: 5, radio: 0.22, req: ['hospital'], agua: 1, giro: 0.12, acel: 0.008, ambu: { carga: 400, cura: 5, radio: 2.2 } },
     camionSum:   { nombre: 'Camión de suministro', cat: 'veh', lugar: 'logistica', vida: 220, vel: 0.085, costo: 350, pet: 20, tiempo: 200, blindaje: 'ligero', arma: null, vision: 5, radio: 0.24, req: ['logistica'], agua: 1, giro: 0.1, acel: 0.006, suministro: { carga: 1200, radio: 8, recarga: 80 } },
     heliSum:     { nombre: 'Helicóptero de suministro', cat: 'aire', aire: true, lugar: 'logistica', vida: 130, vel: 0.17, costo: 700, pet: 60, tiempo: 300, blindaje: 'aire', arma: null, vision: 6, radio: 0.24, req: ['logistica'], agua: 1, giro: 0.2, acel: 0.01, nivel: 2, fuel: 5000, radioVuelo: 140, cono: Math.PI, suministro: { carga: 600, radio: 8, recarga: 60 } },
     avanzadaMovil: { nombre: 'Puesto móvil', cat: 'veh', vida: 400, vel: 0.06, costo: 1200, pet: 80, tiempo: 400, blindaje: 'pesado', arma: null, vision: 6, radio: 0.28, req: ['logistica'], agua: 2, giro: 0.08, acel: 0.004, despliega: 'avanzada' },
@@ -163,6 +172,7 @@
     cohete:  { alcance: 5,   dano: 45, recarga: 60, vuelo: 0.6, vs: { ligero: 0.3, pesado: 1.2,  edificio: 0.7, aire: 1.1 } },
     obus:    { indirecto: true, alcance: 11,  alcanceMin: 3, area: 1.4, dano: 70, recarga: 110, vuelo: 0.45, vs: { ligero: 1, pesado: 0.7, edificio: 1.3 } },
     canonPesado: { alcance: 6, dano: 90, recarga: 60, vuelo: 0.9, vs: { ligero: 0.5, pesado: 1.1, edificio: 1.1 } },
+    obusFijo: { indirecto: true, alcance: 20, alcanceMin: 6, area: 1.6, dano: 90, recarga: 160, vuelo: 0.4, vs: { ligero: 1, pesado: 0.75, edificio: 1.3 } }, // la artillería fija: tira sobre lo que vea cualquiera de los suyos
     canonTorre:  { alcance: 8, dano: 75, recarga: 60, vuelo: 1.0, vs: { ligero: 0.5, pesado: 1.2, edificio: 0.6 } },
     bateria: { alcance: 6.5, dano: 30, recarga: 30, vuelo: 1.1, vs: { ligero: 0.8, pesado: 1,    edificio: 0.5, aire: 0.8 } },
     flak:    { alcance: 9,   dano: 34, recarga: 22, vuelo: 1.3, vs: { aire: 1 } },
@@ -218,7 +228,7 @@
   };
   W.MURO_N = [null, W.MUROS.alambrada, W.MUROS.muro, W.MUROS.reforzado, W.MUROS.puerta];
   // Munición que lleva encima cada arma (disparos; una salva cuenta como uno). Los edificios con arma guardan cuatro veces más.
-  W.MUN = { fusil: 100, canon: 30, cohete: 12, obus: 14, canonPesado: 24, canonTorre: 30, bateria: 50, flak: 70, flakMovil: 70, rifle: 16, salva: 6, pistola: 60, ametralladora: 300, gatling: 700, granadaMano: 12, misil: 40 };
+  W.MUN = { obusFijo: 10, fusil: 100, canon: 30, cohete: 12, obus: 14, canonPesado: 24, canonTorre: 30, bateria: 50, flak: 70, flakMovil: 70, rifle: 16, salva: 6, pistola: 60, ametralladora: 300, gatling: 700, granadaMano: 12, misil: 40 };
   W.munDe = (tipo, edif) => { const a = (edif ? W.EDIF[tipo] : W.UNID[tipo]).arma; return a ? (W.MUN[a] || 60) * (edif ? 4 : 1) : 0; };
   // Misiles balísticos. alcance en celdas desde la misilera (0 = todo el mapa); vel en celdas por tick; aguante: impactos de interceptor que resiste.
   W.MISILES = {
@@ -235,7 +245,7 @@
     minaPozo: 40000, // minerales del pozo de una mina (más lo que hubiera en la superficie que tapa)
     vigilaRadio: 8, vigilaMax: 14, protegeDist: 4,
     espiaRadio: 6, espiaInfo: 2, sumiBase: 1, sumiUnidad: 0.5, sumiCarga: 40, // suministro móvil: gasto por ciclo (medio segundo) en vacío y por unidad atendida; y lo que carga por ciclo en el puesto logístico
-    dronMisRadio: 8, autoReserva: 400, autoLargo: 70, cableMax: 24, /* largo máximo del cable que un edificio nuevo tiende solo hasta la red */
+    dronMisRadio: 8, autoReserva: 400, autoLargo: 70, cableMax: 24, bunkerDano: 0.25, ambCarga: 8, hospitalCura: 0.6, /* largo máximo del cable que un edificio nuevo tiende solo hasta la red */
     rutaNodos: 30000, // presupuesto de celdas que se exploran por tick buscando rutas
     misilesMax: 10, mejoraMax: 3, mejoraCosto: 0.6, mejoraBono: 0.5, // mejora de un edificio: hasta nivel 3; cada nivel cuesta el 60 % del edificio por el nivel que tiene y rinde un 50 % más
     inicio: 2500, petInicio: 150, cosecha: 5, descarga: 25, colaMax: 9, separacionColocar: 3, goteoCada: 5, vistaInicial: 22, obrasMax: 8, curaUnidad: 0.01, curaEdificio: 0.0025, curaCosto: 0.15, venta: 0.5, trinchera: 0.45, arco: 0.14, arcoTrinchera: 1.05, visAd: 1.3, visLado: 0.75, visAt: 0.3, cono: 1.05, periferia: 1.83, flanco: 1.25, espalda: 1.5, bosqueVeh: 0.6, bosqueCubre: 0.7, reposta: 12, retiroBajo: 0.3, retiroAlto: 0.9, huida: 300, dia: 9600, diaLuz: 6000, nocheVis: 0.7, caminoVel: 1.6, tramoLargo: 4, enlace: 5, cobNodo: 14, cobEdif: 6, lineaVel: 0.12, lineaCelda: 3, sinSum: 400, sinSumRecarga: 1.5, abastDura: 1500, heliRepone: 300, cobAvanzada: 10, hospitalCura: 2, dronFpv: 40, dronBomba: 15, dronRepone: 200, dronFpvCada: 60, hackInfo: 25, hackVeh: 240, hackEdif: 300, hackRecarga: 200, hackCanal: 40, trazaVel: 0.45, caminoLlano: 4, caminoBosque: 12, caminoAgua: 30, mandoCada: 40, mandoGiro: 1.5, captura: 600, capturaRadio: 2, antenaRadio: 12, depositoCada: 8, tallerRadio: 4, ocultaVe: 2.5, chatarra: 0.25, reparaRadio: 8, reparaVeh: 0.5, curaMedico: 0.35, reparaEdif: 0.8, rangos: [2, 5, 10], rangoDano: 0.1, rangoVida: 0.1, cupoAviones: 5, pasada: 7, orbita: 3.5, fuelCae: 80, cavar: 80, aplasta: 10, bonoProd: 0.5, bonoMax: 2.5 };

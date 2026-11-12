@@ -139,6 +139,12 @@
       c.fillStyle = col.base; c.fillRect(L * 0.5, -w * 0.75, L * 0.42, w * 1.5);
       c.strokeStyle = col.luz; c.lineWidth = Math.max(1.2, r * 0.22); c.beginPath(); c.moveTo(-L * 0.75, 0); c.lineTo(L * 0.3, 0); c.moveTo(-L * 0.75, 0); c.lineTo(-L * 0.75, -w * 0.5); c.stroke();
       c.fillStyle = col.luz; c.beginPath(); c.arc(L * 0.3, 0, r * 0.2, 0, TAU); c.fill();
+    } else if (u.tipo === 'ambulancia') { // furgón claro con la cruz roja en el techo
+      const L = r * 1.25, w = r * 0.72;
+      c.fillStyle = col.osc; c.fillRect(-L, -w, L * 2, w * 2);
+      c.fillStyle = '#f2f0ea'; c.fillRect(-L * 0.9, -w * 0.82, L * 1.35, w * 1.64);
+      c.fillStyle = col.base; c.fillRect(L * 0.52, -w * 0.75, L * 0.4, w * 1.5);
+      c.fillStyle = '#c0392b'; c.fillRect(-L * 0.38, -w * 0.5, L * 0.3, w * 1.0); c.fillRect(-L * 0.62, -w * 0.18, L * 0.78, w * 0.36);
     } else if (u.tipo === 'camionSum') { // camión de caja abierta con tres cajones
       const L = r * 1.3, w = r * 0.72;
       c.fillStyle = col.osc; c.fillRect(-L, -w, L * 2, w * 2);
@@ -477,6 +483,25 @@
       c.fillStyle = col.osc; c.beginPath(); c.arc(X(0.36), Y(0.64), t * 0.16, 0, TAU); c.fill();
       c.strokeStyle = col.luz; c.lineWidth = lw * 1.4; c.beginPath(); c.moveTo(X(0.36), Y(0.64)); c.lineTo(X(0.68), Y(0.3)); c.moveTo(X(0.5), Y(0.82)); c.lineTo(X(0.68), Y(0.3)); c.lineTo(X(0.84), Y(0.82)); c.stroke();
       const a = s.deficit ? 0 : (s.tiempo + s.id * 97) * 0.004; c.beginPath(); c.arc(X(0.68), Y(0.3), t * 0.1, 0, TAU); c.moveTo(X(0.68) + Math.cos(a) * t * 0.1, Y(0.3) + Math.sin(a) * t * 0.1); c.lineTo(X(0.68) - Math.cos(a) * t * 0.1, Y(0.3) - Math.sin(a) * t * 0.1); c.stroke();
+    } else if (e.tipo === 'bunker') { // casamata baja de hormigón con troneras
+      c.fillStyle = col.osc; c.beginPath(); for (let k = 0; k < 6; k++) { const a = k / 6 * TAU + 0.52; c.lineTo(X(0.5) + Math.cos(a) * t * 0.46, Y(0.5) + Math.sin(a) * t * 0.46); } c.closePath(); c.fill();
+      c.fillStyle = col.base; c.beginPath(); for (let k = 0; k < 6; k++) { const a = k / 6 * TAU + 0.52; c.lineTo(X(0.5) + Math.cos(a) * t * 0.33, Y(0.5) + Math.sin(a) * t * 0.33); } c.closePath(); c.fill();
+      c.fillStyle = '#1b1b1b'; for (const [fx, fy, w, h] of [[0.42, 0.1, 0.16, 0.06], [0.42, 0.84, 0.16, 0.06], [0.08, 0.44, 0.06, 0.12], [0.86, 0.44, 0.06, 0.12]]) c.fillRect(X(fx), Y(fy), t * w, t * h);
+    } else if (e.tipo === 'vigia') { // torre de celosía con caseta y un foco que barre
+      c.strokeStyle = col.osc; c.lineWidth = lw * 1.3; c.beginPath(); c.moveTo(X(0.2), Y(0.85)); c.lineTo(X(0.38), Y(0.3)); c.moveTo(X(0.8), Y(0.85)); c.lineTo(X(0.62), Y(0.3)); c.moveTo(X(0.26), Y(0.66)); c.lineTo(X(0.74), Y(0.66)); c.moveTo(X(0.32), Y(0.48)); c.lineTo(X(0.68), Y(0.48)); c.stroke();
+      c.fillStyle = col.luz; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.rect(X(0.3), Y(0.14), t * 0.4, t * 0.22); c.fill(); c.stroke();
+      const a = s.tiempo * 0.0009 + s.id; c.fillStyle = col.fuego; c.globalAlpha = 0.5; c.beginPath(); c.moveTo(X(0.5), Y(0.25)); c.arc(X(0.5), Y(0.25), t * 0.42, a - 0.3, a + 0.3); c.closePath(); c.fill(); c.globalAlpha = 1;
+    } else if (e.tipo === 'artFija') { // emplazamiento circular de sacos con un obús largo que gira
+      const R = t * 0.44;
+      c.fillStyle = col.osc; c.beginPath(); c.arc(cx, cy, R, 0, TAU); c.fill(); c.fillStyle = col.suelo; c.beginPath(); c.arc(cx, cy, R * 0.78, 0, TAU); c.fill();
+      c.save(); c.translate(cx, cy); c.rotate(s.ang || 0); const rec = (s.retro || 0) * R * 0.3;
+      c.fillStyle = s.deficit ? col.humo : col.osc; c.fillRect(-R * 0.1 - rec, -R * 0.09, R * 1.5, R * 0.18); c.fillRect(-R * 0.75, -R * 0.06, R * 0.7, R * 0.12);
+      c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.rect(-R * 0.3, -R * 0.26, R * 0.5, R * 0.52); c.fill(); c.stroke();
+      if (s.retro > 0.6) { c.fillStyle = col.fuego; c.beginPath(); c.arc(R * 1.5, 0, R * 0.3, 0, TAU); c.fill(); }
+      c.restore();
+    } else if (e.tipo === 'hospital') { // pabellón claro con la cruz roja
+      c.fillStyle = '#f2f0ea'; c.strokeStyle = col.osc; c.lineWidth = lw; c.beginPath(); c.rect(X(0.14), Y(0.14), t * 0.72, t * 0.72); c.fill(); c.stroke();
+      c.fillStyle = s.deficit ? col.humo : '#c0392b'; c.fillRect(X(0.42), Y(0.24), t * 0.16, t * 0.52); c.fillRect(X(0.24), Y(0.42), t * 0.52, t * 0.16);
     } else if (e.tipo === 'radar') { // plato que gira sobre su base, con el haz de barrido
       const px = X(0.5), py = Y(0.5), a = s.deficit ? 0.6 : s.tiempo * 0.0016;
       c.fillStyle = col.osc; c.beginPath(); c.arc(px, py, t * 0.3, 0, TAU); c.fill();

@@ -148,12 +148,13 @@
 
     // Volumen: la vista sigue siendo cenital, pero cada cosa tiene altura. Los edificios muestran su pared sur y el tejado
     // se dibuja desplazado hacia arriba; las unidades llevan un canto; la roca y el agua, un escalón.
-    const ALTO = { patio: 0.3, central: 0.36, refineria: 0.32, bomba: 0.2, cuartel: 0.26, extractor: 0.3, fabrica: 0.34, torreta: 0.22, torreCanon: 0.36, aerodromo: 0.08, antiaerea: 0.22, estacion: 0.26, deposito: 0.22, obras: 0.28, misilera: 0.12, interceptor: 0.24, torretaMuro: 0.34, camara: 0.3, estDrones: 0.14, laboratorio: 0.26, logistica: 0.16, avanzada: 0.2, inteligencia: 0.3, pistaAv: 0.04, almacen: 0.22, tanqueComb: 0.18, torreRadio: 0.5, mina: 0.3, radar: 0.3 };
+    const ALTO = { patio: 0.3, central: 0.36, refineria: 0.32, bomba: 0.2, cuartel: 0.26, extractor: 0.3, fabrica: 0.34, torreta: 0.22, torreCanon: 0.36, aerodromo: 0.08, antiaerea: 0.22, estacion: 0.26, deposito: 0.22, obras: 0.28, misilera: 0.12, interceptor: 0.24, torretaMuro: 0.34, camara: 0.3, estDrones: 0.14, laboratorio: 0.26, logistica: 0.16, avanzada: 0.2, inteligencia: 0.3, pistaAv: 0.04, almacen: 0.22, tanqueComb: 0.18, torreRadio: 0.5, mina: 0.3, radar: 0.3, bunker: 0.14, vigia: 0.6, artFija: 0.14, hospital: 0.28 };
     function entEn(wx, wy, holgura) { // holgura: margen extra (en celdas) para acertar con el dedo
       let mejor = null, md = Infinity;
       for (const e of m.ents) {
         if (!veo(e)) continue;
         if (e.muro && e.j === YO) continue; // el blanco de un muro propio no se selecciona
+        if (e.bunk) continue; // los de dentro de un búnker no se tocan: se toca el búnker
         if (e.infra) { // un tramo de camino: se acierta sobre su carril, y cede ante cualquier unidad
           if (md <= 40) continue;
           const p = e.pts; let dm = Math.hypot(wx - p[0], wy - p[1]);
@@ -200,6 +201,9 @@
         if (!e.edif && UNID[e.tipo].dronStock && e.j === YO && e.drStock !== undefined) { t += ' · repuestos: ' + e.drStock + (e.drFpv !== undefined ? ' drones y ' + e.drFpv + ' kamikazes' : ' drones'); const q = e.dr && e.dr.rec[0] ? m.porId.get(e.dr.rec[0]) : null; if (q && q.bat !== undefined && conRed) t += ' · batería ' + Math.round(q.bat / W.ECON.dronBat * 100) + ' %' + (q.casa2 ? ' (cargando)' : ''); }
         if (!e.edif && e.orden === 'zapar' && e.zapa && e.zapa.lista[0] && e.j === YO) t += ' · ' + ({ minar: 'minando', desminar: 'desminando', ponton: 'tendiendo un pontón', volar: 'va a volar un camino' })[e.zapa.lista[0].t];
         if (e.ponton) t += ' · pontón';
+        if (!e.edif && UNID[e.tipo].ambu && e.j === YO && e.ambC !== undefined) { const a = e.amb || {}; t += ' · material ' + Math.round(e.ambC / UNID[e.tipo].ambu.carga * 100) + ' % · ' + (a.est === 'cura' ? 'atendiendo a un herido' : a.est === 'vuelve' || a.est === 'carga' ? 'recargando en el hospital' : a.est === 'ida' ? 'camino de su puesto' : a.punto ? 'en su puesto: cura a los heridos de la zona' : 'en el hospital: sale sola a por los heridos') + (a.punto ? ' · S: de vuelta al hospital' : ' · muévela y se queda a curar allí'); }
+        if (e.edif && EDIF[e.tipo].ambulancias && e.j === YO) { const c = W.cupoAmb(m, YO); t += ' · ambulancias ' + c.hay + '/' + c.cupo; }
+        if (e.edif && EDIF[e.tipo].bunker && e.j === YO) { const n = W.enBunker(m, e); t += ' · tropa ' + n + '/' + EDIF[e.tipo].bunker + (n ? ' · selecciónalo y clic derecho en el suelo: salen' : ' · clic derecho con infantería: entra'); }
         if (e.edif && EDIF[e.tipo].radar && e.j === YO) t += e.sinLuz ? ' · sin energía: no barre' : (conRed && e.conRed === false) ? ' · fuera de la red: no barre' : ' · ' + (m.ecos ? m.ecos[YO].length / 2 : 0) + ' ecos';
         if (e.tipo === 'mina' && e.j === YO && e.pozo !== undefined) t += e.pozo > 0 ? ' · pozo: ' + Math.round(e.pozo) : ' · pozo agotado';
         if (!e.edif && e.j === YO && e.vigila) t += ' · vigila una zona'; if (!e.edif && e.j === YO && e.protege) { const o = m.porId.get(e.protege); if (o) t += ' · protege: ' + (o.edif ? EDIF : UNID)[o.tipo].nombre.toLowerCase(); }
@@ -239,6 +243,7 @@
       const sitio = sitioPorCelda.get(c);
       if (sitio) return sitio === 'petroleo' ? 'Yacimiento de petróleo' : 'Campo de conocimiento';
       if (m.mapa.tipoMin[c] === 1) return 'Minerales · ' + m.mapa.mineral[c];
+      if (W.vetaDe(m)[c] && !m.mapa.mineral[c] && !m.ocup[c]) return 'Veta agotada en superficie · aquí se puede construir una mina (nivel 2)';
       if (m.mapa.tipoMin[c] === 2) return 'Minerales raros · ' + m.mapa.mineral[c];
       return NOMBRE_TERRENO[m.mapa.terreno[c]];
     }
@@ -498,6 +503,12 @@
         }
         ctx.lineCap = 'butt'; ctx.lineJoin = 'miter';
       }
+      { // vetas agotadas en superficie: queda la mancha (ahí se puede poner una mina)
+        const vt = W.vetaDe(m), vs = mp.vetas; ctx.fillStyle = 'rgba(70,90,60,0.3)'; ctx.beginPath(); void vt;
+        for (const c of vs) { if (mp.mineral[c] > 0 || m.ocup[c] || !f[c]) continue; const x = c % N, y = (c / N) | 0; if (fuera(x, y)) continue; const px = ox + (x + 0.5) * z, py = oy + (y + 0.5) * z, r = z * (0.3 + 0.12 * Math.sin(c * 1.3)); ctx.moveTo(px + r, py); ctx.arc(px, py, r, 0, TAU); }
+        ctx.fill();
+        if (z >= 8) { ctx.fillStyle = 'rgba(50,70,45,0.45)'; ctx.beginPath(); for (const c of vs) { if (mp.mineral[c] > 0 || m.ocup[c] || !f[c]) continue; const x = c % N, y = (c / N) | 0; if (fuera(x, y)) continue; for (let k = 0; k < 3; k++) { const a = c * 1.7 + k * 2.1, qx = ox + (x + 0.5) * z + Math.cos(a) * z * 0.22, qy = oy + (y + 0.5) * z + Math.sin(a) * z * 0.22; ctx.moveTo(qx + z * 0.05, qy); ctx.arc(qx, qy, z * 0.05, 0, TAU); } } ctx.fill(); }
+      }
       const chatarra = [];
       ctx.fillStyle = P.mineral; ctx.beginPath();
       for (const c of m.minas) {
@@ -650,11 +661,13 @@
         const edadObra = e.nace > 0 ? (m.t - e.nace + alfa) / 30 : 1; // recién colocado: se levanta de abajo arriba
         cuerpos.set(e.id, [e, px, py, t, est, h, redondo, edadObra]);
         cuerpo(e, px, py, t, est, h, redondo, edadObra);
+        if (EDIF[e.tipo].bunker && e.j === YO && lod) { const n = W.enBunker(m, e), cap = EDIF[e.tipo].bunker; for (let q = 0; q < cap; q++) { ctx.fillStyle = q < n ? P.yo : 'rgba(0,0,0,0.25)'; ctx.fillRect(px + t / 2 - cap * 2.5 + q * 5, py + t + 3, 4, 4); } } // plazas del búnker: ocupadas y libres
         if (sel.has(e.id)) {
           const g = Math.max(4, t * 0.18), a = px - 2, b = py - h - 2, c2 = px + t + 2, d2 = py + t + 2; // escuadras de selección
           ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.beginPath();
           ctx.moveTo(a, b + g); ctx.lineTo(a, b); ctx.lineTo(a + g, b); ctx.moveTo(c2 - g, b); ctx.lineTo(c2, b); ctx.lineTo(c2, b + g);
           ctx.moveTo(c2, d2 - g); ctx.lineTo(c2, d2); ctx.lineTo(c2 - g, d2); ctx.moveTo(a + g, d2); ctx.lineTo(a, d2); ctx.lineTo(a, d2 - g); ctx.stroke();
+          if (EDIF[e.tipo].radioAmb && e.j === YO) { ctx.setLineDash([3, 6]); ctx.globalAlpha = 0.4; ctx.beginPath(); ctx.arc(px + t / 2, py + t / 2, EDIF[e.tipo].radioAmb * z, 0, TAU); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1; } // radio de las ambulancias
           if (EDIF[e.tipo].arma) { // alcance
             ctx.setLineDash([5, 5]); ctx.globalAlpha = 0.5; ctx.beginPath(); ctx.arc(px + t / 2, py + t / 2, W.alcance(m, e, W.ARMAS[EDIF[e.tipo].arma]) * z, 0, TAU); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
           }
@@ -724,7 +737,7 @@
 
       let repasado = false;
       const repasar = () => { repasado = true; for (const id of tapan) cuerpo(...cuerpos.get(id)); }; // los edificios tapan a quien tienen justo detrás
-      for (const e of m.ents.filter((u) => !u.edif && !UNID[u.tipo].aire).concat(m.ents.filter((u) => !u.edif && UNID[u.tipo].aire))) { // los aviones, encima
+      for (const e of m.ents.filter((u) => !u.edif && !UNID[u.tipo].aire && !u.bunk).concat(m.ents.filter((u) => !u.edif && UNID[u.tipo].aire))) { // los aviones, encima
         if (!repasado && UNID[e.tipo].aire) repasar();
         if (!veo(e)) continue;
         const wx = e.px + (e.x - e.px) * alfa, wy = e.py + (e.y - e.py) * alfa;
@@ -1554,9 +1567,12 @@
       cuartel: 'Produce la infantería.', extractor: 'Saca petróleo de un yacimiento.', fabrica: 'Produce los vehículos.', torreta: 'Defensa fija contra tierra y aire.', torreCanon: 'Defensa pesada de largo alcance contra blindados.', aerodromo: 'Produce y aloja hasta cinco aviones.',
       antiaerea: 'Defensa fija solo contra el aire: aviones y drones.', estacion: 'Sobre un campo de conocimiento da información rápido; aloja la inteligencia.', laboratorio: 'Da información en la base, sin campo, más despacio. Vale como estación.', obras: 'Produce las unidades civiles: ingeniero civil y excavadora.',
       deposito: 'Crea una zona con suministro donde también puedes construir. Como todo edificio, tiende solo su cable hasta la red si está a menos de 24 celdas.', misilera: 'Fabrica, guarda y lanza misiles balísticos.', interceptor: 'Derriba los misiles enemigos que entran en su radio.', estDrones: 'Mantiene dos drones de reconocimiento vigilando a su alrededor. Mejorada lleva además bombarderos y kamikazes, y guarda las tecnologías del operador.', inteligencia: 'Entrena espías, aloja dos drones espía de largo alcance y permite el mapeo satelital.',
+      bunker: 'Entran hasta 4 de infantería (clic derecho sobre él con la tropa seleccionada) y disparan desde dentro recibiendo solo la cuarta parte del daño. Para sacarlos: selecciona el búnker y clic derecho en el suelo. Si lo destruyen, salen heridos.', vigia: 'Sin armas y muy barata: ve a 16 celdas y descubre a los escondidos a 8. Se puede poner fuera de la red.', artFija: 'Nivel 2. Obús fijo con 20 celdas de alcance sobre lo que vea cualquiera de los tuyos; no dispara a menos de 6 celdas. Gasta munición: la repone por la red.',
+      hospital: 'Cura a la infantería que tenga a 6 celdas y aloja hasta tres ambulancias (llega con una; las demás se encargan en él). Necesita energía y red.',
       radar: 'Nivel 2. No levanta la niebla ni dice qué hay, pero marca con un punto que pulsa cada unidad enemiga que esté a 60 celdas; el punto se actualiza cada 2 segundos. No detecta espías ni edificios. Necesita energía y red.',
       torreRadio: 'Da cobertura de radio a 60 celdas (el patio, 60; el vehículo de mando, 30; el puesto de avanzada, 35). Fuera de la cobertura tus unidades de tierra solo ven lo que tienen encima y obedecen con 3 segundos de retraso. El explorador, el espía y todo lo que vuela llevan radio propia. Se coloca en cualquier terreno explorado.', mina: 'Nivel 2. Se construye sobre un yacimiento de minerales y saca de un pozo profundo (40 000) de forma continua, sin cosechadoras: unos 400 por minuto, más si la mejoras. Hay que conectarla a la red.', almacen: 'Guarda 3000 minerales más. Con los almacenes llenos, lo que cosechas se pierde. Si te lo destruyen pierdes su parte, y la mitad queda en el suelo para quien la recoja.', tanqueComb: 'Guarda 800 de petróleo más. Si te lo destruyen, pierdes su parte.', pistaAv: 'Se coloca en cualquier terreno explorado, sin red ni energía. Clic derecho en ella con helicópteros de combate: la toman por base, repostan allí y su radio de vuelo se cuenta desde allí.', logistica: 'En la base: de aquí salen los camiones y helicópteros de suministro y los vuelos que mantienen los puestos de avanzada; tiene pista para trasladar infantería.', avanzada: 'No se construye: lo despliega el puesto móvil. Con enlace aéreo está en tu red, cura a la infantería cercana y tiene pista.',
       tallerMovil: 'Parado, repara los vehículos que tenga a 4 celdas aunque estén sin suministro, y recupera los vehículos destruidos cercanos (tuyos o del rival) a mitad de precio: va solo, o clic derecho sobre el casco.',
+      ambulancia: 'Sale sola del hospital a curar a la infantería herida que haya a 30 celdas y vuelve a recargar cuando se le acaba el material. Si la mueves a un punto, se queda allí curando a los de esa zona, y vuelve al hospital solo a recargar.',
       camionSum: 'Muévelo adonde esté tu ejército: se planta y da munición, combustible, minas y drones de repuesto a todo lo que tenga alrededor mientras le dure la carga (se gasta según cuántas unidades atiende). Vacío, vuelve solo al puesto logístico, recarga y regresa.', heliSum: 'Como el camión de suministro, pero volando: más rápido y sin rodeos; lleva la mitad de carga y la antiaérea lo derriba.',
       avanzadaMovil: 'Se despliega lejos como puesto de avanzada: red, hospital y pista sin tender líneas.',
       camara: 'Ve lejos y en redondo, descubre a los escondidos y avisa si entra un enemigo.',
@@ -1573,7 +1589,7 @@
       const pide = (d) => (d.nivel > 1 ? ' Nivel ' + d.nivel + '.' : '') + (d.req && d.req.length ? ' Pide: ' + d.req.map((r) => EDIF[r].nombre.toLowerCase()).join(', ') + '.' : '');
       let h = '<h3>Edificios (desde el patio)</h3>';
       for (const t in EDIF) if (!EDIF[t].infra) h += fila(t, EDIF[t].nombre, EDIF[t].oculto ? 'se despliega' : precio(EDIF[t]) || '—', (QUE[t] || '') + pide(EDIF[t]));
-      const grupos = [['cuartel', 'Infantería (cuartel)'], ['fabrica', 'Vehículos (fábrica)'], ['obras', 'Civiles (obras civiles)'], ['aerodromo', 'Aviación (aeródromo)'], ['inteligencia', 'Inteligencia (central de inteligencia)'], ['logistica', 'Suministro (puesto logístico)']];
+      const grupos = [['cuartel', 'Infantería (cuartel)'], ['fabrica', 'Vehículos (fábrica)'], ['obras', 'Civiles (obras civiles)'], ['aerodromo', 'Aviación (aeródromo)'], ['inteligencia', 'Inteligencia (central de inteligencia)'], ['logistica', 'Suministro (puesto logístico)'], ['hospital', 'Sanidad (hospital)']];
       for (const [lugar, titulo] of grupos) { h += '<h3>' + titulo + '</h3>'; for (const t in UNID) if (!UNID[t].mini && W.lugarDe(UNID[t]) === lugar) h += fila(t, UNID[t].nombre, precio(UNID[t]), (QUE[t] || '') + pide(UNID[t])); }
       h += '<h3>Drones (los saca su portador)</h3>' + fila('dronRec', 'De reconocimiento', '40', 'Da vueltas alrededor del portador y ve.') + fila('dronFpv', 'Kamikaze', '40 por salida', 'Un solo uso, contra vehículos y edificios armados.') + fila('dronBomba', 'Bombardero', '15 por salida', 'Suelta una granada sobre la infantería y vuelve a recargar.');
       h += '<h3>Misiles (misilera)</h3>'; for (const k in W.MISILES) h += fila('', W.MISILES[k].nombre, precio(W.MISILES[k]), W.MISILES[k].que + ' Nivel ' + W.MISILES[k].nivel + '.');
@@ -1794,6 +1810,7 @@
         if (faltan.length) return 'antes hay que construir ' + faltan.map((q) => EDIF[q].nombre.toLowerCase()).join(' y ');
         if (!esEdif && !J.cuenta[W.lugarDe(d)]) return 'se entrena en ' + EDIF[W.lugarDe(d)].nombre.toLowerCase();
       }
+      if (!esEdif && d.ambu) { const c = W.cupoAmb(m, YO); if (c.hay >= c.cupo) return 'cupo lleno (' + c.hay + '/' + c.cupo + '): hace falta otro hospital'; }
       if (!esEdif && d.aire && !d.mini) { const c = W.cupoAire(m, YO, W.hangarDe(d)); if (c.hay >= c.cupo) return 'cupo lleno (' + c.hay + '/' + c.cupo + '): hace falta otro ' + EDIF[W.lugarDe(d)].nombre.toLowerCase(); }
       if (!W.puedePagar(J, d)) { const f = []; if (J.minerales < (d.costo || 0)) f.push('minerales'); if (J.petroleo < (d.pet || 0)) f.push('petróleo'); if (J.raros < (d.raros || 0)) f.push('minerales raros'); if (J.info < (d.info || 0)) f.push('información'); return 'falta ' + (f.join(' y ') || 'recursos'); }
       if (!W.disponible(m, YO, d)) return 'todavía no disponible';
@@ -2088,6 +2105,7 @@
         const us = unidadesSel();
         if (!us.length) { // con un cuartel o una fábrica seleccionados: punto de reunión
           let puesto = false;
+          for (const id of sel) { const e = m.porId.get(id); if (e && e.edif && e.j === YO && EDIF[e.tipo].bunker && W.enBunker(m, e)) { W.orden(m, { t: 'vaciar', j: YO, id, x: wx, y: wy }); puesto = true; } } // con un búnker seleccionado: los de dentro salen hacia ahí
           for (const id of sel) { const e = m.porId.get(id); if (e && e.edif && W.PRODUCE[e.tipo]) { W.orden(m, { t: 'reunion', j: YO, id, x: wx, y: wy }); puesto = true; } }
           if (puesto) { marca(wx, wy, P.bien); son.orden(); }
           return;
@@ -2113,6 +2131,11 @@
             if (o.tipo === 'avanzada' && !(o.abast > m.t)) { aviso('Ese puesto de avanzada no tiene enlace aéreo'); return; }
             W.orden(m, { t: 'aerotransporte', j: YO, ids: infs.map((u) => u.id), de: de.id, a: o.id }); marca(wx, wy, P.bien); son.orden(); aviso('Traslado por aire · ' + UNID.heliTropa.costo + ' minerales por cada ocho'); return;
           }
+        }
+        if (o && o.j === YO && o.edif && EDIF[o.tipo] && EDIF[o.tipo].bunker && us.some((u) => UNID[u.tipo].cat === 'inf')) { // clic derecho sobre un búnker propio: la infantería entra
+          if (W.enBunker(m, o) >= EDIF[o.tipo].bunker) { aviso('El búnker está lleno'); return; }
+          W.orden(m, { t: 'guarnecer', j: YO, ids: us.filter((u) => UNID[u.tipo].cat === 'inf').map((u) => u.id), en: o.id }); marca(wx, wy, P.bien); son.orden();
+          return;
         }
         if (o && o.j === YO && !o.edif && UNID[o.tipo].plazas && !UNID[o.tipo].mini && us.some((u) => UNID[u.tipo].cat === 'inf')) { // clic derecho sobre un transporte propio: la infantería sube
           const libres = UNID[o.tipo].plazas - o.pasajeros.length;
@@ -2177,7 +2200,7 @@
       }
       const ax = aMundoX(Math.min(raton.x, raton.x0)), bx = aMundoX(Math.max(raton.x, raton.x0));
       const ay = aMundoY(Math.min(raton.y, raton.y0)), by = aMundoY(Math.max(raton.y, raton.y0));
-      for (const e of m.ents) if (!e.edif && e.j === YO && !UNID[e.tipo].mini && e.x >= ax && e.x <= bx && e.y >= ay && e.y <= by) sel.add(e.id);
+      for (const e of m.ents) if (!e.edif && e.j === YO && !UNID[e.tipo].mini && !e.bunk && e.x >= ax && e.x <= bx && e.y >= ay && e.y <= by) sel.add(e.id);
       if (!sel.size) for (const e of m.ents) if (!e.edif && e.j === YO && UNID[e.tipo].mini && e.rol === 'rec' && e.x >= ax && e.x <= bx && e.y >= ay && e.y <= by) sel.add(e.id); // caja solo con drones de reconocimiento: se seleccionan ellos
       // La caja prioriza tropa: suelta edificios y, si hay combatientes, también cosechadoras.
       const cosas = [...sel].map((id) => m.porId.get(id)).filter(Boolean);
