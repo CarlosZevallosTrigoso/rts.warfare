@@ -8,7 +8,7 @@
   // El contexto llega trasladado al centro de la unidad. r = radio en píxeles.
   // e = { ang, angT, retro (0..1), anda, tiempo, carga (0..1), cosecha }
   W.fichaUnidad = function (c, u, r, lod, col, e) {
-    const inf = W.UNID[u.tipo].cat === 'inf', at = u.tipo === 'antitanque', pesado = u.tipo === 'pesado', expl = u.tipo === 'explorador', ing = u.tipo === 'ingeniero', med = u.tipo === 'medico', civ = u.tipo === 'civil', hk = u.tipo === 'hacker', op = u.tipo === 'operador', franco = u.tipo === 'francotirador';
+    const inf = W.UNID[u.tipo].cat === 'inf', at = u.tipo === 'antitanque', pesado = u.tipo === 'pesado', expl = u.tipo === 'explorador', ing = u.tipo === 'ingeniero', med = u.tipo === 'medico', civ = u.tipo === 'civil', hk = u.tipo === 'hacker', op = u.tipo === 'operador', franco = u.tipo === 'francotirador', esp = u.tipo === 'espia';
     if (lod === 0) {
       c.fillStyle = col.base; c.beginPath();
       if (inf) c.arc(0, 0, r, 0, TAU);
@@ -53,6 +53,8 @@
         c.lineWidth = Math.max(1, R * 0.16); c.beginPath(); c.arc(R * 0.75, R * 0.55, R * 0.32, 0, TAU); c.stroke();
       } else if (med) { // sin arma: un maletín por delante
         c.fillStyle = col.luz; c.fillRect(R * 0.75, R * 0.2, R * 0.6, R * 0.5); c.lineWidth = 1; c.strokeRect(R * 0.75, R * 0.2, R * 0.6, R * 0.5);
+      } else if (esp) { // sin arma: un maletín fino al costado
+        c.fillStyle = col.osc; c.fillRect(R * 0.55, R * 0.45, R * 0.55, R * 0.3);
       } else if (expl) { // pistola corta
         c.beginPath(); c.moveTo(R * 0.3, R * 0.5); c.lineTo(R * (1.05 - e.retro * 0.2), R * 0.5); c.stroke();
       } else if (franco) { // rifle largo y fino, con mira
@@ -64,6 +66,7 @@
       c.fillStyle = col.base; c.beginPath(); c.ellipse(0, 0, R * 0.62, R, 0, 0, TAU); c.fill(); // hombros
       c.strokeStyle = col.osc; c.lineWidth = 1; c.stroke();
       c.fillStyle = at ? col.osc : col.luz; c.strokeStyle = at ? col.luz : col.osc; c.beginPath(); c.arc(R * 0.08, 0, R * 0.42, 0, TAU); c.fill(); c.stroke(); // casco
+      if (esp) { c.fillStyle = col.osc; c.beginPath(); c.arc(R * 0.08, 0, R * 0.62, 0, TAU); c.fill(); c.fillStyle = col.luz; c.beginPath(); c.arc(R * 0.08, 0, R * 0.3, 0, TAU); c.fill(); } // sombrero de ala ancha
       if (franco || hk) { c.fillStyle = col.osc; c.beginPath(); c.arc(R * 0.08, 0, R * 0.42, Math.PI * 0.5, Math.PI * 1.5); c.fill(); } // capucha
       if (civ) { c.fillStyle = '#e0b83a'; c.beginPath(); c.arc(R * 0.08, 0, R * 0.42, 0, TAU); c.fill(); c.strokeStyle = col.osc; c.lineWidth = 1; c.stroke(); c.beginPath(); c.moveTo(R * 0.08, -R * 0.42); c.lineTo(R * 0.08, R * 0.42); c.stroke(); } // casco de obra
       if (med) { c.strokeStyle = col.mal; c.lineWidth = Math.max(1.2, R * 0.2); c.beginPath(); c.moveTo(R * 0.08 - R * 0.28, 0); c.lineTo(R * 0.08 + R * 0.28, 0); c.moveTo(R * 0.08, -R * 0.28); c.lineTo(R * 0.08, R * 0.28); c.stroke(); } // cruz en el casco
@@ -140,7 +143,7 @@
       c.strokeStyle = col.luz; c.lineWidth = Math.max(1, r * 0.1); c.beginPath(); c.arc(-L * 0.35, 0, w * 0.55, 0, TAU); c.stroke(); // plataforma
       c.beginPath(); c.moveTo(-L * 0.35 - w * 0.3, 0); c.lineTo(-L * 0.35 + w * 0.3, 0); c.moveTo(-L * 0.35, -w * 0.3); c.lineTo(-L * 0.35, w * 0.3); c.stroke();
       c.strokeStyle = col.osc; c.beginPath(); c.moveTo(L * 0.2, -w * 0.7); c.lineTo(L * 0.2, -w * 1.5); c.stroke(); // antena
-    } else if (u.tipo === 'dron') { // ala fina y larga, cola en V, hélice detrás
+    } else if (u.tipo === 'dron' || u.tipo === 'dronEspia') { // ala fina y larga, cola en V, hélice detrás
       const L = r * 1.8;
       c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1;
       c.beginPath(); c.rect(-L * 0.05, -L * 1.25, L * 0.24, L * 2.5); c.fill(); c.stroke(); // ala
@@ -446,6 +449,13 @@
       c.beginPath(); c.moveTo(X(0.28), Y(0.52)); c.lineTo(X(0.28), Y(0.72)); c.moveTo(X(0.44), Y(0.52)); c.lineTo(X(0.44), Y(0.72)); c.moveTo(X(0.28), Y(0.62)); c.lineTo(X(0.44), Y(0.62)); c.stroke();
       if (e.tipo === 'logistica') { c.fillStyle = col.osc; for (const [fx, fy] of [[0.62, 0.14], [0.78, 0.14], [0.7, 0.3]]) { c.fillRect(X(fx), Y(fy), t * 0.14, t * 0.14); c.strokeRect(X(fx), Y(fy), t * 0.14, t * 0.14); } }
       else { c.fillStyle = col.luz; c.fillRect(X(0.58), Y(0.12), t * 0.3, t * 0.3); c.fillStyle = s.deficit ? col.humo : col.mal; c.fillRect(X(0.61), Y(0.235), t * 0.24, t * 0.07); c.fillRect(X(0.695), Y(0.15), t * 0.07, t * 0.24); }
+    } else if (e.tipo === 'inteligencia') { // una antena parabólica que barre el cielo y un ojo en la fachada
+      const a = s.deficit ? -0.6 : -0.6 + Math.sin((s.tiempo + s.id * 131) * 0.0007) * 0.5, px = X(0.36), py = Y(0.42), R0 = t * 0.24;
+      c.strokeStyle = col.luz; c.lineWidth = lw * 1.5; c.beginPath(); c.arc(px, py, R0, a + Math.PI * 0.5, a + Math.PI * 1.5); c.stroke();
+      c.beginPath(); c.moveTo(px, py); c.lineTo(px + Math.cos(a) * R0 * 0.9, py + Math.sin(a) * R0 * 0.9); c.moveTo(px, py); c.lineTo(px, Y(0.8)); c.stroke();
+      c.fillStyle = s.deficit ? col.humo : col.mal; c.beginPath(); c.arc(px + Math.cos(a) * R0 * 0.9, py + Math.sin(a) * R0 * 0.9, t * 0.03, 0, TAU); c.fill();
+      c.beginPath(); c.moveTo(X(0.58), Y(0.68)); c.quadraticCurveTo(X(0.72), Y(0.56), X(0.86), Y(0.68)); c.quadraticCurveTo(X(0.72), Y(0.8), X(0.58), Y(0.68)); c.stroke();
+      c.fillStyle = col.luz; c.beginPath(); c.arc(X(0.72), Y(0.68), t * 0.035, 0, TAU); c.fill();
     } else if (e.tipo === 'laboratorio') { // un matraz con su líquido, que burbujea si hay energía
       c.strokeStyle = col.luz; c.lineWidth = lw * 1.4; c.beginPath(); c.moveTo(X(0.42), Y(0.2)); c.lineTo(X(0.42), Y(0.42)); c.lineTo(X(0.24), Y(0.78)); c.lineTo(X(0.76), Y(0.78)); c.lineTo(X(0.58), Y(0.42)); c.lineTo(X(0.58), Y(0.2)); c.stroke();
       c.fillStyle = s.deficit ? col.humo : col.agua; c.beginPath(); c.moveTo(X(0.34), Y(0.6)); c.lineTo(X(0.27), Y(0.75)); c.lineTo(X(0.73), Y(0.75)); c.lineTo(X(0.66), Y(0.6)); c.closePath(); c.fill();

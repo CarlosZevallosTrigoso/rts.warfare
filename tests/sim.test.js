@@ -1614,6 +1614,62 @@ prueba('rendimiento: un grupo comparte el tramo largo de la ruta y las búsqueda
   assert.ok(vs.every((u) => !u.pend), 'y en pocos ticks están todas');
 });
 
+prueba('drones por mejoras (estación por nivel, operador por tecnología) y central de inteligencia (espía, dron espía, mapeo satelital)', () => {
+  const m = W.crearMundo(31, { N: 128 }), N = m.N, J = m.jug[0];
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const cel = (x, y) => y * N + x, patio = m.ents.find((e) => e.j === 0 && e.tipo === 'patio'), px = Math.floor(patio.cx), py = Math.floor(patio.cy), dir = px < 64 ? 1 : -1;
+  for (let y = py - 12; y <= py + 12; y++) for (let x = Math.min(px, px + dir * 70) - 2; x <= Math.max(px, px + dir * 70) + 2; x++) { const i = cel(x, y); if (x < 2 || y < 2 || x >= N - 2 || y >= N - 2 || m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  m.terrenoV++;
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  J.minerales = 50000; J.info = 5000; J.nivel = 3;
+  W.crearEdificio(m, 0, 'central', px + dir * 4, py + 4); W.crearEdificio(m, 0, 'central', px + dir * 4, py - 5);
+  // la estación de drones: nivel 1, dos de reconocimiento; mejorada, bombarderos y kamikazes, y más radio
+  const est = W.crearEdificio(m, 0, 'estDrones', px + dir * 7, py); avanza(80);
+  assert.deepStrictEqual([W.dronesDe(m, est).rec, W.dronesDe(m, est).bomba, W.dronesDe(m, est).fpv, W.dronesDe(m, est).radio], [2, 0, 0, 16]);
+  assert.strictEqual(est.dr.rec.length, 2, 'dos drones de reconocimiento en el aire');
+  W.orden(m, { t: 'mejorarEdif', j: 0, id: est.id }); avanza(300);
+  assert.strictEqual(est.nivelE, 2); assert.strictEqual(est.dr.bomba.length, 1, 'a nivel 2 saca un bombardero');
+  W.orden(m, { t: 'mejorarEdif', j: 0, id: est.id }); avanza(600);
+  assert.strictEqual(est.dr.rec.length + est.dr.bomba.length, 5, 'a nivel 3, tres de reconocimiento y dos bombarderos');
+  assert.strictEqual(W.dronesDe(m, est).fpv, 2); assert.strictEqual(W.dronesDe(m, est).radio, 20);
+  const tq = W.crearUnidad(m, 1, 'tanque', cel(px + dir * 16, py)); avanza(120);
+  assert.ok(tq.vida < tq.vidaMax || tq.vida <= 0 || est.dr.fpv.length > 0, 'la estación de nivel 3 lanza kamikazes contra un tanque a la vista');
+  tq.vida = 0; avanza(2);
+  // el operador: de serie, un dron de reconocimiento; con las tecnologías, kamikazes y un bombardero
+  const op = W.crearUnidad(m, 0, 'operador', cel(px + dir * 10, py + 6)); avanza(60);
+  assert.deepStrictEqual([W.dronesDe(m, op).rec, W.dronesDe(m, op).fpv, W.dronesDe(m, op).bomba], [1, 0, 0]);
+  W.orden(m, { t: 'investigar', j: 0, clave: 'dronesFpv' }); avanza(W.TEC.dronesFpv.tiempo + 20);
+  assert.ok(J.mejoras.dronesFpv, 'la tecnología se investiga en la estación de drones');
+  assert.strictEqual(W.dronesDe(m, op).fpv, 2);
+  W.orden(m, { t: 'investigar', j: 0, clave: 'dronesPes' }); avanza(W.TEC.dronesPes.tiempo + 260);
+  assert.strictEqual(W.dronesDe(m, op).bomba, 1); assert.strictEqual(W.dronesDe(m, op).radio, 16);
+  assert.strictEqual(op.dr.bomba.length, 1, 'el operador saca su bombardero');
+  // central de inteligencia
+  W.orden(m, { t: 'intel', j: 0, clave: 'satelite', x: 100, y: 100 }); avanza(2);
+  assert.strictEqual(m.barridos.length, 0, 'sin central no hay mapeo satelital');
+  W.crearEdificio(m, 0, 'estacion', px + dir * 8, py - 9); const ci = W.crearEdificio(m, 0, 'inteligencia', px + dir * 10, py + 9); avanza(3);
+  const info0 = J.info; W.orden(m, { t: 'intel', j: 0, clave: 'satelite', x: px + dir * 60, y: py }); avanza(8);
+  assert.strictEqual(m.barridos.length, 1); assert.strictEqual(J.info, info0 - W.INTEL.satelite.info);
+  assert.strictEqual(m.niebla[0][cel(px + dir * 60 + 30, py)], 2, 'el mapeo satelital revela una zona enorme');
+  for (const t of ['espia', 'dronEspia', 'dronEspia', 'dronEspia']) W.orden(m, { t: 'entrenar', j: 0, tipo: t });
+  avanza(1400);
+  const esp = m.ents.find((e) => e.tipo === 'espia'), dre = m.ents.filter((e) => e.tipo === 'dronEspia');
+  assert.ok(esp, 'la central entrena espías'); assert.strictEqual(dre.length, 2, 'y aloja dos drones espía, no tres');
+  assert.ok(dre.every((d) => d.casa === ci.id && d.enTierra), 'posados en su central');
+  W.orden(m, { t: 'mover', j: 0, ids: [dre[0].id], x: px + dir * 95, y: py }); let lejos = 0; for (let i = 0; i < 700; i++) { W.tick(m); lejos = Math.max(lejos, Math.abs(dre[0].x - px)); }
+  assert.ok(lejos > 85 && dre[0].vida > 0, 'el dron espía llega muy lejos (' + lejos.toFixed(0) + ')');
+  // el espía: oculto aunque camine; junto a un edificio enemigo, informa
+  const cuartelR = W.crearEdificio(m, 1, 'cuartel', px + dir * 40, py);
+  W.orden(m, { t: 'mover', j: 0, ids: [esp.id], x: px + dir * 36, y: py + 1 }); avanza(10);
+  assert.ok(W.oculta(m, esp), 'pasa inadvertido en movimiento');
+  for (let i = 0; i < 3000 && esp.orden !== 'nada'; i++) W.tick(m);
+  const inf1 = J.info; avanza(200);
+  assert.ok(esp.infiltrado && J.intercepta > m.t, 'infiltrado: se ve lo que produce el rival');
+  assert.ok(J.info > inf1, 'y gana información');
+  cuartelR.vida = 0; avanza(60);
+  assert.ok(!esp.infiltrado && J.intercepta <= m.t, 'sin edificio enemigo cerca, deja de informar');
+});
+
 prueba('tanda 5: puente aéreo, puesto de avanzada, hospital y traslado de infantería', () => {
   const m = W.crearMundo(31, { N: 128, logistica: true }), N = m.N, J = m.jug[0];
   m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);

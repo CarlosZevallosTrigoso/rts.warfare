@@ -305,12 +305,12 @@
   <div><h2>Semilla del mapa</h2><input id="op-s" inputmode="numeric" placeholder="al azar" autocomplete="off"></div>
   <button type="button" id="empezar">Empezar</button>
   <button type="button" id="continuar" hidden>Continuar la partida guardada</button>
-  <div id="version">versión 63</div>
+  <div id="version">versión 64</div>
 </div></div>
 <div id="guia" hidden><div class="caja"><div class="cab"><strong>Guía: para qué sirve cada cosa</strong><button type="button" id="cierraGuia">cerrar</button></div><div id="guiaTxt"></div></div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finVer" href="#" title="Vuelve a ver la partida entera, con todo el mapa a la vista y a la velocidad que quieras.">ver repetición</a><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 63' };
+globalThis.W = { VERSION: 'versión 64' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -357,13 +357,15 @@ globalThis.W = { VERSION: 'versión 63' };
     // Interceptor: derriba los misiles enemigos que entran en su radio. Tiene pocas cargas y tarda en reponerlas.
     interceptor: { nombre: 'Interceptor', tam: 2, vida: 700, costo: 1500, pet: 100, tiempo: 500, energia: -40, vision: 7, req: ['fabrica'], nivel: 2, intercepta: 14, cargas: 4, reponeCarga: 600 },
     // Laboratorio: da información sin depender de los campos de conocimiento (a la mitad de ritmo que una estación sobre su campo). Vale como estación para lo que la pida.
+    // Central de inteligencia: entrena espías, aloja hasta dos drones espía de largo alcance y permite el mapeo satelital.
+    inteligencia: { nombre: 'Central de inteligencia', tam: 2, vida: 600, costo: 1400, tiempo: 400, energia: -40, vision: 7, req: ['estacion'], nivel: 2, hangar: 2 },
     laboratorio: { nombre: 'Laboratorio', tam: 2, vida: 500, costo: 700, tiempo: 320, energia: -30, vision: 5, req: ['cuartel'], da: { rec: 'info', cada: 40 }, mejora: true },
     // Puente aéreo. Puesto logístico: en la base; de él salen los helicópteros de carga. Puesto de avanzada: no se construye, lo despliega el puesto móvil
     // donde haga falta; mientras le llegue carga está en tu red (cobertura para suministro y para construir), cura a la infantería cercana y tiene pista.
     logistica: { nombre: 'Puesto logístico', tam: 2, vida: 700, costo: 900, tiempo: 300, energia: -20, vision: 6, req: ['fabrica'], pista: true },
     avanzada:  { nombre: 'Puesto de avanzada', tam: 2, vida: 800, costo: 0, tiempo: 1, energia: 0, vision: 8, req: ['logistica'], pista: true, hospital: 5, oculto: true },
     // Estación de drones: barata; mantiene dos drones de reconocimiento dando vueltas a su alrededor.
-    estDrones: { nombre: 'Estación de drones', tam: 1, vida: 350, costo: 300, tiempo: 160, energia: -10, vision: 5, req: ['cuartel'], drones: { rec: 2 }, radioDron: 16 },
+    estDrones: { nombre: 'Estación de drones', tam: 1, vida: 350, costo: 300, tiempo: 160, energia: -10, vision: 5, req: ['cuartel'], drones: { rec: 2 }, radioDron: 16, mejora: true, dronesN: { 2: { rec: 2, bomba: 1, radio: 18 }, 3: { rec: 3, bomba: 2, fpv: 2, radio: 20 } } }, // mejorada lleva más drones, y de ataque
     // Torreta de muro: solo se monta sobre un muro reforzado propio (y ahí puede ir fuera de la cobertura). Cámara: ve lejos y en redondo, descubre a los escondidos y avisa; en la cobertura o sobre un muro propio.
     torretaMuro: { nombre: 'Torreta de muro', tam: 1, vida: 500, costo: 350, tiempo: 200, energia: -20, vision: 9, req: ['cuartel'], arma: 'bateria', giroT: 0.2, sobreMuro: true },
     camara:    { nombre: 'Cámara', tam: 1, vida: 150, costo: 150, tiempo: 100, energia: -5, vision: 11, req: ['obras'], detecta: 11, enMuro: true },
@@ -434,6 +436,10 @@ globalThis.W = { VERSION: 'versión 63' };
     dronFpv:     { nombre: 'Dron kamikaze', cat: 'aire', aire: true, mini: true, lugar: 'ninguno', vida: 14, vel: 0.3, costo: 40, tiempo: 1, blindaje: 'aire', arma: null, vision: 3, radio: 0.11, req: [], agua: 0, giro: 0.5, acel: 0.05, cono: Math.PI },
     dronBomba:   { nombre: 'Dron bombardero', cat: 'aire', aire: true, mini: true, lugar: 'ninguno', vida: 28, vel: 0.17, costo: 50, tiempo: 1, blindaje: 'aire', arma: null, vision: 5, radio: 0.13, req: [], agua: 0, giro: 0.5, acel: 0.05, cono: Math.PI },
     // Portadores. drones: cuántos de cada clase mantiene en el aire. radioDron: hasta dónde llegan desde él.
+    // Espía: sin arma y oculto aunque se mueva (solo se le ve de muy cerca o con cámaras). Junto a edificios enemigos, ves lo que produce el rival y gana información.
+    espia:       { nombre: 'Espía', cat: 'inf', lugar: 'inteligencia', vida: 35, vel: 0.07, costo: 400, info: 60, tiempo: 300, blindaje: 'ligero', arma: null, vision: 10, radio: 0.105, req: ['inteligencia'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, espia: true, cono: Math.PI },
+    // Dron espía: vuela muy lejos y mucho rato desde su central; no ataca.
+    dronEspia:   { nombre: 'Dron espía', cat: 'aire', aire: true, lugar: 'inteligencia', vida: 60, vel: 0.2, costo: 500, info: 80, tiempo: 300, blindaje: 'aire', arma: null, vision: 14, radio: 0.15, req: ['inteligencia'], agua: 0, giro: 0.2, acel: 0.01, nivel: 2, fuel: 9000, radioVuelo: 220, cono: Math.PI },
     operador:    { nombre: 'Operador de drones', cat: 'inf', vida: 45, vel: 0.06, costo: 150, tiempo: 120, blindaje: 'ligero', arma: null, vision: 6, radio: 0.105, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, drones: { rec: 1 }, radioDron: 12, quieto: true },
     comandoDrones: { nombre: 'Comando de drones', cat: 'veh', vida: 260, vel: 0.085, costo: 900, pet: 60, tiempo: 360, blindaje: 'pesado', arma: null, vision: 7, radio: 0.24, req: ['fabrica'], agua: 2, giro: 0.1, acel: 0.006, nivel: 2, drones: { rec: 3, bomba: 2, fpv: 5 }, radioDron: 25 },
     helicoptero: { nombre: 'Helicóptero', cat: 'aire', aire: true, vida: 180, vel: 0.13, costo: 1400, pet: 150, tiempo: 460, blindaje: 'aire', arma: 'coheteAire', vision: 8, radio: 0.27, req: ['aerodromo'], agua: 2, giro: 0.2, acel: 0.01, nivel: 3, fuel: 2000, radioVuelo: 45, arco: 0.3 },
@@ -481,12 +487,15 @@ globalThis.W = { VERSION: 'versión 63' };
     turbinas:   { nombre: 'Turbinas', lugar: 'central', info: 120, tiempo: 700, nivel: 2, que: '+50 % de energía por central.' },
     depuracion: { nombre: 'Depuración', lugar: 'bomba', info: 100, tiempo: 600, nivel: 2, que: '+50 % de agua por bomba.' },
     telemetro:  { nombre: 'Telémetro', lugar: 'torreta', info: 120, tiempo: 700, nivel: 2, que: '+1,5 de alcance de torretas y torres.' },
+    dronesFpv:  { nombre: 'Operadores de ataque', lugar: 'estDrones', info: 80, tiempo: 600, nivel: 1, que: 'Cada operador lleva además 2 drones kamikaze.' },
+    dronesPes:  { nombre: 'Drones pesados', lugar: 'estDrones', info: 150, tiempo: 800, nivel: 2, que: 'Cada operador lleva además un bombardero, y sus drones llegan más lejos.' },
     analisis:   { nombre: 'Análisis', lugar: 'estacion', info: 250, raros: 60, tiempo: 900, nivel: 3, que: '+50 % de información por estación.' },
   };
   // Inteligencia: gastos puntuales de información, con una estación en pie.
   W.INTEL = {
-    barrido:     { nombre: 'Barrido', info: 30, nivel: 2, radio: 16, dura: 400, que: 'Revela una zona del mapa durante 20 segundos.' },
+    barrido:     { nombre: 'Barrido', info: 30, nivel: 2, radio: 16, dura: 400, zona: true, que: 'Revela una zona del mapa durante 20 segundos.' },
     interceptar: { nombre: 'Interceptar', info: 60, nivel: 3, dura: 1200, que: 'Durante un minuto ves los recursos del rival y qué produce.' },
+    satelite:    { nombre: 'Mapeo satelital', info: 150, nivel: 2, radio: 40, dura: 900, zona: true, pide: 'inteligencia', que: 'Revela una zona enorme durante 45 segundos. Pide una central de inteligencia.' },
     cartografia: { nombre: 'Cartografía', info: 200, nivel: 3, que: 'Revela el terreno de todo el mapa.' },
   };
 
@@ -506,6 +515,7 @@ globalThis.W = { VERSION: 'versión 63' };
     sarmat:    { nombre: 'Sarmat',    que: 'Global: llega a cualquier punto del mapa; hacen falta dos interceptores para pararlo.', alcance: 0, costo: 4000, pet: 400, raros: 120, tiempo: 1500, dano: 2200, area: 5, vel: 0.7, aguante: 2, nivel: 3 },
   };
   W.ECON = {
+    espiaRadio: 6, espiaInfo: 2,
     rutaNodos: 30000, // presupuesto de celdas que se exploran por tick buscando rutas
     misilesMax: 10, mejoraMax: 3, mejoraCosto: 0.6, mejoraBono: 0.5, // mejora de un edificio: hasta nivel 3; cada nivel cuesta el 60 % del edificio por el nivel que tiene y rinde un 50 % más
     inicio: 2500, petInicio: 150, cosecha: 5, descarga: 25, colaMax: 9, separacionColocar: 3, goteoCada: 5, vistaInicial: 22, obrasMax: 8, curaUnidad: 0.01, curaEdificio: 0.0025, curaCosto: 0.15, venta: 0.5, trinchera: 0.45, arco: 0.14, arcoTrinchera: 1.05, visAd: 1.3, visLado: 0.75, visAt: 0.3, cono: 1.05, periferia: 1.83, flanco: 1.25, espalda: 1.5, bosqueVeh: 0.6, bosqueCubre: 0.7, reposta: 12, retiroBajo: 0.3, retiroAlto: 0.9, huida: 300, dia: 9600, diaLuz: 6000, nocheVis: 0.7, caminoVel: 1.6, tramoLargo: 4, enlace: 5, cobNodo: 14, cobEdif: 6, lineaVel: 0.12, lineaCelda: 3, sinSum: 400, sinSumRecarga: 1.5, abastDura: 1500, heliRepone: 300, cobAvanzada: 10, hospitalCura: 2, dronFpv: 40, dronBomba: 15, dronRepone: 200, dronFpvCada: 60, hackInfo: 25, hackVeh: 240, hackEdif: 300, hackRecarga: 200, hackCanal: 40, trazaVel: 0.45, caminoLlano: 4, caminoBosque: 12, caminoAgua: 30, mandoCada: 40, mandoGiro: 1.5, captura: 600, capturaRadio: 2, antenaRadio: 12, depositoCada: 8, tallerRadio: 4, ocultaVe: 2.5, chatarra: 0.25, reparaRadio: 8, reparaVeh: 0.5, curaMedico: 0.35, reparaEdif: 0.8, rangos: [2, 5, 10], rangoDano: 0.1, rangoVida: 0.1, cupoAviones: 5, pasada: 7, orbita: 3.5, fuelCae: 80, cavar: 80, aplasta: 10, bonoProd: 0.5, bonoMax: 2.5 };
@@ -997,10 +1007,19 @@ globalThis.W = { VERSION: 'versión 63' };
   // Cada portador (estación, operador o comando de drones) mantiene los suyos: repone los que le derriban, uno cada cierto tiempo y
   // pagándolo, y manda los de ataque contra lo que su bando tenga a la vista dentro de su radio. Si el portador cae, caen sus drones.
   const DRON = { rec: 'dronRec', bomba: 'dronBomba', fpv: 'dronFpv' };
+  // La dotación de drones de un portador: la de su ficha, más lo que le den las mejoras (la estación, por nivel; el operador, por tecnología).
+  W.dronesDe = function (m, e) {
+    const d = e.edif ? EDIF[e.tipo] : UNID[e.tipo]; if (!d.drones) return null;
+    const J = m.jug[e.j], n = d.dronesN && d.dronesN[e.nivelE || 1];
+    if (n) return n;
+    if (e.tipo === 'operador' && (J.mejoras.dronesFpv || J.mejoras.dronesPes)) return { rec: d.drones.rec, fpv: J.mejoras.dronesFpv ? 2 : 0, bomba: J.mejoras.dronesPes ? 1 : 0, radio: d.radioDron + (J.mejoras.dronesPes ? 4 : 0) };
+    return { rec: d.drones.rec || 0, bomba: d.drones.bomba || 0, fpv: d.drones.fpv || 0, radio: d.radioDron };
+  };
   function tickPortadores(m) {
     for (const e of m.ents) {
       const d = e.edif ? EDIF[e.tipo] : UNID[e.tipo];
       if (!d.drones || e.vida <= 0 || e.infra) continue;
+      const dn = W.dronesDe(m, e);
       const J = m.jug[e.j], x = posX(e), y = posY(e), N = m.N;
       if (!e.dr) e.dr = { rec: [], bomba: [], fpv: [] };
       for (const k in e.dr) e.dr[k] = e.dr[k].filter((id) => { const q = m.porId.get(id); return q && q.vida > 0; });
@@ -1008,28 +1027,42 @@ globalThis.W = { VERSION: 'versión 63' };
       if (!activo) continue;
       const saca = (rol, obj) => { const q = crearUnidad(m, e.j, DRON[rol], Math.floor(y) * N + Math.floor(x)); q.x = q.px = x; q.y = q.py = y; q.base = e.id; q.rol = rol; q.fase = (e.id * 1.7 + e.dr[rol].length * 2.1) % TAU; q.obj = obj || 0; q.est = rol === 'bomba' ? 'espera' : ''; e.dr[rol].push(q.id); return q; };
       for (const rol of ['rec', 'bomba']) { // reconocimiento y bombarderos: se reponen de uno en uno
-        if (!d.drones[rol] || e.dr[rol].length >= d.drones[rol] || m.t < (e.drListo || 0)) continue;
+        if (!dn[rol] || e.dr[rol].length >= dn[rol] || m.t < (e.drListo || 0)) continue;
         const precio = UNID[DRON[rol]].costo, primero = !e.drHubo; // los primeros vienen con el portador; los repuestos se pagan
         if (!primero && J.minerales < precio && !J.dios) continue;
         if (!primero && !J.dios) J.minerales -= precio;
-        saca(rol); e.drListo = m.t + (e.dr.rec.length + e.dr.bomba.length >= (d.drones.rec || 0) + (d.drones.bomba || 0) ? ECON.dronRepone : 20);
-        if (e.dr.rec.length + e.dr.bomba.length >= (d.drones.rec || 0) + (d.drones.bomba || 0)) e.drHubo = true;
+        saca(rol); e.drListo = m.t + (e.dr.rec.length + e.dr.bomba.length >= (dn.rec || 0) + (dn.bomba || 0) ? ECON.dronRepone : 20);
+        if (e.dr.rec.length + e.dr.bomba.length >= (dn.rec || 0) + (dn.bomba || 0)) e.drHubo = true;
         break;
       }
-      if ((!d.drones.fpv && !d.drones.bomba) || e.dronAtk === false) continue;
+      if ((!dn.fpv && !dn.bomba) || e.dronAtk === false) continue;
       // blancos: enemigos de tierra a la vista de su bando dentro del radio. El kamikaze va por vehículos y edificios con arma; el bombardero, por infantería.
       let veh = null, inf = null, dv = Infinity, di = Infinity; const pri = e.dronObj ? m.porId.get(e.dronObj) : null;
       for (const o of m.ents) {
         if (o.j === e.j || o.vida <= 0 || o.infra || (!o.edif && UNID[o.tipo].aire)) continue;
         const ox = posX(o), oy = posY(o), dd = Math.hypot(ox - x, oy - y);
-        if (dd > d.radioDron || m.niebla[e.j][Math.floor(oy) * N + Math.floor(ox)] !== 2 || oculta(m, o)) continue;
+        if (dd > dn.radio || m.niebla[e.j][Math.floor(oy) * N + Math.floor(ox)] !== 2 || oculta(m, o)) continue;
         const k = o === pri ? -1000 : 0;
         if (o.edif ? !!EDIF[o.tipo].arma || o === pri : UNID[o.tipo].cat === 'veh') { const yaVan = e.dr.fpv.filter((id) => m.porId.get(id).obj === o.id).length; if (yaVan < 2 && dd + k + (o.edif ? 6 : 0) < dv) { dv = dd + k + (o.edif ? 6 : 0); veh = o; } }
         else if (!o.edif && dd + k < di) { di = dd + k; inf = o; }
       }
-      if (d.drones.fpv && veh && e.dr.fpv.length < d.drones.fpv && m.t >= (e.fpvT || 0) && (J.minerales >= ECON.dronFpv || J.dios)) { if (!J.dios) J.minerales -= ECON.dronFpv; saca('fpv', veh.id); e.fpvT = m.t + ECON.dronFpvCada; }
+      if (dn.fpv && veh && e.dr.fpv.length < dn.fpv && m.t >= (e.fpvT || 0) && (J.minerales >= ECON.dronFpv || J.dios)) { if (!J.dios) J.minerales -= ECON.dronFpv; saca('fpv', veh.id); e.fpvT = m.t + ECON.dronFpvCada; }
       const blanco = inf || veh;
       if (blanco) for (const id of e.dr.bomba) { const q = m.porId.get(id); if (q.est === 'espera' && q.recarga <= 0 && (J.minerales >= ECON.dronBomba || J.dios)) { if (!J.dios) J.minerales -= ECON.dronBomba; q.obj = blanco.id; q.est = 'ir'; break; } }
+    }
+  }
+  // ---------- espías ----------
+  // Un espía a pocas celdas de un edificio enemigo: su bando ve los recursos del rival y lo que produce (como «interceptar»), y gana información.
+  function tickEspias(m) {
+    const g = m.gr; if (!g) return;
+    for (const u of g.us) {
+      if (!UNID[u.tipo].espia || u.vida <= 0) continue;
+      let cerca = false;
+      for (const e of g.edifs) if (e.j !== u.j && e.vida > 0 && dist(u.x, u.y, e) <= ECON.espiaRadio) { cerca = true; break; }
+      if (cerca !== !!u.infiltrado) { u.infiltrado = cerca; if (cerca) m.efectos.push({ tipo: 'infiltrado', x1: u.x, y1: u.y, j: u.j, t: m.t }); }
+      if (!cerca) continue;
+      const J = m.jug[u.j]; J.intercepta = Math.max(J.intercepta || 0, m.t + 30);
+      if (m.t % 40 === 0) J.info += ECON.espiaInfo;
     }
   }
   // ---------- puente aéreo ----------
@@ -1073,7 +1106,7 @@ globalThis.W = { VERSION: 'versión 63' };
     const d = UNID[u.tipo], base = m.porId.get(u.base);
     if (!base || base.vida <= 0) { u.vida = 0; return; } // sin portador, cae
     if (m.t - (u.tInterf === undefined ? -99 : u.tInterf) <= 12) { u.vida -= 1.2; if (u.vida <= 0) m.efectos.push({ tipo: 'interferido', x1: u.x, y1: u.y, j: u.j, t: m.t }); return; } // interferido por un vehículo de mando enemigo: pierde el enlace y cae
-    const bx = posX(base), by = posY(base), cfg = base.edif ? EDIF[base.tipo] : UNID[base.tipo];
+    const bx = posX(base), by = posY(base), cfg = { radioDron: W.dronesDe(m, base).radio };
     const ir = (x, y, vel) => { const dx = x - u.x, dy = y - u.y, dd = Math.hypot(dx, dy); if (dd > 0.02) u.ang = Math.atan2(dy, dx); u.v = Math.min(vel, dd); if (dd > 1e-6) { u.x += (dx / dd) * u.v; u.y += (dy / dd) * u.v; } return dd; };
     const orbita = (r) => { const a = u.fase + m.t * (0.6 / Math.max(3, r)) * 0.33; ir(bx + Math.cos(a) * r, by + Math.sin(a) * r, d.vel); };
     const parado = base.edif || (base.orden === 'nada' && base.v < 0.001);
@@ -1615,7 +1648,7 @@ globalThis.W = { VERSION: 'versión 63' };
         return;
       case 'dronObj': { // blanco preferente para los drones de ataque de esos portadores
         const o = m.porId.get(cmd.obj); if (!o || o.j === cmd.j) return;
-        for (const u of propias(m, cmd)) if (UNID[u.tipo].drones && UNID[u.tipo].drones.fpv) { u.dronObj = o.id; u.dronAtk = true; }
+        for (const u of propias(m, cmd)) if (UNID[u.tipo].drones && W.dronesDe(m, u).fpv) { u.dronObj = o.id; u.dronAtk = true; }
         return;
       }
       case 'murar': { // el ingeniero civil levanta un tramo recto de muro (tipo: clave de W.MUROS) de una celda a otra; con enc, lo añade a lo que lleva
@@ -1767,7 +1800,7 @@ globalThis.W = { VERSION: 'versión 63' };
       case 'entrenar': {
         const d = UNID[cmd.tipo];
         if (!d || !W.disponible(m, cmd.j, d) || !W.puedePagar(J, d)) return;
-        if (d.aire) { const c = W.cupoAire(m, cmd.j); if (c.hay >= c.cupo) return; } // cada aeródromo aloja un número limitado de aviones
+        if (d.aire) { const c = W.cupoAire(m, cmd.j, d.lugar === 'inteligencia'); if (c.hay >= c.cupo) return; } // cada aeródromo aloja un número limitado de aviones
         // Va a la cola de un edificio: de los indicados (cmd.ids) o de todos los del tipo, el que la tenga más corta.
         let fab = null;
         for (const e of m.ents) {
@@ -1832,9 +1865,9 @@ globalThis.W = { VERSION: 'versión 63' };
       }
       case 'intel': { // usos de inteligencia: se pagan con información y piden una estación en pie
         const it = INTEL[cmd.clave];
-        if (!it || !J.cuenta.estacion || J.nivel < it.nivel || J.info < it.info) return;
+        if (!it || !(J.cuenta.estacion || J.cuenta.inteligencia) || (it.pide && !J.cuenta[it.pide]) || J.nivel < it.nivel || J.info < it.info) return;
         J.info -= it.info;
-        if (cmd.clave === 'barrido') m.barridos.push({ j: cmd.j, x: cmd.x, y: cmd.y, r: it.radio, hasta: m.t + it.dura });
+        if (it.zona) m.barridos.push({ j: cmd.j, x: cmd.x, y: cmd.y, r: it.radio, hasta: m.t + it.dura });
         else if (cmd.clave === 'interceptar') J.intercepta = m.t + it.dura;
         else { const f = m.niebla[cmd.j]; for (let i = 0; i < f.length; i++) if (!f[i]) f[i] = 1; m.nieblaV++; }
         return;
@@ -2115,8 +2148,10 @@ globalThis.W = { VERSION: 'versión 63' };
   // Escondida: infantería quieta en el bosque (o un francotirador quieto en cualquier parte) que no ha disparado hace poco.
   // El enemigo no la ve ni la ataca por su cuenta hasta tenerla a un par de celdas.
   function oculta(m, e) {
-    if (e.edif || e.orden !== 'nada' || e.v > 0.001 || m.t - (e.tDisparo === undefined ? -999 : e.tDisparo) < 60 || m.t - (e.camT === undefined ? -999 : e.camT) < 20) return false; // (una cámara enemiga cerca la descubre)
+    if (e.edif || m.t - (e.camT === undefined ? -999 : e.camT) < 20) return false; // (una cámara enemiga cerca la descubre)
     const d = UNID[e.tipo];
+    if (d.espia) return true; // el espía pasa inadvertido también en movimiento
+    if (e.orden !== 'nada' || e.v > 0.001 || m.t - (e.tDisparo === undefined ? -999 : e.tDisparo) < 60) return false;
     return d.cat === 'inf' && (d.sigilo || m.mapa.terreno[Math.floor(e.y) * m.N + Math.floor(e.x)] === T.BOSQUE);
   }
   W.oculta = oculta;
@@ -2350,9 +2385,9 @@ globalThis.W = { VERSION: 'versión 63' };
   function aerodromoLibre(m, u) {
     let mejor = null, md = Infinity;
     for (const e of m.ents) {
-      if (!e.edif || e.j !== u.j || e.tipo !== 'aerodromo' || e.vida <= 0) continue;
+      if (!e.edif || e.j !== u.j || e.tipo !== (W.lugarDe(UNID[u.tipo]) === 'inteligencia' ? 'inteligencia' : 'aerodromo') || e.vida <= 0) continue; // el dron espía vive en su central
       const dd = Math.hypot(e.cx - u.x, e.cy - u.y);
-      if (dd < md && avionesDe(m, e) - (u.casa === e.id ? 1 : 0) < ECON.cupoAviones) { md = dd; mejor = e; }
+      if (dd < md && avionesDe(m, e) - (u.casa === e.id ? 1 : 0) < (EDIF[e.tipo].hangar || ECON.cupoAviones)) { md = dd; mejor = e; }
     }
     return mejor;
   }
@@ -2364,10 +2399,10 @@ globalThis.W = { VERSION: 'versión 63' };
     u.x = base.cx + SLOTS[s][0]; u.y = base.cy + SLOTS[s][1]; u.px = u.x; u.py = u.y; u.ang = u.angT = -Math.PI / 2;
   }
   // Aviones y cupo de un jugador (los que vuelan, los posados y los encargados).
-  W.cupoAire = function (m, j) {
+  W.cupoAire = function (m, j, esp) { // esp: el cupo de drones espía (por central de inteligencia), aparte del de los aeródromos
     const J = m.jug[j]; let hay = 0;
-    for (const t in UNID) if (UNID[t].aire && !UNID[t].mini) hay += (J.cuenta[t] || 0) + J.colas[t].n;
-    return { hay, cupo: ECON.cupoAviones * (J.cuenta.aerodromo || 0) };
+    for (const t in UNID) if (UNID[t].aire && !UNID[t].mini && (UNID[t].lugar === 'inteligencia') === !!esp) hay += (J.cuenta[t] || 0) + J.colas[t].n;
+    return { hay, cupo: esp ? EDIF.inteligencia.hangar * (J.cuenta.inteligencia || 0) : ECON.cupoAviones * (J.cuenta.aerodromo || 0) };
   };
   // Devuelve true si este tick el avión lo pasa posado o volviendo a su aeródromo.
   function tickVuelo(m, u) {
@@ -2754,7 +2789,7 @@ globalThis.W = { VERSION: 'versión 63' };
       if (fab.prog > q.prog) q.prog = fab.prog;
       if (fab.prog < UNID[tipo].tiempo) continue;
       fab.cola.shift(); fab.pago.shift(); fab.prog = 0; q.n--; J.aguaUso += UNID[tipo].agua || 0;
-      if (fab.bucle && (cat !== 'aire' || W.cupoAire(m, j).hay + 1 < W.cupoAire(m, j).cupo)) { fab.cola.push(tipo); fab.pago.push(false); q.n++; }
+      if (fab.bucle && (cat !== 'aire' || W.cupoAire(m, j, UNID[tipo].lugar === 'inteligencia').hay + 1 < W.cupoAire(m, j, UNID[tipo].lugar === 'inteligencia').cupo)) { fab.cola.push(tipo); fab.pago.push(false); q.n++; }
       const u = crearUnidad(m, j, tipo, cat === 'aire' ? Math.floor(fab.cy) * m.N + Math.floor(fab.cx) : W.cercaLibre(m, fab.cx, fab.y + fab.tam + 0.5, cat === 'veh'));
       if (cat === 'aire') { const casa = aerodromoLibre(m, u) || fab; posar(m, u, casa); } // el avión nace posado en un aeródromo con sitio
       if (fab.reunion) { // va al punto de reunión del edificio
@@ -2776,7 +2811,7 @@ globalThis.W = { VERSION: 'versión 63' };
   // todos: patio) y los edificios se reparan solos, más despacio.
   const LUGAR = { inf: 'cuartel', veh: 'fabrica', aire: 'aerodromo' }; // dónde se produce y se repara cada categoría
   W.lugarDe = (d) => d.lugar || LUGAR[d.cat]; // las unidades civiles salen de Obras civiles
-  W.PRODUCE = { cuartel: true, fabrica: true, aerodromo: true, obras: true };
+  W.PRODUCE = { cuartel: true, fabrica: true, aerodromo: true, obras: true, inteligencia: true };
   function curar(m) {
     const talleres = [[], []];
     for (const e of m.ents) if (e.edif && (e.tipo === 'patio' || e.tipo === 'cuartel' || e.tipo === 'fabrica' || e.tipo === 'aerodromo')) talleres[e.j].push(e);
@@ -2951,7 +2986,7 @@ globalThis.W = { VERSION: 'versión 63' };
     if (m.t % 10 === 0) { curar(m); colmena(m); }
 
     if (m.redSucia || !m.cob || m.t - m.redT >= 100) calcularRed(m);
-    if (m.t % 10 === 0) { tickTrincheras(m); tickCamaras(m); tickPortadores(m); tickPuenteAereo(m); }
+    if (m.t % 10 === 0) { tickTrincheras(m); tickCamaras(m); tickPortadores(m); tickPuenteAereo(m); tickEspias(m); }
     if (m.t % 10 === 0 && m.logistica !== false) { // suministro: fuera de la cobertura el contador sube; dentro, baja rápido. Los aviones repostan en su base: no cuenta.
       for (const u of m.ents) { if (u.edif || UNID[u.tipo].aire) continue; const dentro = m.cob[u.j][Math.floor(u.y) * m.N + Math.floor(u.x)] || m.jug[u.j].dios; u.sinSum = dentro ? Math.max(0, (u.sinSum || 0) - 40) : Math.min(ECON.sinSum + 200, (u.sinSum || 0) + 10); }
     }
@@ -3665,7 +3700,7 @@ globalThis.W = { VERSION: 'versión 63' };
   // El contexto llega trasladado al centro de la unidad. r = radio en píxeles.
   // e = { ang, angT, retro (0..1), anda, tiempo, carga (0..1), cosecha }
   W.fichaUnidad = function (c, u, r, lod, col, e) {
-    const inf = W.UNID[u.tipo].cat === 'inf', at = u.tipo === 'antitanque', pesado = u.tipo === 'pesado', expl = u.tipo === 'explorador', ing = u.tipo === 'ingeniero', med = u.tipo === 'medico', civ = u.tipo === 'civil', hk = u.tipo === 'hacker', op = u.tipo === 'operador', franco = u.tipo === 'francotirador';
+    const inf = W.UNID[u.tipo].cat === 'inf', at = u.tipo === 'antitanque', pesado = u.tipo === 'pesado', expl = u.tipo === 'explorador', ing = u.tipo === 'ingeniero', med = u.tipo === 'medico', civ = u.tipo === 'civil', hk = u.tipo === 'hacker', op = u.tipo === 'operador', franco = u.tipo === 'francotirador', esp = u.tipo === 'espia';
     if (lod === 0) {
       c.fillStyle = col.base; c.beginPath();
       if (inf) c.arc(0, 0, r, 0, TAU);
@@ -3710,6 +3745,8 @@ globalThis.W = { VERSION: 'versión 63' };
         c.lineWidth = Math.max(1, R * 0.16); c.beginPath(); c.arc(R * 0.75, R * 0.55, R * 0.32, 0, TAU); c.stroke();
       } else if (med) { // sin arma: un maletín por delante
         c.fillStyle = col.luz; c.fillRect(R * 0.75, R * 0.2, R * 0.6, R * 0.5); c.lineWidth = 1; c.strokeRect(R * 0.75, R * 0.2, R * 0.6, R * 0.5);
+      } else if (esp) { // sin arma: un maletín fino al costado
+        c.fillStyle = col.osc; c.fillRect(R * 0.55, R * 0.45, R * 0.55, R * 0.3);
       } else if (expl) { // pistola corta
         c.beginPath(); c.moveTo(R * 0.3, R * 0.5); c.lineTo(R * (1.05 - e.retro * 0.2), R * 0.5); c.stroke();
       } else if (franco) { // rifle largo y fino, con mira
@@ -3721,6 +3758,7 @@ globalThis.W = { VERSION: 'versión 63' };
       c.fillStyle = col.base; c.beginPath(); c.ellipse(0, 0, R * 0.62, R, 0, 0, TAU); c.fill(); // hombros
       c.strokeStyle = col.osc; c.lineWidth = 1; c.stroke();
       c.fillStyle = at ? col.osc : col.luz; c.strokeStyle = at ? col.luz : col.osc; c.beginPath(); c.arc(R * 0.08, 0, R * 0.42, 0, TAU); c.fill(); c.stroke(); // casco
+      if (esp) { c.fillStyle = col.osc; c.beginPath(); c.arc(R * 0.08, 0, R * 0.62, 0, TAU); c.fill(); c.fillStyle = col.luz; c.beginPath(); c.arc(R * 0.08, 0, R * 0.3, 0, TAU); c.fill(); } // sombrero de ala ancha
       if (franco || hk) { c.fillStyle = col.osc; c.beginPath(); c.arc(R * 0.08, 0, R * 0.42, Math.PI * 0.5, Math.PI * 1.5); c.fill(); } // capucha
       if (civ) { c.fillStyle = '#e0b83a'; c.beginPath(); c.arc(R * 0.08, 0, R * 0.42, 0, TAU); c.fill(); c.strokeStyle = col.osc; c.lineWidth = 1; c.stroke(); c.beginPath(); c.moveTo(R * 0.08, -R * 0.42); c.lineTo(R * 0.08, R * 0.42); c.stroke(); } // casco de obra
       if (med) { c.strokeStyle = col.mal; c.lineWidth = Math.max(1.2, R * 0.2); c.beginPath(); c.moveTo(R * 0.08 - R * 0.28, 0); c.lineTo(R * 0.08 + R * 0.28, 0); c.moveTo(R * 0.08, -R * 0.28); c.lineTo(R * 0.08, R * 0.28); c.stroke(); } // cruz en el casco
@@ -3797,7 +3835,7 @@ globalThis.W = { VERSION: 'versión 63' };
       c.strokeStyle = col.luz; c.lineWidth = Math.max(1, r * 0.1); c.beginPath(); c.arc(-L * 0.35, 0, w * 0.55, 0, TAU); c.stroke(); // plataforma
       c.beginPath(); c.moveTo(-L * 0.35 - w * 0.3, 0); c.lineTo(-L * 0.35 + w * 0.3, 0); c.moveTo(-L * 0.35, -w * 0.3); c.lineTo(-L * 0.35, w * 0.3); c.stroke();
       c.strokeStyle = col.osc; c.beginPath(); c.moveTo(L * 0.2, -w * 0.7); c.lineTo(L * 0.2, -w * 1.5); c.stroke(); // antena
-    } else if (u.tipo === 'dron') { // ala fina y larga, cola en V, hélice detrás
+    } else if (u.tipo === 'dron' || u.tipo === 'dronEspia') { // ala fina y larga, cola en V, hélice detrás
       const L = r * 1.8;
       c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1;
       c.beginPath(); c.rect(-L * 0.05, -L * 1.25, L * 0.24, L * 2.5); c.fill(); c.stroke(); // ala
@@ -4103,6 +4141,13 @@ globalThis.W = { VERSION: 'versión 63' };
       c.beginPath(); c.moveTo(X(0.28), Y(0.52)); c.lineTo(X(0.28), Y(0.72)); c.moveTo(X(0.44), Y(0.52)); c.lineTo(X(0.44), Y(0.72)); c.moveTo(X(0.28), Y(0.62)); c.lineTo(X(0.44), Y(0.62)); c.stroke();
       if (e.tipo === 'logistica') { c.fillStyle = col.osc; for (const [fx, fy] of [[0.62, 0.14], [0.78, 0.14], [0.7, 0.3]]) { c.fillRect(X(fx), Y(fy), t * 0.14, t * 0.14); c.strokeRect(X(fx), Y(fy), t * 0.14, t * 0.14); } }
       else { c.fillStyle = col.luz; c.fillRect(X(0.58), Y(0.12), t * 0.3, t * 0.3); c.fillStyle = s.deficit ? col.humo : col.mal; c.fillRect(X(0.61), Y(0.235), t * 0.24, t * 0.07); c.fillRect(X(0.695), Y(0.15), t * 0.07, t * 0.24); }
+    } else if (e.tipo === 'inteligencia') { // una antena parabólica que barre el cielo y un ojo en la fachada
+      const a = s.deficit ? -0.6 : -0.6 + Math.sin((s.tiempo + s.id * 131) * 0.0007) * 0.5, px = X(0.36), py = Y(0.42), R0 = t * 0.24;
+      c.strokeStyle = col.luz; c.lineWidth = lw * 1.5; c.beginPath(); c.arc(px, py, R0, a + Math.PI * 0.5, a + Math.PI * 1.5); c.stroke();
+      c.beginPath(); c.moveTo(px, py); c.lineTo(px + Math.cos(a) * R0 * 0.9, py + Math.sin(a) * R0 * 0.9); c.moveTo(px, py); c.lineTo(px, Y(0.8)); c.stroke();
+      c.fillStyle = s.deficit ? col.humo : col.mal; c.beginPath(); c.arc(px + Math.cos(a) * R0 * 0.9, py + Math.sin(a) * R0 * 0.9, t * 0.03, 0, TAU); c.fill();
+      c.beginPath(); c.moveTo(X(0.58), Y(0.68)); c.quadraticCurveTo(X(0.72), Y(0.56), X(0.86), Y(0.68)); c.quadraticCurveTo(X(0.72), Y(0.8), X(0.58), Y(0.68)); c.stroke();
+      c.fillStyle = col.luz; c.beginPath(); c.arc(X(0.72), Y(0.68), t * 0.035, 0, TAU); c.fill();
     } else if (e.tipo === 'laboratorio') { // un matraz con su líquido, que burbujea si hay energía
       c.strokeStyle = col.luz; c.lineWidth = lw * 1.4; c.beginPath(); c.moveTo(X(0.42), Y(0.2)); c.lineTo(X(0.42), Y(0.42)); c.lineTo(X(0.24), Y(0.78)); c.lineTo(X(0.76), Y(0.78)); c.lineTo(X(0.58), Y(0.42)); c.lineTo(X(0.58), Y(0.2)); c.stroke();
       c.fillStyle = s.deficit ? col.humo : col.agua; c.beginPath(); c.moveTo(X(0.34), Y(0.6)); c.lineTo(X(0.27), Y(0.75)); c.lineTo(X(0.73), Y(0.75)); c.lineTo(X(0.66), Y(0.6)); c.closePath(); c.fill();
@@ -4241,6 +4286,7 @@ globalThis.W = { VERSION: 'versión 63' };
     const oido = { llamada: 0, t: m.t, listas: 0, producidas: J.producidas, edificios: 0, bajas: 0, alerta: -999 };
     let tecleado = ''; // últimas letras escritas, para el código "god"
     const sel = new Set(), grupos = {}, teclas = new Set(), marcas = [];
+    let barridoClave = 'barrido';
     let modo = null; // null | 'colocar' | 'amover' | 'patrulla'
     const FORMAS = ['grupo', 'linea', 'columna', 'cuna', 'cuadro'];
     let forma = 'grupo'; // formación con la que llegan los grupos a su destino
@@ -4304,7 +4350,7 @@ globalThis.W = { VERSION: 'versión 63' };
 
     // Volumen: la vista sigue siendo cenital, pero cada cosa tiene altura. Los edificios muestran su pared sur y el tejado
     // se dibuja desplazado hacia arriba; las unidades llevan un canto; la roca y el agua, un escalón.
-    const ALTO = { patio: 0.3, central: 0.36, refineria: 0.32, bomba: 0.2, cuartel: 0.26, extractor: 0.3, fabrica: 0.34, torreta: 0.22, torreCanon: 0.36, aerodromo: 0.08, antiaerea: 0.22, estacion: 0.26, deposito: 0.22, obras: 0.28, misilera: 0.12, interceptor: 0.24, torretaMuro: 0.34, camara: 0.3, estDrones: 0.14, laboratorio: 0.26, logistica: 0.16, avanzada: 0.2 };
+    const ALTO = { patio: 0.3, central: 0.36, refineria: 0.32, bomba: 0.2, cuartel: 0.26, extractor: 0.3, fabrica: 0.34, torreta: 0.22, torreCanon: 0.36, aerodromo: 0.08, antiaerea: 0.22, estacion: 0.26, deposito: 0.22, obras: 0.28, misilera: 0.12, interceptor: 0.24, torretaMuro: 0.34, camara: 0.3, estDrones: 0.14, laboratorio: 0.26, logistica: 0.16, avanzada: 0.2, inteligencia: 0.3 };
     function entEn(wx, wy, holgura) { // holgura: margen extra (en celdas) para acertar con el dedo
       let mejor = null, md = Infinity;
       for (const e of m.ents) {
@@ -4348,6 +4394,7 @@ globalThis.W = { VERSION: 'versión 63' };
         let t = (e.muro ? W.MURO_N[e.muro] : (e.edif ? EDIF : UNID)[e.tipo]).nombre + (e.j === YO ? '' : ' rival') + ' · ' + Math.ceil(e.vida) + '/' + e.vidaMax;
         if (e.tipo === 'cosechadora' && e.j === YO) t += ' · carga ' + e.carga;
         if (!e.edif && UNID[e.tipo].tiende && e.j === YO && m.logistica !== false) t += e.orden === 'conectar' ? ' · tendiendo línea' : e.auto ? ' · automático' : ' · manual';
+        if (!e.edif && UNID[e.tipo].espia && e.j === YO) t += e.infiltrado ? ' · infiltrado: informando' : ' · acércalo a un edificio enemigo';
         if (e.cava > 0) t += ' · cavando'; else if (e.guardia && e.j === YO && !W.enTrinchera(m, e)) t += ' · en guardia';
         if (UNID[e.tipo] && UNID[e.tipo].aire && e.j === YO) t += (e.enTierra ? ' · en tierra' : e.repostando ? ' · vuelve a repostar' : e.patrulla ? ' · patrulla' : '') + ' · combustible ' + Math.round(e.fuel / UNID[e.tipo].fuel * 100) + ' %';
         if (!e.edif && e.rango) t += ' · veterano ' + '▲'.repeat(e.rango);
@@ -4360,7 +4407,7 @@ globalThis.W = { VERSION: 'versión 63' };
         if (e.j === YO && conRed) { if (e.edif && !e.infra && !e.conRed) t += e.tipo === 'deposito' ? ' · sin conexión: únelo a tu base con un ingeniero civil' : ' · fuera de la red'; if (e.linea && !e.conRed) t += ' · no llega a tu red'; if (e.sinLuz) t += ' · sin energía: a media marcha'; if (!e.edif && e.sinSum >= W.ECON.sinSum) t += ' · sin suministro: dispara más lento y no se repara'; }
         if (e.tipo === 'misilera' && e.j === YO) { const g = Object.keys(MIS).filter((k) => e.silo && e.silo[k]).map((k) => e.silo[k] + ' ' + MIS[k].nombre).join(', '); t += ' · ' + (g || 'sin misiles'); }
         if (e.tipo === 'interceptor' && e.j === YO) t += ' · cargas ' + (e.cargas === undefined ? EDIF.interceptor.cargas : e.cargas) + '/' + EDIF.interceptor.cargas;
-        { const dd = (e.edif ? EDIF : UNID)[e.tipo].drones; if (dd && e.j === YO && e.dr) t += ' · drones ' + (e.dr.rec.length + e.dr.bomba.length + e.dr.fpv.length) + ' en el aire' + (dd.fpv ? (e.dronAtk === false ? ' · ataque apagado' : '') : ''); }
+        { const dd = W.dronesDe(m, e); if (dd && e.j === YO && e.dr) t += ' · drones ' + (e.dr.rec.length + e.dr.bomba.length + e.dr.fpv.length) + ' en el aire (dotación: ' + dd.rec + ' rec' + (dd.bomba ? ' · ' + dd.bomba + ' bomb' : '') + (dd.fpv ? ' · ' + dd.fpv + ' kamikaze' : '') + ')' + (dd.fpv ? (e.dronAtk === false ? ' · ataque apagado' : '') : ''); }
         if (e.edif && EDIF[e.tipo].mejora && e.j === YO) t += ' · nivel ' + (e.nivelE || 1) + ' de ' + W.ECON.mejoraMax;
         if (e.tipo === 'avanzada' && e.j === YO) t += e.abast > m.t ? ' · enlace aéreo: ' + Math.ceil((e.abast - m.t) / 20) + ' s · hospital' : ' · sin enlace aéreo: fuera de la red';
         if (e.edif && EDIF[e.tipo].pista && e.j === YO) t += ' · pista';
@@ -4972,8 +5019,8 @@ globalThis.W = { VERSION: 'versión 63' };
         for (const id of sel) {
           const e = m.porId.get(id);
           if (!e || e.j !== YO) continue;
-          if (e.edif) { if (e.tipo === 'aerodromo') for (const t in UNID) if (UNID[t].aire && UNID[t].radioVuelo) aro(e, UNID[t].radioVuelo); if (EDIF[e.tipo].intercepta) aro(e, EDIF[e.tipo].intercepta); if (EDIF[e.tipo].radioDron) aro(e, EDIF[e.tipo].radioDron); }
-          else if (UNID[e.tipo].radioDron) aro({ id: e.id, cx: e.x, cy: e.y }, UNID[e.tipo].radioDron); // hasta dónde llegan sus drones
+          if (e.edif) { if (e.tipo === 'aerodromo') for (const t in UNID) if (UNID[t].aire && UNID[t].radioVuelo) aro(e, UNID[t].radioVuelo); if (EDIF[e.tipo].intercepta) aro(e, EDIF[e.tipo].intercepta); if (EDIF[e.tipo].radioDron) aro(e, W.dronesDe(m, e).radio); }
+          else if (UNID[e.tipo].radioDron) aro({ id: e.id, cx: e.x, cy: e.y }, W.dronesDe(m, e).radio); // hasta dónde llegan sus drones
           else if (UNID[e.tipo].aire && e.casa && m.porId.has(e.casa)) aro(m.porId.get(e.casa), UNID[e.tipo].radioVuelo);
         }
         ctx.setLineDash([]); ctx.globalAlpha = 1;
@@ -5093,7 +5140,7 @@ globalThis.W = { VERSION: 'versión 63' };
         } else modo = null;
       }
       if (modo === 'barrido' && raton.dentro) { // zona que revelará el barrido
-        ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.setLineDash([6, 4]); ctx.beginPath(); ctx.arc(raton.x, raton.y, W.INTEL.barrido.radio * z, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+        ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.setLineDash([6, 4]); ctx.beginPath(); ctx.arc(raton.x, raton.y, W.INTEL[barridoClave].radio * z, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
       }
       for (let k = avisos.length - 1, fila = 0; k >= 0; k--) { // avisos, arriba al centro
         const a = avisos[k], edad = (performance.now() - a.t0) / 6000;
@@ -5202,6 +5249,8 @@ globalThis.W = { VERSION: 'versión 63' };
           if (d.derribo) { estallido(d.x2, d.y2, 2); aviso(d.j === YO ? 'Misil enemigo derribado' : 'Te han derribado un misil'); son.explosion(Math.max(0.2, cerca(d.x2, d.y2)), paneo(d.x2), false); }
         } else if (d.tipo === 'misilListo') {
           if (d.j === YO) { aviso(MIS[d.clase].nombre + ' listo en la misilera'); son.unidadLista(); }
+        } else if (d.tipo === 'infiltrado') {
+          if (d.j === YO) { aviso('Espía infiltrado: ves lo que produce el rival'); senales.push({ k: 'onda', x: d.x1, y: d.y1, r: 2, t0: performance.now(), dur: 900 }); }
         } else if (d.tipo === 'sinEnlace') {
           if (d.j === YO) { aviso('Un puesto de avanzada se ha quedado sin enlace aéreo'); son.alerta(); }
         } else if (d.tipo === 'aterriza') {
@@ -5341,7 +5390,8 @@ globalThis.W = { VERSION: 'versión 63' };
       b.firstChild.textContent = it.nombre; b.title = it.nombre + '. ' + it.que;
       b.addEventListener('click', () => {
         if (J.nivel < it.nivel || J.info < it.info) return;
-        if (clave === 'barrido') modo = 'barrido'; else { W.orden(m, { t: 'intel', j: YO, clave }); son.orden(); }
+        if (it.pide && !J.cuenta[it.pide]) { aviso('Hace falta: ' + EDIF[it.pide].nombre.toLowerCase()); return; }
+        if (it.zona) { modo = 'barrido'; barridoClave = clave; } else { W.orden(m, { t: 'intel', j: YO, clave }); son.orden(); }
       });
       $('bIntel').appendChild(b);
       botonesIntel.push({ b, clave, it, c: b.lastChild });
@@ -5371,7 +5421,7 @@ globalThis.W = { VERSION: 'versión 63' };
       if ($('hechas').textContent !== th) $('hechas').textContent = th;
       hayTecG = hayTec;
       for (const o of botonesIntel) {
-        const falta = J.nivel < o.it.nivel, clase = 'cas txt' + (falta ? ' no' : J.info < o.it.info ? ' caro' : ''), txt = falta ? 'nivel ' + o.it.nivel : o.it.info + ' inf';
+        const sinEd = o.it.pide && !J.cuenta[o.it.pide], falta = J.nivel < o.it.nivel || sinEd, clase = 'cas txt' + (falta ? ' no' : J.info < o.it.info ? ' caro' : ''), txt = sinEd ? 'pide central' : falta ? 'nivel ' + o.it.nivel : o.it.info + ' inf';
         if (o.b.className !== clase) o.b.className = clase;
         if (o.c.textContent !== txt) o.c.textContent = txt;
       }
@@ -5494,12 +5544,12 @@ globalThis.W = { VERSION: 'versión 63' };
       patio: 'El centro de la base: desde él se encargan los edificios. Si pierdes todos, pierdes la partida.', central: 'Da energía a los edificios de su red.', refineria: 'Donde descargan las cosechadoras; trae una.', bomba: 'Da agua, que es el tope de tropa. Va junto al agua.',
       cuartel: 'Produce la infantería.', extractor: 'Saca petróleo de un yacimiento.', fabrica: 'Produce los vehículos.', torreta: 'Defensa fija contra tierra y aire.', torreCanon: 'Defensa pesada de largo alcance contra blindados.', aerodromo: 'Produce y aloja hasta cinco aviones.',
       antiaerea: 'Defensa fija solo contra el aire: aviones y drones.', estacion: 'Sobre un campo de conocimiento da información rápido; aloja la inteligencia.', laboratorio: 'Da información en la base, sin campo, más despacio. Vale como estación.', obras: 'Produce las unidades civiles: ingeniero civil y excavadora.',
-      deposito: 'Conectado a tu red, crea una zona con suministro donde también puedes construir.', misilera: 'Fabrica, guarda y lanza misiles balísticos.', interceptor: 'Derriba los misiles enemigos que entran en su radio.', estDrones: 'Mantiene dos drones de reconocimiento vigilando a su alrededor.',
+      deposito: 'Conectado a tu red, crea una zona con suministro donde también puedes construir.', misilera: 'Fabrica, guarda y lanza misiles balísticos.', interceptor: 'Derriba los misiles enemigos que entran en su radio.', estDrones: 'Mantiene dos drones de reconocimiento vigilando a su alrededor. Mejorada lleva además bombarderos y kamikazes, y guarda las tecnologías del operador.', inteligencia: 'Entrena espías, aloja dos drones espía de largo alcance y permite el mapeo satelital.',
       logistica: 'En la base: de aquí salen los helicópteros que mantienen los puestos de avanzada, y tiene pista para trasladar infantería.', avanzada: 'No se construye: lo despliega el puesto móvil. Con enlace aéreo está en tu red, cura a la infantería cercana y tiene pista.',
       avanzadaMovil: 'Se despliega lejos como puesto de avanzada: red, hospital y pista sin tender líneas.',
       torretaMuro: 'Torreta que se monta sobre un muro reforzado tuyo.', camara: 'Ve lejos y en redondo, descubre a los escondidos y avisa si entra un enemigo.',
       infanteria: 'Barata y versátil; captura puestos, cava y ocupa trincheras.', antitanque: 'Infantería con cohetes: contra vehículos y aviones.', explorador: 'Rápido y ve lejos; explora solo con E.', ingeniero: 'Repara solo vehículos y edificios; cava más rápido.', medico: 'Cura solo a la infantería herida cercana.',
-      francotirador: 'Mata infantería desde muy lejos; se esconde.', gatling: 'Equipo de dos: tarda en montar, y montada tritura infantería y aviones bajos.', hacker: 'Apaga a distancia un vehículo o edificio enemigo unos segundos; cuesta información.', operador: 'Parado, despliega un dron de reconocimiento.',
+      francotirador: 'Mata infantería desde muy lejos; se esconde.', gatling: 'Equipo de dos: tarda en montar, y montada tritura infantería y aviones bajos.', hacker: 'Apaga a distancia un vehículo o edificio enemigo unos segundos; cuesta información.', operador: 'Parado, despliega un dron de reconocimiento; con las tecnologías de la estación de drones, también kamikazes y un bombardero.', espia: 'Pasa inadvertido aunque se mueva. Junto a un edificio enemigo ves lo que produce el rival y ganas información.', dronEspia: 'Vuela muy lejos y mucho rato desde su central; no ataca.',
       tanque: 'El vehículo de combate básico.', artilleria: 'Dispara muy lejos, en área, a lo que vea cualquiera de los tuyos.', pesado: 'Tanque lento, muy duro y de gran pegada.', blindado: 'Rápido, con ametralladora: contra infantería.', antiaereoMovil: 'Antiaérea sobre ruedas para acompañar al ejército.',
       transporte: 'Lleva infantería dentro, rápido.', lanzacohetes: 'Salvas de cohetes a mucha distancia, sobre una zona.', mando: 'Los tuyos a su alrededor ven en redondo y giran más rápido; interfiere drones enemigos. Gasta información.', comandoDrones: 'Lleva drones de reconocimiento, bombarderos y kamikazes que atacan solos.',
       patioMovil: 'Se despliega como un patio nuevo donde lo lleves.', cosechadora: 'Recoge minerales (y chatarra) y los lleva a la refinería.', excavadora: 'Traza caminos militares: abre el bosque y tiende puentes.', civil: 'Conecta edificios con líneas de servicio y levanta muros, puertas y alambradas.',
@@ -5510,7 +5560,7 @@ globalThis.W = { VERSION: 'versión 63' };
       const pide = (d) => (d.nivel > 1 ? ' Nivel ' + d.nivel + '.' : '') + (d.req && d.req.length ? ' Pide: ' + d.req.map((r) => EDIF[r].nombre.toLowerCase()).join(', ') + '.' : '');
       let h = '<h3>Edificios (desde el patio)</h3>';
       for (const t in EDIF) if (!EDIF[t].infra) h += fila(t, EDIF[t].nombre, EDIF[t].oculto ? 'se despliega' : precio(EDIF[t]) || '—', (QUE[t] || '') + pide(EDIF[t]));
-      const grupos = [['cuartel', 'Infantería (cuartel)'], ['fabrica', 'Vehículos (fábrica)'], ['obras', 'Civiles (obras civiles)'], ['aerodromo', 'Aviación (aeródromo)']];
+      const grupos = [['cuartel', 'Infantería (cuartel)'], ['fabrica', 'Vehículos (fábrica)'], ['obras', 'Civiles (obras civiles)'], ['aerodromo', 'Aviación (aeródromo)'], ['inteligencia', 'Inteligencia (central de inteligencia)']];
       for (const [lugar, titulo] of grupos) { h += '<h3>' + titulo + '</h3>'; for (const t in UNID) if (!UNID[t].mini && W.lugarDe(UNID[t]) === lugar) h += fila(t, UNID[t].nombre, precio(UNID[t]), (QUE[t] || '') + pide(UNID[t])); }
       h += '<h3>Drones (los saca su portador)</h3>' + fila('dronRec', 'De reconocimiento', '40', 'Da vueltas alrededor del portador y ve.') + fila('dronFpv', 'Kamikaze', '40 por salida', 'Un solo uso, contra vehículos y edificios armados.') + fila('dronBomba', 'Bombardero', '15 por salida', 'Suelta una granada sobre la infantería y vuelve a recargar.');
       h += '<h3>Muros (ingeniero civil)</h3>'; for (const k in W.MUROS) h += fila('', W.MUROS[k].nombre, W.MUROS[k].costo + ' por celda', W.MUROS[k].que + (W.MUROS[k].nivel ? ' Nivel ' + W.MUROS[k].nivel + '.' : ''));
@@ -5521,7 +5571,7 @@ globalThis.W = { VERSION: 'versión 63' };
     $('abreGuia').addEventListener('click', () => { pintarGuia(); $('guia').hidden = false; });
     $('cierraGuia').addEventListener('click', () => { $('guia').hidden = true; });
     $('guia').addEventListener('click', (ev) => { if (ev.target === $('guia')) $('guia').hidden = true; });
-    const conDrones = () => unidadesSel().filter((u) => u.j === YO && UNID[u.tipo].drones && UNID[u.tipo].drones.fpv);
+    const conDrones = () => unidadesSel().filter((u) => u.j === YO && UNID[u.tipo].drones && (W.dronesDe(m, u).fpv || W.dronesDe(m, u).bomba));
     $('dronAtk').addEventListener('click', () => { const us = conDrones(); if (us.length) W.orden(m, { t: 'dronAtk', j: YO, ids: us.map((u) => u.id), on: us.some((u) => u.dronAtk === false) }); });
     $('verRed').addEventListener('click', () => { if (conRed) verRed = !verRed; else aviso('Partida clásica: sin red'); });
     $('retiro').addEventListener('click', () => { const us = paraRetiro(); if (us.length) W.orden(m, { t: 'retiro', j: YO, ids: us.map((u) => u.id), on: !us.every((u) => u.retira) }); });
@@ -5548,7 +5598,7 @@ globalThis.W = { VERSION: 'versión 63' };
         if (us.some((u) => UNID[u.tipo].plazas)) L.push('<b>transporte: la infantería sube con clic derecho sobre él · ' + k('U') + ' descargar</b>');
         if (us.some((u) => UNID[u.tipo].mando)) L.push('<b>mando: los tuyos en su radio ven en redondo y giran más rápido; gasta información</b>');
         if (us.some((u) => UNID[u.tipo].despliega)) L.push('<b>patio móvil: ' + k('D') + ' lo despliega aquí como patio nuevo (no se repliega)</b>');
-        if (us.some((u) => UNID[u.tipo].drones)) L.push('<b>drones: los de reconocimiento dan vueltas solos; el operador solo los despliega parado; los de ataque del comando salen solos (clic derecho en un enemigo: preferencia)</b>');
+        if (us.some((u) => UNID[u.tipo].drones)) L.push('<b>drones: los de reconocimiento dan vueltas solos; el operador solo los despliega parado; los de ataque salen solos (clic derecho en un enemigo: preferencia); la estación mejora con su botón y el operador con tecnologías de la estación</b>');
         if (us.some((u) => UNID[u.tipo].hackea)) L.push('<b>hacker: clic derecho en un vehículo o edificio enemigo lo apaga unos segundos · ' + W.ECON.hackInfo + ' de información</b>');
         if (us.some((u) => UNID[u.tipo].monta)) L.push('<b>gatling: quieta se monta sola (3 s) y entonces dispara; para moverse desmonta</b>');
         if (us.some((u) => UNID[u.tipo].tiende)) L.push('<b>ingeniero civil: ' + k('J') + ' conectar edificios con una línea de servicio (energía y red)</b>');
@@ -5776,7 +5826,7 @@ globalThis.W = { VERSION: 'versión 63' };
           const q = { sinAgua: !!enCurso && enCurso.sinAgua };
           if (n) { cuenta = '×' + n; clase += ' hay'; }
           if (enCurso) { p = enCurso.prog / d.tiempo; if (q.sinAgua) txt = 'falta agua'; }
-          if (d.aire && J.cuenta.aerodromo) { const c = W.cupoAire(m, YO); if (c.hay >= c.cupo) { txt = 'cupo ' + c.hay + '/' + c.cupo; clase += ' caro'; } }
+          if (d.aire && J.cuenta[W.lugarDe(d)]) { const c = W.cupoAire(m, YO, d.lugar === 'inteligencia'); if (c.hay >= c.cupo) { txt = 'cupo ' + c.hay + '/' + c.cupo; clase += ' caro'; } }
           if (!req) clase += ' no'; else if (caro || (n && q.sinAgua)) clase += ' caro';
         }
         if (o.b.className !== clase) o.b.className = clase;
@@ -5844,7 +5894,7 @@ globalThis.W = { VERSION: 'versión 63' };
           if (W.puedeColocar(m, YO, tipoColocar, p.x, p.y)) { W.orden(m, { t: 'colocar', j: YO, tipo: tipoColocar, x: p.x, y: p.y }); modo = null; }
           return;
         }
-        if (modo === 'barrido') { W.orden(m, { t: 'intel', j: YO, clave: 'barrido', x: wx, y: wy }); son.orden(); modo = null; return; }
+        if (modo === 'barrido') { W.orden(m, { t: 'intel', j: YO, clave: barridoClave, x: wx, y: wy }); son.orden(); modo = null; return; }
         if (modo === 'quitarMuro') { // derribar muro propio, celda a celda
           const c = Math.floor(wy) * N + Math.floor(wx);
           if (m.muro && m.muro[c] && m.muroJ[c] === YO + 1) { W.orden(m, { t: 'quitarMuro', j: YO, c }); son.colocar(); } else aviso('Ahí no hay un muro tuyo');
@@ -5921,7 +5971,7 @@ globalThis.W = { VERSION: 'versión 63' };
         }
         const ids = us.map((u) => u.id), o = entEn(wx, wy), c = Math.floor(wy) * N + Math.floor(wx);
         if (o && o.j !== YO) {
-          { const cd = us.filter((u) => UNID[u.tipo].drones && UNID[u.tipo].drones.fpv).map((u) => u.id); if (cd.length) { W.orden(m, { t: 'dronObj', j: YO, ids: cd, obj: o.id }); marca(wx, wy, P.mal); son.orden(); if (cd.length === us.length) return; } }
+          { const cd = us.filter((u) => UNID[u.tipo].drones && W.dronesDe(m, u).fpv).map((u) => u.id); if (cd.length) { W.orden(m, { t: 'dronObj', j: YO, ids: cd, obj: o.id }); marca(wx, wy, P.mal); son.orden(); if (cd.length === us.length) return; } }
           { const hk = us.filter((u) => UNID[u.tipo].hackea).map((u) => u.id); if (hk.length) { if (W.hackeable(us.find((u) => UNID[u.tipo].hackea), o)) { W.orden(m, { t: 'hackear', j: YO, ids: hk, obj: o.id }); marca(wx, wy, P.mal); son.orden(); } else aviso('El hacker solo puede con vehículos y edificios'); if (hk.length === us.length) return; } }
           if (!us.some((u) => UNID[u.tipo].arma && W.puedeAtacar(u, o))) aviso(UNID[o.tipo] && UNID[o.tipo].aire ? 'Estas unidades no alcanzan a los aviones' : 'Estas unidades no pueden atacar eso');
           W.orden(m, { t: 'atacar', j: YO, ids, obj: o.id, enc }); marca(wx, wy, P.mal); return;

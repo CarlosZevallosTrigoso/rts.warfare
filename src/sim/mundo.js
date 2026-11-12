@@ -205,10 +205,19 @@
   // Cada portador (estación, operador o comando de drones) mantiene los suyos: repone los que le derriban, uno cada cierto tiempo y
   // pagándolo, y manda los de ataque contra lo que su bando tenga a la vista dentro de su radio. Si el portador cae, caen sus drones.
   const DRON = { rec: 'dronRec', bomba: 'dronBomba', fpv: 'dronFpv' };
+  // La dotación de drones de un portador: la de su ficha, más lo que le den las mejoras (la estación, por nivel; el operador, por tecnología).
+  W.dronesDe = function (m, e) {
+    const d = e.edif ? EDIF[e.tipo] : UNID[e.tipo]; if (!d.drones) return null;
+    const J = m.jug[e.j], n = d.dronesN && d.dronesN[e.nivelE || 1];
+    if (n) return n;
+    if (e.tipo === 'operador' && (J.mejoras.dronesFpv || J.mejoras.dronesPes)) return { rec: d.drones.rec, fpv: J.mejoras.dronesFpv ? 2 : 0, bomba: J.mejoras.dronesPes ? 1 : 0, radio: d.radioDron + (J.mejoras.dronesPes ? 4 : 0) };
+    return { rec: d.drones.rec || 0, bomba: d.drones.bomba || 0, fpv: d.drones.fpv || 0, radio: d.radioDron };
+  };
   function tickPortadores(m) {
     for (const e of m.ents) {
       const d = e.edif ? EDIF[e.tipo] : UNID[e.tipo];
       if (!d.drones || e.vida <= 0 || e.infra) continue;
+      const dn = W.dronesDe(m, e);
       const J = m.jug[e.j], x = posX(e), y = posY(e), N = m.N;
       if (!e.dr) e.dr = { rec: [], bomba: [], fpv: [] };
       for (const k in e.dr) e.dr[k] = e.dr[k].filter((id) => { const q = m.porId.get(id); return q && q.vida > 0; });
@@ -216,28 +225,42 @@
       if (!activo) continue;
       const saca = (rol, obj) => { const q = crearUnidad(m, e.j, DRON[rol], Math.floor(y) * N + Math.floor(x)); q.x = q.px = x; q.y = q.py = y; q.base = e.id; q.rol = rol; q.fase = (e.id * 1.7 + e.dr[rol].length * 2.1) % TAU; q.obj = obj || 0; q.est = rol === 'bomba' ? 'espera' : ''; e.dr[rol].push(q.id); return q; };
       for (const rol of ['rec', 'bomba']) { // reconocimiento y bombarderos: se reponen de uno en uno
-        if (!d.drones[rol] || e.dr[rol].length >= d.drones[rol] || m.t < (e.drListo || 0)) continue;
+        if (!dn[rol] || e.dr[rol].length >= dn[rol] || m.t < (e.drListo || 0)) continue;
         const precio = UNID[DRON[rol]].costo, primero = !e.drHubo; // los primeros vienen con el portador; los repuestos se pagan
         if (!primero && J.minerales < precio && !J.dios) continue;
         if (!primero && !J.dios) J.minerales -= precio;
-        saca(rol); e.drListo = m.t + (e.dr.rec.length + e.dr.bomba.length >= (d.drones.rec || 0) + (d.drones.bomba || 0) ? ECON.dronRepone : 20);
-        if (e.dr.rec.length + e.dr.bomba.length >= (d.drones.rec || 0) + (d.drones.bomba || 0)) e.drHubo = true;
+        saca(rol); e.drListo = m.t + (e.dr.rec.length + e.dr.bomba.length >= (dn.rec || 0) + (dn.bomba || 0) ? ECON.dronRepone : 20);
+        if (e.dr.rec.length + e.dr.bomba.length >= (dn.rec || 0) + (dn.bomba || 0)) e.drHubo = true;
         break;
       }
-      if ((!d.drones.fpv && !d.drones.bomba) || e.dronAtk === false) continue;
+      if ((!dn.fpv && !dn.bomba) || e.dronAtk === false) continue;
       // blancos: enemigos de tierra a la vista de su bando dentro del radio. El kamikaze va por vehículos y edificios con arma; el bombardero, por infantería.
       let veh = null, inf = null, dv = Infinity, di = Infinity; const pri = e.dronObj ? m.porId.get(e.dronObj) : null;
       for (const o of m.ents) {
         if (o.j === e.j || o.vida <= 0 || o.infra || (!o.edif && UNID[o.tipo].aire)) continue;
         const ox = posX(o), oy = posY(o), dd = Math.hypot(ox - x, oy - y);
-        if (dd > d.radioDron || m.niebla[e.j][Math.floor(oy) * N + Math.floor(ox)] !== 2 || oculta(m, o)) continue;
+        if (dd > dn.radio || m.niebla[e.j][Math.floor(oy) * N + Math.floor(ox)] !== 2 || oculta(m, o)) continue;
         const k = o === pri ? -1000 : 0;
         if (o.edif ? !!EDIF[o.tipo].arma || o === pri : UNID[o.tipo].cat === 'veh') { const yaVan = e.dr.fpv.filter((id) => m.porId.get(id).obj === o.id).length; if (yaVan < 2 && dd + k + (o.edif ? 6 : 0) < dv) { dv = dd + k + (o.edif ? 6 : 0); veh = o; } }
         else if (!o.edif && dd + k < di) { di = dd + k; inf = o; }
       }
-      if (d.drones.fpv && veh && e.dr.fpv.length < d.drones.fpv && m.t >= (e.fpvT || 0) && (J.minerales >= ECON.dronFpv || J.dios)) { if (!J.dios) J.minerales -= ECON.dronFpv; saca('fpv', veh.id); e.fpvT = m.t + ECON.dronFpvCada; }
+      if (dn.fpv && veh && e.dr.fpv.length < dn.fpv && m.t >= (e.fpvT || 0) && (J.minerales >= ECON.dronFpv || J.dios)) { if (!J.dios) J.minerales -= ECON.dronFpv; saca('fpv', veh.id); e.fpvT = m.t + ECON.dronFpvCada; }
       const blanco = inf || veh;
       if (blanco) for (const id of e.dr.bomba) { const q = m.porId.get(id); if (q.est === 'espera' && q.recarga <= 0 && (J.minerales >= ECON.dronBomba || J.dios)) { if (!J.dios) J.minerales -= ECON.dronBomba; q.obj = blanco.id; q.est = 'ir'; break; } }
+    }
+  }
+  // ---------- espías ----------
+  // Un espía a pocas celdas de un edificio enemigo: su bando ve los recursos del rival y lo que produce (como «interceptar»), y gana información.
+  function tickEspias(m) {
+    const g = m.gr; if (!g) return;
+    for (const u of g.us) {
+      if (!UNID[u.tipo].espia || u.vida <= 0) continue;
+      let cerca = false;
+      for (const e of g.edifs) if (e.j !== u.j && e.vida > 0 && dist(u.x, u.y, e) <= ECON.espiaRadio) { cerca = true; break; }
+      if (cerca !== !!u.infiltrado) { u.infiltrado = cerca; if (cerca) m.efectos.push({ tipo: 'infiltrado', x1: u.x, y1: u.y, j: u.j, t: m.t }); }
+      if (!cerca) continue;
+      const J = m.jug[u.j]; J.intercepta = Math.max(J.intercepta || 0, m.t + 30);
+      if (m.t % 40 === 0) J.info += ECON.espiaInfo;
     }
   }
   // ---------- puente aéreo ----------
@@ -281,7 +304,7 @@
     const d = UNID[u.tipo], base = m.porId.get(u.base);
     if (!base || base.vida <= 0) { u.vida = 0; return; } // sin portador, cae
     if (m.t - (u.tInterf === undefined ? -99 : u.tInterf) <= 12) { u.vida -= 1.2; if (u.vida <= 0) m.efectos.push({ tipo: 'interferido', x1: u.x, y1: u.y, j: u.j, t: m.t }); return; } // interferido por un vehículo de mando enemigo: pierde el enlace y cae
-    const bx = posX(base), by = posY(base), cfg = base.edif ? EDIF[base.tipo] : UNID[base.tipo];
+    const bx = posX(base), by = posY(base), cfg = { radioDron: W.dronesDe(m, base).radio };
     const ir = (x, y, vel) => { const dx = x - u.x, dy = y - u.y, dd = Math.hypot(dx, dy); if (dd > 0.02) u.ang = Math.atan2(dy, dx); u.v = Math.min(vel, dd); if (dd > 1e-6) { u.x += (dx / dd) * u.v; u.y += (dy / dd) * u.v; } return dd; };
     const orbita = (r) => { const a = u.fase + m.t * (0.6 / Math.max(3, r)) * 0.33; ir(bx + Math.cos(a) * r, by + Math.sin(a) * r, d.vel); };
     const parado = base.edif || (base.orden === 'nada' && base.v < 0.001);
@@ -823,7 +846,7 @@
         return;
       case 'dronObj': { // blanco preferente para los drones de ataque de esos portadores
         const o = m.porId.get(cmd.obj); if (!o || o.j === cmd.j) return;
-        for (const u of propias(m, cmd)) if (UNID[u.tipo].drones && UNID[u.tipo].drones.fpv) { u.dronObj = o.id; u.dronAtk = true; }
+        for (const u of propias(m, cmd)) if (UNID[u.tipo].drones && W.dronesDe(m, u).fpv) { u.dronObj = o.id; u.dronAtk = true; }
         return;
       }
       case 'murar': { // el ingeniero civil levanta un tramo recto de muro (tipo: clave de W.MUROS) de una celda a otra; con enc, lo añade a lo que lleva
@@ -975,7 +998,7 @@
       case 'entrenar': {
         const d = UNID[cmd.tipo];
         if (!d || !W.disponible(m, cmd.j, d) || !W.puedePagar(J, d)) return;
-        if (d.aire) { const c = W.cupoAire(m, cmd.j); if (c.hay >= c.cupo) return; } // cada aeródromo aloja un número limitado de aviones
+        if (d.aire) { const c = W.cupoAire(m, cmd.j, d.lugar === 'inteligencia'); if (c.hay >= c.cupo) return; } // cada aeródromo aloja un número limitado de aviones
         // Va a la cola de un edificio: de los indicados (cmd.ids) o de todos los del tipo, el que la tenga más corta.
         let fab = null;
         for (const e of m.ents) {
@@ -1040,9 +1063,9 @@
       }
       case 'intel': { // usos de inteligencia: se pagan con información y piden una estación en pie
         const it = INTEL[cmd.clave];
-        if (!it || !J.cuenta.estacion || J.nivel < it.nivel || J.info < it.info) return;
+        if (!it || !(J.cuenta.estacion || J.cuenta.inteligencia) || (it.pide && !J.cuenta[it.pide]) || J.nivel < it.nivel || J.info < it.info) return;
         J.info -= it.info;
-        if (cmd.clave === 'barrido') m.barridos.push({ j: cmd.j, x: cmd.x, y: cmd.y, r: it.radio, hasta: m.t + it.dura });
+        if (it.zona) m.barridos.push({ j: cmd.j, x: cmd.x, y: cmd.y, r: it.radio, hasta: m.t + it.dura });
         else if (cmd.clave === 'interceptar') J.intercepta = m.t + it.dura;
         else { const f = m.niebla[cmd.j]; for (let i = 0; i < f.length; i++) if (!f[i]) f[i] = 1; m.nieblaV++; }
         return;
@@ -1323,8 +1346,10 @@
   // Escondida: infantería quieta en el bosque (o un francotirador quieto en cualquier parte) que no ha disparado hace poco.
   // El enemigo no la ve ni la ataca por su cuenta hasta tenerla a un par de celdas.
   function oculta(m, e) {
-    if (e.edif || e.orden !== 'nada' || e.v > 0.001 || m.t - (e.tDisparo === undefined ? -999 : e.tDisparo) < 60 || m.t - (e.camT === undefined ? -999 : e.camT) < 20) return false; // (una cámara enemiga cerca la descubre)
+    if (e.edif || m.t - (e.camT === undefined ? -999 : e.camT) < 20) return false; // (una cámara enemiga cerca la descubre)
     const d = UNID[e.tipo];
+    if (d.espia) return true; // el espía pasa inadvertido también en movimiento
+    if (e.orden !== 'nada' || e.v > 0.001 || m.t - (e.tDisparo === undefined ? -999 : e.tDisparo) < 60) return false;
     return d.cat === 'inf' && (d.sigilo || m.mapa.terreno[Math.floor(e.y) * m.N + Math.floor(e.x)] === T.BOSQUE);
   }
   W.oculta = oculta;
@@ -1558,9 +1583,9 @@
   function aerodromoLibre(m, u) {
     let mejor = null, md = Infinity;
     for (const e of m.ents) {
-      if (!e.edif || e.j !== u.j || e.tipo !== 'aerodromo' || e.vida <= 0) continue;
+      if (!e.edif || e.j !== u.j || e.tipo !== (W.lugarDe(UNID[u.tipo]) === 'inteligencia' ? 'inteligencia' : 'aerodromo') || e.vida <= 0) continue; // el dron espía vive en su central
       const dd = Math.hypot(e.cx - u.x, e.cy - u.y);
-      if (dd < md && avionesDe(m, e) - (u.casa === e.id ? 1 : 0) < ECON.cupoAviones) { md = dd; mejor = e; }
+      if (dd < md && avionesDe(m, e) - (u.casa === e.id ? 1 : 0) < (EDIF[e.tipo].hangar || ECON.cupoAviones)) { md = dd; mejor = e; }
     }
     return mejor;
   }
@@ -1572,10 +1597,10 @@
     u.x = base.cx + SLOTS[s][0]; u.y = base.cy + SLOTS[s][1]; u.px = u.x; u.py = u.y; u.ang = u.angT = -Math.PI / 2;
   }
   // Aviones y cupo de un jugador (los que vuelan, los posados y los encargados).
-  W.cupoAire = function (m, j) {
+  W.cupoAire = function (m, j, esp) { // esp: el cupo de drones espía (por central de inteligencia), aparte del de los aeródromos
     const J = m.jug[j]; let hay = 0;
-    for (const t in UNID) if (UNID[t].aire && !UNID[t].mini) hay += (J.cuenta[t] || 0) + J.colas[t].n;
-    return { hay, cupo: ECON.cupoAviones * (J.cuenta.aerodromo || 0) };
+    for (const t in UNID) if (UNID[t].aire && !UNID[t].mini && (UNID[t].lugar === 'inteligencia') === !!esp) hay += (J.cuenta[t] || 0) + J.colas[t].n;
+    return { hay, cupo: esp ? EDIF.inteligencia.hangar * (J.cuenta.inteligencia || 0) : ECON.cupoAviones * (J.cuenta.aerodromo || 0) };
   };
   // Devuelve true si este tick el avión lo pasa posado o volviendo a su aeródromo.
   function tickVuelo(m, u) {
@@ -1962,7 +1987,7 @@
       if (fab.prog > q.prog) q.prog = fab.prog;
       if (fab.prog < UNID[tipo].tiempo) continue;
       fab.cola.shift(); fab.pago.shift(); fab.prog = 0; q.n--; J.aguaUso += UNID[tipo].agua || 0;
-      if (fab.bucle && (cat !== 'aire' || W.cupoAire(m, j).hay + 1 < W.cupoAire(m, j).cupo)) { fab.cola.push(tipo); fab.pago.push(false); q.n++; }
+      if (fab.bucle && (cat !== 'aire' || W.cupoAire(m, j, UNID[tipo].lugar === 'inteligencia').hay + 1 < W.cupoAire(m, j, UNID[tipo].lugar === 'inteligencia').cupo)) { fab.cola.push(tipo); fab.pago.push(false); q.n++; }
       const u = crearUnidad(m, j, tipo, cat === 'aire' ? Math.floor(fab.cy) * m.N + Math.floor(fab.cx) : W.cercaLibre(m, fab.cx, fab.y + fab.tam + 0.5, cat === 'veh'));
       if (cat === 'aire') { const casa = aerodromoLibre(m, u) || fab; posar(m, u, casa); } // el avión nace posado en un aeródromo con sitio
       if (fab.reunion) { // va al punto de reunión del edificio
@@ -1984,7 +2009,7 @@
   // todos: patio) y los edificios se reparan solos, más despacio.
   const LUGAR = { inf: 'cuartel', veh: 'fabrica', aire: 'aerodromo' }; // dónde se produce y se repara cada categoría
   W.lugarDe = (d) => d.lugar || LUGAR[d.cat]; // las unidades civiles salen de Obras civiles
-  W.PRODUCE = { cuartel: true, fabrica: true, aerodromo: true, obras: true };
+  W.PRODUCE = { cuartel: true, fabrica: true, aerodromo: true, obras: true, inteligencia: true };
   function curar(m) {
     const talleres = [[], []];
     for (const e of m.ents) if (e.edif && (e.tipo === 'patio' || e.tipo === 'cuartel' || e.tipo === 'fabrica' || e.tipo === 'aerodromo')) talleres[e.j].push(e);
@@ -2159,7 +2184,7 @@
     if (m.t % 10 === 0) { curar(m); colmena(m); }
 
     if (m.redSucia || !m.cob || m.t - m.redT >= 100) calcularRed(m);
-    if (m.t % 10 === 0) { tickTrincheras(m); tickCamaras(m); tickPortadores(m); tickPuenteAereo(m); }
+    if (m.t % 10 === 0) { tickTrincheras(m); tickCamaras(m); tickPortadores(m); tickPuenteAereo(m); tickEspias(m); }
     if (m.t % 10 === 0 && m.logistica !== false) { // suministro: fuera de la cobertura el contador sube; dentro, baja rápido. Los aviones repostan en su base: no cuenta.
       for (const u of m.ents) { if (u.edif || UNID[u.tipo].aire) continue; const dentro = m.cob[u.j][Math.floor(u.y) * m.N + Math.floor(u.x)] || m.jug[u.j].dios; u.sinSum = dentro ? Math.max(0, (u.sinSum || 0) - 40) : Math.min(ECON.sinSum + 200, (u.sinSum || 0) + 10); }
     }
