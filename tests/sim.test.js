@@ -1711,6 +1711,7 @@ prueba('suministro móvil: el camión va, abastece mientras le dura la carga, vu
   W.crearEdificio(m, 0, 'central', px + dir * 4, py + 4); W.crearEdificio(m, 0, 'fabrica', px + dir * 4, py - 5);
   W.crearEdificio(m, 0, 'bomba', px, py + 5); W.crearEdificio(m, 0, 'bomba', px, py - 4);
   const lg = W.crearEdificio(m, 0, 'logistica', px + dir * 8, py); avanza(3);
+  for (const k of [25, 50, 75]) W.crearEdificio(m, 0, 'torreRadio', px + dir * k, py - 10); // cobertura de radio hasta el frente
   const fx = px + dir * 50, tropa = []; for (let k = 0; k < 6; k++) tropa.push(W.crearUnidad(m, 0, k % 2 ? 'tanque' : 'infanteria', cel(fx + (k % 3), py + ((k / 3) | 0))));
   avanza(1200);
   assert.ok(tropa.every((u) => u.sinSum >= W.ECON.sinSum), 'lejos de la red, la tropa se queda sin suministro');
@@ -1817,6 +1818,7 @@ prueba('tanda B: el taller de campaña repara sin suministro y recupera vehícul
   m.terrenoV++;
   const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
   J.minerales = 20000; J.petroleo = 3000; J.nivel = 3;
+  for (const k of [25, 50, 75]) W.crearEdificio(m, 0, 'torreRadio', px + dir * k, py - 10); // cobertura de radio hasta el frente
   const fx = px + dir * 50;
   const tq = W.crearUnidad(m, 0, 'tanque', cel(fx, py)); avanza(1000);
   tq.vida = tq.vidaMax * 0.4; tq.tDano = m.t - 500; avanza(300);
@@ -1861,6 +1863,7 @@ prueba('tanda C: los vehículos de combate gastan combustible, se paran sin él 
   m.terrenoV++;
   const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
   J.minerales = 20000; J.petroleo = 500;
+  for (const k of [25, 50, 75]) W.crearEdificio(m, 0, 'torreRadio', px + dir * k, py - 10); // cobertura de radio hasta el frente
   const fx = px + dir * 30, tq = W.crearUnidad(m, 0, 'tanque', cel(fx, py)), inf = W.crearUnidad(m, 0, 'infanteria', cel(fx, py + 2)), cos = W.crearUnidad(m, 0, 'cosechadora', cel(fx, py + 4));
   assert.strictEqual(tq.comb, W.ECON.combMax, 'el tanque sale con el depósito lleno'); assert.strictEqual(inf.comb, undefined, 'la infantería no gasta'); assert.strictEqual(cos.comb, undefined, 'ni la cosechadora');
   // ida y vuelta fuera de la red: gasta lo que anda
@@ -1883,6 +1886,73 @@ prueba('tanda C: los vehículos de combate gastan combustible, se paran sin él 
   assert.ok(tq.comb < 100, 'sin petróleo en la reserva, no reposta');
   // partida clásica: no hay combustible
   const mc = W.crearMundo(31, { N: 128, logistica: false }); assert.strictEqual(W.crearUnidad(mc, 0, 'tanque', cel(64, 64)).comb, undefined);
+});
+
+prueba('tanda D: almacenes físicos: capacidad, lo que no cabe se pierde, y el almacén destruido deja botín', () => {
+  const m = W.crearMundo(31, { N: 128, logistica: true }), N = m.N, J = m.jug[0];
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const cel = (x, y) => y * N + x, patio = m.ents.find((e) => e.j === 0 && e.tipo === 'patio'), px = Math.floor(patio.cx), py = Math.floor(patio.cy), dir = px < 64 ? 1 : -1;
+  for (let y = py - 12; y <= py + 12; y++) for (let x = Math.min(px, px + dir * 40) - 2; x <= Math.max(px, px + dir * 40) + 2; x++) { const i = cel(x, y); if (x < 2 || y < 2 || x >= N - 2 || y >= N - 2 || m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.mapa.tipoMin[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  m.terrenoV++;
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  avanza(2); assert.strictEqual(J.capMin, 3000); assert.strictEqual(J.capPet, 500);
+  // el goteo se pierde con la caja llena; por debajo, entra
+  J.minerales = 3000; avanza(100); assert.strictEqual(J.minerales, 3000, 'con el patio lleno no entra nada'); assert.ok(J.perdido > 0 && J.lleno.minerales > 0, 'y queda apuntado que se pierde');
+  J.minerales = 2990; avanza(100); assert.strictEqual(J.minerales, 3000, 'entra solo hasta el tope');
+  J.minerales = 5000; avanza(50); assert.strictEqual(J.minerales, 5000, 'lo que ya se tenía por encima del tope no se quita');
+  // un almacén y un tanque suben la capacidad
+  W.crearEdificio(m, 0, 'central', px + dir * 4, py + 4);
+  const al = W.crearEdificio(m, 0, 'almacen', px + dir * 5, py - 4), tc = W.crearEdificio(m, 0, 'tanqueComb', px + dir * 8, py - 4); avanza(2);
+  assert.strictEqual(J.capMin, 6000); assert.strictEqual(J.capPet, 1300);
+  J.minerales = 5990; avanza(100); assert.strictEqual(J.minerales, 6000);
+  // destruido el almacén: se pierde su mitad de la caja (3000 de 6000) y la mitad de eso queda como botín en el suelo
+  J.minerales = 4000; J.petroleo = 1300; const c = cel(Math.floor(al.cx), Math.floor(al.cy)); al.vida = 0; avanza(2);
+  assert.ok(Math.abs(J.minerales - 2000) < 5, 'pierde la parte que guardaba ese almacén (quedan ' + J.minerales + ')');
+  assert.strictEqual(m.mapa.mineral[c], 1000, 'la mitad de lo perdido queda en el suelo'); assert.strictEqual(m.mapa.tipoMin[c], 3);
+  assert.strictEqual(J.capMin, 3000);
+  tc.vida = 0; avanza(2); assert.ok(Math.abs(J.petroleo - 500) < 5, 'y el tanque destruido se lleva su parte del petróleo (queda ' + J.petroleo + ')');
+  // vender no hace perder nada
+  const al2 = W.crearEdificio(m, 0, 'almacen', px + dir * 5, py - 7); avanza(2); J.minerales = 4000;
+  W.orden(m, { t: 'vender', j: 0, ids: [al2.id] }); avanza(5); assert.ok(J.minerales >= 4000, 'al vender un almacén no se pierde lo guardado');
+  // el botín lo recoge una cosechadora del rival
+  const r1 = m.jug[1].minerales, cosR = W.crearUnidad(m, 1, 'cosechadora', cel(Math.floor(al.cx) + dir * 2, Math.floor(al.cy) + 1));
+  W.crearEdificio(m, 1, 'refineria', Math.floor(al.cx) + dir * 6, Math.floor(al.cy) + 3); avanza(3);
+  W.orden(m, { t: 'cosechar', j: 1, ids: [cosR.id], x: al.cx, y: al.cy }); for (let i = 0; i < 3000 && m.mapa.mineral[c] > 0; i++) W.tick(m);
+  avanza(600); assert.ok(m.jug[1].minerales > r1 + 400, 'el rival se lleva el botín (' + Math.round(m.jug[1].minerales - r1) + ')');
+  // en la partida clásica no hay tope
+  const mc = W.crearMundo(31, { N: 128, logistica: false }); W.tick(mc); assert.strictEqual(mc.jug[0].capMin, Infinity);
+});
+
+prueba('tanda E: fuera de la cobertura de radio las unidades casi no ven y obedecen con retraso; la torre de radio lo arregla', () => {
+  const m = W.crearMundo(31, { N: 128, logistica: true }), N = m.N, J = m.jug[0];
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const cel = (x, y) => y * N + x, patio = m.ents.find((e) => e.j === 0 && e.tipo === 'patio'), px = Math.floor(patio.cx), py = Math.floor(patio.cy), dir = px < 64 ? 1 : -1;
+  for (let y = py - 14; y <= py + 14; y++) for (let x = Math.min(px, px + dir * 90) - 2; x <= Math.max(px, px + dir * 90) + 2; x++) { const i = cel(x, y); if (x < 2 || y < 2 || x >= N - 2 || y >= N - 2 || m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  m.terrenoV++;
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  const fx = px + dir * 70, cerca = W.crearUnidad(m, 0, 'infanteria', cel(px + dir * 20, py)), lejos = W.crearUnidad(m, 0, 'infanteria', cel(fx, py)), expl = W.crearUnidad(m, 0, 'explorador', cel(fx, py + 13));
+  lejos.ang = expl.ang = dir > 0 ? 0 : Math.PI; avanza(25);
+  assert.ok(!W.sinRadio(m, cerca), 'a 20 celdas del patio hay radio'); assert.ok(W.sinRadio(m, lejos), 'a 70, no'); assert.ok(!W.sinRadio(m, expl), 'el explorador lleva radio propia');
+  // visión: la unidad sin radio solo levanta la niebla de lo que tiene encima; el explorador ve con normalidad
+  assert.strictEqual(m.niebla[0][cel(fx + dir * 1, py)], 2); assert.notStrictEqual(m.niebla[0][cel(fx + dir * 6, py - 2)], 2, 'sin radio no se ve lo que ve la unidad a 6 celdas');
+  assert.strictEqual(m.niebla[0][cel(fx + dir * 8, py + 13)], 2, 'el explorador sí informa de lo que ve');
+  // órdenes: llegan a los tres segundos
+  W.orden(m, { t: 'mover', j: 0, ids: [cerca.id, lejos.id], x: fx + 0.5, y: py - 6.5 }); avanza(5);
+  assert.strictEqual(cerca.orden, 'mover', 'la que tiene radio obedece al instante'); assert.strictEqual(lejos.orden, 'nada', 'la que no, todavía no');
+  assert.ok(m.demoras.length === 1 && m.efectos.some((e) => e.tipo === 'demora') || m.demoras.length === 1);
+  avanza(W.ECON.radioDemora); assert.strictEqual(lejos.orden, 'mover', 'y obedece tres segundos después'); assert.strictEqual(m.demoras.length, 0);
+  // una torre de radio junto a ella: ve y obedece
+  W.orden(m, { t: 'detener', j: 0, ids: [lejos.id] }); avanza(W.ECON.radioDemora + 5); lejos.ang = dir > 0 ? 0 : Math.PI;
+  W.crearEdificio(m, 0, 'torreRadio', Math.floor(lejos.x) - dir * 3, Math.floor(lejos.y) + 3); avanza(25);
+  assert.ok(!W.sinRadio(m, lejos), 'con la torre hay cobertura');
+  assert.strictEqual(m.niebla[0][cel(Math.floor(lejos.x) + dir * 6, Math.floor(lejos.y))], 2, 'y vuelve a verse lo que ve');
+  W.orden(m, { t: 'mover', j: 0, ids: [lejos.id], x: lejos.x + dir * 4, y: lejos.y }); avanza(4); assert.strictEqual(lejos.orden, 'mover', 'y obedece al instante');
+  // el vehículo de mando lleva la cobertura consigo
+  const lejos2 = W.crearUnidad(m, 0, 'infanteria', cel(fx, py + 9)); avanza(25); 
+  const torre = m.ents.find((e) => e.tipo === 'torreRadio'); torre.vida = 0; avanza(25); assert.ok(W.sinRadio(m, lejos2), 'destruida la torre, se pierde la cobertura');
+  W.crearUnidad(m, 0, 'mando', cel(fx - dir * 4, py + 7)); avanza(25); assert.ok(!W.sinRadio(m, lejos2), 'un vehículo de mando cerca la devuelve');
+  // partida clásica: sin red de radio
+  const mc = W.crearMundo(31, { N: 128, logistica: false }); const uc = W.crearUnidad(mc, 0, 'infanteria', cel(100, 100)); for (let i = 0; i < 25; i++) W.tick(mc); assert.ok(!W.sinRadio(mc, uc));
 });
 
 prueba('tanda 5: puente aéreo, puesto de avanzada, hospital y traslado de infantería', () => {
@@ -2100,7 +2170,7 @@ if (!process.env.RAPIDO) prueba('fase 2c: los cinco estilos de rival juegan medi
     const m = W.crearMundo(555, { N: 256, logistica: true }), a = W.iaCrear(0, 'normal', estilo), b = W.iaCrear(1, 'normal', 'equilibrado');
     for (const J of m.jug) { J.nivel = 2; J.info = 500; J.minerales += 8000; J.petroleo += 600; } // con ventaja inicial, para que en media hora se vea el juego avanzado
     let aviones = 0, torres = 0, patios = 1, puestos = 0, primera = 0;
-    while (m.ganador < 0 && m.t < 20 * 60 * 30) {
+    while (m.ganador < 0 && m.t < 20 * 60 * 38) { // (38 minutos: con almacenes, combustible y radio, la IA tarda algo más en llegar a la aviación)
       W.iaTick(m, a); W.iaTick(m, b); W.tick(m);
       if (m.t % 200 === 0) {
         const c = m.jug[0].cuenta;

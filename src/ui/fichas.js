@@ -460,6 +460,16 @@
       c.beginPath(); c.moveTo(X(0.28), Y(0.52)); c.lineTo(X(0.28), Y(0.72)); c.moveTo(X(0.44), Y(0.52)); c.lineTo(X(0.44), Y(0.72)); c.moveTo(X(0.28), Y(0.62)); c.lineTo(X(0.44), Y(0.62)); c.stroke();
       if (e.tipo === 'logistica') { c.fillStyle = col.osc; for (const [fx, fy] of [[0.62, 0.14], [0.78, 0.14], [0.7, 0.3]]) { c.fillRect(X(fx), Y(fy), t * 0.14, t * 0.14); c.strokeRect(X(fx), Y(fy), t * 0.14, t * 0.14); } }
       else if (e.tipo === 'avanzada') { c.fillStyle = col.luz; c.fillRect(X(0.58), Y(0.12), t * 0.3, t * 0.3); c.fillStyle = s.deficit ? col.humo : col.mal; c.fillRect(X(0.61), Y(0.235), t * 0.24, t * 0.07); c.fillRect(X(0.695), Y(0.15), t * 0.07, t * 0.24); }
+    } else if (e.tipo === 'torreRadio') { // mástil con tirantes y ondas
+      const px = X(0.5), py = Y(0.56);
+      c.strokeStyle = col.luz; c.lineWidth = lw * 1.4; c.beginPath(); c.moveTo(px, Y(0.86)); c.lineTo(px, Y(0.2)); c.moveTo(X(0.26), Y(0.86)); c.lineTo(px, Y(0.42)); c.lineTo(X(0.74), Y(0.86)); c.stroke();
+      c.lineWidth = lw; for (const k of [0.16, 0.27]) { c.beginPath(); c.arc(px, Y(0.2), t * k, -Math.PI * 0.85, -Math.PI * 0.15); c.stroke(); }
+      c.fillStyle = s.deficit ? col.humo : col.mal; c.beginPath(); c.arc(px, Y(0.2), t * 0.05, 0, TAU); c.fill(); void py;
+    } else if (e.tipo === 'almacen') { // nave con tres hileras de cajas
+      c.fillStyle = col.osc; for (let fy = 0; fy < 3; fy++) for (let fx = 0; fx < 3; fx++) { c.fillRect(X(0.2 + fx * 0.22), Y(0.2 + fy * 0.22), t * 0.16, t * 0.16); }
+      c.strokeStyle = col.luz; c.lineWidth = lw; c.strokeRect(X(0.14), Y(0.14), t * 0.72, t * 0.72);
+    } else if (e.tipo === 'tanqueComb') { // dos depósitos cilíndricos vistos desde arriba
+      for (const [fx, fy] of [[0.34, 0.5], [0.68, 0.5]]) { c.fillStyle = col.luz; c.beginPath(); c.arc(X(fx), Y(fy), t * 0.15, 0, TAU); c.fill(); c.strokeStyle = col.osc; c.lineWidth = lw; c.beginPath(); c.arc(X(fx), Y(fy), t * 0.09, 0, TAU); c.stroke(); }
     } else if (e.tipo === 'inteligencia') { // una antena parabólica que barre el cielo y un ojo en la fachada
       const a = s.deficit ? -0.6 : -0.6 + Math.sin((s.tiempo + s.id * 131) * 0.0007) * 0.5, px = X(0.36), py = Y(0.42), R0 = t * 0.24;
       c.strokeStyle = col.luz; c.lineWidth = lw * 1.5; c.beginPath(); c.arc(px, py, R0, a + Math.PI * 0.5, a + Math.PI * 1.5); c.stroke();

@@ -24,7 +24,7 @@
   // pero sí sobre su recurso (sobre: tipo de sitio; juntoA: 'agua') y en terreno ya explorado.
   // da: recurso que producen solos y cada cuántos ticks dan una unidad.
   W.EDIF = {
-    patio:     { nombre: 'Patio',     tam: 3, vida: 2000, costo: 0,    tiempo: 0,   energia: 0,   vision: 8, req: [], agua: 8 },
+    patio:     { nombre: 'Patio',     tam: 3, vida: 2000, costo: 0,    tiempo: 0,   energia: 0,   vision: 8, req: [], agua: 8, guarda: { min: 3000, pet: 500 }, radioCom: 45 },
     central:   { nombre: 'Central',   tam: 2, vida: 500,  costo: 300,  tiempo: 200, energia: 100, vision: 5, req: ['patio'], mejora: true },
     refineria: { nombre: 'Refinería', tam: 3, vida: 900,  costo: 1200, tiempo: 400, energia: -30, vision: 6, req: ['central'] },
     bomba:     { nombre: 'Bomba de agua', tam: 2, vida: 450, costo: 400, tiempo: 240, energia: -15, vision: 5, req: ['central'], agua: 12, juntoA: 'agua', libre: true, mejora: true },
@@ -49,7 +49,7 @@
     // Puente aéreo. Puesto logístico: en la base; de él salen los helicópteros de carga. Puesto de avanzada: no se construye, lo despliega el puesto móvil
     // donde haga falta; mientras le llegue carga está en tu red (cobertura para suministro y para construir), cura a la infantería cercana y tiene pista.
     logistica: { nombre: 'Puesto logístico', tam: 2, vida: 700, costo: 900, tiempo: 300, energia: -20, vision: 6, req: ['fabrica'], pista: true, hangar: 2 }, // (aloja hasta dos helicópteros de suministro)
-    avanzada:  { nombre: 'Puesto de avanzada', tam: 2, vida: 800, costo: 0, tiempo: 1, energia: 0, vision: 8, req: ['logistica'], pista: true, hospital: 5, oculto: true },
+    avanzada:  { nombre: 'Puesto de avanzada', tam: 2, vida: 800, costo: 0, tiempo: 1, energia: 0, vision: 8, req: ['logistica'], pista: true, hospital: 5, oculto: true, radioCom: 25 },
     // Estación de drones: barata; mantiene dos drones de reconocimiento dando vueltas a su alrededor.
     estDrones: { nombre: 'Estación de drones', tam: 1, vida: 350, costo: 300, tiempo: 160, energia: -10, vision: 5, req: ['cuartel'], drones: { rec: 2 }, radioDron: 16, mejora: true, dronesN: { 2: { rec: 2, bomba: 1, radio: 18 }, 3: { rec: 3, bomba: 2, fpv: 2, radio: 20 } } }, // mejorada lleva más drones, y de ataque
     // Torreta de muro: solo se monta sobre un muro reforzado propio (y ahí puede ir fuera de la cobertura). Cámara: ve lejos y en redondo, descubre a los escondidos y avisa; en la cobertura o sobre un muro propio.
@@ -58,6 +58,11 @@
     // Depósito: nodo de la red. Conectado por camino (o por cercanía) a un patio, extiende la cobertura: suministro, energía y dónde se puede construir.
     // Pista avanzada: va en cualquier terreno explorado, sin red ni energía. Los helicópteros de combate pueden tomarla por base: repostan en ella y su radio de vuelo se cuenta desde allí.
     pistaAv:   { nombre: 'Pista avanzada', tam: 2, vida: 400, costo: 600, pet: 40, tiempo: 240, energia: 0, vision: 6, req: ['aerodromo'], nivel: 2, libre: true, hangar: 2, helipuerto: true },
+    // Almacenes: los minerales y el petróleo se guardan en edificios. Lo que entra con todo lleno se pierde; si destruyen uno, se pierde su parte y la mitad queda en el suelo como botín.
+    almacen:   { nombre: 'Almacén', tam: 2, vida: 700, costo: 500, tiempo: 200, energia: -5, vision: 4, req: ['refineria'], guarda: { min: 3000, pet: 0 } },
+    tanqueComb: { nombre: 'Tanque de combustible', tam: 2, vida: 450, costo: 400, tiempo: 200, energia: -5, vision: 4, req: ['refineria'], guarda: { min: 0, pet: 800 } },
+    // Torre de radio: va en cualquier terreno explorado, con su propio generador. Dentro de la cobertura de radio se ve lo que ven las unidades y las órdenes llegan al instante.
+    torreRadio: { nombre: 'Torre de radio', tam: 1, vida: 300, costo: 300, tiempo: 160, energia: 0, vision: 6, req: ['cuartel'], libre: true, radioCom: 40 },
     deposito:  { nombre: 'Depósito',  tam: 1, vida: 450,  costo: 500,  tiempo: 240, energia: -10, vision: 6, req: ['cuartel'], libre: true },
     // Infraestructura: cada tramo de camino. No se construye desde el patio (lo deja la excavadora), no ocupa celdas y no se ataca solo: hay que ordenarlo.
     // Línea de servicio: cable, tubería y pista de servicio en una pieza. Une edificios a la red; cruza cualquier terreno; no acelera a nadie.
@@ -90,7 +95,7 @@
     // (cae con su aeródromo). En patrulla, tras repostar despega y la retoma. Sin combustible ni base, cae.
     // Fase 1c. cono: medio ángulo del campo central de visión (por defecto ECON.cono; Math.PI = ve en todas direcciones).
     // repara: arregla sola los vehículos y edificios propios cercanos. cavaRapido: cava trincheras al doble de velocidad.
-    explorador:  { nombre: 'Explorador',  cat: 'inf', vida: 45,  vel: 0.10, costo: 120, tiempo: 80, blindaje: 'ligero', arma: 'pistola', vision: 10, radio: 0.10, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.03, arco: 0.5, cono: 1.4 },
+    explorador:  { enlace: true, nombre: 'Explorador',  cat: 'inf', vida: 45,  vel: 0.10, costo: 120, tiempo: 80, blindaje: 'ligero', arma: 'pistola', vision: 10, radio: 0.10, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.03, arco: 0.5, cono: 1.4 },
     ingeniero:   { nombre: 'Ingeniero',   cat: 'inf', vida: 60,  vel: 0.06, costo: 200, tiempo: 160, blindaje: 'ligero', arma: null, vision: 6, radio: 0.11, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, repara: true, cavaRapido: true, zapador: true }, // zapador: mina y desmina, tiende pontones y vuela caminos y puentes
     medico:      { nombre: 'Médico',      cat: 'inf', vida: 60,  vel: 0.06, costo: 220, tiempo: 160, blindaje: 'ligero', arma: null, vision: 6, radio: 0.11, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, cura: true },
     blindado:    { nombre: 'Blindado ligero', cat: 'veh', vida: 150, vel: 0.15, costo: 350, pet: 20, tiempo: 180, blindaje: 'pesado', arma: 'ametralladora', vision: 8, radio: 0.17, req: ['fabrica'], agua: 1, giro: 0.2, acel: 0.012, giroT: 0.3, cono: 1.2 },
@@ -120,7 +125,7 @@
     hacker:      { nombre: 'Hacker',      cat: 'inf', vida: 45,  vel: 0.06, costo: 400, info: 30, tiempo: 240, blindaje: 'ligero', arma: null, vision: 8, radio: 0.105, req: ['estacion'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, hackea: true, alcanceHack: 9 },
     transporte:  { nombre: 'Transporte', cat: 'veh', vida: 260, vel: 0.13, costo: 500, pet: 30, tiempo: 220, blindaje: 'pesado', arma: null, vision: 7, radio: 0.24, req: ['fabrica'], agua: 1, giro: 0.14, acel: 0.008, nivel: 2, plazas: 6 },
     lanzacohetes: { nombre: 'Lanzacohetes', cat: 'veh', vida: 200, vel: 0.07, costo: 1300, pet: 90, raros: 50, tiempo: 480, blindaje: 'pesado', arma: 'salva', vision: 7, radio: 0.23, req: ['fabrica'], agua: 2, giro: 0.07, acel: 0.004, nivel: 3, arco: 0.1, cono: 0.7 },
-    mando:       { nombre: 'Vehículo de mando', cat: 'veh', vida: 300, vel: 0.08, costo: 1200, pet: 60, tiempo: 420, blindaje: 'pesado', arma: null, vision: 8, radio: 0.24, req: ['fabrica'], agua: 2, giro: 0.1, acel: 0.005, nivel: 3, mando: 7 },
+    mando:       { nombre: 'Vehículo de mando', cat: 'veh', vida: 300, vel: 0.08, costo: 1200, pet: 60, tiempo: 420, blindaje: 'pesado', arma: null, vision: 8, radio: 0.24, req: ['fabrica'], agua: 2, giro: 0.1, acel: 0.005, nivel: 3, mando: 7, radioCom: 20, enlace: true },
     caza:        { nombre: 'Caza',        cat: 'aire', aire: true, vida: 160, vel: 0.22, costo: 900, pet: 120, tiempo: 360, blindaje: 'aire', arma: 'misil', vision: 9, radio: 0.25, req: ['aerodromo'], agua: 1, giro: 0.16, acel: 0.012, nivel: 2, fuel: 1800, arco: 0.3, radioVuelo: 70, pasada: true },
     bombardero:  { nombre: 'Bombardero',  cat: 'aire', aire: true, vida: 260, vel: 0.15, costo: 1600, pet: 200, raros: 40, tiempo: 520, blindaje: 'aire', arma: 'bomba', vision: 8, radio: 0.38, req: ['aerodromo'], agua: 2, giro: 0.09, acel: 0.008, nivel: 3, fuel: 2400, radioVuelo: 90, pasada: true },
     dron:        { nombre: 'Dron', cat: 'aire', aire: true, vida: 50, vel: 0.16, costo: 250, info: 40, tiempo: 200, blindaje: 'aire', arma: null, vision: 12, radio: 0.14, req: ['aerodromo'], agua: 0, giro: 0.2, acel: 0.01, nivel: 2, fuel: 4200, radioVuelo: 110, cono: Math.PI },
@@ -131,7 +136,7 @@
     dronBomba:   { nombre: 'Dron bombardero', cat: 'aire', aire: true, mini: true, lugar: 'ninguno', vida: 28, vel: 0.17, costo: 50, tiempo: 1, blindaje: 'aire', arma: null, vision: 5, radio: 0.13, req: [], agua: 0, giro: 0.5, acel: 0.05, cono: Math.PI },
     // Portadores. drones: cuántos de cada clase mantiene en el aire. radioDron: hasta dónde llegan desde él.
     // Espía: sin arma y oculto aunque se mueva (solo se le ve de muy cerca o con cámaras). Junto a edificios enemigos, ves lo que produce el rival y gana información.
-    espia:       { nombre: 'Espía', cat: 'inf', lugar: 'inteligencia', vida: 35, vel: 0.07, costo: 400, info: 60, tiempo: 300, blindaje: 'ligero', arma: null, vision: 10, radio: 0.105, req: ['inteligencia'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, espia: true, cono: Math.PI },
+    espia:       { enlace: true, nombre: 'Espía', cat: 'inf', lugar: 'inteligencia', vida: 35, vel: 0.07, costo: 400, info: 60, tiempo: 300, blindaje: 'ligero', arma: null, vision: 10, radio: 0.105, req: ['inteligencia'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, espia: true, cono: Math.PI },
     // Dron espía: vuela muy lejos y mucho rato desde su central; no ataca.
     dronEspia:   { nombre: 'Dron espía', cat: 'aire', aire: true, lugar: 'inteligencia', vida: 60, vel: 0.2, costo: 500, info: 80, tiempo: 300, blindaje: 'aire', arma: null, vision: 14, radio: 0.15, req: ['inteligencia'], agua: 0, giro: 0.2, acel: 0.01, nivel: 2, fuel: 9000, radioVuelo: 220, cono: Math.PI },
     operador:    { misionDron: 45, nombre: 'Operador de drones', cat: 'inf', vida: 45, vel: 0.06, costo: 150, tiempo: 120, blindaje: 'ligero', arma: null, vision: 6, radio: 0.105, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, drones: { rec: 1 }, radioDron: 12, quieto: true },
@@ -213,6 +218,7 @@
     minaCosto: 40, minaTiempo: 40, minasMax: 60, minaPisa: 0.7, minaVe: 4, desminaRadio: 5, desminaTiempo: 30, volarTiempo: 60, pontonMax: 14, pontonCelda: 12, pontonCada: 12, pontonVida: 160,
     recuperaTiempo: 160, recuperaCosto: 0.5, recuperaVida: 0.5, recuperaAuto: 10, cascoDura: 3600,
     combMax: 450, combCarga: 30, combPet: 0.02, // combustible de los vehículos de combate: celdas de autonomía, lo que repostan por ciclo (medio segundo) y el petróleo que cuesta cada celda repostada
+    radioDemora: 60, // ticks que tarda en llegar una orden a quien está fuera de la cobertura de radio
     espiaRadio: 6, espiaInfo: 2, sumiBase: 1, sumiUnidad: 0.5, sumiCarga: 40, // suministro móvil: gasto por ciclo (medio segundo) en vacío y por unidad atendida; y lo que carga por ciclo en el puesto logístico
     dronMisRadio: 8, autoReserva: 400, autoLargo: 70,
     rutaNodos: 30000, // presupuesto de celdas que se exploran por tick buscando rutas

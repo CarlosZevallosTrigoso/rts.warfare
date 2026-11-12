@@ -150,6 +150,10 @@
     // La red: terminada su vía, levanta un depósito en la punta, para que la cobertura (suministro y territorio) llegue hasta allí.
     const quiereDeposito = m.logistica !== false && ia.via && ia.viaFin && !J.cuenta.deposito && W.tieneReq(m, j, EDIF.deposito.req) && J.minerales > 900 && !!J.cuenta.obras;
     if (obra && obra.tipo === 'deposito' && ia.viaFin) donde = { cx: ia.viaFin.x, cy: ia.viaFin.y };
+    // Radio: torres escalonadas cada 38 celdas en la línea hacia el rival, para que sus oleadas vean y obedezcan a tiempo.
+    const rivB = m.mapa.bases[1 - j], rvx = rivB.x - patio.cx, rvy = rivB.y - patio.cy, rvd = Math.hypot(rvx, rvy) || 1, nTorres = J.cuenta.torreRadio || 0;
+    const quiereTorre = m.logistica !== false && !urgente && J.cuenta.fabrica && m.t > 9000 && J.minerales > 1200 && !(ia.tAhorro > 0) && !ia.pn && nTorres < Math.min(5, Math.floor((rvd - 50) / 38)) && (ia.torresHechas || 0) < 8 && W.disponible(m, j, EDIF.torreRadio); // (con la base ya en marcha y dinero de sobra; y sin reponerlas sin fin si se las tiran)
+    if (obra && obra.tipo === 'torreRadio') donde = { cx: patio.cx + (rvx / rvd) * 38 * (nTorres + 1), cy: patio.cy + (rvy / rvd) * 38 * (nTorres + 1) };
     const quiereObras = m.logistica !== false && !J.cuenta.obras && J.cuenta.cuartel && W.tieneReq(m, j, EDIF.obras.req) && J.minerales > 600 && (J.cuenta.fabrica || m.ents.some((e) => e.edif && !e.infra && e.j === j && !e.conRed)); // en cuanto tiene algo que conectar (o fábrica), sus obras civiles
     // Misiles: pasada la primera media hora y con dinero de sobra, una misilera; y un interceptor en cuanto ve volar un misil enemigo o conoce una misilera rival.
     if (!ia.misilVisto && (m.misiles.some((q) => q.j !== j) || m.ents.some((e) => e.tipo === 'misilera' && e.j !== j && m.niebla[j][Math.floor(e.cy) * m.N + Math.floor(e.cx)]))) ia.misilVisto = true;
@@ -164,13 +168,16 @@
       else if (!c.logistica && m.logistica !== false && m.t > 18000 && J.minerales > 2000 && puede('logistica')) quiereNuevo = 'logistica'; // (antes que la central de inteligencia: sin suministro, sus oleadas pelean a media fuerza)
       else if (!c.inteligencia && m.t > 24000 && J.minerales > 3200 && puede('inteligencia')) quiereNuevo = 'inteligencia';
     }
-    const plan = obra || urgente ? null : planBase || (quiereMisil ? quiereMisil : quiereObras ? 'obras' : quiereDeposito ? 'deposito' : quiereNuevo || siguienteEdificio(m, j, patio, ia.plan));
+    // Almacenes: cuando la caja roza la capacidad, otro almacén (hasta cuatro); y lo mismo con el petróleo (hasta dos tanques).
+    const quiereAlmacen = urgente || !J.cuenta.refineria ? null : isFinite(J.capMin) && J.minerales > J.capMin * 0.6 && (J.cuenta.almacen || 0) < 5 ? 'almacen' : isFinite(J.capPet) && J.petroleo > J.capPet * 0.9 && !(J.cuenta.tanqueComb || 0) && J.cuenta.fabrica && J.minerales > 1500 ? 'tanqueComb' : null; // un solo tanque, y sin prisa: a la IA el petróleo le sobra
+    const plan = obra || urgente ? null : planBase || (quiereAlmacen ? quiereAlmacen : quiereMisil ? quiereMisil : quiereObras ? 'obras' : quiereDeposito ? 'deposito' : quiereNuevo || siguienteEdificio(m, j, patio, ia.plan) || (quiereTorre ? 'torreRadio' : null)); // las torres de radio, cuando el plan de la base no pide nada
     if (obra && obra.listo) {
       const p = buscarSitio(m, j, obra.tipo, donde) || buscarSitio(m, j, obra.tipo, patio);
       if (p) { W.orden(m, { t: 'colocar', j, tipo: obra.tipo, x: p.x, y: p.y }); ia.fallos = 0; }
       else if (++ia.fallos > 15) { W.orden(m, { t: 'cancelarEdif', j, tipo: obra.tipo }); ia.fallos = 0; }
-    } else if (plan && W.puedePagar(J, EDIF[plan]) && !((ia.tAhorro > 0 || ia.pn) && plan !== 'central' && plan !== 'bomba' && plan !== planBase)) { // mientras ahorra para la segunda base, solo lo urgente
+    } else if (plan && W.puedePagar(J, EDIF[plan]) && !((ia.tAhorro > 0 || ia.pn) && plan !== 'central' && plan !== 'bomba' && plan !== planBase && plan !== quiereAlmacen)) { // mientras ahorra para la segunda base, solo lo urgente
       W.orden(m, { t: 'construir', j, tipo: plan });
+      if (plan === 'torreRadio') ia.torresHechas = (ia.torresHechas || 0) + 1;
     }
 
     // Caminos: si a sus vehículos ya casi no les quedan minerales a los que llegar (el resto está tras el bosque),
@@ -429,7 +436,7 @@
     const faltaVer = (J.cuenta.extractor || 0) < 2 || !J.cuenta.estacion;
     if (expl && (!faltaVer || !expl.explora && expl.orden === 'nada')) { if (!faltaVer) W.orden(m, { t: 'detener', j, ids: [expl.id] }); expl = null; ia.explorador = 0; }
     if (!expl && faltaVer) {
-      expl = soldados.find((u) => u.tipo === 'explorador' && u.orden === 'nada' && !u.obj) || (!J.cuenta.explorador && soldados.find((u) => u.tipo === 'infanteria' && !ia.atacantes.has(u.id) && u.orden === 'nada' && !u.obj));
+      expl = soldados.find((u) => u.tipo === 'explorador' && u.orden === 'nada' && !u.obj) || (m.logistica === false && !J.cuenta.explorador && soldados.find((u) => u.tipo === 'infanteria' && !ia.atacantes.has(u.id) && u.orden === 'nada' && !u.obj)); // (con red de radio, un soldado lejos de la base no ve casi nada: explora solo el explorador, que lleva radio propia)
       if (expl) { ia.explorador = expl.id; W.orden(m, { t: 'explorar', j, ids: [expl.id] }); }
     }
     // Patio móvil: va al campo de minerales libre más cercano que quede lejos de las dos bases, y allí se despliega.

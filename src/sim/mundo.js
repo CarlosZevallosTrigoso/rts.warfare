@@ -764,13 +764,22 @@
     g.t = m.t;
   }
 
+  // Lo que entra por cosecha o extracción cabe solo hasta la capacidad de los almacenes; lo que no cabe se pierde (y queda apuntado, para avisar).
+  function entra(m, J, rec, q) {
+    const cap = rec === 'minerales' ? J.capMin : J.capPet, cabe = J.dios || cap === undefined ? q : Math.max(0, Math.min(q, cap - J[rec]));
+    J[rec] += cabe;
+    if (cabe < q) { J.lleno = J.lleno || {}; J.lleno[rec] = m.t; J.perdido = (J.perdido || 0) + q - cabe; }
+    return cabe;
+  }
   function contar(m) {
-    for (let j = 0; j < 2; j++) { const J = m.jug[j]; J.prod = 0; J.uso = 0; J.aguaProd = 0; J.aguaUso = 0; J.cuenta = {}; }
+    const fisico = m.logistica !== false; // con almacenes: la capacidad la dan los edificios que guardan; en la partida clásica no hay tope
+    for (let j = 0; j < 2; j++) { const J = m.jug[j]; J.prod = 0; J.uso = 0; J.aguaProd = 0; J.aguaUso = 0; J.cuenta = {}; J.capMin = fisico ? 0 : Infinity; J.capPet = fisico ? 0 : Infinity; }
     for (let k = 0; k < m.ents.length; k++) {
       const e = m.ents[k], J = m.jug[e.j];
       J.cuenta[e.tipo] = (J.cuenta[e.tipo] || 0) + 1;
       if (e.edif) {
         const d = EDIF[e.tipo], en = d.energia;
+        if (d.guarda && fisico) { J.capMin += d.guarda.min; J.capPet += d.guarda.pet; }
         if (en > 0) J.prod += en * (J.mejoras.turbinas ? 1.5 : 1) * bonoE(e); else J.uso -= en;
         J.aguaProd += (d.agua || 0) * (e.tipo === 'bomba' && J.mejoras.depuracion ? 1.5 : 1) * (e.tipo === 'bomba' ? bonoE(e) : 1);
       }
@@ -965,9 +974,35 @@
     } else if (clave in J.tr) J.tr[clave] = !!valor;
     J.admin = J.dios || J.tr.requisitos || J.tr.libre || J.tr.vel > 1 || J.tr.mapa || J.tr.invulnerable;
   }
+  // ---------- red de comunicaciones ----------
+  // Cobertura de radio de cada jugador: la dan el patio, las torres de radio, los puestos de avanzada y los vehículos de mando.
+  // Fuera de ella, una unidad de tierra solo ve lo que tiene encima (no levanta la niebla de lejos) y recibe las órdenes con retraso.
+  // Tienen radio propia el explorador, el espía, el vehículo de mando y todo lo que vuela.
+  function calcularRadio(m) {
+    const N = m.N, NN = N * N;
+    if (!m.radioCob) m.radioCob = [new Uint8Array(NN), new Uint8Array(NN)];
+    m.radioCob[0].fill(0); m.radioCob[1].fill(0);
+    for (const e of m.ents) {
+      const r = (e.edif ? EDIF[e.tipo] : UNID[e.tipo]).radioCom; if (!r || e.vida <= 0 || e.hack > m.t || (e.tipo === 'avanzada' && !(e.abast > m.t))) continue;
+      const f = m.radioCob[e.j], cx = Math.floor(posX(e)), cy = Math.floor(posY(e)), r2 = r * r;
+      for (let dy = -r; dy <= r; dy++) { const y = cy + dy; if (y < 0 || y >= N) continue; const w = Math.floor(Math.sqrt(r2 - dy * dy)), x0 = Math.max(0, cx - w), x1 = Math.min(N - 1, cx + w); f.fill(1, y * N + x0, y * N + x1 + 1); }
+    }
+  }
+  const sinRadio = (m, u) => !!m.radioCob && m.logistica !== false && !UNID[u.tipo].aire && !UNID[u.tipo].enlace && !m.jug[u.j].dios && !m.radioCob[u.j][Math.floor(u.y) * m.N + Math.floor(u.x)];
+  W.sinRadio = sinRadio;
   function aplicar(m, cmd) {
     const J = m.jug[cmd.j];
     if (!J || !J.vivo) return;
+    if (cmd.ids && !cmd.dem && m.radioCob && m.logistica !== false && cmd.t !== 'formar' && cmd.t !== 'autoCivil') { // las unidades sin cobertura de radio reciben la orden más tarde
+      const lejos = cmd.ids.filter((id) => { const u = m.porId.get(id); return u && !u.edif && u.j === cmd.j && sinRadio(m, u); });
+      if (lejos.length) {
+        if (!m.demoras) m.demoras = [];
+        m.demoras.push({ t: m.t + ECON.radioDemora, cmd: Object.assign({}, cmd, { ids: lejos, dem: true }) });
+        m.efectos.push({ tipo: 'demora', j: cmd.j, n: lejos.length, t: m.t });
+        if (lejos.length === cmd.ids.length) return;
+        cmd = Object.assign({}, cmd, { ids: cmd.ids.filter((id) => !lejos.includes(id)) });
+      }
+    }
     if (cmd.ids && (cmd.t === 'mover' || cmd.t === 'amover' || cmd.t === 'atacar' || cmd.t === 'patrulla')) { // misma orden, misma misión
       const mision = m.sigMision++;
       for (const id of cmd.ids) { const u = m.porId.get(id); if (u && !u.edif && u.j === cmd.j) u.mision = mision; }
@@ -2137,7 +2172,7 @@
         if (!m.porId.get(u.ref)) { u.est = 'volver0'; break; }
         const q = Math.min(ECON.descarga, u.carga);
         u.carga -= q;
-        if (u.cargaTipo === 2) J.raros += q; else { J.minerales += q; J.cosechado += q; }
+        if (u.cargaTipo === 2) J.raros += q; else { entra(m, J, 'minerales', q); J.cosechado += q; }
         if (u.carga <= 0) { if (u.huye > m.t) { u.est = 'espera'; u.espera = u.huye - m.t; } else u.est = 'buscar'; } // si huía, espera a cubierto antes de volver
         break;
       }
@@ -2159,7 +2194,7 @@
     const J = m.jug[j];
     if (!J.vivo) return;
     const base = J.tr.vel, factor = base * (J.uso > J.prod ? 0.5 : 1); // el multiplicador de ADMIN; la investigación va a media velocidad si en conjunto falta energía, y cada edificio según su red
-    if (m.t % ECON.goteoCada === 0) J.minerales += 1; // ingreso mínimo del patio: evita el bloqueo total
+    if (m.t % ECON.goteoCada === 0) entra(m, J, 'minerales', 1); // ingreso mínimo del patio: evita el bloqueo total
     // Investigaciones: avanzan en su edificio sin frenar obras ni unidades; si el edificio cae, se devuelve el costo.
     for (let k = J.inv.length - 1; k >= 0; k--) {
       const i = J.inv[k], t = TEC[i.clave];
@@ -2293,7 +2328,7 @@
         p.prog += 10 * Math.min(3, n[j]);
         if (p.prog >= ECON.captura) { p.dueno = j; p.prog = 0; p.quien = -1; m.efectos.push({ tipo: 'captura', x2: p.x, y2: p.y, clase: p.tipo, j, t: m.t }); }
       } else if (p.prog > 0 && !(n[0] && n[1])) { p.prog = Math.max(0, p.prog - 10); if (!p.prog) p.quien = -1; } // sin nadie, lo ganado se pierde poco a poco
-      if (p.dueno >= 0 && p.tipo === 'deposito' && m.t % (ECON.depositoCada * 10) === 0) { m.jug[p.dueno].petroleo += 10; m.jug[p.dueno].extraido += 10; }
+      if (p.dueno >= 0 && p.tipo === 'deposito' && m.t % (ECON.depositoCada * 10) === 0) { entra(m, m.jug[p.dueno], 'petroleo', 10); m.jug[p.dueno].extraido += 10; }
     }
   }
   // Los vehículos en marcha aplastan a la infantería enemiga que pisan: daño fuerte cada tick mientras la tienen
@@ -2347,7 +2382,8 @@
         continue;
       }
       // Las unidades ven cerca alrededor y lejos solo en un cono hacia su frente.
-      const v = UNID[e.tipo].vision * noche, rc = v * ECON.visAt, rc2 = rc * rc, rs = v * ECON.visLado, rs2 = rs * rs, rl = v * ECON.visAd, rl2 = rl * rl, R = Math.ceil(rl);
+      const mudo = sinRadio(m, e); // sin radio: solo cuenta lo que tiene encima
+      const v = UNID[e.tipo].vision * noche * (mudo ? ECON.visAt : 1), rc = mudo ? v : v * ECON.visAt, rc2 = rc * rc, rs = v * ECON.visLado, rs2 = rs * rs, rl = v * ECON.visAd, rl2 = rl * rl, R = Math.ceil(rl);
       const ux = Math.cos(e.ang), uy = Math.sin(e.ang), campo = CAMPO[e.tipo], kc = campo.k, redondo = campo.todo || mandado(m, e);
       for (let dy = -R; dy <= R; dy++) {
         const y = cy + dy; if (y < 0 || y >= N) continue;
@@ -2386,6 +2422,7 @@
   W.tick = function (m) {
     if (m.ganador >= 0) return;
     const cmds = m.cola; m.cola = [];
+    if (m.demoras && m.demoras.length) { const ya = m.demoras.filter((q) => q.t <= m.t); if (ya.length) { m.demoras = m.demoras.filter((q) => q.t > m.t); for (const q of ya) aplicar(m, q.cmd); } } // las órdenes que iban con retraso y ya llegan
     for (let k = 0; k < cmds.length; k++) aplicar(m, cmds[k]);
     contar(m);
     rejilla(m);
@@ -2400,7 +2437,7 @@
       else if (EDIF[e.tipo].da) { // extracción continua; con déficit de energía rinde la mitad
         const da = EDIF[e.tipo].da, J = m.jug[e.j];
         e.acum += (e.sinLuz ? 0.5 : 1) * (e.tipo === 'estacion' && J.mejoras.analisis ? 1.5 : 1) * bonoE(e);
-        if (e.acum >= da.cada) { e.acum -= da.cada; J[da.rec]++; if (da.rec === 'petroleo') J.extraido++; }
+        if (e.acum >= da.cada) { e.acum -= da.cada; if (da.rec === 'petroleo') { entra(m, J, 'petroleo', 1); J.extraido++; } else J[da.rec]++; }
       }
     }
     separar(m);
@@ -2410,6 +2447,7 @@
     if (m.t % 10 === 0) { curar(m); colmena(m); }
 
     if (m.redSucia || !m.cob || m.t - m.redT >= 100) calcularRed(m);
+    if (m.logistica !== false && (!m.radioCob || m.t % 20 === 0)) calcularRadio(m);
     if (m.t % 10 === 0) { tickTrincheras(m); tickCamaras(m); tickPortadores(m); tickPuenteAereo(m); tickEspias(m); }
     if (m.minasT && m.minasT.length && m.t % 2 === 0) tickMinas(m);
     if (m.t % 10 === 0 && m.logistica !== false) { // suministro: fuera de la cobertura el contador sube; dentro, baja rápido. Los aviones repostan en su base: no cuenta.
@@ -2447,6 +2485,13 @@
         }
       }
       m.efectos.push({ tipo: e.vendido ? 'venta' : 'muerte', x2: posX(e), y2: posY(e), edif: e.edif, tam: e.tam || 0, clase: e.tipo, ang: e.ang || 0, j: e.j, t: m.t });
+      if (e.edif && EDIF[e.tipo].guarda && !e.vendido && m.logistica !== false && !m.jug[e.j].dios) { // cae un almacén: se pierde la parte que guardaba, y la mitad de los minerales queda en el suelo como botín
+        const J = m.jug[e.j], g = EDIF[e.tipo].guarda, pm = J.capMin > 0 ? Math.min(1, g.min / J.capMin) : 0, pp = J.capPet > 0 ? Math.min(1, g.pet / J.capPet) : 0;
+        const pierde = Math.floor(J.minerales * pm), pet = Math.floor(J.petroleo * pp); J.minerales -= pierde; J.petroleo -= pet;
+        const c = Math.floor(e.cy) * m.N + Math.floor(e.cx), botin = Math.floor(pierde / 2);
+        if (botin > 0 && m.mapa.tipoMin[c] !== 2 && !m.mapa.sitioEn[c]) { if (!m.mapa.tipoMin[c]) { m.mapa.tipoMin[c] = 3; m.minas.push(c); } m.mapa.mineral[c] += botin; m.terrenoV++; }
+        if (pierde + pet > 0) m.efectos.push({ tipo: 'almacenPerdido', x1: e.cx, y1: e.cy, j: e.j, n: pierde, pet, t: m.t });
+      }
       if (e.edif) {
         const N = m.N;
         e.cola.forEach((t, i) => { if (e.pago[i]) devolver(m.jug[e.j], UNID[t]); m.jug[e.j].colas[t].n--; }); // lo que tenía encargado (y pagado) se devuelve
