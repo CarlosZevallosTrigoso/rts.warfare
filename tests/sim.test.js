@@ -1670,6 +1670,36 @@ prueba('drones por mejoras (estación por nivel, operador por tecnología) y cen
   assert.ok(!esp.infiltrado && J.intercepta <= m.t, 'sin edificio enemigo cerca, deja de informar');
 });
 
+prueba('operador: misión de dron a un punto lejano (vigila y, con la tecnología, ataca allí); formación por unidad', () => {
+  const m = W.crearMundo(31, { N: 128 }), N = m.N, J = m.jug[0];
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const cel = (x, y) => y * N + x;
+  for (let y = 40; y < 90; y++) for (let x = 20; x < 110; x++) { const i = cel(x, y); if (m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  m.terrenoV++;
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  J.minerales = 5000;
+  const op = W.crearUnidad(m, 0, 'operador', cel(30, 64)); avanza(60);
+  const dr = m.porId.get(op.dr.rec[0]); assert.ok(dr, 'el operador tiene su dron en el aire');
+  assert.ok(Math.hypot(dr.x - op.x, dr.y - op.y) < 13, 'de serie, el dron no se aleja de su radio');
+  const blanco = W.crearUnidad(m, 1, 'tanque', cel(70, 64)); avanza(40);
+  assert.notStrictEqual(m.niebla[0][cel(70, 64)], 2, 'a 40 celdas no ve nada');
+  W.orden(m, { t: 'dronMision', j: 0, ids: [op.id], x: 90.5, y: 64.5 }); avanza(3);
+  assert.ok(!op.dronMis, 'más allá de 45 celdas no hay misión');
+  W.orden(m, { t: 'dronMision', j: 0, ids: [op.id], x: 70.5, y: 64.5 }); avanza(300);
+  assert.ok(op.dronMis && Math.hypot(dr.x - 70.5, dr.y - 64.5) < 6, 'el dron vigila el punto lejano');
+  assert.strictEqual(m.niebla[0][cel(70, 64)], 2, 'y lo que ve, lo ve su bando');
+  assert.strictEqual(blanco.vida, blanco.vidaMax, 'sin la tecnología de ataque, solo mira');
+  J.mejoras.dronesFpv = true; avanza(400);
+  assert.ok(blanco.vida < blanco.vidaMax, 'con ella, los kamikazes atacan en la zona de la misión (vida ' + Math.round(blanco.vida) + ')');
+  W.orden(m, { t: 'mover', j: 0, ids: [op.id], x: 34.5, y: 64.5 }); avanza(30);
+  assert.ok(!op.dronMis, 'si el operador echa a andar, la misión se acaba');
+  avanza(400); assert.ok(Math.hypot(dr.x - op.x, dr.y - op.y) < 13 || dr.vida <= 0, 'y el dron vuelve con él');
+  // formación: cada unidad recuerda la suya
+  const a = W.crearUnidad(m, 0, 'infanteria', cel(40, 70)), b = W.crearUnidad(m, 0, 'infanteria', cel(42, 70));
+  W.orden(m, { t: 'formar', j: 0, ids: [a.id], forma: 'linea' }); avanza(2);
+  assert.strictEqual(a.forma, 'linea'); assert.ok(!b.forma, 'la formación se aplica solo a las unidades de la orden');
+});
+
 prueba('tanda 5: puente aéreo, puesto de avanzada, hospital y traslado de infantería', () => {
   const m = W.crearMundo(31, { N: 128, logistica: true }), N = m.N, J = m.jug[0];
   m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);

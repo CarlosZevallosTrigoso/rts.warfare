@@ -224,7 +224,8 @@
       if (!e.dr) e.dr = { rec: [], bomba: [], fpv: [] };
       for (const k in e.dr) e.dr[k] = e.dr[k].filter((id) => { const q = m.porId.get(id); return q && q.vida > 0; });
       const activo = !(e.edif && e.sinLuz) && !(e.hack > m.t) && !(d.quieto && (e.orden !== 'nada' || e.v > 0.001)); // el operador solo trabaja parado
-      if (!activo) continue;
+      if (!activo) { if (d.quieto && e.dronMis && e.orden !== 'nada') e.dronMis = null; continue; } // si echa a andar, la misión se acaba
+      const mis = e.dronMis || null;
       const saca = (rol, obj) => { const q = crearUnidad(m, e.j, DRON[rol], Math.floor(y) * N + Math.floor(x)); q.x = q.px = x; q.y = q.py = y; q.base = e.id; q.rol = rol; q.fase = (e.id * 1.7 + e.dr[rol].length * 2.1) % TAU; q.obj = obj || 0; q.est = rol === 'bomba' ? 'espera' : ''; e.dr[rol].push(q.id); return q; };
       for (const rol of ['rec', 'bomba']) { // reconocimiento y bombarderos: se reponen de uno en uno
         if (!dn[rol] || e.dr[rol].length >= dn[rol] || m.t < (e.drListo || 0)) continue;
@@ -241,7 +242,7 @@
       for (const o of m.ents) {
         if (o.j === e.j || o.vida <= 0 || o.infra || (!o.edif && UNID[o.tipo].aire)) continue;
         const ox = posX(o), oy = posY(o), dd = Math.hypot(ox - x, oy - y);
-        if (dd > dn.radio || m.niebla[e.j][Math.floor(oy) * N + Math.floor(ox)] !== 2 || oculta(m, o)) continue;
+        if ((dd > dn.radio && !(mis && Math.hypot(ox - mis.x, oy - mis.y) <= ECON.dronMisRadio)) || m.niebla[e.j][Math.floor(oy) * N + Math.floor(ox)] !== 2 || oculta(m, o)) continue; // dentro de su radio, o en la zona de la misión
         const k = o === pri ? -1000 : 0;
         if (o.edif ? !!EDIF[o.tipo].arma || o === pri : UNID[o.tipo].cat === 'veh') { const yaVan = e.dr.fpv.filter((id) => m.porId.get(id).obj === o.id).length; if (yaVan < 2 && dd + k + (o.edif ? 6 : 0) < dv) { dv = dd + k + (o.edif ? 6 : 0); veh = o; } }
         else if (!o.edif && dd + k < di) { di = dd + k; inf = o; }
@@ -308,12 +309,13 @@
     if (m.t - (u.tInterf === undefined ? -99 : u.tInterf) <= 12) { u.vida -= 1.2; if (u.vida <= 0) m.efectos.push({ tipo: 'interferido', x1: u.x, y1: u.y, j: u.j, t: m.t }); return; } // interferido por un vehículo de mando enemigo: pierde el enlace y cae
     const bx = posX(base), by = posY(base), cfg = { radioDron: W.dronesDe(m, base).radio };
     const ir = (x, y, vel) => { const dx = x - u.x, dy = y - u.y, dd = Math.hypot(dx, dy); if (dd > 0.02) u.ang = Math.atan2(dy, dx); u.v = Math.min(vel, dd); if (dd > 1e-6) { u.x += (dx / dd) * u.v; u.y += (dy / dd) * u.v; } return dd; };
-    const orbita = (r) => { const a = u.fase + m.t * (0.6 / Math.max(3, r)) * 0.33; ir(bx + Math.cos(a) * r, by + Math.sin(a) * r, d.vel); };
+    const orbita = (r, cx, cy) => { const a = u.fase + m.t * (0.6 / Math.max(3, r)) * 0.33; ir((cx === undefined ? bx : cx) + Math.cos(a) * r, (cy === undefined ? by : cy) + Math.sin(a) * r, d.vel); };
+    const mis = base.dronMis || null;
     const parado = base.edif || (base.orden === 'nada' && base.v < 0.001);
-    if (u.rol === 'rec') { orbita(parado ? cfg.radioDron * 0.55 : 2.2); return; }
+    if (u.rol === 'rec') { if (parado && mis) orbita(3.5, mis.x, mis.y); else orbita(parado ? cfg.radioDron * 0.55 : 2.2); return; } // en misión, da vueltas sobre el punto lejano
     const o = u.obj ? m.porId.get(u.obj) : null, vivo = o && o.vida > 0;
     if (u.rol === 'fpv') {
-      if (!vivo || Math.hypot(posX(o) - bx, posY(o) - by) > cfg.radioDron + 3) { u.vida = 0; return; } // sin blanco: se pierde
+      if (!vivo || (Math.hypot(posX(o) - bx, posY(o) - by) > cfg.radioDron + 3 && !(mis && Math.hypot(posX(o) - mis.x, posY(o) - mis.y) <= ECON.dronMisRadio + 3))) { u.vida = 0; return; } // sin blanco: se pierde
       if (ir(posX(o), posY(o), d.vel) <= (o.edif ? o.tam * 0.5 : 0.35)) {
         const arma = ARMAS.fpv;
         for (const e of m.ents) if (e.j !== u.j && e.vida > 0 && !e.muro && dist(u.x, u.y, e) <= arma.area) herir(m, e, arma, e === o ? 1 : 0.5, 0, u.x, u.y);
@@ -806,7 +808,7 @@
       const mision = m.sigMision++;
       for (const id of cmd.ids) { const u = m.porId.get(id); if (u && !u.edif && u.j === cmd.j) u.mision = mision; }
     }
-    if (cmd.ids && cmd.t !== 'autoCivil') for (const id of cmd.ids) { const u = m.porId.get(id); if (u && !u.edif && u.j === cmd.j && u.auto) u.auto = false; } // una orden a mano saca al ingeniero civil del automático
+    if (cmd.ids && cmd.t !== 'autoCivil' && cmd.t !== 'formar') for (const id of cmd.ids) { const u = m.porId.get(id); if (u && !u.edif && u.j === cmd.j && u.auto) u.auto = false; } // una orden a mano saca al ingeniero civil del automático
     switch (cmd.t) {
       case 'autoCivil': for (const u of propias(m, cmd)) if (UNID[u.tipo].tiende) u.auto = !!cmd.on; return;
       case 'dios': // modo GOD: recursos infinitos; al apagarlo vuelve el saldo anterior
@@ -845,6 +847,16 @@
         m.efectos.push({ tipo: 'mejoraEdif', x1: e.cx, y1: e.cy, j: e.j, clase: e.tipo, nivel: e.nivelE, t: m.t });
         return;
       }
+      case 'formar': // la formación con la que esas unidades llegarán a destino (cada una recuerda la suya)
+        if (['grupo', 'linea', 'columna', 'cuna', 'cuadro'].includes(cmd.forma)) for (const u of propias(m, cmd)) u.forma = cmd.forma;
+        return;
+      case 'dronMision': // el operador manda sus drones a un punto lejano (sin x: los recoge)
+        for (const u of propias(m, cmd)) {
+          const al = UNID[u.tipo].misionDron; if (!al) continue;
+          if (!(cmd.x >= 0 && cmd.y >= 0 && cmd.x < m.N && cmd.y < m.N)) { u.dronMis = null; continue; }
+          if (Math.hypot(cmd.x - u.x, cmd.y - u.y) <= al) { u.dronMis = { x: cmd.x, y: cmd.y }; if (u.orden !== 'nada') { limpiar(u); u.orden = 'nada'; u.ruta = null; u.pend = null; } } // (se planta: el operador solo trabaja parado)
+        }
+        return;
       case 'dronAtk': // enciende o apaga los drones de ataque de esos portadores
         for (const u of propias(m, cmd)) if (UNID[u.tipo].drones) u.dronAtk = !!cmd.on;
         return;

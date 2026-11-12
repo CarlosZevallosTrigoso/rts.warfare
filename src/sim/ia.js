@@ -473,6 +473,7 @@
     if (tk % 5 === 1) { // hackers y operadores de drones: con la oleada, unos pasos por detrás; sin oleada, en el punto de reunión
       let ax = 0, ay = 0, na = 0; for (const u of soldados) if (ia.atacantes.has(u.id)) { ax += u.x; ay += u.y; na++; }
       const tx = na >= 4 ? ax / na - (dx / dd) * 4 : rx - (dx / dd) * 2, ty = na >= 4 ? ay / na - (dy / dd) * 4 : ry - (dy / dd) * 2;
+      if (objetivo) for (const u of sinArma) if (u.tipo === 'operador' && u.orden === 'nada' && !u.dronMis && Math.hypot(u.x - tx, u.y - ty) <= 8 && Math.hypot(objetivo.cx - u.x, objetivo.cy - u.y) <= UNID.operador.misionDron) W.orden(m, { t: 'dronMision', j, ids: [u.id], x: objetivo.cx, y: objetivo.cy }); // el operador, en su sitio y con el objetivo a tiro: dron en misión sobre él
       for (const u of sinArma) if ((u.tipo === 'hacker' || u.tipo === 'operador') && u.orden === 'nada' && Math.hypot(u.x - tx, u.y - ty) > 8) { const cc = W.cercaLibre(m, tx, ty); W.orden(m, { t: 'mover', j, ids: [u.id], x: (cc % m.N) + 0.5, y: ((cc / m.N) | 0) + 0.5 }); }
     }
     const reserva = soldados.filter((u) => !ia.atacantes.has(u.id) && u.id !== ia.explorador && !ia.capturan.has(u.id));

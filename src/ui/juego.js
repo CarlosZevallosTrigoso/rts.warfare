@@ -193,6 +193,7 @@
         if (e.tipo === 'cosechadora' && e.j === YO) t += ' · carga ' + e.carga;
         if (!e.edif && UNID[e.tipo].tiende && e.j === YO && m.logistica !== false) t += e.orden === 'conectar' ? ' · tendiendo línea' : e.auto ? ' · automático' : ' · manual';
         if (!e.edif && UNID[e.tipo].espia && e.j === YO) t += e.infiltrado ? ' · infiltrado: informando' : ' · acércalo a un edificio enemigo';
+        if (!e.edif && e.dronMis && e.j === YO) t += ' · dron en misión lejana';
         if (e.cava > 0) t += ' · cavando'; else if (e.guardia && e.j === YO && !W.enTrinchera(m, e)) t += ' · en guardia';
         if (UNID[e.tipo] && UNID[e.tipo].aire && e.j === YO) t += (e.enTierra ? ' · en tierra' : e.repostando ? ' · vuelve a repostar' : e.patrulla ? ' · patrulla' : '') + ' · combustible ' + Math.round(e.fuel / UNID[e.tipo].fuel * 100) + ' %';
         if (!e.edif && e.rango) t += ' · veterano ' + '▲'.repeat(e.rango);
@@ -933,6 +934,17 @@
         if (raton.dentro) { ctx.fillStyle = P.tinta; ctx.fillText('clic: otro punto · clic derecho: en marcha', raton.x + 14, raton.y - 8); }
         rutaP.forEach((q, i) => { const px = ox + q.x * z, py = oy + q.y * z; ctx.fillStyle = P.mal; ctx.beginPath(); ctx.arc(px, py, 8, 0, TAU); ctx.fill(); ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.fillText(String(i + 1), px, py + 4); ctx.textAlign = 'left'; });
       }
+      { // misiones de dron: el alcance mientras se elige el punto, y la línea hasta el punto de cada operador seleccionado
+        const om = modo === 'dronMis' || sel.size ? unidadesSel().filter((u) => u.j === YO && UNID[u.tipo].misionDron) : [];
+        ctx.strokeStyle = P.yo; ctx.lineWidth = 1; ctx.setLineDash([4, 5]);
+        for (const u of om) {
+          const px = ox + u.x * z, py = oy + u.y * z;
+          if (modo === 'dronMis') { ctx.beginPath(); ctx.arc(px, py, UNID[u.tipo].misionDron * z, 0, TAU); ctx.stroke(); }
+          if (u.dronMis) { const qx = ox + u.dronMis.x * z, qy = oy + u.dronMis.y * z; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(qx, qy); ctx.stroke(); ctx.beginPath(); ctx.arc(qx, qy, W.ECON.dronMisRadio * z, 0, TAU); ctx.stroke(); }
+        }
+        ctx.setLineDash([]);
+        if (modo === 'dronMis' && raton.dentro) { ctx.fillStyle = P.tinta; ctx.fillText('misión de dron: elige el punto a vigilar', raton.x + 14, raton.y - 8); }
+      }
       if (modo === 'conectar' && raton.dentro) { // la línea que saldría del último edificio marcado, y lo que costaría
         const a = conectaDesde ? m.porId.get(conectaDesde) : null, wx = aMundoX(raton.x), wy = aMundoY(raton.y), e = entEn(wx, wy), vale = e && e.edif && !e.infra && e.j === YO;
         if (a) {
@@ -1274,7 +1286,16 @@
     }
 
     // ---------- formación y demolición ----------
-    function ponerForma(f) { forma = f; for (const b of $('formas').children) b.classList.toggle('on', b.dataset.f === f); }
+    // La formación es de cada unidad: al elegir una, se aplica solo a lo seleccionado; los botones muestran la de la selección.
+    const formaLoc = new Map(); // (lo recién elegido, hasta que la simulación lo apunte en la unidad)
+    function fA(us) { us = us || unidadesSel(); const u = us.find((q) => !UNID[q.tipo].aire) || us[0]; return u ? formaLoc.get(u.id) || u.forma || 'grupo' : 'grupo'; }
+    function pintarForma() { const f = fA(); if (f === forma) return; forma = f; for (const b of $('formas').children) b.classList.toggle('on', b.dataset.f === f); }
+    function ponerForma(f) {
+      const us = unidadesSel(); if (!us.length) { aviso('Selecciona las unidades a las que quieres dar esa formación'); return; }
+      for (const u of us) formaLoc.set(u.id, f);
+      W.orden(m, { t: 'formar', j: YO, ids: us.map((u) => u.id), forma: f }); pintarForma();
+      aviso('Formación «' + f + '» para ' + (us.length === 1 ? 'esta unidad' : 'estas ' + us.length + ' unidades'));
+    }
     $('formas').addEventListener('click', (ev) => { const b = ev.target.closest('[data-f]'); if (b) ponerForma(b.dataset.f); });
     const vendibles = () => [...sel].map((id) => m.porId.get(id)).filter((e) => e && e.edif && e.j === YO && e.tipo !== 'patio');
     const valorVenta = (e) => Math.floor(EDIF[e.tipo].costo * W.ECON.venta * (e.vida / e.vidaMax));
@@ -1387,7 +1408,7 @@
       avanzadaMovil: 'Se despliega lejos como puesto de avanzada: red, hospital y pista sin tender líneas.',
       torretaMuro: 'Torreta que se monta sobre un muro reforzado tuyo.', camara: 'Ve lejos y en redondo, descubre a los escondidos y avisa si entra un enemigo.',
       infanteria: 'Barata y versátil; captura puestos, cava y ocupa trincheras.', antitanque: 'Infantería con cohetes: contra vehículos y aviones.', explorador: 'Rápido y ve lejos; explora solo con E.', ingeniero: 'Repara solo vehículos y edificios; cava más rápido.', medico: 'Cura solo a la infantería herida cercana.',
-      francotirador: 'Mata infantería desde muy lejos; se esconde.', gatling: 'Equipo de dos: tarda en montar, y montada tritura infantería y aviones bajos.', hacker: 'Apaga a distancia un vehículo o edificio enemigo unos segundos; cuesta información.', operador: 'Parado, despliega un dron de reconocimiento; con las tecnologías de la estación de drones, también kamikazes y un bombardero.', espia: 'Pasa inadvertido aunque se mueva. Junto a un edificio enemigo ves lo que produce el rival y ganas información.', dronEspia: 'Vuela muy lejos y mucho rato desde su central; no ataca.',
+      francotirador: 'Mata infantería desde muy lejos; se esconde.', gatling: 'Equipo de dos: tarda en montar, y montada tritura infantería y aviones bajos.', hacker: 'Apaga a distancia un vehículo o edificio enemigo unos segundos; cuesta información.', operador: 'Parado, despliega un dron de reconocimiento, y puede mandarlo en misión a vigilar un punto a 45 celdas (tecla O): lo que vea lo ve tu artillería. Con las tecnologías de la estación de drones lleva también kamikazes y un bombardero, que atacan en la zona de la misión.', espia: 'Pasa inadvertido aunque se mueva. Junto a un edificio enemigo ves lo que produce el rival y ganas información.', dronEspia: 'Vuela muy lejos y mucho rato desde su central; no ataca.',
       tanque: 'El vehículo de combate básico.', artilleria: 'Dispara muy lejos, en área, a lo que vea cualquiera de los tuyos.', pesado: 'Tanque lento, muy duro y de gran pegada.', blindado: 'Rápido, con ametralladora: contra infantería.', antiaereoMovil: 'Antiaérea sobre ruedas para acompañar al ejército.',
       transporte: 'Lleva infantería dentro, rápido.', lanzacohetes: 'Salvas de cohetes a mucha distancia, sobre una zona.', mando: 'Los tuyos a su alrededor ven en redondo y giran más rápido; interfiere drones enemigos. Gasta información.', comandoDrones: 'Lleva drones de reconocimiento, bombarderos y kamikazes que atacan solos.',
       patioMovil: 'Se despliega como un patio nuevo donde lo lleves.', cosechadora: 'Recoge minerales (y chatarra) y los lleva a la refinería.', excavadora: 'Traza caminos militares: abre el bosque y tiende puentes.', civil: 'Conecta edificios con líneas de servicio y levanta muros, puertas y alambradas.',
@@ -1410,6 +1431,8 @@
     $('cierraGuia').addEventListener('click', () => { $('guia').hidden = true; });
     $('guia').addEventListener('click', (ev) => { if (ev.target === $('guia')) $('guia').hidden = true; });
     const conDrones = () => unidadesSel().filter((u) => u.j === YO && UNID[u.tipo].drones && (W.dronesDe(m, u).fpv || W.dronesDe(m, u).bomba));
+    const conMision = () => unidadesSel().filter((u) => u.j === YO && UNID[u.tipo].misionDron);
+    $('dronMis').addEventListener('click', () => { const om = conMision(); if (!om.length) return; if (om.some((u) => u.dronMis)) { W.orden(m, { t: 'dronMision', j: YO, ids: om.map((u) => u.id) }); aviso('Drones de vuelta con su operador'); } else { modo = 'dronMis'; aviso('Elige el punto que vigilará el dron (hasta 45 celdas del operador)'); } });
     $('dronAtk').addEventListener('click', () => { const us = conDrones(); if (us.length) W.orden(m, { t: 'dronAtk', j: YO, ids: us.map((u) => u.id), on: us.some((u) => u.dronAtk === false) }); });
     $('verRed').addEventListener('click', () => { if (conRed) verRed = !verRed; else aviso('Partida clásica: sin red'); });
     $('retiro').addEventListener('click', () => { const us = paraRetiro(); if (us.length) W.orden(m, { t: 'retiro', j: YO, ids: us.map((u) => u.id), on: !us.every((u) => u.retira) }); });
@@ -1449,7 +1472,7 @@
           L.push((armadas ? k('A') + ' atacar al avanzar · ' : '') + k('R') + ' patrulla (clic: puntos; clic derecho: en marcha) · ' + k('E') + ' explorar');
           L.push(k('S') + ' detener · ' + k('G') + ' guardia · ' + k('Mayús') + ' encadenar');
         }
-        if (us.length > 1) L.push(k('F') + ' formación: ' + forma);
+        if (us.length > 1) L.push(k('F') + ' formación de esta selección: ' + fA(us));
         if (paraCavar().length) L.push(k('Z') + ' atrincherarse');
         const n = {}; for (const u of us) { const ef = efectos(u); if (ef) n[ef] = (n[ef] || 0) + 1; }
         for (const ef in n) L.push('<b>' + (us.length > 1 ? n[ef] + ' en ' : 'en ') + ef + '</b>');
@@ -1765,6 +1788,8 @@
       { const hay = unidadesSel().some((u) => UNID[u.tipo].traza), bz = $('trazar'); bz.hidden = !hay; bz.classList.toggle('listo', modo === 'trazar'); }
       { const us = conCarga(), bd = $('descargar'); bd.hidden = !us.length; if (us.length) { const t = 'Descargar · ' + us.reduce((a, u) => a + u.pasajeros.length, 0) + ' dentro'; if (bd.textContent !== t) bd.textContent = t; } }
       { const e = mejorable(), bm = $('mejorar'); bm.hidden = !e; if (e) { const pr = W.costoMejora(e), t = 'Mejorar a nivel ' + ((e.nivelE || 1) + 1) + ' · ' + pr, cl = 'btn' + (J.minerales < pr && !J.dios ? ' caro' : ''); if (bm.textContent !== t) bm.textContent = t; if (bm.className !== cl) bm.className = cl; } }
+      pintarForma();
+      { const om = conMision(), bm = $('dronMis'); bm.hidden = !om.length; if (om.length) { const tx = om.some((u) => u.dronMis) ? 'Misión de dron: en curso' : 'Misión de dron'; if (bm.textContent !== tx) bm.textContent = tx; bm.classList.toggle('listo', om.some((u) => u.dronMis)); } }
       { const us = conDrones(), bd = $('dronAtk'); bd.hidden = !us.length; if (us.length) { const t = 'Drones de ataque: ' + (us.every((u) => u.dronAtk !== false) ? 'sí' : us.some((u) => u.dronAtk !== false) ? 'algunos' : 'no'); if (bd.textContent !== t) bd.textContent = t; } }
       { const bv = $('verRed'), t = 'ver la red: ' + (verRed ? 'sí' : 'no'); if (bv.textContent !== t) { bv.textContent = t; bv.classList.toggle('on', verRed); } bv.hidden = !conRed; }
       { const us = paraRetiro(), br = $('retiro'); br.hidden = !us.length;
@@ -1793,6 +1818,11 @@
           const p = esquinaColocar(tipoColocar);
           const no = W.porQueNo(m, YO, tipoColocar, p.x, p.y);
           if (!no) { W.orden(m, { t: 'colocar', j: YO, tipo: tipoColocar, x: p.x, y: p.y }); modo = null; } else aviso('No se puede colocar: ' + no);
+          return;
+        }
+        if (modo === 'dronMis') {
+          const om = conMision().filter((u) => Math.hypot(wx - u.x, wy - u.y) <= UNID[u.tipo].misionDron);
+          if (om.length) { W.orden(m, { t: 'dronMision', j: YO, ids: om.map((u) => u.id), x: wx, y: wy }); marca(wx, wy, P.yo); son.orden(); modo = null; } else aviso('Demasiado lejos: el dron llega a 45 celdas de su operador');
           return;
         }
         if (modo === 'barrido') { W.orden(m, { t: 'intel', j: YO, clave: barridoClave, x: wx, y: wy }); son.orden(); modo = null; return; }
@@ -1834,8 +1864,8 @@
         if (modo === 'amover') {
           const ids = unidadesSel().map((u) => u.id);
           if (ids.length) {
-            W.orden(m, { t: modo, j: YO, ids, x: wx, y: wy, enc: ev.shiftKey, forma }); marca(wx, wy, P.mal); son.orden();
-            if (modo === 'amover' && !ev.shiftKey) giroPend = { tipo: 'amover', ids, x: wx, y: wy, forma, t0: performance.now() };
+            W.orden(m, { t: modo, j: YO, ids, x: wx, y: wy, enc: ev.shiftKey, forma: fA() }); marca(wx, wy, P.mal); son.orden();
+            if (modo === 'amover' && !ev.shiftKey) giroPend = { tipo: 'amover', ids, x: wx, y: wy, forma: fA(), t0: performance.now() };
           }
           modo = null;
           return;
@@ -1900,7 +1930,7 @@
           if (ajena) aviso('La trinchera está ocupada por el enemigo');
           else {
             const infs = us.filter((u) => UNID[u.tipo].cat === 'inf').map((u) => u.id), resto = us.filter((u) => UNID[u.tipo].cat !== 'inf').map((u) => u.id);
-            W.orden(m, { t: 'ocupar', j: YO, ids: infs, c }); if (resto.length) W.orden(m, { t: 'mover', j: YO, ids: resto, x: wx, y: wy, enc, forma });
+            W.orden(m, { t: 'ocupar', j: YO, ids: infs, c }); if (resto.length) W.orden(m, { t: 'mover', j: YO, ids: resto, x: wx, y: wy, enc, forma: fA() });
             marca(wx, wy, P.bien); son.orden(); return;
           }
         }
@@ -1908,10 +1938,10 @@
         if (cos.length && m.mapa.tipoMin[c] >= 1 && m.niebla[YO][c]) {
           W.orden(m, { t: 'cosechar', j: YO, ids: cos, x: wx, y: wy });
           const resto = us.filter((u) => u.tipo !== 'cosechadora').map((u) => u.id);
-          if (resto.length) W.orden(m, { t: 'mover', j: YO, ids: resto, x: wx, y: wy, enc, forma });
+          if (resto.length) W.orden(m, { t: 'mover', j: YO, ids: resto, x: wx, y: wy, enc, forma: fA() });
         } else {
-          W.orden(m, { t: 'mover', j: YO, ids, x: wx, y: wy, enc, forma });
-          if (!enc && us.some((u) => !UNID[u.tipo].aire)) giroPend = { tipo: 'mover', ids, x: wx, y: wy, forma, t0: performance.now() }; // a un avión no se le orienta: vuelve a casa
+          W.orden(m, { t: 'mover', j: YO, ids, x: wx, y: wy, enc, forma: fA() });
+          if (!enc && us.some((u) => !UNID[u.tipo].aire)) giroPend = { tipo: 'mover', ids, x: wx, y: wy, forma: fA(), t0: performance.now() }; // a un avión no se le orienta: vuelve a casa
         }
         marca(wx, wy, P.bien); son.orden();
     }
@@ -2103,7 +2133,8 @@
         case 'KeyX': elegirEdificios('aerodromo'); break;
         case 'KeyG': { const ids = unidadesSel().map((u) => u.id); if (ids.length) { W.orden(m, { t: 'guardia', j: YO, ids }); son.orden(); } break; }
         case 'KeyC': W.orden(m, { t: 'colmena', j: YO }); aviso(J.colmena ? 'Colmena desactivada: nadie acude solo' : 'Colmena activada'); break;
-        case 'KeyF': ponerForma(FORMAS[(FORMAS.indexOf(forma) + 1) % FORMAS.length]); break;
+        case 'KeyF': ponerForma(FORMAS[(FORMAS.indexOf(fA()) + 1) % FORMAS.length]); break;
+        case 'KeyO': if (conMision().length) modo = 'dronMis'; break;
         case 'Delete': case 'Backspace': if (modo === 'patrulla') { rutaP.pop(); break; } vender(); break;
         case 'KeyE': { const ids = unidadesSel().map((u) => u.id); if (ids.length) { W.orden(m, { t: 'explorar', j: YO, ids }); son.orden(); } break; }
         case 'KeyS': { const ids = unidadesSel().map((u) => u.id); if (ids.length) W.orden(m, { t: 'detener', j: YO, ids }); break; }
