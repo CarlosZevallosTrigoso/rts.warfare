@@ -48,7 +48,8 @@
   }
   function siguienteEdificio(m, j, patio, plan) {
     const J = m.jug[j];
-    const conEnergia = (tipo) => (tipo !== 'central' && J.prod - J.uso + EDIF[tipo].energia < 0 ? 'central' : tipo);
+    const energia = m.logistica !== false && J.petroleo < 40 && W.disponible(m, j, EDIF.eolica) ? 'eolica' : 'central'; // sin petróleo que quemar, la central no rinde: eólicas
+    const conEnergia = (tipo) => (tipo !== 'central' && tipo !== 'eolica' && J.prod - J.uso + EDIF[tipo].energia < 0 ? energia : tipo);
     // Agua justa: otra bomba antes que nada, o la tropa deja de crecer.
     if (J.cuenta.central && J.aguaProd - J.aguaUso < 4 && (J.cuenta.bomba || 0) < 6 && buscarSitio(m, j, 'bomba', patio)) return conEnergia('bomba');
     for (const [tipo, n] of plan || PLAN) {
@@ -60,7 +61,7 @@
       if ((d.pet || 0) > J.petroleo && !J.cuenta.extractor) continue; // sin petróleo ni forma de sacarlo: se salta
       return conEnergia(tipo);
     }
-    return J.uso > J.prod ? 'central' : null;
+    return J.uso > J.prod ? energia : null;
   }
 
   function buscarSitio(m, j, tipo, patio) {

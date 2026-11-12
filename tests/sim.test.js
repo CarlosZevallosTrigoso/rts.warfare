@@ -1833,10 +1833,10 @@ prueba('tanda C: los vehículos de combate gastan combustible, se paran sin él 
   assert.ok(en.vida < en.vidaMax || en.vida <= 0, 'pero sigue disparando'); en.vida = 0; avanza(2);
   // un camión de suministro lo reposta, y cuesta petróleo
   W.crearEdificio(m, 0, 'central', px + dir * 4, py + 4); W.crearEdificio(m, 0, 'logistica', px + dir * 8, py); avanza(3);
-  const cam = W.crearUnidad(m, 0, 'camionSum', cel(Math.floor(tq.x) - dir * 3, py + 2)); const pet0 = J.petroleo;
+  const cam = W.crearUnidad(m, 0, 'camionSum', cel(Math.floor(tq.x) - dir * 3, py + 2)); const pet0 = J.petroleo, q0 = J.quemado || 0;
   W.orden(m, { t: 'mover', j: 0, ids: [cam.id], x: tq.x, y: tq.y + 2 }); avanza(3); for (let i = 0; i < 1500 && tq.comb < W.ECON.combMax; i++) W.tick(m);
   assert.strictEqual(tq.comb, W.ECON.combMax, 'el camión lo deja lleno');
-  assert.ok(Math.abs((pet0 - J.petroleo) - W.ECON.combMax * W.ECON.combPet) < 1.5, 'y el repostaje se paga en petróleo (' + (pet0 - J.petroleo).toFixed(1) + ')');
+  assert.ok(Math.abs((pet0 - J.petroleo - ((J.quemado || 0) - q0)) - W.ECON.combMax * W.ECON.combPet) < 1.5, 'y el repostaje se paga en petróleo (' + (pet0 - J.petroleo).toFixed(1) + ', sin contar lo que queman las centrales)');
   W.orden(m, { t: 'mover', j: 0, ids: [tq.id], x: fx + 0.5, y: py + 0.5 }); avanza(3); for (let i = 0; i < 2000 && tq.orden !== 'nada'; i++) W.tick(m);
   assert.ok(Math.abs(tq.x - fx) < 3, 'y vuelve a andar');
   // sin petróleo no hay repostaje
@@ -2245,6 +2245,48 @@ prueba('tipos de mapa: todos simétricos, con paso de vehículos entre bases y r
     assert.strictEqual(m.mapa.tipo, tipo); for (let i = 0; i < 5000; i++) { W.iaTick(m, a); W.iaTick(m, b); W.tick(m); }
     assert.ok(m.jug[0].cuenta.cuartel && m.jug[1].cuenta.cuartel && m.jug[0].cosechado > 500, tipo + ': la IA levanta su base y cosecha (' + m.jug[0].cosechado + ')');
   }
+});
+
+prueba('oleoductos y centrales: el extractor tiende su tubería, sin ella rinde el 30 %; la central quema petróleo y sin él da el 30 %; eólica e hidroeléctrica', () => {
+  const m = W.crearMundo(31, { N: 256, logistica: true }), N = m.N, J = m.jug[0];
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const cel = (x, y) => y * N + x, patio = m.ents.find((e) => e.j === 0 && e.tipo === 'patio'), px = Math.floor(patio.cx), py = Math.floor(patio.cy), dir = px < 128 ? 1 : -1, dy = py < 128 ? 1 : -1;
+  for (let y = Math.min(py, py + dy * 30) - 12; y <= Math.max(py, py + dy * 30) + 12; y++) for (let x = Math.min(px, px + dir * 90) - 4; x <= Math.max(px, px + dir * 90) + 4; x++) { const i = cel(x, y); if (x < 2 || y < 2 || x >= N - 2 || y >= N - 2 || m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.mapa.tipoMin[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  m.terrenoV++;
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  J.minerales = 20000; J.petroleo = 400; J.nivel = 2;
+  for (const k of [0, 1, 2]) W.crearEdificio(m, 0, 'eolica', px + dir * (4 + k * 2), py - dy * 6); // energía sin quemar nada, para medir limpio
+  const tubos = (e) => m.ents.filter((t) => t.tubo && e.tubos.includes(t.id) && t.vida > 0);
+  const saca = (e, n) => { const a = J.extraido; avanza(n); return J.extraido - a; };
+  // 1) extractor a 14 celdas del patio: tubería sola, rinde entero
+  avanza(3); const ex = W.crearEdificio(m, 0, 'extractor', px + dir * 14, py + dy * 2); avanza(5);
+  assert.ok(W.entubado(m, ex) && tubos(ex).length >= 2 && ex.tuboA === patio.id, 'el extractor tiende solo su oleoducto hasta el patio'); assert.ok(!tubos(ex)[0].conRed || true);
+  const lleno = saca(ex, 600); assert.ok(lleno >= 95 && lleno <= 105, 'con oleoducto saca unos 100 en medio minuto (' + lleno + ')');
+  // 2) le cortan la tubería: 30 %
+  tubos(ex)[0].vida = 0; avanza(3); assert.ok(!W.entubado(m, ex)); const poco = saca(ex, 600);
+  assert.ok(ex.sinTubo && poco >= 26 && poco <= 34, 'sin oleoducto rinde el 30 % (' + poco + ')');
+  // 3) un ingeniero civil en automático lo repone
+  const civ = W.crearUnidad(m, 0, 'civil', cel(px + dir * 5, py + dy * 3)); avanza(900);
+  assert.ok(W.entubado(m, ex) && !ex.sinTubo, 'el ingeniero civil repone el oleoducto por su cuenta'); civ.vida = 0; avanza(2);
+  // 4) extractor lejos de todo: sin tubería; al construir un tanque cerca, la recibe
+  const lejos = W.crearEdificio(m, 0, 'extractor', px + dir * 70, py + dy * 4); avanza(5);
+  assert.ok(!W.entubado(m, lejos) && lejos.tubos.length === 0, 'a 70 celdas no hay adónde llevarlo');
+  const tq = W.crearEdificio(m, 0, 'tanqueComb', px + dir * 60, py + dy * 6); avanza(5);
+  assert.ok(W.entubado(m, lejos) && lejos.tuboA === tq.id, 'al levantar un tanque cerca, el extractor se conecta a él');
+  assert.ok(!m.ents.some((t) => t.tubo && t.conRed), 'el oleoducto no lleva red ni energía');
+  // 5) la central térmica quema petróleo; sin él da el 30 %
+  lejos.vida = 0; ex.vida = 0; avanza(3); J.petroleo = 20; const c1 = W.crearEdificio(m, 0, 'central', px + dir * 4, py + dy * 6); avanza(5);
+  const p0 = J.petroleo, prod0 = J.prod; avanza(W.ECON.quemaCada * 5);
+  assert.ok(Math.abs((p0 - J.petroleo) - 5) <= 1, 'la central quema 1 de petróleo cada ' + W.ECON.quemaCada + ' ticks (' + (p0 - J.petroleo) + ')'); assert.ok(!c1.sinComb);
+  J.petroleo = 0; avanza(W.ECON.quemaCada + 110);
+  assert.ok(c1.sinComb && Math.abs((prod0 - J.prod) - 100 * (1 - W.ECON.sinCombEnergia)) < 1, 'sin petróleo, la central da el 30 % (' + prod0 + ' → ' + J.prod + ')');
+  J.petroleo = 50; avanza(W.ECON.quemaCada + 110); assert.ok(!c1.sinComb && J.prod === prod0, 'con petróleo otra vez, vuelve a dar todo');
+  // 6) hidroeléctrica: solo junto al agua
+  assert.ok(W.porQueNo(m, 0, 'hidro', px + dir * 10, py - dy * 6), 'en seco no se puede'); 
+  for (let y = py + dy * 9 - 1; y <= py + dy * 9 + 1; y++) for (let x = px + dir * 8; x <= px + dir * 12; x++) { m.mapa.terreno[cel(x, y)] = W.TERRENO.AGUA; m.paso[cel(x, y)] = 0; m.pasoV[cel(x, y)] = 0; } m.terrenoV++;
+  let sitio = null; for (let x = px + dir * 6; x !== px + dir * 14 && !sitio; x += dir) for (const yy of [py + dy * 5, py + dy * 6, py + dy * 11, py + dy * 12]) if (!sitio && !W.porQueNo(m, 0, 'hidro', x, yy)) sitio = [x, yy];
+  assert.ok(sitio, 'junto al agua, sí'); const pr = J.prod; W.crearEdificio(m, 0, 'hidro', sitio[0], sitio[1]); avanza(110);
+  assert.strictEqual(J.prod - pr, 160, 'y da 160 de energía sin gastar petróleo');
 });
 
 prueba('tanda 5: puente aéreo, puesto de avanzada, hospital y traslado de infantería', () => {

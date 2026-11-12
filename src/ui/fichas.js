@@ -502,6 +502,16 @@
     } else if (e.tipo === 'hospital') { // pabellón claro con la cruz roja
       c.fillStyle = '#f2f0ea'; c.strokeStyle = col.osc; c.lineWidth = lw; c.beginPath(); c.rect(X(0.14), Y(0.14), t * 0.72, t * 0.72); c.fill(); c.stroke();
       c.fillStyle = s.deficit ? col.humo : '#c0392b'; c.fillRect(X(0.42), Y(0.24), t * 0.16, t * 0.52); c.fillRect(X(0.24), Y(0.42), t * 0.52, t * 0.16);
+    } else if (e.tipo === 'eolica') { // torre fina con tres palas que giran
+      const px = X(0.5), py = Y(0.42), a0 = s.deficit ? 0.4 : s.tiempo * 0.003 + s.id;
+      c.strokeStyle = col.osc; c.lineWidth = lw * 1.6; c.beginPath(); c.moveTo(px, Y(0.9)); c.lineTo(px, py); c.stroke();
+      c.strokeStyle = col.luz; c.lineWidth = lw * 1.3; c.beginPath(); for (let k = 0; k < 3; k++) { const a = a0 + k * TAU / 3; c.moveTo(px, py); c.lineTo(px + Math.cos(a) * t * 0.36, py + Math.sin(a) * t * 0.36); } c.stroke();
+      c.fillStyle = col.osc; c.beginPath(); c.arc(px, py, t * 0.06, 0, TAU); c.fill();
+    } else if (e.tipo === 'hidro') { // presa: muro curvo, sala de turbinas y el agua que cae
+      c.fillStyle = col.agua || '#9bb5cc'; c.fillRect(X(0.12), Y(0.12), t * 0.76, t * 0.3);
+      c.strokeStyle = col.osc; c.lineWidth = lw * 2.4; c.beginPath(); c.arc(X(0.5), Y(0.2), t * 0.4, 0.25, Math.PI - 0.25); c.stroke();
+      c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = lw; c.beginPath(); c.rect(X(0.3), Y(0.62), t * 0.4, t * 0.24); c.fill(); c.stroke();
+      c.strokeStyle = col.luz; c.lineWidth = lw; c.beginPath(); for (const fx of [0.38, 0.5, 0.62]) { c.moveTo(X(fx), Y(0.46)); c.lineTo(X(fx), Y(0.6)); } c.stroke();
     } else if (e.tipo === 'radar') { // plato que gira sobre su base, con el haz de barrido
       const px = X(0.5), py = Y(0.5), a = s.deficit ? 0.6 : s.tiempo * 0.0016;
       c.fillStyle = col.osc; c.beginPath(); c.arc(px, py, t * 0.3, 0, TAU); c.fill();

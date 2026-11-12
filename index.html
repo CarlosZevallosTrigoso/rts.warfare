@@ -338,12 +338,12 @@
   <button type="button" id="empezar">Empezar</button>
   <button type="button" id="tutorial">Tutorial guiado<small style="display:block;color:var(--suave);font-size:10px">ocho pasos, con el rival dormido hasta el final</small></button>
   <button type="button" id="continuar" hidden>Continuar la partida guardada</button>
-  <div id="version">versión 83</div>
+  <div id="version">versión 84</div>
 </div></div>
 <div id="guia" hidden><div class="caja"><div class="cab"><strong>Guía: para qué sirve cada cosa</strong><button type="button" id="cierraGuia">cerrar</button></div><div id="guiaTxt"></div></div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finVer" href="#" title="Vuelve a ver la partida entera, con todo el mapa a la vista y a la velocidad que quieras.">ver repetición</a><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 83' };
+globalThis.W = { VERSION: 'versión 84' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -372,7 +372,10 @@ globalThis.W = { VERSION: 'versión 83' };
   // da: recurso que producen solos y cada cuántos ticks dan una unidad.
   W.EDIF = {
     patio:     { nombre: 'Patio',     tam: 3, vida: 2000, costo: 0,    tiempo: 0,   energia: 0,   vision: 8, req: [], agua: 8, guarda: { min: 3000, pet: 500 }, radioCom: 60 },
-    central:   { nombre: 'Central',   tam: 2, vida: 500,  costo: 300,  tiempo: 200, energia: 100, vision: 5, req: ['patio'], mejora: true },
+    central:   { nombre: 'Central térmica', tam: 2, vida: 500,  costo: 300,  tiempo: 200, energia: 100, vision: 5, req: ['patio'], mejora: true, quema: true }, // quema petróleo; sin él da el 30 %
+    // Energía sin petróleo: la eólica da poco y es barata; la hidroeléctrica da mucho, pero solo va junto al agua.
+    eolica:    { nombre: 'Eólica', tam: 1, vida: 250, costo: 200, tiempo: 140, energia: 25, vision: 4, req: ['patio'] },
+    hidro:     { nombre: 'Hidroeléctrica', tam: 2, vida: 700, costo: 1000, tiempo: 400, energia: 160, vision: 5, req: ['central'], nivel: 2, juntoA: 'agua', libre: true },
     refineria: { nombre: 'Refinería', tam: 3, vida: 900,  costo: 1200, tiempo: 400, energia: -30, vision: 6, req: ['central'] },
     bomba:     { nombre: 'Bomba de agua', tam: 2, vida: 450, costo: 400, tiempo: 240, energia: -15, vision: 5, req: ['central'], agua: 12, juntoA: 'agua', libre: true, mejora: true },
     cuartel:   { nombre: 'Cuartel',   tam: 2, vida: 700,  costo: 400,  tiempo: 300, energia: -20, vision: 5, req: ['central'] },
@@ -423,6 +426,7 @@ globalThis.W = { VERSION: 'versión 83' };
     deposito:  { nombre: 'Depósito',  tam: 1, vida: 450,  costo: 500,  tiempo: 240, energia: -10, vision: 6, req: ['cuartel'], libre: true },
     // Infraestructura: cada tramo de camino. No se construye desde el patio (lo deja la excavadora), no ocupa celdas y no se ataca solo: hay que ordenarlo.
     // Línea de servicio: cable, tubería y pista de servicio en una pieza. Une edificios a la red; cruza cualquier terreno; no acelera a nadie.
+    tubo:      { nombre: 'Oleoducto', infra: true, linea: true, tubo: true, tam: 1, vida: 220, costo: 0, tiempo: 1, energia: 0, vision: 0, req: [] }, // lleva el petróleo del extractor a la refinería, al tanque o al patio; se tiende solo
     linea:     { nombre: 'Línea de servicio', infra: true, linea: true, tam: 1, vida: 180, costo: 16, tiempo: 1, energia: 0, vision: 0, req: [] },
     camino:    { nombre: 'Camino', infra: true, tam: 1, vida: 320, costo: 24, tiempo: 1, energia: 0, vision: 0, req: [] },
   };
@@ -592,7 +596,7 @@ globalThis.W = { VERSION: 'versión 83' };
     minaPozo: 40000, // minerales del pozo de una mina (más lo que hubiera en la superficie que tapa)
     vigilaRadio: 8, vigilaMax: 14, protegeDist: 4,
     espiaRadio: 6, espiaInfo: 2, sumiBase: 1, sumiUnidad: 0.5, sumiCarga: 40, // suministro móvil: gasto por ciclo (medio segundo) en vacío y por unidad atendida; y lo que carga por ciclo en el puesto logístico
-    dronMisRadio: 8, autoReserva: 400, autoLargo: 70, cableMax: 24, bunkerDano: 0.25, ambCarga: 8, hospitalCura: 0.6, /* largo máximo del cable que un edificio nuevo tiende solo hasta la red */
+    dronMisRadio: 8, autoReserva: 400, autoLargo: 70, cableMax: 24, tuboMax: 30, sinTubo: 0.3, quemaCada: 80, sinCombEnergia: 0.3, /* oleoducto: largo máximo y rendimiento del extractor sin él; central: cada cuántos ticks quema 1 de petróleo y qué fracción da sin él */ bunkerDano: 0.25, ambCarga: 8, hospitalCura: 0.6, /* largo máximo del cable que un edificio nuevo tiende solo hasta la red */
     rutaNodos: 30000, // presupuesto de celdas que se exploran por tick buscando rutas
     misilesMax: 10, mejoraMax: 3, mejoraCosto: 0.6, mejoraBono: 0.5, // mejora de un edificio: hasta nivel 3; cada nivel cuesta el 60 % del edificio por el nivel que tiene y rinde un 50 % más
     inicio: 2500, petInicio: 150, cosecha: 5, descarga: 25, colaMax: 9, separacionColocar: 3, goteoCada: 5, vistaInicial: 22, obrasMax: 8, curaUnidad: 0.01, curaEdificio: 0.0025, curaCosto: 0.15, venta: 0.5, trinchera: 0.45, arco: 0.14, arcoTrinchera: 1.05, visAd: 1.3, visLado: 0.75, visAt: 0.3, cono: 1.05, periferia: 1.83, flanco: 1.25, espalda: 1.5, bosqueVeh: 0.6, bosqueCubre: 0.7, reposta: 12, retiroBajo: 0.3, retiroAlto: 0.9, huida: 300, dia: 9600, diaLuz: 6000, nocheVis: 0.7, caminoVel: 1.6, tramoLargo: 4, enlace: 5, cobNodo: 14, cobEdif: 6, lineaVel: 0.12, lineaCelda: 3, sinSum: 400, sinSumRecarga: 1.5, abastDura: 1500, heliRepone: 300, cobAvanzada: 10, hospitalCura: 2, dronFpv: 40, dronBomba: 15, dronRepone: 200, dronFpvCada: 60, hackInfo: 25, hackVeh: 240, hackEdif: 300, hackRecarga: 200, hackCanal: 40, trazaVel: 0.45, caminoLlano: 4, caminoBosque: 12, caminoAgua: 30, mandoCada: 40, mandoGiro: 1.5, captura: 600, capturaRadio: 2, antenaRadio: 12, depositoCada: 8, tallerRadio: 4, ocultaVe: 2.5, chatarra: 0.25, reparaRadio: 8, reparaVeh: 0.5, curaMedico: 0.35, reparaEdif: 0.8, rangos: [2, 5, 10], rangoDano: 0.1, rangoVida: 0.1, cupoAviones: 5, pasada: 7, orbita: 3.5, fuelCae: 80, cavar: 80, aplasta: 10, bonoProd: 0.5, bonoMax: 2.5 };
@@ -1029,7 +1033,53 @@ globalThis.W = { VERSION: 'versión 83' };
     }
     m.ents.push(e); m.porId.set(e.id, e); m.redSucia = true;
     if (m.logistica !== false && m.cob && tipo !== 'patio' && tipo !== 'avanzada') autoCable(m, e);
+    if (m.logistica !== false && m.cob) { // oleoductos: el extractor nuevo tiende el suyo; una refinería o un tanque nuevos se lo dan a los extractores que no lo tenían
+      if (tipo === 'extractor') autoTubo(m, e);
+      else if (DESTINO_TUBO[tipo]) for (const o of m.ents.slice()) if (o.edif && o.j === j && o.tipo === 'extractor' && o.vida > 0 && !W.entubado(m, o)) autoTubo(m, o);
+    }
     return e;
+  }
+  // Oleoducto: del extractor al edificio propio más cercano que recibe petróleo (refinería, tanque o patio), hasta ECON.tuboMax celdas.
+  // Son tramos como los del cable, pero no llevan energía ni red: solo petróleo. Si el enemigo corta uno, el extractor rinde ECON.sinTubo.
+  const DESTINO_TUBO = { refineria: true, tanqueComb: true, patio: true };
+  W.entubado = (m, e) => { if (!e.tubos || !e.tubos.length) return false; const d = m.porId.get(e.tuboA); if (!d || d.vida <= 0) return false; for (const id of e.tubos) { const t = m.porId.get(id); if (!t || t.vida <= 0) return false; } return true; };
+  function autoTubo(m, e) {
+    for (const id of e.tubos || []) { const t = m.porId.get(id); if (t && t.vida > 0) t.vida = 0; } // lo que quede del anterior se retira
+    e.tubos = []; e.tuboA = 0;
+    let a = null, da = Infinity;
+    for (const o of m.ents) { if (!o.edif || o.infra || o.j !== e.j || o.vida <= 0 || !DESTINO_TUBO[o.tipo]) continue; const dd = Math.hypot(o.cx - e.cx, o.cy - e.cy); if (dd < da) { da = dd; a = o; } }
+    if (!a || da > ECON.tuboMax) return false;
+    const ux = (e.cx - a.cx) / da, uy = (e.cy - a.cy) / da; let ult = a.id, prev = null;
+    for (let h = 0; h < da; h += 5) { const s = Math.min(da, h + 5), tr = crearLinea(m, e.j, a.cx + ux * h, a.cy + uy * h, a.cx + ux * s, a.cy + uy * s, ult); tr.tipo = 'tubo'; tr.tubo = true; tr.vida = tr.vidaMax = EDIF.tubo.vida; if (prev) prev.a = tr.id; prev = tr; ult = tr.id; e.tubos.push(tr.id); }
+    if (prev) prev.a = e.id;
+    e.tuboA = a.id; return true;
+  }
+  W.autoTubo = autoTubo;
+  // Ingeniero civil en automático, sin cables que tender: va al extractor propio sin oleoducto más cercano (que tenga adónde llevarlo) y se lo repone.
+  function autoEntubar(m, u) {
+    const tomados = new Set(); for (const o of m.ents) if (!o.edif && o.j === u.j && o !== u && o.orden === 'entubar') tomados.add(o.entuba);
+    let b = null, db = Infinity;
+    for (const e of m.ents) {
+      if (!e.edif || e.j !== u.j || e.tipo !== 'extractor' || e.vida <= 0 || tomados.has(e.id) || W.entubado(m, e)) continue;
+      if (!m.ents.some((o) => o.edif && !o.infra && o.j === u.j && o.vida > 0 && DESTINO_TUBO[o.tipo] && Math.hypot(o.cx - e.cx, o.cy - e.cy) <= ECON.tuboMax)) continue;
+      const d0 = Math.hypot(e.cx - u.x, e.cy - u.y); if (d0 < db) { db = d0; b = e; }
+    }
+    if (b) { u.orden = 'entubar'; u.entuba = b.id; u.ruta = null; u.pend = null; u.obj = 0; }
+  }
+  function tickEntubar(m, u) {
+    const e = m.porId.get(u.entuba), fin = () => { u.orden = 'nada'; u.entuba = 0; u.ruta = null; };
+    if (!e || e.vida <= 0 || W.entubado(m, e)) { fin(); return; }
+    if (dist(u.x, u.y, e) > 2.4) { if (u.fallo) { u.fallo = false; u.autoT = m.t + 600; fin(); return; } if (!u.pend && !u.ruta) pedirRuta(m, u, e.cx, e.cy, e.tam / 2 + 1.2); avanzar(m, u); return; }
+    autoTubo(m, e); fin();
+  }
+  // Centrales térmicas: cada ECON.quemaCada ticks queman 1 de petróleo; si no lo hay, dan ECON.sinCombEnergia de su energía.
+  function tickCentrales(m) {
+    for (const e of m.ents) {
+      if (!e.edif || e.vida <= 0 || !EDIF[e.tipo].quema) continue;
+      const J = m.jug[e.j], antes = !!e.sinComb;
+      if (J.dios) e.sinComb = false; else if (J.petroleo >= 1) { J.petroleo -= 1; J.quemado = (J.quemado || 0) + 1; e.sinComb = false; } else e.sinComb = true;
+      if (antes !== !!e.sinComb) m.redSucia = true;
+    }
   }
   // Cableado automático: un edificio nuevo que no queda pegado a la red tiende solo un cable hasta el edificio conectado más cercano
   // (gratis, hasta ECON.cableMax celdas). El cable son tramos de línea de servicio: el enemigo puede cortarlos.
@@ -1802,7 +1852,7 @@ globalThis.W = { VERSION: 'versión 83' };
     const cel = m.redCel, puestas = [];
     const idx = new Map(); for (let i = 0; i < its.length; i++) idx.set(its[i].id, i);
     for (let i = 0; i < its.length; i++) { // líneas de servicio: cada tramo se une con lo que tiene a cada extremo (otro tramo o un edificio)
-      const e = its[i]; if (!e.linea) continue;
+      const e = its[i]; if (!e.linea || e.tubo) continue; // (el oleoducto no lleva red)
       for (const id of [e.de, e.a]) { const k = idx.get(id); if (k !== undefined && its[k].j === e.j) une(i, k); }
     }
     for (let i = 0; i < its.length; i++) { // edificios cercanos entre sí
@@ -1824,7 +1874,7 @@ globalThis.W = { VERSION: 'versión 83' };
       if (e.infra) continue;
       const en = EDIF[e.tipo].energia;
       if (e.tipo === 'patio') g.patio = true;
-      if (en > 0) g.prod += en * (m.jug[e.j].mejoras.turbinas ? 1.5 : 1) * bonoE(e); else g.uso -= en;
+      if (en > 0) g.prod += en * (m.jug[e.j].mejoras.turbinas ? 1.5 : 1) * bonoE(e) * (e.sinComb ? ECON.sinCombEnergia : 1); else g.uso -= en;
     }
     const sella = (f, cx, cy, r) => { const R = Math.ceil(r), r2 = r * r; for (let dy = -R; dy <= R; dy++) { const y = cy + dy; if (y < 0 || y >= N) continue; for (let dx = -R; dx <= R; dx++) { const x = cx + dx; if (x >= 0 && x < N && dx * dx + dy * dy <= r2) f[y * N + x] = 1; } } };
     for (let i = 0; i < its.length; i++) {
@@ -1884,7 +1934,7 @@ globalThis.W = { VERSION: 'versión 83' };
       if (e.edif) {
         const d = EDIF[e.tipo], en = d.energia;
         if (d.guarda && fisico) { J.capMin += d.guarda.min; J.capPet += d.guarda.pet; }
-        if (en > 0) J.prod += en * (J.mejoras.turbinas ? 1.5 : 1) * bonoE(e); else J.uso -= en;
+        if (en > 0) J.prod += en * (J.mejoras.turbinas ? 1.5 : 1) * bonoE(e) * (e.sinComb ? ECON.sinCombEnergia : 1); else J.uso -= en;
         J.aguaProd += (d.agua || 0) * (e.tipo === 'bomba' && J.mejoras.depuracion ? 1.5 : 1) * (e.tipo === 'bomba' ? bonoE(e) : 1);
       }
       else { J.aguaUso += UNID[e.tipo].agua || 0; for (const p of e.pasajeros) { J.cuenta[p.tipo] = (J.cuenta[p.tipo] || 0) + 1; J.aguaUso += UNID[p.tipo].agua || 0; } } // los que van dentro de un transporte también cuentan
@@ -3217,13 +3267,14 @@ globalThis.W = { VERSION: 'versión 83' };
       if (u.orden === 'atacar') { u.orden = 'nada'; u.obj = 0; }
       if (u.orden === 'trazar') { tickTraza(m, u); return; }
       if (u.orden === 'conectar') { tickConectar(m, u); return; }
+      if (u.orden === 'entubar') { tickEntubar(m, u); return; }
       if (u.orden === 'hackear') { tickHackear(m, u); return; }
       if (u.orden === 'murar') { tickMurar(m, u); return; }
       if (u.orden === 'zapar') { tickZapar(m, u); return; }
       if (u.orden === 'recuperar') { tickRecuperar(m, u); return; }
       if (u.orden !== 'nada') { u.arregla = 0; if (avanzar(m, u) || (!u.ruta && !u.pend)) u.orden = 'nada'; return; }
       if (d.recupera && (m.t + u.id) % 40 === 0 && m.cascos && m.cascos.length) autoRecuperar(m, u);
-      if (d.tiende && u.auto && m.logistica !== false && (m.t + u.id) % 30 === 0 && m.t >= (u.autoT || 0)) autoConectar(m, u);
+      if (d.tiende && u.auto && m.logistica !== false && (m.t + u.id) % 30 === 0 && m.t >= (u.autoT || 0)) { autoConectar(m, u); if (u.orden === 'nada') autoEntubar(m, u); }
       if (d.repara || d.cura) tickIngeniero(m, u);
       return;
     }
@@ -3636,7 +3687,8 @@ globalThis.W = { VERSION: 'versión 83' };
       else if (EDIF[e.tipo].da) { // extracción continua; con déficit de energía rinde la mitad
         const da = EDIF[e.tipo].da, J = m.jug[e.j];
         if (da.rec === 'minerales' && ((e.conRed === false && m.logistica !== false) || e.pozo <= 0)) continue; // la mina: sin red no saca nada; y el pozo se acaba
-        e.acum += (e.sinLuz ? 0.5 : 1) * (e.tipo === 'estacion' && J.mejoras.analisis ? 1.5 : 1) * bonoE(e);
+        if (da.rec === 'petroleo' && m.logistica !== false) { if (e.tubos === undefined && m.cob) autoTubo(m, e); e.sinTubo = !W.entubado(m, e); } // sin oleoducto en pie, el petróleo sale en bidones: rinde mucho menos
+        e.acum += (e.sinLuz ? 0.5 : 1) * (e.tipo === 'estacion' && J.mejoras.analisis ? 1.5 : 1) * bonoE(e) * (e.sinTubo ? ECON.sinTubo : 1);
         if (e.acum >= da.cada) { e.acum -= da.cada; if (da.rec === 'petroleo') { entra(m, J, 'petroleo', 1); J.extraido++; } else if (da.rec === 'minerales') { const q = entra(m, J, 'minerales', 1); e.pozo -= q; J.cosechado += q; } else J[da.rec]++; }
       }
     }
@@ -3653,6 +3705,7 @@ globalThis.W = { VERSION: 'versión 83' };
     if (m.minasT && m.minasT.length && m.t % 2 === 0) tickMinas(m);
     if (m.t % 10 === 5) tickEscoltas(m);
     if (m.t % 40 === 7) tickRadar(m);
+    if (m.logistica !== false && m.t % ECON.quemaCada === 11) tickCentrales(m);
     if (m.t % 10 === 0 && m.logistica !== false) { // suministro: fuera de la cobertura el contador sube; dentro, baja rápido. Los aviones repostan en su base: no cuenta.
       const pts = tickSuministro(m);
       for (const e of m.gr.edifs) { if (!EDIF[e.tipo].arma) continue; const cap = W.munDe(e.tipo, true); if (e.mun === undefined) e.mun = cap; else if (e.mun < cap && e.conRed !== false && !e.sinLuz) e.mun = Math.min(cap, e.mun + Math.ceil(cap / 40)); } // las torres reponen por la red
@@ -3789,7 +3842,8 @@ globalThis.W = { VERSION: 'versión 83' };
   }
   function siguienteEdificio(m, j, patio, plan) {
     const J = m.jug[j];
-    const conEnergia = (tipo) => (tipo !== 'central' && J.prod - J.uso + EDIF[tipo].energia < 0 ? 'central' : tipo);
+    const energia = m.logistica !== false && J.petroleo < 40 && W.disponible(m, j, EDIF.eolica) ? 'eolica' : 'central'; // sin petróleo que quemar, la central no rinde: eólicas
+    const conEnergia = (tipo) => (tipo !== 'central' && tipo !== 'eolica' && J.prod - J.uso + EDIF[tipo].energia < 0 ? energia : tipo);
     // Agua justa: otra bomba antes que nada, o la tropa deja de crecer.
     if (J.cuenta.central && J.aguaProd - J.aguaUso < 4 && (J.cuenta.bomba || 0) < 6 && buscarSitio(m, j, 'bomba', patio)) return conEnergia('bomba');
     for (const [tipo, n] of plan || PLAN) {
@@ -3801,7 +3855,7 @@ globalThis.W = { VERSION: 'versión 83' };
       if ((d.pet || 0) > J.petroleo && !J.cuenta.extractor) continue; // sin petróleo ni forma de sacarlo: se salta
       return conEnergia(tipo);
     }
-    return J.uso > J.prod ? 'central' : null;
+    return J.uso > J.prod ? energia : null;
   }
 
   function buscarSitio(m, j, tipo, patio) {
@@ -5020,6 +5074,16 @@ globalThis.W = { VERSION: 'versión 83' };
     } else if (e.tipo === 'hospital') { // pabellón claro con la cruz roja
       c.fillStyle = '#f2f0ea'; c.strokeStyle = col.osc; c.lineWidth = lw; c.beginPath(); c.rect(X(0.14), Y(0.14), t * 0.72, t * 0.72); c.fill(); c.stroke();
       c.fillStyle = s.deficit ? col.humo : '#c0392b'; c.fillRect(X(0.42), Y(0.24), t * 0.16, t * 0.52); c.fillRect(X(0.24), Y(0.42), t * 0.52, t * 0.16);
+    } else if (e.tipo === 'eolica') { // torre fina con tres palas que giran
+      const px = X(0.5), py = Y(0.42), a0 = s.deficit ? 0.4 : s.tiempo * 0.003 + s.id;
+      c.strokeStyle = col.osc; c.lineWidth = lw * 1.6; c.beginPath(); c.moveTo(px, Y(0.9)); c.lineTo(px, py); c.stroke();
+      c.strokeStyle = col.luz; c.lineWidth = lw * 1.3; c.beginPath(); for (let k = 0; k < 3; k++) { const a = a0 + k * TAU / 3; c.moveTo(px, py); c.lineTo(px + Math.cos(a) * t * 0.36, py + Math.sin(a) * t * 0.36); } c.stroke();
+      c.fillStyle = col.osc; c.beginPath(); c.arc(px, py, t * 0.06, 0, TAU); c.fill();
+    } else if (e.tipo === 'hidro') { // presa: muro curvo, sala de turbinas y el agua que cae
+      c.fillStyle = col.agua || '#9bb5cc'; c.fillRect(X(0.12), Y(0.12), t * 0.76, t * 0.3);
+      c.strokeStyle = col.osc; c.lineWidth = lw * 2.4; c.beginPath(); c.arc(X(0.5), Y(0.2), t * 0.4, 0.25, Math.PI - 0.25); c.stroke();
+      c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = lw; c.beginPath(); c.rect(X(0.3), Y(0.62), t * 0.4, t * 0.24); c.fill(); c.stroke();
+      c.strokeStyle = col.luz; c.lineWidth = lw; c.beginPath(); for (const fx of [0.38, 0.5, 0.62]) { c.moveTo(X(fx), Y(0.46)); c.lineTo(X(fx), Y(0.6)); } c.stroke();
     } else if (e.tipo === 'radar') { // plato que gira sobre su base, con el haz de barrido
       const px = X(0.5), py = Y(0.5), a = s.deficit ? 0.6 : s.tiempo * 0.0016;
       c.fillStyle = col.osc; c.beginPath(); c.arc(px, py, t * 0.3, 0, TAU); c.fill();
@@ -5247,7 +5311,7 @@ globalThis.W = { VERSION: 'versión 83' };
 
     // Volumen: la vista sigue siendo cenital, pero cada cosa tiene altura. Los edificios muestran su pared sur y el tejado
     // se dibuja desplazado hacia arriba; las unidades llevan un canto; la roca y el agua, un escalón.
-    const ALTO = { patio: 0.3, central: 0.36, refineria: 0.32, bomba: 0.2, cuartel: 0.26, extractor: 0.3, fabrica: 0.34, torreta: 0.22, torreCanon: 0.36, aerodromo: 0.08, antiaerea: 0.22, estacion: 0.26, deposito: 0.22, obras: 0.28, misilera: 0.12, interceptor: 0.24, torretaMuro: 0.34, camara: 0.3, estDrones: 0.14, laboratorio: 0.26, logistica: 0.16, avanzada: 0.2, inteligencia: 0.3, pistaAv: 0.04, almacen: 0.22, tanqueComb: 0.18, torreRadio: 0.5, mina: 0.3, radar: 0.3, bunker: 0.14, vigia: 0.6, artFija: 0.14, hospital: 0.28 };
+    const ALTO = { patio: 0.3, central: 0.36, refineria: 0.32, bomba: 0.2, cuartel: 0.26, extractor: 0.3, fabrica: 0.34, torreta: 0.22, torreCanon: 0.36, aerodromo: 0.08, antiaerea: 0.22, estacion: 0.26, deposito: 0.22, obras: 0.28, misilera: 0.12, interceptor: 0.24, torretaMuro: 0.34, camara: 0.3, estDrones: 0.14, laboratorio: 0.26, logistica: 0.16, avanzada: 0.2, inteligencia: 0.3, pistaAv: 0.04, almacen: 0.22, tanqueComb: 0.18, torreRadio: 0.5, mina: 0.3, radar: 0.3, eolica: 0.55, hidro: 0.26, bunker: 0.14, vigia: 0.6, artFija: 0.14, hospital: 0.28 };
     function entEn(wx, wy, holgura) { // holgura: margen extra (en celdas) para acertar con el dedo
       let mejor = null, md = Infinity;
       for (const e of m.ents) {
@@ -5322,7 +5386,7 @@ globalThis.W = { VERSION: 'versión 83' };
         if (!e.edif && UNID[e.tipo].mando && e.j === YO) t += e.sinInfo ? ' · sin información: apagado' : ' · mando activo';
         if (!e.edif && e.j === YO && W.oculta(m, e)) t += ' · oculta';
         if (e.retirando) t += ' · se retira a reparar'; else if (e.huye > m.t) t += ' · huye';
-        if (e.j === YO) { const pb = problema(e); if (pb) t += ' · ' + REMEDIO[pb]; if (e.linea && conRed && !e.conRed) t += ' · no llega a tu red'; }
+        if (e.j === YO) { const pb = problema(e); if (pb) t += ' · ' + REMEDIO[pb]; if (e.linea && !e.tubo && conRed && !e.conRed) t += ' · no llega a tu red'; }
         if (e.tipo === 'misilera' && e.j === YO) { const g = Object.keys(MIS).filter((k) => e.silo && e.silo[k]).map((k) => e.silo[k] + ' ' + MIS[k].nombre).join(', '); t += ' · ' + (g || 'sin misiles'); }
         if (e.tipo === 'interceptor' && e.j === YO) t += ' · cargas ' + (e.cargas === undefined ? EDIF.interceptor.cargas : e.cargas) + '/' + EDIF.interceptor.cargas;
         { const dd = W.dronesDe(m, e); if (dd && e.j === YO && e.dr) t += ' · drones ' + (e.dr.rec.length + e.dr.bomba.length + e.dr.fpv.length) + ' en el aire (dotación: ' + dd.rec + ' rec' + (dd.bomba ? ' · ' + dd.bomba + ' bomb' : '') + (dd.fpv ? ' · ' + dd.fpv + ' kamikaze' : '') + ')' + (dd.fpv ? (e.dronAtk === false ? ' · ataque apagado' : '') : ''); }
@@ -5401,6 +5465,8 @@ globalThis.W = { VERSION: 'versión 83' };
         if (e.tipo === 'avanzada') return e.abast > m.t ? '' : 'enlace';
         if (conRed && e.conRed === false && !EDIF[e.tipo].helipuerto) return 'red'; // (la pista avanzada va fuera de la red a propósito)
         if (e.sinLuz) return 'luz';
+        if (conRed && e.sinComb) return 'quema';
+        if (conRed && e.tipo === 'extractor' && e.sinTubo) return 'tubo';
         if (e.cola && e.cola.length && e.sinAgua) return 'agua';
         return '';
       }
@@ -5421,8 +5487,11 @@ globalThis.W = { VERSION: 'versión 83' };
       dron: 'sin drones · llévalo junto a una estación de drones, un puesto logístico o un camión de suministro',
       radio: 'sin radio: no ves lo que ve y obedece con retraso · torre de radio o vehículo de mando',
       hack: 'hackeado: apagado unos segundos',
+      quema: 'sin petróleo que quemar: da el 30 % · extrae petróleo o pon eólicas',
+      tubo: 'sin oleoducto: rinde el 30 % · ingeniero civil, o una refinería o tanque a menos de 30 celdas',
     };
     function icono(x, y, k) { // disco rojo con el dibujo en blanco
+      if (k === 'quema' || k === 'tubo') k = 'comb';
       ctx.fillStyle = P.mal; ctx.beginPath(); ctx.arc(x, y, 8, 0, TAU); ctx.fill();
       ctx.strokeStyle = '#ffffff'; ctx.fillStyle = '#ffffff'; ctx.lineWidth = 1.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath();
       if (k === 'mun') { // tres cartuchos
@@ -5484,7 +5553,7 @@ globalThis.W = { VERSION: 'versión 83' };
         ctx.fillStyle = COL.copa; ctx.fill(copas);
       }
       if (conRed && (verRed || modo === 'colocar')) { if (redVista !== m.redV) pintarRed(); ctx.drawImage(cRed, ox, oy, N * z, N * z); } // la cobertura: dónde hay suministro y dónde se puede construir
-      const infra = m.ents.filter((e) => e.infra && !e.muro), tramos = infra.filter((e) => !e.linea), lineas = infra.filter((e) => e.linea); // caminos: cada tramo es una pieza de infraestructura, dibujada como un carril continuo con su borde
+      const infra = m.ents.filter((e) => e.infra && !e.muro), tramos = infra.filter((e) => !e.linea), lineas = infra.filter((e) => e.linea && !e.tubo), tubos = infra.filter((e) => e.tubo); // caminos: cada tramo es una pieza de infraestructura, dibujada como un carril continuo con su borde
       if (tramos.length) {
         const linea = (p) => { ctx.moveTo(ox + p[0] * z, oy + p[1] * z); if (p.length < 4) ctx.lineTo(ox + p[0] * z + 0.01, oy + p[1] * z); for (let k = 2; k < p.length; k += 2) ctx.lineTo(ox + p[k] * z, oy + p[k + 1] * z); };
         ctx.lineJoin = 'round'; ctx.lineCap = 'butt'; // los puentes: un tablero más ancho y oscuro debajo del carril
@@ -5540,6 +5609,11 @@ globalThis.W = { VERSION: 'versión 83' };
           ctx.strokeStyle = e.abast > m.t ? P.yo : P.mal; ctx.beginPath(); ctx.moveTo(ox + b.cx * z, oy + b.cy * z); ctx.lineTo(ox + e.cx * z, oy + e.cy * z); ctx.stroke();
         }
         ctx.setLineDash([]);
+      }
+      if (tubos.length) { // oleoductos: un trazo más grueso y pardo, tenue salvo en la vista de la red
+        ctx.strokeStyle = '#7a5a2e'; ctx.globalAlpha = verRed ? 0.85 : 0.4; ctx.lineWidth = Math.max(1.5, z * (verRed ? 0.2 : 0.13)); ctx.beginPath();
+        for (const e of tubos) { if (!veo(e)) continue; const p = e.pts; ctx.moveTo(ox + p[0] * z, oy + p[1] * z); ctx.lineTo(ox + p[2] * z, oy + p[3] * z); }
+        ctx.stroke(); ctx.globalAlpha = 1;
       }
       if (lineas.length) { // líneas de servicio: un trazo fino con sus postes; en rojo las propias que no llegan a la red
         const ancho = Math.max(1, z * (verRed ? 0.14 : 0.08));
@@ -6664,11 +6738,13 @@ globalThis.W = { VERSION: 'versión 83' };
     // ---------- guía: para qué sirve cada cosa ----------
     const QUE = {
       patio: 'El centro de la base: desde él se encargan los edificios. Si pierdes todos, pierdes la partida.', central: 'Da energía a los edificios de su red.', refineria: 'Donde descargan las cosechadoras; trae una.', bomba: 'Da agua, que es el tope de tropa. Va junto al agua.',
-      cuartel: 'Produce la infantería.', extractor: 'Saca petróleo de un yacimiento.', fabrica: 'Produce los vehículos.', torreta: 'Defensa fija contra tierra y aire.', torreCanon: 'Defensa pesada de largo alcance contra blindados.', aerodromo: 'Produce y aloja hasta cinco aviones.',
+      cuartel: 'Produce la infantería.', fabrica: 'Produce los vehículos.', torreta: 'Defensa fija contra tierra y aire.', torreCanon: 'Defensa pesada de largo alcance contra blindados.', aerodromo: 'Produce y aloja hasta cinco aviones.',
       antiaerea: 'Defensa fija solo contra el aire: aviones y drones.', estacion: 'Sobre un campo de conocimiento da información rápido; aloja la inteligencia.', laboratorio: 'Da información en la base, sin campo, más despacio. Vale como estación.', obras: 'Produce las unidades civiles: ingeniero civil y excavadora.',
       deposito: 'Crea una zona con suministro donde también puedes construir. Como todo edificio, tiende solo su cable hasta la red si está a menos de 24 celdas.', misilera: 'Fabrica, guarda y lanza misiles balísticos.', interceptor: 'Derriba los misiles enemigos que entran en su radio.', estDrones: 'Mantiene dos drones de reconocimiento vigilando a su alrededor. Mejorada lleva además bombarderos y kamikazes, y guarda las tecnologías del operador.', inteligencia: 'Entrena espías, aloja dos drones espía de largo alcance y permite el mapeo satelital.',
       bunker: 'Entran hasta 4 de infantería (clic derecho sobre él con la tropa seleccionada) y disparan desde dentro recibiendo solo la cuarta parte del daño. Para sacarlos: selecciona el búnker y clic derecho en el suelo. Si lo destruyen, salen heridos.', vigia: 'Sin armas y muy barata: ve a 16 celdas y descubre a los escondidos a 8. Se puede poner fuera de la red.', artFija: 'Nivel 2. Obús fijo con 20 celdas de alcance sobre lo que vea cualquiera de los tuyos; no dispara a menos de 6 celdas. Gasta munición: la repone por la red.',
       hospital: 'Cura a la infantería que tenga a 6 celdas y aloja hasta tres ambulancias (llega con una; las demás se encargan en él). Necesita energía y red.',
+      central: 'Da 100 de energía quemando petróleo (1 cada 4 segundos). Sin petróleo da solo el 30 %.', eolica: 'Da 25 de energía sin gastar petróleo.', hidro: 'Nivel 2. Da 160 de energía sin gastar petróleo; solo se construye junto al agua.',
+      extractor: 'Saca petróleo de un yacimiento y lo manda por un oleoducto que se tiende solo hasta la refinería, tanque o patio más cercano (30 celdas). Sin oleoducto, o si te lo cortan, rinde el 30 %.',
       radar: 'Nivel 2. No levanta la niebla ni dice qué hay, pero marca con un punto que pulsa cada unidad enemiga que esté a 60 celdas; el punto se actualiza cada 2 segundos. No detecta espías ni edificios. Necesita energía y red.',
       torreRadio: 'Da cobertura de radio a 60 celdas (el patio, 60; el vehículo de mando, 30; el puesto de avanzada, 35). Fuera de la cobertura tus unidades de tierra solo ven lo que tienen encima y obedecen con 3 segundos de retraso. El explorador, el espía y todo lo que vuela llevan radio propia. Se coloca en cualquier terreno explorado.', mina: 'Nivel 2. Se construye sobre un yacimiento de minerales y saca de un pozo profundo (40 000) de forma continua, sin cosechadoras: unos 400 por minuto, más si la mejoras. Hay que conectarla a la red.', almacen: 'Guarda 3000 minerales más. Con los almacenes llenos, lo que cosechas se pierde. Si te lo destruyen pierdes su parte, y la mitad queda en el suelo para quien la recoja.', tanqueComb: 'Guarda 800 de petróleo más. Si te lo destruyen, pierdes su parte.', pistaAv: 'Se coloca en cualquier terreno explorado, sin red ni energía. Clic derecho en ella con helicópteros de combate: la toman por base, repostan allí y su radio de vuelo se cuenta desde allí.', logistica: 'En la base: de aquí salen los camiones y helicópteros de suministro y los vuelos que mantienen los puestos de avanzada; tiene pista para trasladar infantería.', avanzada: 'No se construye: lo despliega el puesto móvil. Con enlace aéreo está en tu red, cura a la infantería cercana y tiene pista.',
       tallerMovil: 'Parado, repara los vehículos que tenga a 4 celdas aunque estén sin suministro, y recupera los vehículos destruidos cercanos (tuyos o del rival) a mitad de precio: va solo, o clic derecho sobre el casco.',
@@ -6963,6 +7039,8 @@ globalThis.W = { VERSION: 'versión 83' };
       sum: (n) => (n === 1 ? '1 unidad sin suministro' : n + ' unidades sin suministro') + ' <small>· fuera de tu red</small>',
       enlace: (n) => (n === 1 ? 'Puesto de avanzada sin enlace aéreo' : n + ' puestos de avanzada sin enlace aéreo'),
       hack: (n) => (n === 1 ? '1 edificio hackeado' : n + ' edificios hackeados'),
+      quema: (n) => (n === 1 ? '1 central sin petróleo: da' : n + ' centrales sin petróleo: dan') + ' el 30 % <small>· extrae petróleo o pon eólicas</small>',
+      tubo: (n) => (n === 1 ? '1 extractor sin oleoducto: rinde' : n + ' extractores sin oleoducto: rinden') + ' el 30 % <small>· ingeniero civil</small>',
     };
     let alertaFirma = '', alertaDonde = {}; const alertaIdx = {};
     function actualizarAlertas() {

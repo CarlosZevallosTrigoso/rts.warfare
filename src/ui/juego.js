@@ -148,7 +148,7 @@
 
     // Volumen: la vista sigue siendo cenital, pero cada cosa tiene altura. Los edificios muestran su pared sur y el tejado
     // se dibuja desplazado hacia arriba; las unidades llevan un canto; la roca y el agua, un escalón.
-    const ALTO = { patio: 0.3, central: 0.36, refineria: 0.32, bomba: 0.2, cuartel: 0.26, extractor: 0.3, fabrica: 0.34, torreta: 0.22, torreCanon: 0.36, aerodromo: 0.08, antiaerea: 0.22, estacion: 0.26, deposito: 0.22, obras: 0.28, misilera: 0.12, interceptor: 0.24, torretaMuro: 0.34, camara: 0.3, estDrones: 0.14, laboratorio: 0.26, logistica: 0.16, avanzada: 0.2, inteligencia: 0.3, pistaAv: 0.04, almacen: 0.22, tanqueComb: 0.18, torreRadio: 0.5, mina: 0.3, radar: 0.3, bunker: 0.14, vigia: 0.6, artFija: 0.14, hospital: 0.28 };
+    const ALTO = { patio: 0.3, central: 0.36, refineria: 0.32, bomba: 0.2, cuartel: 0.26, extractor: 0.3, fabrica: 0.34, torreta: 0.22, torreCanon: 0.36, aerodromo: 0.08, antiaerea: 0.22, estacion: 0.26, deposito: 0.22, obras: 0.28, misilera: 0.12, interceptor: 0.24, torretaMuro: 0.34, camara: 0.3, estDrones: 0.14, laboratorio: 0.26, logistica: 0.16, avanzada: 0.2, inteligencia: 0.3, pistaAv: 0.04, almacen: 0.22, tanqueComb: 0.18, torreRadio: 0.5, mina: 0.3, radar: 0.3, eolica: 0.55, hidro: 0.26, bunker: 0.14, vigia: 0.6, artFija: 0.14, hospital: 0.28 };
     function entEn(wx, wy, holgura) { // holgura: margen extra (en celdas) para acertar con el dedo
       let mejor = null, md = Infinity;
       for (const e of m.ents) {
@@ -223,7 +223,7 @@
         if (!e.edif && UNID[e.tipo].mando && e.j === YO) t += e.sinInfo ? ' · sin información: apagado' : ' · mando activo';
         if (!e.edif && e.j === YO && W.oculta(m, e)) t += ' · oculta';
         if (e.retirando) t += ' · se retira a reparar'; else if (e.huye > m.t) t += ' · huye';
-        if (e.j === YO) { const pb = problema(e); if (pb) t += ' · ' + REMEDIO[pb]; if (e.linea && conRed && !e.conRed) t += ' · no llega a tu red'; }
+        if (e.j === YO) { const pb = problema(e); if (pb) t += ' · ' + REMEDIO[pb]; if (e.linea && !e.tubo && conRed && !e.conRed) t += ' · no llega a tu red'; }
         if (e.tipo === 'misilera' && e.j === YO) { const g = Object.keys(MIS).filter((k) => e.silo && e.silo[k]).map((k) => e.silo[k] + ' ' + MIS[k].nombre).join(', '); t += ' · ' + (g || 'sin misiles'); }
         if (e.tipo === 'interceptor' && e.j === YO) t += ' · cargas ' + (e.cargas === undefined ? EDIF.interceptor.cargas : e.cargas) + '/' + EDIF.interceptor.cargas;
         { const dd = W.dronesDe(m, e); if (dd && e.j === YO && e.dr) t += ' · drones ' + (e.dr.rec.length + e.dr.bomba.length + e.dr.fpv.length) + ' en el aire (dotación: ' + dd.rec + ' rec' + (dd.bomba ? ' · ' + dd.bomba + ' bomb' : '') + (dd.fpv ? ' · ' + dd.fpv + ' kamikaze' : '') + ')' + (dd.fpv ? (e.dronAtk === false ? ' · ataque apagado' : '') : ''); }
@@ -302,6 +302,8 @@
         if (e.tipo === 'avanzada') return e.abast > m.t ? '' : 'enlace';
         if (conRed && e.conRed === false && !EDIF[e.tipo].helipuerto) return 'red'; // (la pista avanzada va fuera de la red a propósito)
         if (e.sinLuz) return 'luz';
+        if (conRed && e.sinComb) return 'quema';
+        if (conRed && e.tipo === 'extractor' && e.sinTubo) return 'tubo';
         if (e.cola && e.cola.length && e.sinAgua) return 'agua';
         return '';
       }
@@ -322,8 +324,11 @@
       dron: 'sin drones · llévalo junto a una estación de drones, un puesto logístico o un camión de suministro',
       radio: 'sin radio: no ves lo que ve y obedece con retraso · torre de radio o vehículo de mando',
       hack: 'hackeado: apagado unos segundos',
+      quema: 'sin petróleo que quemar: da el 30 % · extrae petróleo o pon eólicas',
+      tubo: 'sin oleoducto: rinde el 30 % · ingeniero civil, o una refinería o tanque a menos de 30 celdas',
     };
     function icono(x, y, k) { // disco rojo con el dibujo en blanco
+      if (k === 'quema' || k === 'tubo') k = 'comb';
       ctx.fillStyle = P.mal; ctx.beginPath(); ctx.arc(x, y, 8, 0, TAU); ctx.fill();
       ctx.strokeStyle = '#ffffff'; ctx.fillStyle = '#ffffff'; ctx.lineWidth = 1.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath();
       if (k === 'mun') { // tres cartuchos
@@ -385,7 +390,7 @@
         ctx.fillStyle = COL.copa; ctx.fill(copas);
       }
       if (conRed && (verRed || modo === 'colocar')) { if (redVista !== m.redV) pintarRed(); ctx.drawImage(cRed, ox, oy, N * z, N * z); } // la cobertura: dónde hay suministro y dónde se puede construir
-      const infra = m.ents.filter((e) => e.infra && !e.muro), tramos = infra.filter((e) => !e.linea), lineas = infra.filter((e) => e.linea); // caminos: cada tramo es una pieza de infraestructura, dibujada como un carril continuo con su borde
+      const infra = m.ents.filter((e) => e.infra && !e.muro), tramos = infra.filter((e) => !e.linea), lineas = infra.filter((e) => e.linea && !e.tubo), tubos = infra.filter((e) => e.tubo); // caminos: cada tramo es una pieza de infraestructura, dibujada como un carril continuo con su borde
       if (tramos.length) {
         const linea = (p) => { ctx.moveTo(ox + p[0] * z, oy + p[1] * z); if (p.length < 4) ctx.lineTo(ox + p[0] * z + 0.01, oy + p[1] * z); for (let k = 2; k < p.length; k += 2) ctx.lineTo(ox + p[k] * z, oy + p[k + 1] * z); };
         ctx.lineJoin = 'round'; ctx.lineCap = 'butt'; // los puentes: un tablero más ancho y oscuro debajo del carril
@@ -441,6 +446,11 @@
           ctx.strokeStyle = e.abast > m.t ? P.yo : P.mal; ctx.beginPath(); ctx.moveTo(ox + b.cx * z, oy + b.cy * z); ctx.lineTo(ox + e.cx * z, oy + e.cy * z); ctx.stroke();
         }
         ctx.setLineDash([]);
+      }
+      if (tubos.length) { // oleoductos: un trazo más grueso y pardo, tenue salvo en la vista de la red
+        ctx.strokeStyle = '#7a5a2e'; ctx.globalAlpha = verRed ? 0.85 : 0.4; ctx.lineWidth = Math.max(1.5, z * (verRed ? 0.2 : 0.13)); ctx.beginPath();
+        for (const e of tubos) { if (!veo(e)) continue; const p = e.pts; ctx.moveTo(ox + p[0] * z, oy + p[1] * z); ctx.lineTo(ox + p[2] * z, oy + p[3] * z); }
+        ctx.stroke(); ctx.globalAlpha = 1;
       }
       if (lineas.length) { // líneas de servicio: un trazo fino con sus postes; en rojo las propias que no llegan a la red
         const ancho = Math.max(1, z * (verRed ? 0.14 : 0.08));
@@ -1565,11 +1575,13 @@
     // ---------- guía: para qué sirve cada cosa ----------
     const QUE = {
       patio: 'El centro de la base: desde él se encargan los edificios. Si pierdes todos, pierdes la partida.', central: 'Da energía a los edificios de su red.', refineria: 'Donde descargan las cosechadoras; trae una.', bomba: 'Da agua, que es el tope de tropa. Va junto al agua.',
-      cuartel: 'Produce la infantería.', extractor: 'Saca petróleo de un yacimiento.', fabrica: 'Produce los vehículos.', torreta: 'Defensa fija contra tierra y aire.', torreCanon: 'Defensa pesada de largo alcance contra blindados.', aerodromo: 'Produce y aloja hasta cinco aviones.',
+      cuartel: 'Produce la infantería.', fabrica: 'Produce los vehículos.', torreta: 'Defensa fija contra tierra y aire.', torreCanon: 'Defensa pesada de largo alcance contra blindados.', aerodromo: 'Produce y aloja hasta cinco aviones.',
       antiaerea: 'Defensa fija solo contra el aire: aviones y drones.', estacion: 'Sobre un campo de conocimiento da información rápido; aloja la inteligencia.', laboratorio: 'Da información en la base, sin campo, más despacio. Vale como estación.', obras: 'Produce las unidades civiles: ingeniero civil y excavadora.',
       deposito: 'Crea una zona con suministro donde también puedes construir. Como todo edificio, tiende solo su cable hasta la red si está a menos de 24 celdas.', misilera: 'Fabrica, guarda y lanza misiles balísticos.', interceptor: 'Derriba los misiles enemigos que entran en su radio.', estDrones: 'Mantiene dos drones de reconocimiento vigilando a su alrededor. Mejorada lleva además bombarderos y kamikazes, y guarda las tecnologías del operador.', inteligencia: 'Entrena espías, aloja dos drones espía de largo alcance y permite el mapeo satelital.',
       bunker: 'Entran hasta 4 de infantería (clic derecho sobre él con la tropa seleccionada) y disparan desde dentro recibiendo solo la cuarta parte del daño. Para sacarlos: selecciona el búnker y clic derecho en el suelo. Si lo destruyen, salen heridos.', vigia: 'Sin armas y muy barata: ve a 16 celdas y descubre a los escondidos a 8. Se puede poner fuera de la red.', artFija: 'Nivel 2. Obús fijo con 20 celdas de alcance sobre lo que vea cualquiera de los tuyos; no dispara a menos de 6 celdas. Gasta munición: la repone por la red.',
       hospital: 'Cura a la infantería que tenga a 6 celdas y aloja hasta tres ambulancias (llega con una; las demás se encargan en él). Necesita energía y red.',
+      central: 'Da 100 de energía quemando petróleo (1 cada 4 segundos). Sin petróleo da solo el 30 %.', eolica: 'Da 25 de energía sin gastar petróleo.', hidro: 'Nivel 2. Da 160 de energía sin gastar petróleo; solo se construye junto al agua.',
+      extractor: 'Saca petróleo de un yacimiento y lo manda por un oleoducto que se tiende solo hasta la refinería, tanque o patio más cercano (30 celdas). Sin oleoducto, o si te lo cortan, rinde el 30 %.',
       radar: 'Nivel 2. No levanta la niebla ni dice qué hay, pero marca con un punto que pulsa cada unidad enemiga que esté a 60 celdas; el punto se actualiza cada 2 segundos. No detecta espías ni edificios. Necesita energía y red.',
       torreRadio: 'Da cobertura de radio a 60 celdas (el patio, 60; el vehículo de mando, 30; el puesto de avanzada, 35). Fuera de la cobertura tus unidades de tierra solo ven lo que tienen encima y obedecen con 3 segundos de retraso. El explorador, el espía y todo lo que vuela llevan radio propia. Se coloca en cualquier terreno explorado.', mina: 'Nivel 2. Se construye sobre un yacimiento de minerales y saca de un pozo profundo (40 000) de forma continua, sin cosechadoras: unos 400 por minuto, más si la mejoras. Hay que conectarla a la red.', almacen: 'Guarda 3000 minerales más. Con los almacenes llenos, lo que cosechas se pierde. Si te lo destruyen pierdes su parte, y la mitad queda en el suelo para quien la recoja.', tanqueComb: 'Guarda 800 de petróleo más. Si te lo destruyen, pierdes su parte.', pistaAv: 'Se coloca en cualquier terreno explorado, sin red ni energía. Clic derecho en ella con helicópteros de combate: la toman por base, repostan allí y su radio de vuelo se cuenta desde allí.', logistica: 'En la base: de aquí salen los camiones y helicópteros de suministro y los vuelos que mantienen los puestos de avanzada; tiene pista para trasladar infantería.', avanzada: 'No se construye: lo despliega el puesto móvil. Con enlace aéreo está en tu red, cura a la infantería cercana y tiene pista.',
       tallerMovil: 'Parado, repara los vehículos que tenga a 4 celdas aunque estén sin suministro, y recupera los vehículos destruidos cercanos (tuyos o del rival) a mitad de precio: va solo, o clic derecho sobre el casco.',
@@ -1864,6 +1876,8 @@
       sum: (n) => (n === 1 ? '1 unidad sin suministro' : n + ' unidades sin suministro') + ' <small>· fuera de tu red</small>',
       enlace: (n) => (n === 1 ? 'Puesto de avanzada sin enlace aéreo' : n + ' puestos de avanzada sin enlace aéreo'),
       hack: (n) => (n === 1 ? '1 edificio hackeado' : n + ' edificios hackeados'),
+      quema: (n) => (n === 1 ? '1 central sin petróleo: da' : n + ' centrales sin petróleo: dan') + ' el 30 % <small>· extrae petróleo o pon eólicas</small>',
+      tubo: (n) => (n === 1 ? '1 extractor sin oleoducto: rinde' : n + ' extractores sin oleoducto: rinden') + ' el 30 % <small>· ingeniero civil</small>',
     };
     let alertaFirma = '', alertaDonde = {}; const alertaIdx = {};
     function actualizarAlertas() {

@@ -75,7 +75,53 @@
     }
     m.ents.push(e); m.porId.set(e.id, e); m.redSucia = true;
     if (m.logistica !== false && m.cob && tipo !== 'patio' && tipo !== 'avanzada') autoCable(m, e);
+    if (m.logistica !== false && m.cob) { // oleoductos: el extractor nuevo tiende el suyo; una refinería o un tanque nuevos se lo dan a los extractores que no lo tenían
+      if (tipo === 'extractor') autoTubo(m, e);
+      else if (DESTINO_TUBO[tipo]) for (const o of m.ents.slice()) if (o.edif && o.j === j && o.tipo === 'extractor' && o.vida > 0 && !W.entubado(m, o)) autoTubo(m, o);
+    }
     return e;
+  }
+  // Oleoducto: del extractor al edificio propio más cercano que recibe petróleo (refinería, tanque o patio), hasta ECON.tuboMax celdas.
+  // Son tramos como los del cable, pero no llevan energía ni red: solo petróleo. Si el enemigo corta uno, el extractor rinde ECON.sinTubo.
+  const DESTINO_TUBO = { refineria: true, tanqueComb: true, patio: true };
+  W.entubado = (m, e) => { if (!e.tubos || !e.tubos.length) return false; const d = m.porId.get(e.tuboA); if (!d || d.vida <= 0) return false; for (const id of e.tubos) { const t = m.porId.get(id); if (!t || t.vida <= 0) return false; } return true; };
+  function autoTubo(m, e) {
+    for (const id of e.tubos || []) { const t = m.porId.get(id); if (t && t.vida > 0) t.vida = 0; } // lo que quede del anterior se retira
+    e.tubos = []; e.tuboA = 0;
+    let a = null, da = Infinity;
+    for (const o of m.ents) { if (!o.edif || o.infra || o.j !== e.j || o.vida <= 0 || !DESTINO_TUBO[o.tipo]) continue; const dd = Math.hypot(o.cx - e.cx, o.cy - e.cy); if (dd < da) { da = dd; a = o; } }
+    if (!a || da > ECON.tuboMax) return false;
+    const ux = (e.cx - a.cx) / da, uy = (e.cy - a.cy) / da; let ult = a.id, prev = null;
+    for (let h = 0; h < da; h += 5) { const s = Math.min(da, h + 5), tr = crearLinea(m, e.j, a.cx + ux * h, a.cy + uy * h, a.cx + ux * s, a.cy + uy * s, ult); tr.tipo = 'tubo'; tr.tubo = true; tr.vida = tr.vidaMax = EDIF.tubo.vida; if (prev) prev.a = tr.id; prev = tr; ult = tr.id; e.tubos.push(tr.id); }
+    if (prev) prev.a = e.id;
+    e.tuboA = a.id; return true;
+  }
+  W.autoTubo = autoTubo;
+  // Ingeniero civil en automático, sin cables que tender: va al extractor propio sin oleoducto más cercano (que tenga adónde llevarlo) y se lo repone.
+  function autoEntubar(m, u) {
+    const tomados = new Set(); for (const o of m.ents) if (!o.edif && o.j === u.j && o !== u && o.orden === 'entubar') tomados.add(o.entuba);
+    let b = null, db = Infinity;
+    for (const e of m.ents) {
+      if (!e.edif || e.j !== u.j || e.tipo !== 'extractor' || e.vida <= 0 || tomados.has(e.id) || W.entubado(m, e)) continue;
+      if (!m.ents.some((o) => o.edif && !o.infra && o.j === u.j && o.vida > 0 && DESTINO_TUBO[o.tipo] && Math.hypot(o.cx - e.cx, o.cy - e.cy) <= ECON.tuboMax)) continue;
+      const d0 = Math.hypot(e.cx - u.x, e.cy - u.y); if (d0 < db) { db = d0; b = e; }
+    }
+    if (b) { u.orden = 'entubar'; u.entuba = b.id; u.ruta = null; u.pend = null; u.obj = 0; }
+  }
+  function tickEntubar(m, u) {
+    const e = m.porId.get(u.entuba), fin = () => { u.orden = 'nada'; u.entuba = 0; u.ruta = null; };
+    if (!e || e.vida <= 0 || W.entubado(m, e)) { fin(); return; }
+    if (dist(u.x, u.y, e) > 2.4) { if (u.fallo) { u.fallo = false; u.autoT = m.t + 600; fin(); return; } if (!u.pend && !u.ruta) pedirRuta(m, u, e.cx, e.cy, e.tam / 2 + 1.2); avanzar(m, u); return; }
+    autoTubo(m, e); fin();
+  }
+  // Centrales térmicas: cada ECON.quemaCada ticks queman 1 de petróleo; si no lo hay, dan ECON.sinCombEnergia de su energía.
+  function tickCentrales(m) {
+    for (const e of m.ents) {
+      if (!e.edif || e.vida <= 0 || !EDIF[e.tipo].quema) continue;
+      const J = m.jug[e.j], antes = !!e.sinComb;
+      if (J.dios) e.sinComb = false; else if (J.petroleo >= 1) { J.petroleo -= 1; J.quemado = (J.quemado || 0) + 1; e.sinComb = false; } else e.sinComb = true;
+      if (antes !== !!e.sinComb) m.redSucia = true;
+    }
   }
   // Cableado automático: un edificio nuevo que no queda pegado a la red tiende solo un cable hasta el edificio conectado más cercano
   // (gratis, hasta ECON.cableMax celdas). El cable son tramos de línea de servicio: el enemigo puede cortarlos.
@@ -848,7 +894,7 @@
     const cel = m.redCel, puestas = [];
     const idx = new Map(); for (let i = 0; i < its.length; i++) idx.set(its[i].id, i);
     for (let i = 0; i < its.length; i++) { // líneas de servicio: cada tramo se une con lo que tiene a cada extremo (otro tramo o un edificio)
-      const e = its[i]; if (!e.linea) continue;
+      const e = its[i]; if (!e.linea || e.tubo) continue; // (el oleoducto no lleva red)
       for (const id of [e.de, e.a]) { const k = idx.get(id); if (k !== undefined && its[k].j === e.j) une(i, k); }
     }
     for (let i = 0; i < its.length; i++) { // edificios cercanos entre sí
@@ -870,7 +916,7 @@
       if (e.infra) continue;
       const en = EDIF[e.tipo].energia;
       if (e.tipo === 'patio') g.patio = true;
-      if (en > 0) g.prod += en * (m.jug[e.j].mejoras.turbinas ? 1.5 : 1) * bonoE(e); else g.uso -= en;
+      if (en > 0) g.prod += en * (m.jug[e.j].mejoras.turbinas ? 1.5 : 1) * bonoE(e) * (e.sinComb ? ECON.sinCombEnergia : 1); else g.uso -= en;
     }
     const sella = (f, cx, cy, r) => { const R = Math.ceil(r), r2 = r * r; for (let dy = -R; dy <= R; dy++) { const y = cy + dy; if (y < 0 || y >= N) continue; for (let dx = -R; dx <= R; dx++) { const x = cx + dx; if (x >= 0 && x < N && dx * dx + dy * dy <= r2) f[y * N + x] = 1; } } };
     for (let i = 0; i < its.length; i++) {
@@ -930,7 +976,7 @@
       if (e.edif) {
         const d = EDIF[e.tipo], en = d.energia;
         if (d.guarda && fisico) { J.capMin += d.guarda.min; J.capPet += d.guarda.pet; }
-        if (en > 0) J.prod += en * (J.mejoras.turbinas ? 1.5 : 1) * bonoE(e); else J.uso -= en;
+        if (en > 0) J.prod += en * (J.mejoras.turbinas ? 1.5 : 1) * bonoE(e) * (e.sinComb ? ECON.sinCombEnergia : 1); else J.uso -= en;
         J.aguaProd += (d.agua || 0) * (e.tipo === 'bomba' && J.mejoras.depuracion ? 1.5 : 1) * (e.tipo === 'bomba' ? bonoE(e) : 1);
       }
       else { J.aguaUso += UNID[e.tipo].agua || 0; for (const p of e.pasajeros) { J.cuenta[p.tipo] = (J.cuenta[p.tipo] || 0) + 1; J.aguaUso += UNID[p.tipo].agua || 0; } } // los que van dentro de un transporte también cuentan
@@ -2263,13 +2309,14 @@
       if (u.orden === 'atacar') { u.orden = 'nada'; u.obj = 0; }
       if (u.orden === 'trazar') { tickTraza(m, u); return; }
       if (u.orden === 'conectar') { tickConectar(m, u); return; }
+      if (u.orden === 'entubar') { tickEntubar(m, u); return; }
       if (u.orden === 'hackear') { tickHackear(m, u); return; }
       if (u.orden === 'murar') { tickMurar(m, u); return; }
       if (u.orden === 'zapar') { tickZapar(m, u); return; }
       if (u.orden === 'recuperar') { tickRecuperar(m, u); return; }
       if (u.orden !== 'nada') { u.arregla = 0; if (avanzar(m, u) || (!u.ruta && !u.pend)) u.orden = 'nada'; return; }
       if (d.recupera && (m.t + u.id) % 40 === 0 && m.cascos && m.cascos.length) autoRecuperar(m, u);
-      if (d.tiende && u.auto && m.logistica !== false && (m.t + u.id) % 30 === 0 && m.t >= (u.autoT || 0)) autoConectar(m, u);
+      if (d.tiende && u.auto && m.logistica !== false && (m.t + u.id) % 30 === 0 && m.t >= (u.autoT || 0)) { autoConectar(m, u); if (u.orden === 'nada') autoEntubar(m, u); }
       if (d.repara || d.cura) tickIngeniero(m, u);
       return;
     }
@@ -2682,7 +2729,8 @@
       else if (EDIF[e.tipo].da) { // extracción continua; con déficit de energía rinde la mitad
         const da = EDIF[e.tipo].da, J = m.jug[e.j];
         if (da.rec === 'minerales' && ((e.conRed === false && m.logistica !== false) || e.pozo <= 0)) continue; // la mina: sin red no saca nada; y el pozo se acaba
-        e.acum += (e.sinLuz ? 0.5 : 1) * (e.tipo === 'estacion' && J.mejoras.analisis ? 1.5 : 1) * bonoE(e);
+        if (da.rec === 'petroleo' && m.logistica !== false) { if (e.tubos === undefined && m.cob) autoTubo(m, e); e.sinTubo = !W.entubado(m, e); } // sin oleoducto en pie, el petróleo sale en bidones: rinde mucho menos
+        e.acum += (e.sinLuz ? 0.5 : 1) * (e.tipo === 'estacion' && J.mejoras.analisis ? 1.5 : 1) * bonoE(e) * (e.sinTubo ? ECON.sinTubo : 1);
         if (e.acum >= da.cada) { e.acum -= da.cada; if (da.rec === 'petroleo') { entra(m, J, 'petroleo', 1); J.extraido++; } else if (da.rec === 'minerales') { const q = entra(m, J, 'minerales', 1); e.pozo -= q; J.cosechado += q; } else J[da.rec]++; }
       }
     }
@@ -2699,6 +2747,7 @@
     if (m.minasT && m.minasT.length && m.t % 2 === 0) tickMinas(m);
     if (m.t % 10 === 5) tickEscoltas(m);
     if (m.t % 40 === 7) tickRadar(m);
+    if (m.logistica !== false && m.t % ECON.quemaCada === 11) tickCentrales(m);
     if (m.t % 10 === 0 && m.logistica !== false) { // suministro: fuera de la cobertura el contador sube; dentro, baja rápido. Los aviones repostan en su base: no cuenta.
       const pts = tickSuministro(m);
       for (const e of m.gr.edifs) { if (!EDIF[e.tipo].arma) continue; const cap = W.munDe(e.tipo, true); if (e.mun === undefined) e.mun = cap; else if (e.mun < cap && e.conRed !== false && !e.sinLuz) e.mun = Math.min(cap, e.mun + Math.ceil(cap / 40)); } // las torres reponen por la red
