@@ -285,7 +285,7 @@
       return conRed && e.sinSum >= W.ECON.sinSum ? 'sum' : '';
     }
     const REMEDIO = {
-      red: 'fuera de la red: no rinde. Un ingeniero civil en automático lo conecta; o construye un depósito conectado cerca',
+      red: 'fuera de la red: no rinde. Un ingeniero civil en automático lo conecta (si está a menos de ' + W.ECON.autoLargo + ' celdas de tu red y te sobran minerales); más lejos, ordénaselo con «Conectar edificios»',
       luz: 'sin energía suficiente en su red: a media marcha. Construye o mejora una central en esta red',
       agua: 'falta agua para entrenar: construye o mejora una bomba de agua',
       sum: 'sin suministro: dispara más lento y no se repara. Vuelve a la zona de tu red o lleva un depósito conectado o un puesto de avanzada',
@@ -1676,7 +1676,7 @@
       ['Mueve la cámara (flechas, o arrastra con el botón derecho) y haz zoom con la rueda. Luego selecciona tu patio con un clic.', () => { if (!tuto.cam0) tuto.cam0 = { x: cam.x, y: cam.y, z: cam.z }; const p = [...sel].map((id) => m.porId.get(id)).some((e) => e && e.tipo === 'patio'); return p && (Math.hypot(cam.x - tuto.cam0.x, cam.y - tuto.cam0.y) > 2 || cam.z !== tuto.cam0.z); }],
       ['Economía: en el menú de la derecha, encarga una central y una refinería. Cuando la casilla diga «colocar», haz clic en ella y ponla cerca del patio. La refinería trae una cosechadora.', () => J.cuenta.central >= 1 && J.cuenta.refineria >= 1],
       ['Tropa: construye un cuartel. Selecciónalo, pasa a la pestaña de unidades y entrena tres soldados. Selecciónalos con una caja y muévelos con clic derecho.', () => { if (!tuto.inf0) tuto.inf0 = (J.cuenta.infanteria || 0) + 1; return J.cuenta.cuartel >= 1 && (J.cuenta.infanteria || 0) >= tuto.inf0 + 2; }],
-      ['La red: pulsa L. Lo sombreado es tu red: ahí hay energía y suministro, y solo ahí se construye. Algunos edificios van fuera: encarga un depósito y colócalo lejos de la zona sombreada.', () => m.ents.some((e) => e.tipo === 'deposito' && e.j === YO)],
+      ['La red: pulsa L. Lo sombreado es tu red: ahí hay energía y suministro, y solo ahí se construye. Algunos edificios van fuera: encarga un depósito y colócalo fuera de la zona sombreada, no muy lejos.', () => m.ents.some((e) => e.tipo === 'deposito' && e.j === YO)],
       ['El depósito lleva un icono rojo: está fuera de la red y no sirve. Construye «Obras civiles» y entrena un ingeniero civil: en automático irá solo a tenderle una línea. Mira también el panel de alertas, arriba a la izquierda.', () => m.ents.some((e) => e.tipo === 'deposito' && e.j === YO && e.conRed)],
       ['Vehículos: construye una fábrica y un tanque. Con el tanque seleccionado pulsa R, marca tres puntos con clic y cierra con clic derecho: patrullará ese circuito.', () => m.ents.some((e) => !e.edif && e.j === YO && e.patrulla && e.patrulla.pts.length >= 2)],
       ['Tecnología: selecciona el patio y, en la pestaña de tecnología, investiga «Nivel 2». Cuesta información, que dan los laboratorios y las estaciones; aquí ya tienes la necesaria.', () => J.nivel >= 2 || J.inv.some((q) => q.clave === 'nivel2')],

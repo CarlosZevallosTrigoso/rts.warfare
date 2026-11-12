@@ -92,6 +92,7 @@
   }
   // Ingeniero civil en automático: busca el edificio propio sin red que tenga más cerca (y que no esté ya encargado a otro) y lo une con el edificio conectado más próximo a él.
   function autoConectar(m, u) {
+    if (m.jug[u.j].minerales < ECON.autoReserva && !m.jug[u.j].dios) return; // solo con algo de dinero de sobra
     const tomados = new Set();
     for (const o of m.ents) if (!o.edif && o.j === u.j && o !== u && o.orden === 'conectar' && o.obra) for (const p of o.obra.pares) { tomados.add(p[0]); tomados.add(p[1]); }
     let b = null, db = Infinity;
@@ -105,7 +106,7 @@
       if (!e.edif || e.infra || e.j !== u.j || e.vida <= 0 || !e.conRed) continue;
       const d0 = Math.hypot(e.cx - b.cx, e.cy - b.cy); if (d0 < da) { da = d0; a = e; }
     }
-    if (!a) return;
+    if (!a || da > ECON.autoLargo) return; // demasiado lejos para decidirlo solo: eso lo ordena el jugador (o va un depósito)
     u.orden = 'conectar'; u.obra = { pares: [[a.id, b.id]], prog: 0, hecho: 0, ult: 0, auto: true }; u.ruta = null; u.pend = null; u.obj = 0;
   }
   // El ingeniero civil conectando: va al primer edificio del par y, desde ahí, la línea avanza sola hasta el segundo, tramo a tramo y pagando cada uno.
@@ -125,6 +126,7 @@
     const L = Math.hypot(b.cx - a.cx, b.cy - a.cy) || 1, ux = (b.cx - a.cx) / L, uy = (b.cy - a.cy) / L;
     const sig = Math.min(L, (ob.hecho || 0) + 5), precio = Math.ceil((sig - (ob.hecho || 0)) * ECON.lineaCelda); // el siguiente tramo, de hasta 5 celdas
     if ((ob.prog || 0) < sig) { ob.prog = Math.min(sig, (ob.prog || 0) + ECON.lineaVel); return; }
+    if (ob.auto && J.minerales < precio + ECON.autoReserva && !J.dios) return; // en automático no deja la caja vacía: espera a que sobre
     if (J.minerales < precio) { if (!ob.avisado) { ob.avisado = true; m.efectos.push({ tipo: 'sinLinea', x1: u.x, y1: u.y, j: u.j, t: m.t }); } return; } // espera a tener con qué
     J.minerales -= precio; ob.avisado = false;
     const h0 = ob.hecho || 0, tr = crearLinea(m, u.j, a.cx + ux * h0, a.cy + uy * h0, a.cx + ux * sig, a.cy + uy * sig, ob.ult || a.id);

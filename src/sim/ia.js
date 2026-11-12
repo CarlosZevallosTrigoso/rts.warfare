@@ -9,7 +9,7 @@
   const PLAN = [['central', 1], ['refineria', 1], ['cuartel', 1], ['bomba', 1], ['extractor', 1], ['fabrica', 1], ['torreta', 1], ['refineria', 2],
     ['estacion', 1], ['torreta', 2], ['cuartel', 2], ['extractor', 2], ['torreta', 3], ['fabrica', 2], ['torreCanon', 1], ['aerodromo', 1], ['antiaerea', 1], ['torreCanon', 2], ['antiaerea', 2]];
   // Orden fijo de investigación.
-  const ORDEN_TEC = ['tolva', 'perforante', 'nivel2', 'motores', 'chalecos', 'reactivo', 'telemetro', 'turbinas', 'depuracion', 'nivel3', 'canonLargo', 'analisis'];
+  const ORDEN_TEC = ['tolva', 'perforante', 'nivel2', 'motores', 'chalecos', 'reactivo', 'telemetro', 'dronesFpv', 'turbinas', 'depuracion', 'nivel3', 'canonLargo', 'dronesPes', 'analisis'];
 
   // Estilos de rival. oleada: factor sobre el tamaño de las oleadas. infMax: tope de infantería (0 = sin tope).
   // blindados: cuántos blindados ligeros abre. aire: aeródromos que quiere y factor de aviones. extra: edificios añadidos al plan.
@@ -108,6 +108,7 @@
     const j = ia.j, J = m.jug[j];
     if (!J.vivo) return;
     const E = ESTILOS[ia.estilo];
+    const tk = (m.t + ia.j * 7) / 20; // cuántas veces ha pensado: las reglas que van cada cierto tiempo se cuentan con esto (con m.t, las del jugador 2 no caían nunca en su turno)
     let patio = null, objetivo = null, dObj = Infinity;
     const soldados = [], aviones = [], patios = [], moviles = [], sinArma = [];
     for (const e of m.ents) {
@@ -152,19 +153,29 @@
     const quiereObras = m.logistica !== false && !J.cuenta.obras && J.cuenta.cuartel && W.tieneReq(m, j, EDIF.obras.req) && J.minerales > 600 && (J.cuenta.fabrica || m.ents.some((e) => e.edif && !e.infra && e.j === j && !e.conRed)); // en cuanto tiene algo que conectar (o fábrica), sus obras civiles
     // Misiles: pasada la primera media hora y con dinero de sobra, una misilera; y un interceptor en cuanto ve volar un misil enemigo o conoce una misilera rival.
     if (!ia.misilVisto && (m.misiles.some((q) => q.j !== j) || m.ents.some((e) => e.tipo === 'misilera' && e.j !== j && m.niebla[j][Math.floor(e.cy) * m.N + Math.floor(e.cx)]))) ia.misilVisto = true;
-    const quiereMisil = J.nivel >= 2 && W.tieneReq(m, j, EDIF.misilera.req) && (ia.misilVisto && !J.cuenta.interceptor && J.minerales > 2200 ? 'interceptor' : !J.cuenta.misilera && m.t > 36000 && J.minerales > 4000 ? 'misilera' : null);
-    const plan = obra || urgente ? null : planBase || (quiereMisil ? quiereMisil : quiereObras ? 'obras' : quiereDeposito ? 'deposito' : siguienteEdificio(m, j, patio, ia.plan));
+    const lejosObj = objetivo ? Math.hypot(objetivo.cx - patio.cx, objetivo.cy - patio.cy) : 0, llegaMisil = J.nivel >= 3 || lejosObj < W.MISILES.scud.alcance - 12; // con nivel 2 solo tiene el Scud: si no alcanza al rival, la misilera no le sirve
+    const quiereMisil = J.nivel >= 2 && W.tieneReq(m, j, EDIF.misilera.req) && (ia.misilVisto && !J.cuenta.interceptor && J.minerales > 2200 ? 'interceptor' : !J.cuenta.misilera && llegaMisil && m.t > 36000 && J.minerales > 4000 ? 'misilera' : null);
+    // Lo que no está en el plan fijo, cuando sobra dinero: estación de drones, una cámara, la central de inteligencia y el puesto logístico.
+    let quiereNuevo = null;
+    if (!urgente && J.cuenta.cuartel && J.cuenta.fabrica && !(ia.tAhorro > 0) && !ia.pn) {
+      const c = J.cuenta, puede = (t) => W.disponible(m, j, EDIF[t]);
+      if (!c.estDrones && m.t > 9000 && J.minerales > 1200 && puede('estDrones')) quiereNuevo = 'estDrones';
+      else if (!c.camara && m.t > 14000 && J.minerales > 1200 && puede('camara')) quiereNuevo = 'camara';
+      else if (!c.inteligencia && m.t > 24000 && J.minerales > 3200 && puede('inteligencia')) quiereNuevo = 'inteligencia';
+      else if (!c.logistica && m.logistica !== false && m.t > 30000 && J.minerales > 3500 && puede('logistica')) quiereNuevo = 'logistica';
+    }
+    const plan = obra || urgente ? null : planBase || (quiereMisil ? quiereMisil : quiereObras ? 'obras' : quiereDeposito ? 'deposito' : quiereNuevo || siguienteEdificio(m, j, patio, ia.plan));
     if (obra && obra.listo) {
       const p = buscarSitio(m, j, obra.tipo, donde) || buscarSitio(m, j, obra.tipo, patio);
       if (p) { W.orden(m, { t: 'colocar', j, tipo: obra.tipo, x: p.x, y: p.y }); ia.fallos = 0; }
       else if (++ia.fallos > 15) { W.orden(m, { t: 'cancelarEdif', j, tipo: obra.tipo }); ia.fallos = 0; }
-    } else if (plan && W.puedePagar(J, EDIF[plan]) && !(ia.tAhorro > 0 && plan !== 'central' && plan !== 'bomba' && plan !== planBase)) { // mientras ahorra para la segunda base, solo lo urgente
+    } else if (plan && W.puedePagar(J, EDIF[plan]) && !((ia.tAhorro > 0 || ia.pn) && plan !== 'central' && plan !== 'bomba' && plan !== planBase)) { // mientras ahorra para la segunda base, solo lo urgente
       W.orden(m, { t: 'construir', j, tipo: plan });
     }
 
     // Caminos: si a sus vehículos ya casi no les quedan minerales a los que llegar (el resto está tras el bosque),
     // encarga una excavadora y abre camino hasta el campo cerrado más cercano.
-    if (m.t % 600 === ia.j * 20) {
+    if (tk % 30 === 0) {
       const alc = alcanceVehiculos(m, patio.cx, patio.cy + 2.5);
       let hay = 0, lejos = -1, dl = Infinity;
       for (let k = 0; k < m.minas.length; k += 3) {
@@ -178,7 +189,7 @@
     }
     // La red: un extractor, una estación o un depósito sin conexión no rinde. Un ingeniero civil le tiende una línea de servicio desde el edificio conectado más cercano.
     const suelto = m.logistica !== false && J.cuenta.obras && J.minerales > 250 ? m.ents.find((e) => e.edif && !e.infra && e.j === j && !e.conRed && (EDIF[e.tipo].da || e.tipo === 'deposito') && m.t - e.nace > 40) : null;
-    if (suelto && m.t % 40 === 0) {
+    if (suelto && tk % 2 === 0) {
       const civil = sinArma.find((u) => u.tipo === 'civil');
       if (!civil) { if (!J.colas.civil.n && W.puedePagar(J, UNID.civil)) W.orden(m, { t: 'entrenar', j, tipo: 'civil' }); }
       else if (civil.orden === 'nada') {
@@ -200,7 +211,7 @@
         W.orden(m, { t: 'trazar', j, ids: [exc.id], x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 }); ia.via = true;
         ia.viaFin = { x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 }; ia.viaIni = { x: exc.x, y: exc.y }; ia.viaN = 0;
       }
-    } else if (ia.via && ia.viaFin && m.t % 400 === ia.j * 20) {
+    } else if (ia.via && ia.viaFin && tk % 20 === 0) {
       // Mantenimiento: si le han destruido tramos de su vía, la excavadora la recorre de punta a punta reponiéndolos (lo que sigue en pie no cuesta).
       let n = 0; for (const e of m.ents) if (e.infra && e.j === j) n++;
       const exc = sinArma.find((u) => u.tipo === 'excavadora');
@@ -224,6 +235,7 @@
     const sigNivel = J.nivel < 3 ? TEC['nivel' + (J.nivel + 1)] : null;
     const paraNivel = !!sigNivel && m.t > 8400 && J.info >= (sigNivel.info || 0) && J.raros >= (sigNivel.raros || 0) && !J.inv.some((i) => TEC[i.clave].sube) && soldados.length >= 6;
     const ahorra = (quiereBase && ia.tAhorro > 0) || paraNivel;
+    ia.pn = paraNivel; // (para la construcción del turno siguiente: mientras ahorra para el nivel, solo lo urgente)
 
     // Unidades
     let dinero = J.minerales - (plan ? EDIF[plan].costo : 0);
@@ -238,7 +250,8 @@
       if (J.nivel >= 3 && (c.lanzacohetes || 0) < 2 && (c.lanzacohetes || 0) * 5 < (c.tanque || 0) + (c.pesado || 0) && W.puedePagar(J, UNID.lanzacohetes)) veh = 'lanzacohetes';
       else if (J.nivel >= 3 && !c.mando && J.info > 250 && soldados.length >= 8) veh = 'mando';
       // Segunda base: un patio móvil cuando la economía lo permite y aún solo hay un patio.
-      if (ahorra) veh = 'patioMovil';
+      const paraBase = quiereBase && ia.tAhorro > 0;
+      if (paraBase) veh = 'patioMovil'; // (solo cuando ahorra para la segunda base: si ahorra para subir de nivel, no compra vehículos)
       if (J.nivel >= 2 && (c.antiaereoMovil || 0) < 1 + Math.floor(((c.tanque || 0) + (c.pesado || 0)) / 8)) veh = 'antiaereoMovil'; // escolta antiaérea para las columnas
       else if (J.nivel >= 3 && (c.pesado || 0) < 5 && W.puedePagar(J, UNID.pesado)) veh = 'pesado';
       else if (J.nivel >= 2 && (c.artilleria || 0) * 4 < (c.tanque || 0)) veh = 'artilleria';
@@ -251,7 +264,7 @@
           : !c.dron && J.info >= 120 ? 'dron' : (c.caza || 0) < Math.round(3 * k) ? 'caza' : null;
       }
       const guardaAire = av && E.aviones > 1 && !ahorra ? UNID[av].costo : 0; // lo que el estilo aéreo aparta para su próximo avión
-      if (c.fabrica && !enFabrica && dinero >= UNID[veh].costo + guardaAire && W.puedePagar(J, UNID[veh])) { W.orden(m, { t: 'entrenar', j, tipo: veh }); dinero -= UNID[veh].costo; }
+      if (c.fabrica && !enFabrica && !(paraNivel && !paraBase) && dinero >= UNID[veh].costo + guardaAire && W.puedePagar(J, UNID[veh])) { W.orden(m, { t: 'entrenar', j, tipo: veh }); dinero -= UNID[veh].costo; }
       if (av && !ahorra && dinero >= UNID[av].costo + (E.aviones > 1 ? 0 : 600) && W.puedePagar(J, UNID[av])) { W.orden(m, { t: 'entrenar', j, tipo: av }); dinero -= UNID[av].costo; }
       // Infantería: un antitanque por cada dos fusileros desde el nivel 2.
       let inf = J.nivel >= 2 && (c.antitanque || 0) * 2 < (c.infanteria || 0) ? 'antitanque' : 'infanteria';
@@ -287,7 +300,8 @@
       const riv = m.mapa.bases[1 - j], ax = riv.x - patio.cx, ay = riv.y - patio.cy, ad = Math.hypot(ax, ay) || 1;
       const ociosos = aviones.filter((u) => u.enTierra && !u.repostando && !u.patrulla);
       const patrulla = [];
-      for (const u of ociosos) { // bombarderos y helicópteros atacan lo que tengan a su alcance de vuelo y ya esté explorado; el resto patrulla
+      for (const u of ociosos) { // el dron espía, a dar vueltas sobre la base rival; bombarderos y helicópteros atacan lo que tengan a su alcance de vuelo y ya esté explorado; el resto patrulla
+        if (u.tipo === 'dronEspia') { if (u.fuel >= UNID.dronEspia.fuel * 0.9) W.orden(m, { t: 'patrulla', j, ids: [u.id], x: riv.x, y: riv.y }); continue; }
         const d = UNID[u.tipo], casa = m.porId.get(u.casa);
         let blanco = null, mb = Infinity;
         if (casa && (u.tipo === 'bombardero' || u.tipo === 'helicoptero') && u.fuel >= d.fuel * 0.9) {
@@ -310,20 +324,82 @@
     }
 
     // Misilera: guarda un par de misiles (el mejor que pueda pagar sin quedarse seca) y los lanza al edificio rival explorado más valioso que tenga a su alcance.
-    if (J.cuenta.misilera && m.t % 100 === 40 + ia.j * 20) {
+    if (J.cuenta.misilera && tk % 5 === 2) {
       const MIS = W.MISILES;
       for (const e of m.ents) {
         if (e.tipo !== 'misilera' || e.j !== j || e.vida <= 0) continue;
         let hay = 0; if (e.silo) for (const k in e.silo) hay += e.silo[k];
-        if (hay + (e.fabMis ? e.fabMis.length : 0) < 2) { const tipo = ['sarmat', 'minuteman', 'scud'].find((k) => J.nivel >= MIS[k].nivel && W.puedePagar(J, MIS[k]) && J.minerales > MIS[k].costo + 1500); if (tipo) W.orden(m, { t: 'misil', j, id: e.id, tipo }); }
-        if (!hay || e.sinLuz || m.t - (ia.ultMisil || -9999) < 600) continue;
-        const tipo = ['scud', 'minuteman', 'sarmat'].find((k) => e.silo[k] > 0);
-        let blanco = null, mv = 0;
-        for (const o of m.ents) {
-          if (!o.edif || o.infra || o.j === j || o.vida <= 0 || !m.niebla[j][Math.floor(o.cy) * m.N + Math.floor(o.cx)] || !W.alcanceMisil(m, e, tipo, o.cx, o.cy)) continue;
-          const v = o.tipo === 'patio' ? 5000 : o.tipo === 'interceptor' ? 1 : EDIF[o.tipo].costo; if (v > mv) { mv = v; blanco = o; }
+        // El mejor edificio rival explorado que alcance cada clase de misil.
+        const blancoDe = (tipo) => { let b = null, mv = 0; for (const o of m.ents) { if (!o.edif || o.infra || o.j === j || o.vida <= 0 || !m.niebla[j][Math.floor(o.cy) * m.N + Math.floor(o.cx)] || !W.alcanceMisil(m, e, tipo, o.cx, o.cy)) continue; const v = o.tipo === 'patio' ? 5000 : o.tipo === 'interceptor' ? 1 : EDIF[o.tipo].costo; if (v > mv) { mv = v; b = o; } } return b; };
+        if (hay + (e.fabMis ? e.fabMis.length : 0) < 2) { // fabrica el mejor que pueda pagar sin quedarse seca, pero solo uno que llegue a algo
+          const tipo = ['sarmat', 'minuteman', 'scud'].find((k) => J.nivel >= MIS[k].nivel && W.puedePagar(J, MIS[k]) && J.minerales > MIS[k].costo + 1500 && blancoDe(k));
+          if (tipo) W.orden(m, { t: 'misil', j, id: e.id, tipo });
         }
-        if (blanco) { W.orden(m, { t: 'lanzar', j, id: e.id, tipo, x: blanco.cx, y: blanco.cy }); ia.ultMisil = m.t; }
+        if (!hay || e.sinLuz || m.t - (ia.ultMisil || -9999) < 600) continue;
+        for (const tipo of ['scud', 'minuteman', 'sarmat']) { // lanza el más barato que tenga y que llegue
+          if (!(e.silo[tipo] > 0)) continue;
+          const blanco = blancoDe(tipo);
+          if (blanco) { W.orden(m, { t: 'lanzar', j, id: e.id, tipo, x: blanco.cx, y: blanco.cy }); ia.ultMisil = m.t; break; }
+        }
+      }
+    }
+
+    // ---------- lo añadido después: mejoras de edificio, gatling, hacker, operadores, alambrada, inteligencia y puente aéreo ----------
+    {
+      const c = J.cuenta, riv = m.mapa.bases[1 - j], vx = riv.x - patio.cx, vy = riv.y - patio.cy, vd = Math.hypot(vx, vy) || 1;
+      const entrena = (t, margen) => { if (W.disponible(m, j, UNID[t]) && W.puedePagar(J, UNID[t]) && dinero >= UNID[t].costo + margen) { W.orden(m, { t: 'entrenar', j, tipo: t }); dinero -= UNID[t].costo; return true; } return false; };
+      // Mejorar edificios: la central si la energía va justa, la bomba si falta agua; con dinero de sobra, lo que da información y la estación de drones.
+      if (tk % 20 === 7 && !ahorra) {
+        const busca = (tipo) => m.ents.find((e) => e.edif && e.j === j && e.tipo === tipo && e.vida > 0 && (e.nivelE || 1) < W.ECON.mejoraMax && e.conRed !== false);
+        let cand = J.prod - J.uso < 40 ? busca('central') : null;
+        if (!cand && J.aguaProd - J.aguaUso < 6) cand = busca('bomba');
+        if (!cand && J.minerales > 4000) cand = busca('estDrones') || busca('laboratorio') || busca('estacion') || busca('extractor');
+        if (cand && J.minerales > W.costoMejora(cand) + 1500) W.orden(m, { t: 'mejorarEdif', j, id: cand.id });
+      }
+      // Infantería especial: dos gatling para sostener el punto de reunión, un hacker y dos operadores de drones.
+      if (c.cuartel && !ahorra && !urgente && tk % 5 === 3) {
+        if ((c.gatling || 0) + J.colas.gatling.n < 2 && (c.infanteria || 0) >= 8) entrena('gatling', 500);
+        else if ((c.hacker || 0) + J.colas.hacker.n < 1 && soldados.length >= 10) entrena('hacker', 500);
+        else if (c.estDrones && (c.operador || 0) + J.colas.operador.n < 2 && soldados.length >= 8) entrena('operador', 500);
+      }
+      // El hacker apaga la torre o el vehículo armado enemigo que tenga más cerca y a la vista.
+      if (tk % 5 === 4) for (const u of sinArma) {
+        if (u.tipo !== 'hacker' || u.orden !== 'nada') continue;
+        let b = null, md = 28;
+        for (const e of m.ents) {
+          if (e.j === j || e.vida <= 0 || e.infra || e.hack > m.t || !(e.edif ? EDIF[e.tipo].arma : UNID[e.tipo].cat === 'veh' && UNID[e.tipo].arma)) continue;
+          const ex = e.edif ? e.cx : e.x, ey = e.edif ? e.cy : e.y, d0 = Math.hypot(ex - u.x, ey - u.y);
+          if (d0 < md && m.niebla[j][Math.floor(ey) * m.N + Math.floor(ex)] === 2) { md = d0; b = e; }
+        }
+        if (b) W.orden(m, { t: 'hackear', j, ids: [u.id], obj: b.id });
+      }
+      // Ingeniero civil: una alambrada por delante de la base, de cara al rival (no cierra el paso a los suyos); y cuando queda libre, vuelve al automático.
+      const civil = sinArma.find((u) => u.tipo === 'civil');
+      if (c.obras && !ia.alambrada && m.t > (ia.estilo === 'defensivo' ? 8000 : 15000) && J.minerales > 800 && tk % 10 === 5) {
+        if (!civil) { if (!J.colas.civil.n) entrena('civil', 300); }
+        else if (civil.orden === 'nada') {
+          const cx = patio.cx + (vx / vd) * 13, cy = patio.cy + (vy / vd) * 13, px = -vy / vd, py = vx / vd, lim = (v) => Math.max(3, Math.min(m.N - 4, v));
+          W.orden(m, { t: 'murar', j, ids: [civil.id], tipo: 'alambrada', x0: lim(cx + px * 9), y0: lim(cy + py * 9), x1: lim(cx - px * 9), y1: lim(cy - py * 9) }); ia.alambrada = true;
+        }
+      } else if (civil && civil.orden === 'nada' && !civil.auto && tk % 10 === 6) W.orden(m, { t: 'autoCivil', j, ids: [civil.id], on: true });
+      // Central de inteligencia: un dron espía y un espía; y con información de sobra, mapeo satelital sobre el objetivo (así sus misiles y bombarderos lo ven).
+      if (c.inteligencia && tk % 10 === 8 && !ahorra) {
+        const cupo = W.cupoAire(m, j, true);
+        if (!c.dronEspia && !J.colas.dronEspia.n && cupo.hay < cupo.cupo) entrena('dronEspia', 800);
+        else if (!c.espia && !J.colas.espia.n) entrena('espia', 800);
+        if (objetivo && J.info > 500 && (c.misilera || c.bombardero) && m.t - (ia.tSat || -9999) > 6000) { W.orden(m, { t: 'intel', j, clave: 'satelite', x: objetivo.cx, y: objetivo.cy }); ia.tSat = m.t; }
+      }
+      if (objetivo && tk % 10 === 9) for (const u of sinArma) if (u.tipo === 'espia' && u.orden === 'nada' && !u.infiltrado) { const cc = W.cercaLibre(m, objetivo.cx - (vx / vd) * 4, objetivo.cy - (vy / vd) * 4); W.orden(m, { t: 'mover', j, ids: [u.id], x: (cc % m.N) + 0.5, y: ((cc / m.N) | 0) + 0.5 }); }
+      // Puente aéreo: con puesto logístico, un puesto móvil que se despliega a medio camino del rival: allí hay suministro, hospital y pista.
+      if (c.logistica && m.logistica !== false) {
+        const av = sinArma.find((u) => u.tipo === 'avanzadaMovil');
+        if (!av) { if (!c.avanzada && !J.colas.avanzadaMovil.n && tk % 10 === 1 && !ahorra) entrena('avanzadaMovil', 800); }
+        else if (av.orden === 'nada') {
+          if (!ia.avz) { const cc = W.cercaLibre(m, patio.cx + vx * 0.5, patio.cy + vy * 0.5, true); ia.avz = { x: (cc % m.N) + 0.5, y: ((cc / m.N) | 0) + 0.5, n: 0 }; }
+          const z = ia.avz;
+          if (Math.hypot(av.x - z.x, av.y - z.y) < 5 && W.puedeDesplegar(m, av)) { W.orden(m, { t: 'desplegar', j, ids: [av.id] }); ia.avz = null; }
+          else { const a = z.n * 2.4, r = Math.min(8, z.n * 0.8); z.n++; const cc = W.cercaLibre(m, z.x + Math.cos(a) * r, z.y + Math.sin(a) * r, true); W.orden(m, { t: 'mover', j, ids: [av.id], x: (cc % m.N) + 0.5, y: ((cc / m.N) | 0) + 0.5 }); if (z.n > 40) ia.avz = null; }
+        }
       }
     }
 
@@ -383,7 +459,7 @@
       }
     }
     // Cortar caminos: hasta tres atacantes que se han quedado sin nada que hacer disparan al tramo enemigo que tengan a la vista y cerca.
-    if (m.t % 200 === ia.j * 20) {
+    if (tk % 10 === 0) {
       const libres = soldados.filter((u) => ia.atacantes.has(u.id) && u.orden === 'nada' && !u.obj).slice(0, 3);
       if (libres.length) {
         let tramo = null, md = 8;
@@ -394,6 +470,11 @@
     // El vehículo de mando y los ingenieros sobrantes acompañan al punto de reunión.
     if (J.nivel >= 2 && ia.estilo !== 'aereo' && !J.cuenta.comandoDrones && !J.colas.comandoDrones.n && soldados.length >= 10 && J.cuenta.fabrica && W.puedePagar(J, UNID.comandoDrones) && J.minerales > 1600) W.orden(m, { t: 'entrenar', j, tipo: 'comandoDrones' }); // un comando de drones que acompaña al grueso
     for (const u of sinArma) if ((u.tipo === 'mando' || u.tipo === 'comandoDrones') && u.orden === 'nada' && Math.hypot(u.x - rx, u.y - ry) > 7) W.orden(m, { t: 'mover', j, ids: [u.id], x: rx - (dx / dd) * 2, y: ry - (dy / dd) * 2 });
+    if (tk % 5 === 1) { // hackers y operadores de drones: con la oleada, unos pasos por detrás; sin oleada, en el punto de reunión
+      let ax = 0, ay = 0, na = 0; for (const u of soldados) if (ia.atacantes.has(u.id)) { ax += u.x; ay += u.y; na++; }
+      const tx = na >= 4 ? ax / na - (dx / dd) * 4 : rx - (dx / dd) * 2, ty = na >= 4 ? ay / na - (dy / dd) * 4 : ry - (dy / dd) * 2;
+      for (const u of sinArma) if ((u.tipo === 'hacker' || u.tipo === 'operador') && u.orden === 'nada' && Math.hypot(u.x - tx, u.y - ty) > 8) { const cc = W.cercaLibre(m, tx, ty); W.orden(m, { t: 'mover', j, ids: [u.id], x: (cc % m.N) + 0.5, y: ((cc / m.N) | 0) + 0.5 }); }
+    }
     const reserva = soldados.filter((u) => !ia.atacantes.has(u.id) && u.id !== ia.explorador && !ia.capturan.has(u.id));
 
     if (J.alerta && m.t - J.alerta.t < 100) { // defensa: acude la reserva ociosa
