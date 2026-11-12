@@ -89,7 +89,7 @@
     // Fase 1c. cono: medio ángulo del campo central de visión (por defecto ECON.cono; Math.PI = ve en todas direcciones).
     // repara: arregla sola los vehículos y edificios propios cercanos. cavaRapido: cava trincheras al doble de velocidad.
     explorador:  { nombre: 'Explorador',  cat: 'inf', vida: 45,  vel: 0.10, costo: 120, tiempo: 80, blindaje: 'ligero', arma: 'pistola', vision: 10, radio: 0.10, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.03, arco: 0.5, cono: 1.4 },
-    ingeniero:   { nombre: 'Ingeniero',   cat: 'inf', vida: 60,  vel: 0.06, costo: 200, tiempo: 160, blindaje: 'ligero', arma: null, vision: 6, radio: 0.11, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, repara: true, cavaRapido: true },
+    ingeniero:   { nombre: 'Ingeniero',   cat: 'inf', vida: 60,  vel: 0.06, costo: 200, tiempo: 160, blindaje: 'ligero', arma: null, vision: 6, radio: 0.11, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, repara: true, cavaRapido: true, zapador: true }, // zapador: mina y desmina, tiende pontones y vuela caminos y puentes
     medico:      { nombre: 'Médico',      cat: 'inf', vida: 60,  vel: 0.06, costo: 220, tiempo: 160, blindaje: 'ligero', arma: null, vision: 6, radio: 0.11, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, cura: true },
     blindado:    { nombre: 'Blindado ligero', cat: 'veh', vida: 150, vel: 0.15, costo: 350, pet: 20, tiempo: 180, blindaje: 'pesado', arma: 'ametralladora', vision: 8, radio: 0.17, req: ['fabrica'], agua: 1, giro: 0.2, acel: 0.012, giroT: 0.3, cono: 1.2 },
     antiaereoMovil: { nombre: 'Antiaéreo móvil', cat: 'veh', vida: 220, vel: 0.09, costo: 700, pet: 40, tiempo: 300, blindaje: 'pesado', arma: 'flakMovil', vision: 8, radio: 0.20, req: ['fabrica'], agua: 2, giro: 0.12, acel: 0.006, giroT: 0.28, nivel: 2, cono: 1.25 },
@@ -157,6 +157,7 @@
     pistola: { alcance: 3,   dano: 4,  recarga: 18, vs: { ligero: 1,   pesado: 0.1,  edificio: 0.1 } },
     ametralladora: { alcance: 4.5, dano: 6, recarga: 5, vs: { ligero: 1, pesado: 0.15, edificio: 0.15, aire: 0.25 } },
     fpv:     { dano: 150, area: 0.9, vs: { ligero: 0.5, pesado: 1, edificio: 0.5 } }, // el dron kamikaze al estrellarse
+    mina:    { dano: 150, area: 1.3, vs: { ligero: 1, pesado: 1, edificio: 0 } }, // mina terrestre: la pisa quien no sea zapador
     granada: { dano: 42, area: 1.2, vs: { ligero: 1, pesado: 0.25, edificio: 0.15 } }, // lo que suelta el dron bombardero
     gatling: { alcance: 5.5, dano: 5, recarga: 2, vs: { ligero: 1, pesado: 0.2, edificio: 0.2, aire: 0.5 } }, // diez tiros por segundo: tritura infantería y aviones bajos
     misil:   { alcance: 6,   dano: 40, recarga: 14, vuelo: 1.0, vs: { ligero: 0.6, pesado: 0.6, edificio: 0.3, aire: 1.3 } },
@@ -205,6 +206,7 @@
     sarmat:    { nombre: 'Sarmat',    que: 'Global: llega a cualquier punto del mapa; hacen falta dos interceptores para pararlo.', alcance: 0, costo: 4000, pet: 400, raros: 120, tiempo: 1500, dano: 2200, area: 5, vel: 0.7, aguante: 2, nivel: 3 },
   };
   W.ECON = {
+    minaCosto: 40, minaTiempo: 40, minasMax: 60, minaPisa: 0.7, minaVe: 4, desminaRadio: 5, desminaTiempo: 30, volarTiempo: 60, pontonMax: 14, pontonCelda: 12, pontonCada: 12, pontonVida: 160,
     espiaRadio: 6, espiaInfo: 2, sumiBase: 1, sumiUnidad: 0.5, sumiCarga: 40, // suministro móvil: gasto por ciclo (medio segundo) en vacío y por unidad atendida; y lo que carga por ciclo en el puesto logístico
     dronMisRadio: 8, autoReserva: 400, autoLargo: 70,
     rutaNodos: 30000, // presupuesto de celdas que se exploran por tick buscando rutas

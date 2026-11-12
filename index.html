@@ -128,6 +128,7 @@
   #admin .fila2 .grupo::before { content: none; }
   #finGraf { display: block; margin: 12px auto 4px; max-width: 100%; }
   #continuar { margin-top: 6px; font: inherit; padding: 8px 14px; cursor: pointer; background: var(--panel); color: var(--tinta); border: 1px solid var(--linea); border-radius: 2px; }
+  #zapa[hidden] { display: none !important; }
   #alertas { position: fixed; top: 38px; left: 8px; z-index: 2; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
   #alertas button { font: inherit; font-size: 11px; text-align: left; color: var(--tinta); background: var(--panel); border: 1px solid var(--linea); border-left: 3px solid var(--mal); border-radius: 2px; padding: 3px 8px; cursor: pointer; opacity: 0.94; }
   body.contuto #alertas { max-width: 226px; }
@@ -293,6 +294,12 @@
     <button type="button" id="descargar" class="btn" hidden></button>
     <button type="button" id="desplegar" class="btn" hidden title="Convierte el vehículo en su edificio, donde está: el patio móvil en un patio; el puesto móvil en un puesto de avanzada. No se puede replegar.">Desplegar</button>
     <button type="button" id="mejorar" class="btn" hidden title="Sube un nivel el rendimiento de este edificio: un 50 % más por nivel, hasta el nivel 3."></button>
+    <div id="zapa" hidden style="display:flex;flex-wrap:wrap;gap:4px">
+      <button type="button" class="btn" data-z="minar" title="El ingeniero pone una mina donde hagas clic (40 minerales). Con Mayús sigues poniendo. No la ve el enemigo (salvo sus ingenieros y sus cámaras) y estalla cuando la pisa una unidad de tierra suya. Los tuyos pasan sin peligro.">Minar</button>
+      <button type="button" class="btn" data-z="desminar" title="El ingeniero va al punto y retira todas las minas enemigas en 5 celdas a la redonda. Los ingenieros nunca las pisan.">Desminar</button>
+      <button type="button" class="btn" data-z="ponton" title="Clic en el agua: el ingeniero tiende un pontón por el cruce más corto que pase por ahí (hasta 14 celdas, 12 minerales por celda). Pasan infantería y vehículos. Es frágil.">Pontón</button>
+      <button type="button" class="btn" data-z="volar" title="Clic en un camino, puente o pontón, tuyo o enemigo: el ingeniero va y lo vuela.">Volar camino</button>
+    </div>
     <button type="button" id="dronMis" class="btn" hidden title="Manda el dron del operador a vigilar un punto lejano (hasta 45 celdas): lo que vea lo ven tu artillería, tus misiles y tus bombarderos. Con la tecnología de ataque, sus kamikazes y su bombardero atacan también allí. El operador se planta; si echa a andar, la misión se acaba. Tecla O.">Misión de dron</button>
     <button type="button" id="dronAtk" class="btn" hidden title="Los drones kamikaze y bombarderos del comando salen solos contra lo que tu bando vea dentro de su radio. Cada salida cuesta minerales. Clic derecho en un enemigo le da preferencia."></button>
     <button type="button" id="retiro" class="btn" hidden title="Con poca vida, la unidad se va sola a reparar y luego vuelve a su puesto."></button>
@@ -320,12 +327,12 @@
   <button type="button" id="empezar">Empezar</button>
   <button type="button" id="tutorial">Tutorial guiado<small style="display:block;color:var(--suave);font-size:10px">ocho pasos, con el rival dormido hasta el final</small></button>
   <button type="button" id="continuar" hidden>Continuar la partida guardada</button>
-  <div id="version">versión 69</div>
+  <div id="version">versión 70</div>
 </div></div>
 <div id="guia" hidden><div class="caja"><div class="cab"><strong>Guía: para qué sirve cada cosa</strong><button type="button" id="cierraGuia">cerrar</button></div><div id="guiaTxt"></div></div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finVer" href="#" title="Vuelve a ver la partida entera, con todo el mapa a la vista y a la velocidad que quieras.">ver repetición</a><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 69' };
+globalThis.W = { VERSION: 'versión 70' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -418,7 +425,7 @@ globalThis.W = { VERSION: 'versión 69' };
     // Fase 1c. cono: medio ángulo del campo central de visión (por defecto ECON.cono; Math.PI = ve en todas direcciones).
     // repara: arregla sola los vehículos y edificios propios cercanos. cavaRapido: cava trincheras al doble de velocidad.
     explorador:  { nombre: 'Explorador',  cat: 'inf', vida: 45,  vel: 0.10, costo: 120, tiempo: 80, blindaje: 'ligero', arma: 'pistola', vision: 10, radio: 0.10, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.03, arco: 0.5, cono: 1.4 },
-    ingeniero:   { nombre: 'Ingeniero',   cat: 'inf', vida: 60,  vel: 0.06, costo: 200, tiempo: 160, blindaje: 'ligero', arma: null, vision: 6, radio: 0.11, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, repara: true, cavaRapido: true },
+    ingeniero:   { nombre: 'Ingeniero',   cat: 'inf', vida: 60,  vel: 0.06, costo: 200, tiempo: 160, blindaje: 'ligero', arma: null, vision: 6, radio: 0.11, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, repara: true, cavaRapido: true, zapador: true }, // zapador: mina y desmina, tiende pontones y vuela caminos y puentes
     medico:      { nombre: 'Médico',      cat: 'inf', vida: 60,  vel: 0.06, costo: 220, tiempo: 160, blindaje: 'ligero', arma: null, vision: 6, radio: 0.11, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, cura: true },
     blindado:    { nombre: 'Blindado ligero', cat: 'veh', vida: 150, vel: 0.15, costo: 350, pet: 20, tiempo: 180, blindaje: 'pesado', arma: 'ametralladora', vision: 8, radio: 0.17, req: ['fabrica'], agua: 1, giro: 0.2, acel: 0.012, giroT: 0.3, cono: 1.2 },
     antiaereoMovil: { nombre: 'Antiaéreo móvil', cat: 'veh', vida: 220, vel: 0.09, costo: 700, pet: 40, tiempo: 300, blindaje: 'pesado', arma: 'flakMovil', vision: 8, radio: 0.20, req: ['fabrica'], agua: 2, giro: 0.12, acel: 0.006, giroT: 0.28, nivel: 2, cono: 1.25 },
@@ -486,6 +493,7 @@ globalThis.W = { VERSION: 'versión 69' };
     pistola: { alcance: 3,   dano: 4,  recarga: 18, vs: { ligero: 1,   pesado: 0.1,  edificio: 0.1 } },
     ametralladora: { alcance: 4.5, dano: 6, recarga: 5, vs: { ligero: 1, pesado: 0.15, edificio: 0.15, aire: 0.25 } },
     fpv:     { dano: 150, area: 0.9, vs: { ligero: 0.5, pesado: 1, edificio: 0.5 } }, // el dron kamikaze al estrellarse
+    mina:    { dano: 150, area: 1.3, vs: { ligero: 1, pesado: 1, edificio: 0 } }, // mina terrestre: la pisa quien no sea zapador
     granada: { dano: 42, area: 1.2, vs: { ligero: 1, pesado: 0.25, edificio: 0.15 } }, // lo que suelta el dron bombardero
     gatling: { alcance: 5.5, dano: 5, recarga: 2, vs: { ligero: 1, pesado: 0.2, edificio: 0.2, aire: 0.5 } }, // diez tiros por segundo: tritura infantería y aviones bajos
     misil:   { alcance: 6,   dano: 40, recarga: 14, vuelo: 1.0, vs: { ligero: 0.6, pesado: 0.6, edificio: 0.3, aire: 1.3 } },
@@ -534,6 +542,7 @@ globalThis.W = { VERSION: 'versión 69' };
     sarmat:    { nombre: 'Sarmat',    que: 'Global: llega a cualquier punto del mapa; hacen falta dos interceptores para pararlo.', alcance: 0, costo: 4000, pet: 400, raros: 120, tiempo: 1500, dano: 2200, area: 5, vel: 0.7, aguante: 2, nivel: 3 },
   };
   W.ECON = {
+    minaCosto: 40, minaTiempo: 40, minasMax: 60, minaPisa: 0.7, minaVe: 4, desminaRadio: 5, desminaTiempo: 30, volarTiempo: 60, pontonMax: 14, pontonCelda: 12, pontonCada: 12, pontonVida: 160,
     espiaRadio: 6, espiaInfo: 2, sumiBase: 1, sumiUnidad: 0.5, sumiCarga: 40, // suministro móvil: gasto por ciclo (medio segundo) en vacío y por unidad atendida; y lo que carga por ciclo en el puesto logístico
     dronMisRadio: 8, autoReserva: 400, autoLargo: 70,
     rutaNodos: 30000, // presupuesto de celdas que se exploran por tick buscando rutas
@@ -932,7 +941,7 @@ globalThis.W = { VERSION: 'versión 69' };
   }
   // Las celdas de camino de cada jugador. En una partida guardada antes de que existieran, se reconstruyen de los tramos.
   function viaDe(m) {
-    if (!m.via) { const NN = m.N * m.N; m.via = [new Uint8Array(NN), new Uint8Array(NN)]; m.viaN = [0, 0]; for (const e of m.ents) if (e.infra) for (const c of e.celdas) if (m.tramoEn[c] === e.id) { m.via[e.j][c] = 1; m.viaN[e.j]++; } }
+    if (!m.via) { const NN = m.N * m.N; m.via = [new Uint8Array(NN), new Uint8Array(NN)]; m.viaN = [0, 0]; for (const e of m.ents) if (e.infra && !e.ponton) for (const c of e.celdas) if (m.tramoEn[c] === e.id) { m.via[e.j][c] = 1; m.viaN[e.j]++; } }
     return m.via;
   }
   // Un tramo de camino: infraestructura con vida propia. Guarda su recorrido (pts), las celdas que abrió y lo que había antes en ellas.
@@ -1110,6 +1119,105 @@ globalThis.W = { VERSION: 'versión 69' };
       if (dn.fpv && veh && e.dr.fpv.length < dn.fpv && m.t >= (e.fpvT || 0) && (J.minerales >= ECON.dronFpv || J.dios)) { if (!J.dios) J.minerales -= ECON.dronFpv; saca('fpv', veh.id); e.fpvT = m.t + ECON.dronFpvCada; }
       const blanco = inf || veh;
       if (blanco) for (const id of e.dr.bomba) { const q = m.porId.get(id); if (q.est === 'espera' && q.recarga <= 0 && (J.minerales >= ECON.dronBomba || J.dios)) { if (!J.dios) J.minerales -= ECON.dronBomba; q.obj = blanco.id; q.est = 'ir'; break; } }
+    }
+  }
+  // ---------- zapadores: minas, pontones y voladuras ----------
+  // Por dónde cruzaría un pontón que pase por la celda de agua (x, y): de los cuatro ejes, el más corto que toque tierra firme por los dos lados.
+  // Devuelve las filas de celdas (dos de ancho, para que quepan los vehículos), empezando por la orilla más cercana al ingeniero, y esa orilla.
+  function planPonton(m, x, y, u) {
+    const N = m.N, terr = m.mapa.terreno, agua = (a, b) => a >= 0 && b >= 0 && a < N && b < N && terr[b * N + a] === T.AGUA && !m.tramoEn[b * N + a];
+    const tierra = (a, b) => a >= 0 && b >= 0 && a < N && b < N && terr[b * N + a] !== T.AGUA && m.paso[b * N + a] === 1;
+    if (!agua(x, y)) return null;
+    let mejor = null;
+    for (const [dx, dy] of [[1, 0], [0, 1], [1, 1], [1, -1]]) {
+      let a = 0, b = 0; while (a < ECON.pontonMax && agua(x - dx * (a + 1), y - dy * (a + 1))) a++; while (b < ECON.pontonMax && agua(x + dx * (b + 1), y + dy * (b + 1))) b++;
+      if (a + b + 1 > ECON.pontonMax || !tierra(x - dx * (a + 1), y - dy * (a + 1)) || !tierra(x + dx * (b + 1), y + dy * (b + 1))) continue;
+      const largo = (a + b + 1) * (dx && dy ? 1.4 : 1);
+      if (!mejor || largo < mejor.largo) mejor = { largo, dx, dy, a, b };
+    }
+    if (!mejor) return null;
+    const { dx, dy, a, b } = mejor, e0 = [x - dx * (a + 1), y - dy * (a + 1)], e1 = [x + dx * (b + 1), y + dy * (b + 1)];
+    const alReves = Math.hypot(u.x - e1[0], u.y - e1[1]) < Math.hypot(u.x - e0[0], u.y - e0[1]), filas = [];
+    for (let k = -a; k <= b; k++) { const cx = x + dx * k, cy = y + dy * k, f = [cy * N + cx]; const ox = dx && !dy ? 0 : 1, oy = dx && !dy ? 1 : 0; if (agua(cx + ox, cy + oy)) f.push((cy + oy) * N + cx + ox); filas.push(f); }
+    if (alReves) filas.reverse();
+    const s = alReves ? e1 : e0;
+    return { filas, sx: s[0] + 0.5, sy: s[1] + 0.5 };
+  }
+  function tickZapar(m, u) {
+    const z = u.zapa, J = m.jug[u.j], N = m.N, terr = m.mapa.terreno;
+    const sig = () => { z.lista.shift(); z.prog = 0; u.ruta = null; u.pend = null; u.fallo = false; if (!z.lista.length) { u.orden = 'nada'; u.zapa = null; } };
+    if (!z || !z.lista.length) { u.orden = 'nada'; u.zapa = null; return; }
+    const q = z.lista[0];
+    const llegar = (x, y, r) => { // true cuando está a r del punto; si no hay ruta, deja la tarea
+      if (Math.hypot(u.x - x, u.y - y) <= r) { u.ruta = null; u.pend = null; u.v = 0; u.ang = Math.atan2(y - u.y, x - u.x); return true; }
+      if (u.fallo) { u.fallo = false; sig(); return false; }
+      if (!u.pend && !u.ruta) pedirRuta(m, u, x, y, Math.max(0.5, r - 0.5));
+      avanzar(m, u); return false;
+    };
+    if (!m.minasT) m.minasT = [];
+    if (q.t === 'minar') {
+      if (!llegar(q.x, q.y, 1.4)) return;
+      if (++z.prog < ECON.minaTiempo) return;
+      const c = Math.floor(q.y) * N + Math.floor(q.x); let mias = 0, ya = false; for (const mn of m.minasT) { if (mn.j === u.j) mias++; if (mn.c === c) ya = true; }
+      if (!ya && m.paso[c] && mias < ECON.minasMax && (J.minerales >= ECON.minaCosto || J.dios)) { if (!J.dios) J.minerales -= ECON.minaCosto; m.minasT.push({ x: q.x, y: q.y, c, j: u.j, vis: false }); m.efectos.push({ tipo: 'minaPuesta', x1: q.x, y1: q.y, j: u.j, t: m.t }); }
+      else if (!ya) m.efectos.push({ tipo: 'sinMina', x1: q.x, y1: q.y, j: u.j, t: m.t, tope: mias >= ECON.minasMax });
+      sig(); return;
+    }
+    if (q.t === 'desminar') {
+      if (!q.en) { if (llegar(q.x, q.y, ECON.desminaRadio - 1)) q.en = true; return; }
+      let mn = null, md = Infinity; for (const o of m.minasT) { if (o.j === u.j || Math.hypot(o.x - q.x, o.y - q.y) > ECON.desminaRadio) continue; const d0 = Math.hypot(o.x - u.x, o.y - u.y); if (d0 < md) { md = d0; mn = o; } }
+      if (!mn) { sig(); return; } // zona limpia
+      mn.vis = true;
+      if (!llegar(mn.x, mn.y, 1.3)) return;
+      if (++z.prog < ECON.desminaTiempo) return;
+      z.prog = 0; m.minasT.splice(m.minasT.indexOf(mn), 1); m.efectos.push({ tipo: 'minaFuera', x1: mn.x, y1: mn.y, j: u.j, t: m.t });
+      return;
+    }
+    if (q.t === 'volar') {
+      const tr = m.porId.get(q.id); if (!tr || tr.vida <= 0) { sig(); return; }
+      if (!llegar(q.x, q.y, 1.8)) return;
+      if (++z.prog < ECON.volarTiempo) return;
+      tr.vida = 0; m.efectos.push({ tipo: 'impacto', x1: q.x, y1: q.y, x2: q.x, y2: q.y, j: u.j, t: m.t, arma: 'mina', acierto: true });
+      sig(); return;
+    }
+    if (q.t === 'ponton') {
+      if (!q.tr && !llegar(q.sx, q.sy, 1.8)) return;
+      let tr = q.tr ? m.porId.get(q.tr) : null;
+      if (q.tr && (!tr || tr.vida <= 0)) { sig(); return; } // se lo han hundido a medio tender
+      if (q.k >= q.filas.length) { sig(); return; }
+      if (++z.prog < ECON.pontonCada) return;
+      const fila = q.filas[q.k], precio = ECON.pontonCelda * fila.length;
+      if (J.minerales < precio && !J.dios) { if (!q.avisado) { q.avisado = true; m.efectos.push({ tipo: 'sinCamino', x1: u.x, y1: u.y, j: u.j, t: m.t }); } return; } // espera a tener con qué
+      z.prog = 0; if (!J.dios) J.minerales -= precio;
+      const c0 = fila[0], fx = (c0 % N) + 0.5, fy = ((c0 / N) | 0) + 0.5;
+      if (!tr) { tr = crearTramo(m, u.j, fx, fy); tr.ponton = true; tr.puente = true; tr.vida = tr.vidaMax = ECON.pontonVida; q.tr = tr.id; } else { tr.pts.push(fx, fy); tr.largo += 1; }
+      for (const c of fila) { if (terr[c] !== T.AGUA || m.tramoEn[c]) continue; tr.celdas.push(c); tr.antes.push(T.AGUA); m.tramoEn[c] = tr.id; terr[c] = T.PUENTE; m.paso[c] = 1; m.pasoV[c] = 1; }
+      m.hayCaminos = true; m.terrenoV++; q.k++;
+      if (q.k >= q.filas.length) { tr.cx = (tr.pts[0] + fx) / 2; tr.cy = (tr.pts[1] + fy) / 2; tr.x = tr.cx - 0.5; tr.y = tr.cy - 0.5; m.efectos.push({ tipo: 'pontonListo', x1: tr.cx, y1: tr.cy, j: u.j, t: m.t }); }
+      return;
+    }
+    sig();
+  }
+  // Minas terrestres: no son fichas, sino puntos. Estallan cuando las pisa una unidad de tierra enemiga que no sea zapador; las descubren
+  // los zapadores enemigos que pasen cerca y las cámaras.
+  function tickMinas(m) {
+    const g = m.gr, C = g.C, ini = g.ini, us = g.us, ver = m.t % 10 === 0, arma = ARMAS.mina;
+    for (let k = m.minasT.length - 1; k >= 0; k--) {
+      const mn = m.minasT[k], gx = Math.min(C - 1, (mn.x / GC) | 0), gy = Math.min(C - 1, (mn.y / GC) | 0); let pisa = false;
+      for (let cy = Math.max(0, gy - 1); cy <= Math.min(C - 1, gy + 1) && !pisa; cy++) for (let cx = Math.max(0, gx - 1); cx <= Math.min(C - 1, gx + 1) && !pisa; cx++) for (let i = ini[cy * C + cx], f = ini[cy * C + cx + 1]; i < f; i++) {
+        const u = us[i], d = UNID[u.tipo];
+        if (u.j === mn.j || u.vida <= 0 || d.aire) continue;
+        const dd = Math.hypot(u.x - mn.x, u.y - mn.y);
+        if (d.zapador) { if (ver && dd <= ECON.minaVe) mn.vis = true; continue; }
+        if (dd <= ECON.minaPisa) { pisa = true; m.jug[u.j].minaVista = { x: mn.x, y: mn.y, t: m.t }; break; } // (su bando se entera de dónde había minas)
+      }
+      if (!pisa) { if (ver && !mn.vis) for (const e of g.edifs) if (e.j !== mn.j && EDIF[e.tipo].detecta && !e.sinLuz && Math.hypot(e.cx - mn.x, e.cy - mn.y) <= EDIF[e.tipo].detecta) { mn.vis = true; break; } continue; }
+      m.minasT.splice(k, 1);
+      for (let cy = Math.max(0, gy - 1); cy <= Math.min(C - 1, gy + 1); cy++) for (let cx = Math.max(0, gx - 1); cx <= Math.min(C - 1, gx + 1); cx++) for (let i = ini[cy * C + cx], f = ini[cy * C + cx + 1]; i < f; i++) {
+        const u = us[i]; if (u.j === mn.j || u.vida <= 0 || UNID[u.tipo].aire) continue;
+        const dd = Math.hypot(u.x - mn.x, u.y - mn.y); if (dd <= arma.area) herir(m, u, arma, dd <= ECON.minaPisa ? 1 : 0.5, 0);
+      }
+      m.efectos.push({ tipo: 'impacto', x1: mn.x, y1: mn.y, x2: mn.x, y2: mn.y, j: mn.j, t: m.t, arma: 'mina', acierto: true, mina: true });
     }
   }
   // ---------- suministro móvil ----------
@@ -1301,7 +1409,7 @@ globalThis.W = { VERSION: 'versión 69' };
     for (let k = 0; k < e.celdas.length; k++) {
       const c = e.celdas[k];
       if (m.tramoEn[c] !== e.id) continue;
-      m.tramoEn[c] = 0; m.carrilX[c] = 0; m.carrilY[c] = 0; terr[c] = e.antes[k]; viaDe(m)[e.j][c] = 0; m.viaN[e.j]--;
+      m.tramoEn[c] = 0; m.carrilX[c] = 0; m.carrilY[c] = 0; terr[c] = e.antes[k]; if (!e.ponton) { viaDe(m)[e.j][c] = 0; m.viaN[e.j]--; } // (el pontón no es vía: no acelera a nadie)
       if (e.antes[k] === T.BOSQUE) { m.pasoV[c] = 0; cerrado = true; }
       else if (e.antes[k] === T.AGUA) { m.paso[c] = 0; m.pasoV[c] = 0; cerrado = true; } // el puente caído vuelve a ser agua
     }
@@ -1741,6 +1849,23 @@ globalThis.W = { VERSION: 'versión 69' };
         if (!J.dios) J.minerales -= precio;
         e.nivelE = (e.nivelE || 1) + 1; m.redSucia = true;
         m.efectos.push({ tipo: 'mejoraEdif', x1: e.cx, y1: e.cy, j: e.j, clase: e.tipo, nivel: e.nivelE, t: m.t });
+        return;
+      }
+      case 'zapar': { // el ingeniero militar: minar / desminar un punto, tender un pontón sobre el agua o volar un tramo de camino o puente (con enc, se suma a lo que lleva)
+        const N = m.N, x = Math.floor(cmd.x), y = Math.floor(cmd.y); if (!(x >= 0 && y >= 0 && x < N && y < N)) return;
+        const us = propias(m, cmd).filter((u) => UNID[u.tipo].zapador); if (!us.length) return;
+        let q = null;
+        if (cmd.que === 'minar') q = { t: 'minar', x: x + 0.5, y: y + 0.5 };
+        else if (cmd.que === 'desminar') q = { t: 'desminar', x: cmd.x, y: cmd.y };
+        else if (cmd.que === 'volar') { const tr = m.porId.get(m.tramoEn[y * N + x]); if (tr && tr.vida > 0 && tr.tipo === 'camino') q = { t: 'volar', id: tr.id, x: x + 0.5, y: y + 0.5 }; }
+        else if (cmd.que === 'ponton') { const pl = planPonton(m, x, y, us[0]); if (pl) q = { t: 'ponton', filas: pl.filas, sx: pl.sx, sy: pl.sy, k: 0, tr: 0 }; else { m.efectos.push({ tipo: 'sinPonton', x1: cmd.x, y1: cmd.y, j: cmd.j, t: m.t }); return; } }
+        if (!q) return;
+        us.forEach((u, k) => {
+          if (k > 0 && q.t !== 'minar' && q.t !== 'desminar') return; // un pontón o una voladura, un solo ingeniero
+          const mio = k === 0 ? q : { t: q.t, x: q.x + (q.t === 'minar' ? k : 0), y: q.y };
+          if (cmd.enc && u.orden === 'zapar' && u.zapa) { if (u.zapa.lista.length < 24) u.zapa.lista.push(mio); return; }
+          limpiar(u); u.arregla = 0; u.obj = 0; u.ruta = null; u.pend = null; u.fallo = false; u.orden = 'zapar'; u.zapa = { lista: [mio], prog: 0 };
+        });
         return;
       }
       case 'formar': // la formación con la que esas unidades llegarán a destino (cada una recuerda la suya)
@@ -2685,6 +2810,7 @@ globalThis.W = { VERSION: 'versión 69' };
       if (u.orden === 'conectar') { tickConectar(m, u); return; }
       if (u.orden === 'hackear') { tickHackear(m, u); return; }
       if (u.orden === 'murar') { tickMurar(m, u); return; }
+      if (u.orden === 'zapar') { tickZapar(m, u); return; }
       if (u.orden !== 'nada') { u.arregla = 0; if (avanzar(m, u) || (!u.ruta && !u.pend)) u.orden = 'nada'; return; }
       if (d.tiende && u.auto && m.logistica !== false && (m.t + u.id) % 30 === 0 && m.t >= (u.autoT || 0)) autoConectar(m, u);
       if (d.repara || d.cura) tickIngeniero(m, u);
@@ -3099,6 +3225,7 @@ globalThis.W = { VERSION: 'versión 69' };
 
     if (m.redSucia || !m.cob || m.t - m.redT >= 100) calcularRed(m);
     if (m.t % 10 === 0) { tickTrincheras(m); tickCamaras(m); tickPortadores(m); tickPuenteAereo(m); tickEspias(m); }
+    if (m.minasT && m.minasT.length && m.t % 2 === 0) tickMinas(m);
     if (m.t % 10 === 0 && m.logistica !== false) { // suministro: fuera de la cobertura el contador sube; dentro, baja rápido. Los aviones repostan en su base: no cuenta.
       const pts = tickSuministro(m);
       for (const u of m.ents) { if (u.edif || UNID[u.tipo].aire || UNID[u.tipo].suministro) continue; let dentro = m.cob[u.j][Math.floor(u.y) * m.N + Math.floor(u.x)] || m.jug[u.j].dios;
@@ -3554,6 +3681,18 @@ globalThis.W = { VERSION: 'versión 69' };
           W.orden(m, { t: 'murar', j, ids: [civil.id], tipo: 'alambrada', x0: lim(cx + px * 9), y0: lim(cy + py * 9), x1: lim(cx - px * 9), y1: lim(cy - py * 9) }); ia.alambrada = true;
         }
       } else if (civil && civil.orden === 'nada' && !civil.auto && tk % 10 === 6) W.orden(m, { t: 'autoCivil', j, ids: [civil.id], on: true });
+      // Ingeniero militar (solo el rival de estilo defensivo): ocho minas en un arco por delante de la base, de cara al rival.
+      if (ia.estilo === 'defensivo' && tk % 20 === 11 && m.t > 12000 && J.minerales > 500 && (ia.minasP || 0) < 8 && !urgente) {
+        const z = sinArma.find((u) => u.tipo === 'ingeniero' && u.orden === 'nada' && !u.arregla);
+        if (z) { const k = ia.minasP || 0, px = -vy / vd, py = vx / vd, mx = patio.cx + (vx / vd) * 17 + px * (k - 3.5) * 2.5, my = patio.cy + (vy / vd) * 17 + py * (k - 3.5) * 2.5; W.orden(m, { t: 'zapar', j, ids: [z.id], que: 'minar', x: Math.max(2, Math.min(m.N - 3, mx)), y: Math.max(2, Math.min(m.N - 3, my)) }); ia.minasP = k + 1; }
+      }
+      // Desminado: si una unidad suya pisa una mina, apunta dónde y manda a un ingeniero a limpiar la zona (si no tiene, entrena uno).
+      if (J.minaVista && J.minaVista.t > (ia.tMina || 0)) { ia.tMina = J.minaVista.t; ia.minaEn = { x: J.minaVista.x, y: J.minaVista.y }; }
+      if (ia.minaEn && tk % 5 === 0) {
+        const z = sinArma.find((u) => u.tipo === 'ingeniero' && u.orden !== 'zapar');
+        if (z) { W.orden(m, { t: 'zapar', j, ids: [z.id], que: 'desminar', x: ia.minaEn.x, y: ia.minaEn.y }); ia.minaEn = null; }
+        else if (c.cuartel && !(c.ingeniero || 0) && !J.colas.ingeniero.n) entrena('ingeniero', 0);
+      }
       // Central de inteligencia: un dron espía y un espía; y con información de sobra, mapeo satelital sobre el objetivo (así sus misiles y bombarderos lo ven).
       if (c.inteligencia && tk % 10 === 8 && !ahorra) {
         const cupo = W.cupoAire(m, j, 'inteligencia');
@@ -4602,6 +4741,8 @@ globalThis.W = { VERSION: 'versión 69' };
         if (!e.edif && UNID[e.tipo].tiende && e.j === YO && m.logistica !== false) t += e.orden === 'conectar' ? ' · tendiendo línea' : e.auto ? ' · automático' : ' · manual';
         if (!e.edif && UNID[e.tipo].espia && e.j === YO) t += e.infiltrado ? ' · infiltrado: informando' : ' · acércalo a un edificio enemigo';
         if (!e.edif && e.dronMis && e.j === YO) t += ' · dron en misión lejana';
+        if (!e.edif && e.orden === 'zapar' && e.zapa && e.zapa.lista[0] && e.j === YO) t += ' · ' + ({ minar: 'minando', desminar: 'desminando', ponton: 'tendiendo un pontón', volar: 'va a volar un camino' })[e.zapa.lista[0].t];
+        if (e.ponton) t += ' · pontón';
         if (!e.edif && UNID[e.tipo].suministro && e.j === YO && e.sumC !== undefined) { const cf = UNID[e.tipo].suministro, pc = Math.round(e.sumC / cf.carga * 100), s = e.sumi; t += ' · carga ' + pc + ' % · ' + (!s ? 'sin punto: muévelo adonde deba abastecer' : s.est === 'ida' ? 'de camino a su punto' : s.est === 'puesto' ? (e.sumC > 0 ? 'abasteciendo a ' + (e.sumiAt || 0) + (e.sumiAt === 1 ? ' unidad' : ' unidades') : 'vacío: no hay puesto logístico al que volver') : s.est === 'vuelta' ? 'vacío: vuelve a recargar' : 'recargando (' + cf.recarga + ' minerales)'); }
         if (e.cava > 0) t += ' · cavando'; else if (e.guardia && e.j === YO && !W.enTrinchera(m, e)) t += ' · en guardia';
         if (UNID[e.tipo] && UNID[e.tipo].aire && e.j === YO) t += (e.enTierra ? ' · en tierra' : e.repostando ? ' · vuelve a repostar' : e.patrulla ? ' · patrulla' : '') + ' · combustible ' + Math.round(e.fuel / UNID[e.tipo].fuel * 100) + ' %';
@@ -5349,6 +5490,19 @@ globalThis.W = { VERSION: 'versión 69' };
         if (raton.dentro) { ctx.fillStyle = P.tinta; ctx.fillText('clic: otro punto · clic derecho: en marcha', raton.x + 14, raton.y - 8); }
         rutaP.forEach((q, i) => { const px = ox + q.x * z, py = oy + q.y * z; ctx.fillStyle = P.mal; ctx.beginPath(); ctx.arc(px, py, 8, 0, TAU); ctx.fill(); ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.fillText(String(i + 1), px, py + 4); ctx.textAlign = 'left'; });
       }
+      if (m.minasT && m.minasT.length && z >= 6) { // minas: las propias siempre; las enemigas, solo las descubiertas
+        for (const mn of m.minasT) {
+          if (!(rep || mn.j === YO || mn.vis)) continue;
+          const px = ox + mn.x * z, py = oy + mn.y * z; if (px < -10 || py < -10 || px > cw + 10 || py > ch + 10) continue;
+          const r = Math.max(2.5, z * 0.16);
+          ctx.fillStyle = mn.j === YO ? P.tinta : P.mal; ctx.beginPath(); ctx.arc(px, py, r, 0, TAU); ctx.fill();
+          ctx.strokeStyle = mn.j === YO ? P.yo : P.mal; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(px, py, r * 2, 0, TAU); ctx.stroke();
+        }
+      }
+      if (modo === 'zapar' && raton.dentro) {
+        ctx.fillStyle = P.tinta; ctx.fillText(ZAPA[zapaQue], raton.x + 14, raton.y - 8);
+        if (zapaQue === 'desminar') { ctx.strokeStyle = P.yo; ctx.lineWidth = 1; ctx.setLineDash([4, 5]); ctx.beginPath(); ctx.arc(raton.x, raton.y, W.ECON.desminaRadio * z, 0, TAU); ctx.stroke(); ctx.setLineDash([]); }
+      }
       { // misiones de dron: el alcance mientras se elige el punto, y la línea hasta el punto de cada operador seleccionado
         const om = modo === 'dronMis' || sel.size ? unidadesSel().filter((u) => u.j === YO && UNID[u.tipo].misionDron) : [];
         ctx.strokeStyle = P.yo; ctx.lineWidth = 1; ctx.setLineDash([4, 5]);
@@ -5496,6 +5650,7 @@ globalThis.W = { VERSION: 'versión 69' };
           if (d.tipo === 'boca') parte('humo', d.x1, d.y1, (azar() - 0.5) * 0.4, -0.3, 0.6, 0.16);
           else bala(d);
         } else if (d.tipo === 'impacto') {
+          if (d.mina && d.j !== YO && !rep) { aviso('¡Mina! Manda un ingeniero a desminar'); son.alerta(); senales.push({ k: 'onda', x: d.x1, y: d.y1, r: 2, t0: performance.now(), dur: 900 }); }
           if (!enVista) continue;
           const area = W.ARMAS[d.arma].area || 0; // los obuses de área dejan un cráter mayor
           estallido(d.x2, d.y2, area ? 2 : 1); marcaSuelo('quemado', d.x2, d.y2, area || 0.42, 0, 15000);
@@ -5514,6 +5669,15 @@ globalThis.W = { VERSION: 'versión 69' };
           if (d.derribo) { estallido(d.x2, d.y2, 2); aviso(d.j === YO ? 'Misil enemigo derribado' : 'Te han derribado un misil'); son.explosion(Math.max(0.2, cerca(d.x2, d.y2)), paneo(d.x2), false); }
         } else if (d.tipo === 'misilListo') {
           if (d.j === YO) { aviso(MIS[d.clase].nombre + ' listo en la misilera'); son.unidadLista(); }
+        } else if (d.tipo === 'sinPonton') {
+          if (d.j === YO) aviso('Ahí no cabe un pontón: hace falta tierra firme a los dos lados, a 14 celdas como mucho');
+        } else if (d.tipo === 'pontonListo') {
+          if (d.j === YO) aviso('Pontón tendido');
+        } else if (d.tipo === 'sinMina') {
+          if (d.j === YO) aviso(d.tope ? 'Ya tienes el máximo de minas (' + W.ECON.minasMax + ')' : 'No se pudo poner la mina: faltan minerales o el sitio no vale');
+        } else if (d.tipo === 'minaFuera') {
+          if (d.j === YO) aviso('Mina retirada');
+        } else if (d.tipo === 'minaPuesta') {
         } else if (d.tipo === 'sumiVacio') {
           if (d.j === YO) aviso('Suministro agotado: vuelve a recargar');
         } else if (d.tipo === 'infiltrado') {
@@ -5825,7 +5989,7 @@ globalThis.W = { VERSION: 'versión 69' };
       camionSum: 'Muévelo adonde esté tu ejército: se planta y abastece a todo lo que tenga alrededor mientras le dure la carga (se gasta según cuántas unidades atiende). Vacío, vuelve solo al puesto logístico, recarga y regresa.', heliSum: 'Como el camión de suministro, pero volando: más rápido y sin rodeos; lleva la mitad de carga y la antiaérea lo derriba.',
       avanzadaMovil: 'Se despliega lejos como puesto de avanzada: red, hospital y pista sin tender líneas.',
       torretaMuro: 'Torreta que se monta sobre un muro reforzado tuyo.', camara: 'Ve lejos y en redondo, descubre a los escondidos y avisa si entra un enemigo.',
-      infanteria: 'Barata y versátil; captura puestos, cava y ocupa trincheras.', antitanque: 'Infantería con cohetes: contra vehículos y aviones.', explorador: 'Rápido y ve lejos; explora solo con E.', ingeniero: 'Repara solo vehículos y edificios; cava más rápido.', medico: 'Cura solo a la infantería herida cercana.',
+      infanteria: 'Barata y versátil; captura puestos, cava y ocupa trincheras.', antitanque: 'Infantería con cohetes: contra vehículos y aviones.', explorador: 'Rápido y ve lejos; explora solo con E.', ingeniero: 'Zapador: pone y retira minas, tiende pontones sobre el agua y vuela caminos y puentes (botones al seleccionarlo). Repara solo vehículos y edificios; cava más rápido.', medico: 'Cura solo a la infantería herida cercana.',
       francotirador: 'Mata infantería desde muy lejos; se esconde.', gatling: 'Equipo de dos: tarda en montar, y montada tritura infantería y aviones bajos.', hacker: 'Apaga a distancia un vehículo o edificio enemigo unos segundos; cuesta información.', operador: 'Parado, despliega un dron de reconocimiento, y puede mandarlo en misión a vigilar un punto a 45 celdas (tecla O): lo que vea lo ve tu artillería. Con las tecnologías de la estación de drones lleva también kamikazes y un bombardero, que atacan en la zona de la misión.', espia: 'Pasa inadvertido aunque se mueva. Junto a un edificio enemigo ves lo que produce el rival y ganas información.', dronEspia: 'Vuela muy lejos y mucho rato desde su central; no ataca.',
       tanque: 'El vehículo de combate básico.', artilleria: 'Dispara muy lejos, en área, a lo que vea cualquiera de los tuyos.', pesado: 'Tanque lento, muy duro y de gran pegada.', blindado: 'Rápido, con ametralladora: contra infantería.', antiaereoMovil: 'Antiaérea sobre ruedas para acompañar al ejército.',
       transporte: 'Lleva infantería dentro, rápido.', lanzacohetes: 'Salvas de cohetes a mucha distancia, sobre una zona.', mando: 'Los tuyos a su alrededor ven en redondo y giran más rápido; interfiere drones enemigos. Gasta información.', comandoDrones: 'Lleva drones de reconocimiento, bombarderos y kamikazes que atacan solos.',
@@ -5849,6 +6013,10 @@ globalThis.W = { VERSION: 'versión 69' };
     $('cierraGuia').addEventListener('click', () => { $('guia').hidden = true; });
     $('guia').addEventListener('click', (ev) => { if (ev.target === $('guia')) $('guia').hidden = true; });
     const conDrones = () => unidadesSel().filter((u) => u.j === YO && UNID[u.tipo].drones && (W.dronesDe(m, u).fpv || W.dronesDe(m, u).bomba));
+    const zapadores = () => unidadesSel().filter((u) => u.j === YO && UNID[u.tipo].zapador);
+    const ZAPA = { minar: 'minar: clic donde va la mina (Mayús: seguir poniendo)', desminar: 'desminar: clic en la zona a limpiar', ponton: 'pontón: clic en el agua que quieres cruzar', volar: 'volar: clic en un camino, puente o pontón' };
+    let zapaQue = 'minar';
+    $('zapa').addEventListener('click', (ev) => { const b = ev.target.closest('[data-z]'); if (!b || !zapadores().length) return; zapaQue = b.dataset.z; modo = 'zapar'; });
     const conMision = () => unidadesSel().filter((u) => u.j === YO && UNID[u.tipo].misionDron);
     $('dronMis').addEventListener('click', () => { const om = conMision(); if (!om.length) return; if (om.some((u) => u.dronMis)) { W.orden(m, { t: 'dronMision', j: YO, ids: om.map((u) => u.id) }); aviso('Drones de vuelta con su operador'); } else { modo = 'dronMis'; aviso('Elige el punto que vigilará el dron (hasta 45 celdas del operador)'); } });
     $('dronAtk').addEventListener('click', () => { const us = conDrones(); if (us.length) W.orden(m, { t: 'dronAtk', j: YO, ids: us.map((u) => u.id), on: us.some((u) => u.dronAtk === false) }); });
@@ -6207,6 +6375,7 @@ globalThis.W = { VERSION: 'versión 69' };
       { const us = conCarga(), bd = $('descargar'); bd.hidden = !us.length; if (us.length) { const t = 'Descargar · ' + us.reduce((a, u) => a + u.pasajeros.length, 0) + ' dentro'; if (bd.textContent !== t) bd.textContent = t; } }
       { const e = mejorable(), bm = $('mejorar'); bm.hidden = !e; if (e) { const pr = W.costoMejora(e), t = 'Mejorar a nivel ' + ((e.nivelE || 1) + 1) + ' · ' + pr, cl = 'btn' + (J.minerales < pr && !J.dios ? ' caro' : ''); if (bm.textContent !== t) bm.textContent = t; if (bm.className !== cl) bm.className = cl; } }
       pintarForma();
+      $('zapa').hidden = !zapadores().length;
       { const om = conMision(), bm = $('dronMis'); bm.hidden = !om.length; if (om.length) { const tx = om.some((u) => u.dronMis) ? 'Misión de dron: en curso' : 'Misión de dron'; if (bm.textContent !== tx) bm.textContent = tx; bm.classList.toggle('listo', om.some((u) => u.dronMis)); } }
       { const us = conDrones(), bd = $('dronAtk'); bd.hidden = !us.length; if (us.length) { const t = 'Drones de ataque: ' + (us.every((u) => u.dronAtk !== false) ? 'sí' : us.some((u) => u.dronAtk !== false) ? 'algunos' : 'no'); if (bd.textContent !== t) bd.textContent = t; } }
       { const bv = $('verRed'), t = 'ver la red: ' + (verRed ? 'sí' : 'no'); if (bv.textContent !== t) { bv.textContent = t; bv.classList.toggle('on', verRed); } bv.hidden = !conRed; }
@@ -6236,6 +6405,14 @@ globalThis.W = { VERSION: 'versión 69' };
           const p = esquinaColocar(tipoColocar);
           const no = W.porQueNo(m, YO, tipoColocar, p.x, p.y);
           if (!no) { W.orden(m, { t: 'colocar', j: YO, tipo: tipoColocar, x: p.x, y: p.y }); modo = null; } else aviso('No se puede colocar: ' + no);
+          return;
+        }
+        if (modo === 'zapar') {
+          const zs = zapadores(); if (!zs.length) { modo = null; return; }
+          if (zapaQue === 'volar' && !m.tramoEn[Math.floor(wy) * m.N + Math.floor(wx)]) { aviso('Ahí no hay camino, puente ni pontón'); return; }
+          if (zapaQue === 'ponton' && m.mapa.terreno[Math.floor(wy) * m.N + Math.floor(wx)] !== W.TERRENO.AGUA) { aviso('El pontón se tiende sobre el agua: haz clic en ella'); return; }
+          W.orden(m, { t: 'zapar', j: YO, ids: zs.map((u) => u.id), que: zapaQue, x: wx, y: wy, enc: ev.shiftKey }); marca(wx, wy, P.yo); son.orden();
+          if (!(zapaQue === 'minar' && ev.shiftKey)) modo = null;
           return;
         }
         if (modo === 'dronMis') {

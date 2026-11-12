@@ -382,6 +382,18 @@
           W.orden(m, { t: 'murar', j, ids: [civil.id], tipo: 'alambrada', x0: lim(cx + px * 9), y0: lim(cy + py * 9), x1: lim(cx - px * 9), y1: lim(cy - py * 9) }); ia.alambrada = true;
         }
       } else if (civil && civil.orden === 'nada' && !civil.auto && tk % 10 === 6) W.orden(m, { t: 'autoCivil', j, ids: [civil.id], on: true });
+      // Ingeniero militar (solo el rival de estilo defensivo): ocho minas en un arco por delante de la base, de cara al rival.
+      if (ia.estilo === 'defensivo' && tk % 20 === 11 && m.t > 12000 && J.minerales > 500 && (ia.minasP || 0) < 8 && !urgente) {
+        const z = sinArma.find((u) => u.tipo === 'ingeniero' && u.orden === 'nada' && !u.arregla);
+        if (z) { const k = ia.minasP || 0, px = -vy / vd, py = vx / vd, mx = patio.cx + (vx / vd) * 17 + px * (k - 3.5) * 2.5, my = patio.cy + (vy / vd) * 17 + py * (k - 3.5) * 2.5; W.orden(m, { t: 'zapar', j, ids: [z.id], que: 'minar', x: Math.max(2, Math.min(m.N - 3, mx)), y: Math.max(2, Math.min(m.N - 3, my)) }); ia.minasP = k + 1; }
+      }
+      // Desminado: si una unidad suya pisa una mina, apunta dónde y manda a un ingeniero a limpiar la zona (si no tiene, entrena uno).
+      if (J.minaVista && J.minaVista.t > (ia.tMina || 0)) { ia.tMina = J.minaVista.t; ia.minaEn = { x: J.minaVista.x, y: J.minaVista.y }; }
+      if (ia.minaEn && tk % 5 === 0) {
+        const z = sinArma.find((u) => u.tipo === 'ingeniero' && u.orden !== 'zapar');
+        if (z) { W.orden(m, { t: 'zapar', j, ids: [z.id], que: 'desminar', x: ia.minaEn.x, y: ia.minaEn.y }); ia.minaEn = null; }
+        else if (c.cuartel && !(c.ingeniero || 0) && !J.colas.ingeniero.n) entrena('ingeniero', 0);
+      }
       // Central de inteligencia: un dron espía y un espía; y con información de sobra, mapeo satelital sobre el objetivo (así sus misiles y bombarderos lo ven).
       if (c.inteligencia && tk % 10 === 8 && !ahorra) {
         const cupo = W.cupoAire(m, j, 'inteligencia');

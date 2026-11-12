@@ -128,6 +128,7 @@
   #admin .fila2 .grupo::before { content: none; }
   #finGraf { display: block; margin: 12px auto 4px; max-width: 100%; }
   #continuar { margin-top: 6px; font: inherit; padding: 8px 14px; cursor: pointer; background: var(--panel); color: var(--tinta); border: 1px solid var(--linea); border-radius: 2px; }
+  #zapa[hidden] { display: none !important; }
   #alertas { position: fixed; top: 38px; left: 8px; z-index: 2; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
   #alertas button { font: inherit; font-size: 11px; text-align: left; color: var(--tinta); background: var(--panel); border: 1px solid var(--linea); border-left: 3px solid var(--mal); border-radius: 2px; padding: 3px 8px; cursor: pointer; opacity: 0.94; }
   body.contuto #alertas { max-width: 226px; }
@@ -293,6 +294,12 @@
     <button type="button" id="descargar" class="btn" hidden></button>
     <button type="button" id="desplegar" class="btn" hidden title="Convierte el vehículo en su edificio, donde está: el patio móvil en un patio; el puesto móvil en un puesto de avanzada. No se puede replegar.">Desplegar</button>
     <button type="button" id="mejorar" class="btn" hidden title="Sube un nivel el rendimiento de este edificio: un 50 % más por nivel, hasta el nivel 3."></button>
+    <div id="zapa" hidden style="display:flex;flex-wrap:wrap;gap:4px">
+      <button type="button" class="btn" data-z="minar" title="El ingeniero pone una mina donde hagas clic (40 minerales). Con Mayús sigues poniendo. No la ve el enemigo (salvo sus ingenieros y sus cámaras) y estalla cuando la pisa una unidad de tierra suya. Los tuyos pasan sin peligro.">Minar</button>
+      <button type="button" class="btn" data-z="desminar" title="El ingeniero va al punto y retira todas las minas enemigas en 5 celdas a la redonda. Los ingenieros nunca las pisan.">Desminar</button>
+      <button type="button" class="btn" data-z="ponton" title="Clic en el agua: el ingeniero tiende un pontón por el cruce más corto que pase por ahí (hasta 14 celdas, 12 minerales por celda). Pasan infantería y vehículos. Es frágil.">Pontón</button>
+      <button type="button" class="btn" data-z="volar" title="Clic en un camino, puente o pontón, tuyo o enemigo: el ingeniero va y lo vuela.">Volar camino</button>
+    </div>
     <button type="button" id="dronMis" class="btn" hidden title="Manda el dron del operador a vigilar un punto lejano (hasta 45 celdas): lo que vea lo ven tu artillería, tus misiles y tus bombarderos. Con la tecnología de ataque, sus kamikazes y su bombardero atacan también allí. El operador se planta; si echa a andar, la misión se acaba. Tecla O.">Misión de dron</button>
     <button type="button" id="dronAtk" class="btn" hidden title="Los drones kamikaze y bombarderos del comando salen solos contra lo que tu bando vea dentro de su radio. Cada salida cuesta minerales. Clic derecho en un enemigo le da preferencia."></button>
     <button type="button" id="retiro" class="btn" hidden title="Con poca vida, la unidad se va sola a reparar y luego vuelve a su puesto."></button>

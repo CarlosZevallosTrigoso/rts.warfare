@@ -1755,6 +1755,60 @@ prueba('suministro móvil: el camión va, abastece mientras le dura la carga, vu
   void dura;
 });
 
+prueba('zapadores: minas y desminado, pontón sobre el agua y voladura', () => {
+  const m = W.crearMundo(31, { N: 128 }), N = m.N, J = m.jug[0], T = W.TERRENO;
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const cel = (x, y) => y * N + x;
+  for (let y = 40; y < 90; y++) for (let x = 20; x < 110; x++) { const i = cel(x, y); if (m.ocup[i]) continue; const agua = x >= 60 && x <= 64; m.mapa.terreno[i] = agua ? T.AGUA : 0; m.mapa.mineral[i] = 0; m.paso[i] = agua ? 0 : 1; m.pasoV[i] = agua ? 0 : 1; }
+  for (let x = 20; x < 110; x++) for (const y of [39, 90]) { const i = cel(x, y); if (!m.ocup[i]) { m.mapa.terreno[i] = 1; m.paso[i] = 0; m.pasoV[i] = 0; } } // cerrado por arriba y por abajo: el río solo se cruza con pontón
+  for (let y = 39; y <= 90; y++) for (const x of [19, 110]) { const i = cel(x, y); if (!m.ocup[i]) { m.mapa.terreno[i] = 1; m.paso[i] = 0; m.pasoV[i] = 0; } }
+  m.terrenoV++;
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  J.minerales = 5000;
+  const ing = W.crearUnidad(m, 0, 'ingeniero', cel(50, 64)), tq = W.crearUnidad(m, 0, 'tanque', cel(48, 66));
+  // sin pontón no hay paso
+  W.orden(m, { t: 'mover', j: 0, ids: [tq.id], x: 80.5, y: 66.5 }); avanza(200);
+  assert.ok(tq.x < 60, 'el río cierra el paso');
+  // pontón
+  W.orden(m, { t: 'zapar', j: 0, ids: [ing.id], que: 'ponton', x: 62.5, y: 64.5 }); avanza(3);
+  assert.strictEqual(ing.orden, 'zapar');
+  const min0 = J.minerales; for (let i = 0; i < 2000 && ing.orden === 'zapar'; i++) W.tick(m);
+  const pon = m.ents.find((e) => e.ponton); assert.ok(pon, 'el ingeniero tiende un pontón');
+  assert.strictEqual(pon.celdas.length, 10, 'cinco celdas de río, dos de ancho');
+  assert.ok(pon.celdas.every((c) => m.mapa.terreno[c] === T.PUENTE && m.paso[c] && m.pasoV[c]), 'y se puede pisar');
+  assert.ok(min0 - J.minerales >= 10 * W.ECON.pontonCelda - 70, 'se paga por celda (' + (min0 - J.minerales) + ')');
+  W.orden(m, { t: 'mover', j: 0, ids: [tq.id], x: 80.5, y: 66.5 }); avanza(3); for (let i = 0; i < 2000 && tq.orden !== 'nada'; i++) W.tick(m);
+  assert.ok(tq.x > 70, 'el tanque cruza por el pontón (x=' + tq.x.toFixed(1) + ')');
+  W.orden(m, { t: 'zapar', j: 0, ids: [ing.id], que: 'ponton', x: 100.5, y: 50.5 }); avanza(3);
+  assert.ok(m.efectos.some((e) => e.tipo === 'sinPonton') || ing.orden !== 'zapar', 'en tierra firme no hay pontón que tender');
+  // voladura: un ingeniero enemigo lo hunde
+  const ingR = W.crearUnidad(m, 1, 'ingeniero', cel(70, 64));
+  W.orden(m, { t: 'zapar', j: 1, ids: [ingR.id], que: 'volar', x: (pon.celdas[pon.celdas.length - 1] % N) + 0.5, y: ((pon.celdas[pon.celdas.length - 1] / N) | 0) + 0.5 });
+  avanza(3); for (let i = 0; i < 1500 && m.ents.some((e) => e.ponton); i++) W.tick(m);
+  assert.ok(!m.ents.some((e) => e.ponton), 'el pontón volado desaparece');
+  assert.strictEqual(m.mapa.terreno[cel(62, 64)], T.AGUA, 'y vuelve a ser agua');
+  ingR.vida = 0; avanza(2);
+  // minas: tres en fila al este del río; el tanque propio las pisa sin daño; el enemigo, no
+  for (let k = 0; k < 3; k++) W.orden(m, { t: 'zapar', j: 0, ids: [ing.id], que: 'minar', x: 44.5, y: 60.5 + k, enc: k > 0 });
+  avanza(3); for (let i = 0; i < 2000 && ing.orden === 'zapar'; i++) W.tick(m);
+  assert.strictEqual(m.minasT.length, 3, 'tres minas puestas'); assert.ok(m.minasT.every((q) => q.j === 0 && !q.vis));
+  const mio = W.crearUnidad(m, 0, 'infanteria', cel(40, 61));
+  W.orden(m, { t: 'mover', j: 0, ids: [mio.id], x: 47.5, y: 61.5 }); avanza(3); for (let i = 0; i < 600 && mio.orden !== 'nada'; i++) W.tick(m);
+  assert.strictEqual(m.minasT.length, 3, 'las propias no estallan con los suyos');
+  const zR = W.crearUnidad(m, 1, 'ingeniero', cel(36, 61));
+  W.orden(m, { t: 'mover', j: 1, ids: [zR.id], x: 47.5, y: 61.5 }); avanza(3); for (let i = 0; i < 800 && zR.orden !== 'nada'; i++) W.tick(m);
+  assert.strictEqual(m.minasT.length, 3, 'el zapador enemigo pasa sin pisarlas');
+  assert.ok(m.minasT.some((q) => q.vis), 'y las descubre');
+  const enem = W.crearUnidad(m, 1, 'tanque', cel(38, 60)); enem.ang = 0;
+  W.orden(m, { t: 'mover', j: 1, ids: [enem.id], x: 50.5, y: 60.5 }); avanza(3); for (let i = 0; i < 800 && m.minasT.length === 3; i++) W.tick(m);
+  assert.ok(m.minasT.length < 3, 'el tanque enemigo pisa una');
+  assert.ok(enem.vida < enem.vidaMax - 100, 'y le hace daño de verdad (vida ' + Math.round(enem.vida) + ' de ' + enem.vidaMax + ')');
+  // desminado
+  const quedan = m.minasT.length; mio.vida = 0; tq.vida = 0; avanza(2); assert.ok(zR.vida > 0, 'el zapador sigue vivo');
+  W.orden(m, { t: 'zapar', j: 1, ids: [zR.id], que: 'desminar', x: 44.5, y: 61.5 }); avanza(3); for (let i = 0; i < 3000 && zR.orden === 'zapar'; i++) W.tick(m);
+  assert.ok(quedan > 0 && m.minasT.length === 0, 'el zapador enemigo limpia la zona');
+});
+
 prueba('tanda 5: puente aéreo, puesto de avanzada, hospital y traslado de infantería', () => {
   const m = W.crearMundo(31, { N: 128, logistica: true }), N = m.N, J = m.jug[0];
   m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
