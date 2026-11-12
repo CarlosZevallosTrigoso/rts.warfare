@@ -90,7 +90,7 @@
         if (azar < 0.2 + (d / rad) * 0.35) continue;
         const i = y * N + x;
         if (terreno[i] !== T.LLANO || !alcanzable[i] || mineral[i] || dBase(x, y) < 6) continue;
-        const q = Math.round(cant * (0.6 + 0.8 * azar2));
+        const q = Math.round(cant * 1.3 * (0.6 + 0.8 * azar2)); // (yacimientos un 30 % mayores: las partidas largas se quedaban sin minerales)
         mineral[i] = q; tipoMin[i] = tipo; mineral[espejo(i)] = q; tipoMin[espejo(i)] = tipo;
       }
     }

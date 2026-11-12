@@ -148,7 +148,7 @@
 
     // Volumen: la vista sigue siendo cenital, pero cada cosa tiene altura. Los edificios muestran su pared sur y el tejado
     // se dibuja desplazado hacia arriba; las unidades llevan un canto; la roca y el agua, un escalón.
-    const ALTO = { patio: 0.3, central: 0.36, refineria: 0.32, bomba: 0.2, cuartel: 0.26, extractor: 0.3, fabrica: 0.34, torreta: 0.22, torreCanon: 0.36, aerodromo: 0.08, antiaerea: 0.22, estacion: 0.26, deposito: 0.22, obras: 0.28, misilera: 0.12, interceptor: 0.24, torretaMuro: 0.34, camara: 0.3, estDrones: 0.14, laboratorio: 0.26, logistica: 0.16, avanzada: 0.2, inteligencia: 0.3, pistaAv: 0.04, almacen: 0.22, tanqueComb: 0.18, torreRadio: 0.5 };
+    const ALTO = { patio: 0.3, central: 0.36, refineria: 0.32, bomba: 0.2, cuartel: 0.26, extractor: 0.3, fabrica: 0.34, torreta: 0.22, torreCanon: 0.36, aerodromo: 0.08, antiaerea: 0.22, estacion: 0.26, deposito: 0.22, obras: 0.28, misilera: 0.12, interceptor: 0.24, torretaMuro: 0.34, camara: 0.3, estDrones: 0.14, laboratorio: 0.26, logistica: 0.16, avanzada: 0.2, inteligencia: 0.3, pistaAv: 0.04, almacen: 0.22, tanqueComb: 0.18, torreRadio: 0.5, mina: 0.3 };
     function entEn(wx, wy, holgura) { // holgura: margen extra (en celdas) para acertar con el dedo
       let mejor = null, md = Infinity;
       for (const e of m.ents) {
@@ -194,10 +194,13 @@
         if (!e.edif && UNID[e.tipo].tiende && e.j === YO && m.logistica !== false) t += e.orden === 'conectar' ? ' · tendiendo línea' : e.auto ? ' · automático' : ' · manual';
         if (!e.edif && UNID[e.tipo].espia && e.j === YO) t += e.infiltrado ? ' · infiltrado: informando' : ' · acércalo a un edificio enemigo';
         if (!e.edif && e.comb !== undefined && e.j === YO) t += e.comb > 0 ? ' · combustible ' + Math.round(e.comb / W.ECON.combMax * 100) + ' %' : ' · sin combustible';
+        if (e.mun !== undefined && e.j === YO) { const cap = W.munDe(e.tipo, e.edif); t += e.mun > 0 ? ' · munición ' + Math.round(e.mun / cap * 100) + ' %' : !e.edif && UNID[e.tipo].cat === 'inf' ? ' · sin munición: solo arma corta' : ' · sin munición'; }
+        if (!e.edif && e.minasQ !== undefined && e.j === YO) t += ' · minas: ' + e.minasQ;
         if (!e.edif && e.dronMis && e.j === YO) t += ' · dron en misión lejana';
         if (!e.edif && UNID[e.tipo].dronStock && e.j === YO && e.drStock !== undefined) { t += ' · repuestos: ' + e.drStock + (e.drFpv !== undefined ? ' drones y ' + e.drFpv + ' kamikazes' : ' drones'); const q = e.dr && e.dr.rec[0] ? m.porId.get(e.dr.rec[0]) : null; if (q && q.bat !== undefined && conRed) t += ' · batería ' + Math.round(q.bat / W.ECON.dronBat * 100) + ' %' + (q.casa2 ? ' (cargando)' : ''); }
         if (!e.edif && e.orden === 'zapar' && e.zapa && e.zapa.lista[0] && e.j === YO) t += ' · ' + ({ minar: 'minando', desminar: 'desminando', ponton: 'tendiendo un pontón', volar: 'va a volar un camino' })[e.zapa.lista[0].t];
         if (e.ponton) t += ' · pontón';
+        if (e.tipo === 'mina' && e.j === YO && e.pozo !== undefined) t += e.pozo > 0 ? ' · pozo: ' + num(e.pozo) : ' · pozo agotado';
         if (!e.edif && e.j === YO && e.vigila) t += ' · vigila una zona'; if (!e.edif && e.j === YO && e.protege) { const o = m.porId.get(e.protege); if (o) t += ' · protege: ' + (o.edif ? EDIF : UNID)[o.tipo].nombre.toLowerCase(); }
         if (!e.edif && e.j === YO && e.explora) t += e.expG ? ' · explorando en grupo' : ' · explorando';
         if (e.edif && EDIF[e.tipo].guarda && e.j === YO && isFinite(J.capMin)) { const g = EDIF[e.tipo].guarda; t += ' · guarda' + (g.min ? ' ' + Math.round(J.minerales * g.min / Math.max(1, J.capMin)) + ' de ' + g.min + ' minerales' : '') + (g.min && g.pet ? ' y' : '') + (g.pet ? ' ' + Math.round(J.petroleo * g.pet / Math.max(1, J.capPet)) + ' de ' + g.pet + ' de petróleo' : ''); }
@@ -287,6 +290,7 @@
       if (e.edif) {
         if (e.infra || e.vida <= 0) return '';
         if (e.hack > m.t) return 'hack';
+        if (e.mun === 0) return 'mun';
         if (e.tipo === 'avanzada') return e.abast > m.t ? '' : 'enlace';
         if (conRed && e.conRed === false && !EDIF[e.tipo].helipuerto) return 'red'; // (la pista avanzada va fuera de la red a propósito)
         if (e.sinLuz) return 'luz';
@@ -294,6 +298,7 @@
         return '';
       }
       if (e.comb !== undefined && e.comb <= 0) return 'comb';
+      if (e.mun === 0) return 'mun';
       if (e.sinDron) return 'dron';
       if (conRed && W.sinRadio(m, e)) return 'radio';
       return conRed && UNID[e.tipo].arma && e.sinSum >= W.ECON.sinSum ? 'sum' : ''; // (a quien no dispara, el suministro no le cambia nada)
@@ -302,7 +307,8 @@
       red: 'fuera de la red: no rinde · conéctalo con un ingeniero civil',
       luz: 'falta energía en su red: va a media marcha · otra central',
       agua: 'falta agua para entrenar · otra bomba de agua',
-      sum: 'sin suministro: dispara lento y no se repara · acércale un camión de suministro',
+      sum: 'sin suministro: no repone munición ni se repara · acércale un camión de suministro',
+      mun: 'sin munición · vuelve a la red o acércale un camión de suministro',
       enlace: 'sin enlace aéreo: fuera de la red · hace falta un puesto logístico',
       comb: 'parado · acércale un camión de suministro',
       dron: 'sin drones · llévalo junto a una estación de drones, un puesto logístico o un camión de suministro',
@@ -312,7 +318,9 @@
     function icono(x, y, k) { // disco rojo con el dibujo en blanco
       ctx.fillStyle = P.mal; ctx.beginPath(); ctx.arc(x, y, 8, 0, TAU); ctx.fill();
       ctx.strokeStyle = '#ffffff'; ctx.fillStyle = '#ffffff'; ctx.lineWidth = 1.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath();
-      if (k === 'comb') { // bidón
+      if (k === 'mun') { // tres cartuchos
+        for (const dx of [-3, 0, 3]) { ctx.moveTo(x + dx, y + 4.5); ctx.lineTo(x + dx, y - 2); ctx.moveTo(x + dx - 1.2, y - 2); ctx.lineTo(x + dx, y - 5); ctx.lineTo(x + dx + 1.2, y - 2); } ctx.stroke();
+      } else if (k === 'comb') { // bidón
         ctx.rect(x - 3.5, y - 3, 7, 8); ctx.moveTo(x - 1.5, y - 3); ctx.lineTo(x - 1.5, y - 5.5); ctx.lineTo(x + 2, y - 5.5); ctx.moveTo(x - 3.5, y + 1); ctx.lineTo(x + 3.5, y - 1); ctx.stroke();
       } else if (k === 'red') { // enchufe tachado
         ctx.moveTo(x - 2, y - 5); ctx.lineTo(x - 2, y - 2); ctx.moveTo(x + 2, y - 5); ctx.lineTo(x + 2, y - 2); ctx.rect(x - 3.5, y - 2, 7, 3.5); ctx.moveTo(x, y + 1.5); ctx.lineTo(x, y + 5); ctx.moveTo(x - 5, y + 4.5); ctx.lineTo(x + 5, y - 4.5); ctx.stroke();
@@ -445,19 +453,48 @@
           if (elegido || dano > 0.02) { const bx = ox + e.cx * z, by = oy + e.cy * z - z * 0.5, w = Math.max(14, z); ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(bx - w / 2, by, w, 3); ctx.fillStyle = dano > 0.6 ? P.mal : e.j === YO ? P.yo : P.rival; ctx.fillRect(bx - w / 2, by, w * (1 - dano), 3); }
         }
       }
-      if (m.muros && m.muros.length) { // muros: bloques con su cara sur; la alambrada, aspas; la puerta, con la franja de su dueño
-        const alto = lod ? Math.max(2, z * 0.22) : 0;
+      if (m.muros && m.muros.length) { // muros y alambradas: cada celda se une con sus vecinas (también en diagonal) y se dibuja como un trazo continuo, no como bloques sueltos
+        const alto = lod ? Math.max(2, z * 0.22) : 0, cls = (c) => { const n = m.muro[c]; return !n ? 0 : n === 1 ? 1 : 2; };
+        const nodos = [[], [], []], enl = [[], [], []];
         for (const c of m.muros) {
           const x = c % N, y = (c / N) | 0; if (fuera(x + 0.5, y + 0.5) || !m.niebla[YO][c]) continue;
-          const n = m.muro[c], px = ox + x * z, py = oy + y * z, mio = m.muroJ[c] === YO + 1;
-          if (n === 1) { ctx.strokeStyle = '#6b665c'; ctx.lineWidth = Math.max(1, z * 0.05); ctx.beginPath(); ctx.moveTo(px + z * 0.1, py + z * 0.2); ctx.lineTo(px + z * 0.9, py + z * 0.8); ctx.moveTo(px + z * 0.9, py + z * 0.2); ctx.lineTo(px + z * 0.1, py + z * 0.8); ctx.moveTo(px, py + z * 0.5); ctx.lineTo(px + z, py + z * 0.5); ctx.stroke(); continue; }
-          ctx.fillStyle = n === 3 ? '#3f3d39' : '#5c5850'; ctx.fillRect(px, py + z - alto, z + 0.5, alto); // cara sur
-          ctx.fillStyle = n === 3 ? '#6e6a62' : n === 4 ? '#8d877a' : '#9a958a'; ctx.fillRect(px, py - alto, z + 0.5, z + 0.5); // coronación
-          if (n === 4) { ctx.fillStyle = mio ? P.yo : P.rival; ctx.fillRect(px + z * 0.2, py - alto + z * 0.38, z * 0.6, z * 0.24); }
-          else if (lod && z >= 12) { ctx.fillStyle = mio ? P.yo : P.rival; ctx.globalAlpha = 0.55; ctx.fillRect(px + z * 0.42, py - alto + z * 0.42, z * 0.16, z * 0.16); ctx.globalAlpha = 1; }
-          const b = m.muroId.get(c) ? m.porId.get(m.muroId.get(c)) : null;
-          if (b && b.vida < b.vidaMax) { ctx.fillStyle = 'rgba(0,0,0,' + (0.55 * (1 - b.vida / b.vidaMax)).toFixed(2) + ')'; ctx.fillRect(px, py - alto, z + 0.5, z + 0.5); }
+          const k = cls(c), px = ox + (x + 0.5) * z, py = oy + (y + 0.5) * z; nodos[k].push(c, px, py);
+          // Cada celda une los puntos medios de sus lados compartidos: una escalera de celdas sale como una diagonal recta, y un codo, achaflanado.
+          const h = z / 2, mp = [];
+          if (x + 1 < N && cls(c + 1) === k) mp.push(px + h, py); if (y + 1 < N && cls(c + N) === k) mp.push(px, py + h);
+          if (x > 0 && cls(c - 1) === k) mp.push(px - h, py); if (y > 0 && cls(c - N) === k) mp.push(px, py - h);
+          const L = enl[k];
+          if (mp.length === 4) L.push(mp[0], mp[1], mp[2], mp[3]);
+          else if (mp.length === 2) L.push(px, py, mp[0], mp[1]);
+          else for (let q = 0; q < mp.length; q += 2) L.push(px, py, mp[q], mp[q + 1]);
+          if (!mp.length) { // suelta, o unida solo en diagonal
+            let d = false;
+            if (x + 1 < N && y + 1 < N && cls(c + N + 1) === k) { L.push(px, py, px + z, py + z); d = true; }
+            if (x > 0 && y + 1 < N && cls(c + N - 1) === k) { L.push(px, py, px - z, py + z); d = true; }
+            if (!d) L.push(px - 0.01, py, px + 0.01, py);
+          }
         }
+        ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        const traza = (k, dy) => { ctx.beginPath(); const L = enl[k]; for (let i = 0; i < L.length; i += 4) { ctx.moveTo(L[i], L[i + 1] + dy); ctx.lineTo(L[i + 2], L[i + 3] + dy); } ctx.stroke(); };
+        if (nodos[1].length) { // alambrada: dos hilos, postes en cada celda y espiras de concertina entre ellos
+          ctx.strokeStyle = '#7d776b'; ctx.lineWidth = Math.max(1, z * 0.045); traza(1, -z * 0.06); traza(1, z * 0.06);
+          if (z >= 9) { ctx.lineWidth = Math.max(0.8, z * 0.035); ctx.beginPath(); const L = enl[1]; for (let i = 0; i < L.length; i += 4) for (let t = 0.25; t < 1; t += 0.5) { const qx = L[i] + (L[i + 2] - L[i]) * t, qy = L[i + 1] + (L[i + 3] - L[i + 1]) * t; ctx.moveTo(qx + z * 0.13, qy); ctx.arc(qx, qy, z * 0.13, 0, TAU); } ctx.stroke(); }
+          ctx.fillStyle = '#4c4840'; const L1 = enl[1]; for (let i = 0; i < L1.length; i += 4) { ctx.beginPath(); ctx.arc(L1[i + 2], L1[i + 3], Math.max(1.2, z * 0.08), 0, TAU); ctx.fill(); } // un poste donde se unen dos tramos
+        }
+        if (nodos[2].length) { // muro: el paramento (oscuro, a ras de suelo) y la coronación (clara, un poco más arriba), como una cinta continua
+          const w = Math.max(2, z * 0.5);
+          ctx.lineWidth = w; ctx.strokeStyle = '#55514a'; traza(2, 0);
+          ctx.strokeStyle = '#a19c90'; traza(2, -alto);
+          const P2 = nodos[2];
+          for (let i = 0; i < P2.length; i += 3) {
+            const c = P2[i], n = m.muro[c], px = P2[i + 1], py = P2[i + 2] - alto, mio = m.muroJ[c] === YO + 1;
+            if (n === 3) { ctx.fillStyle = '#6a665e'; ctx.beginPath(); ctx.arc(px, py, w * 0.56, 0, TAU); ctx.fill(); ctx.fillStyle = '#4a4741'; ctx.beginPath(); ctx.arc(px, py, w * 0.2, 0, TAU); ctx.fill(); } // reforzado: un contrafuerte en cada celda
+            else if (n === 4) { ctx.fillStyle = '#d9d5ca'; ctx.beginPath(); ctx.arc(px, py, w * 0.62, 0, TAU); ctx.fill(); ctx.fillStyle = mio ? P.yo : P.rival; ctx.beginPath(); ctx.arc(px, py, w * 0.36, 0, TAU); ctx.fill(); } // puerta: un vano con el color de su dueño
+            const b = m.muroId.get(c) ? m.porId.get(m.muroId.get(c)) : null;
+            if (b && b.vida < b.vidaMax) { ctx.fillStyle = 'rgba(0,0,0,' + (0.55 * (1 - b.vida / b.vidaMax)).toFixed(2) + ')'; ctx.beginPath(); ctx.arc(px, py, w * 0.5, 0, TAU); ctx.fill(); }
+          }
+        }
+        ctx.lineCap = 'butt'; ctx.lineJoin = 'miter';
       }
       const chatarra = [];
       ctx.fillStyle = P.mineral; ctx.beginPath();
@@ -1172,8 +1209,9 @@
           if (d.j === YO) aviso('Ahí no cabe un pontón: hace falta tierra firme a los dos lados, a 14 celdas como mucho');
         } else if (d.tipo === 'pontonListo') {
           if (d.j === YO) aviso('Pontón tendido');
+        } else if (d.tipo === 'sinMun') {
         } else if (d.tipo === 'sinMina') {
-          if (d.j === YO) aviso(d.tope ? 'Ya tienes el máximo de minas (' + W.ECON.minasMax + ')' : 'No se pudo poner la mina: faltan minerales o el sitio no vale');
+          if (d.j === YO) aviso(d.vacio ? 'Al ingeniero no le quedan minas: las repone en tu red o junto a un camión de suministro' : d.tope ? 'Ya tienes el máximo de minas (' + W.ECON.minasMax + ')' : 'No se pudo poner la mina: faltan minerales o el sitio no vale');
         } else if (d.tipo === 'minaFuera') {
           if (d.j === YO) aviso('Mina retirada');
         } else if (d.tipo === 'minaPuesta') {
@@ -1491,9 +1529,9 @@
       cuartel: 'Produce la infantería.', extractor: 'Saca petróleo de un yacimiento.', fabrica: 'Produce los vehículos.', torreta: 'Defensa fija contra tierra y aire.', torreCanon: 'Defensa pesada de largo alcance contra blindados.', aerodromo: 'Produce y aloja hasta cinco aviones.',
       antiaerea: 'Defensa fija solo contra el aire: aviones y drones.', estacion: 'Sobre un campo de conocimiento da información rápido; aloja la inteligencia.', laboratorio: 'Da información en la base, sin campo, más despacio. Vale como estación.', obras: 'Produce las unidades civiles: ingeniero civil y excavadora.',
       deposito: 'Conectado a tu red, crea una zona con suministro donde también puedes construir.', misilera: 'Fabrica, guarda y lanza misiles balísticos.', interceptor: 'Derriba los misiles enemigos que entran en su radio.', estDrones: 'Mantiene dos drones de reconocimiento vigilando a su alrededor. Mejorada lleva además bombarderos y kamikazes, y guarda las tecnologías del operador.', inteligencia: 'Entrena espías, aloja dos drones espía de largo alcance y permite el mapeo satelital.',
-      torreRadio: 'Da cobertura de radio a 40 celdas (el patio, 45; el vehículo de mando, 20; el puesto de avanzada, 25). Fuera de la cobertura tus unidades de tierra solo ven lo que tienen encima y obedecen con 3 segundos de retraso. El explorador, el espía y todo lo que vuela llevan radio propia. Se coloca en cualquier terreno explorado.', almacen: 'Guarda 3000 minerales más. Con los almacenes llenos, lo que cosechas se pierde. Si te lo destruyen pierdes su parte, y la mitad queda en el suelo para quien la recoja.', tanqueComb: 'Guarda 800 de petróleo más. Si te lo destruyen, pierdes su parte.', pistaAv: 'Se coloca en cualquier terreno explorado, sin red ni energía. Clic derecho en ella con helicópteros de combate: la toman por base, repostan allí y su radio de vuelo se cuenta desde allí.', logistica: 'En la base: de aquí salen los camiones y helicópteros de suministro y los vuelos que mantienen los puestos de avanzada; tiene pista para trasladar infantería.', avanzada: 'No se construye: lo despliega el puesto móvil. Con enlace aéreo está en tu red, cura a la infantería cercana y tiene pista.',
+      torreRadio: 'Da cobertura de radio a 40 celdas (el patio, 45; el vehículo de mando, 20; el puesto de avanzada, 25). Fuera de la cobertura tus unidades de tierra solo ven lo que tienen encima y obedecen con 3 segundos de retraso. El explorador, el espía y todo lo que vuela llevan radio propia. Se coloca en cualquier terreno explorado.', mina: 'Nivel 2. Se construye sobre un yacimiento de minerales y saca de un pozo profundo (40 000) de forma continua, sin cosechadoras: unos 400 por minuto, más si la mejoras. Hay que conectarla a la red.', almacen: 'Guarda 3000 minerales más. Con los almacenes llenos, lo que cosechas se pierde. Si te lo destruyen pierdes su parte, y la mitad queda en el suelo para quien la recoja.', tanqueComb: 'Guarda 800 de petróleo más. Si te lo destruyen, pierdes su parte.', pistaAv: 'Se coloca en cualquier terreno explorado, sin red ni energía. Clic derecho en ella con helicópteros de combate: la toman por base, repostan allí y su radio de vuelo se cuenta desde allí.', logistica: 'En la base: de aquí salen los camiones y helicópteros de suministro y los vuelos que mantienen los puestos de avanzada; tiene pista para trasladar infantería.', avanzada: 'No se construye: lo despliega el puesto móvil. Con enlace aéreo está en tu red, cura a la infantería cercana y tiene pista.',
       tallerMovil: 'Parado, repara los vehículos que tenga a 4 celdas aunque estén sin suministro, y recupera los vehículos destruidos cercanos (tuyos o del rival) a mitad de precio: va solo, o clic derecho sobre el casco.',
-      camionSum: 'Muévelo adonde esté tu ejército: se planta y abastece y reposta a todo lo que tenga alrededor mientras le dure la carga (se gasta según cuántas unidades atiende). Vacío, vuelve solo al puesto logístico, recarga y regresa.', heliSum: 'Como el camión de suministro, pero volando: más rápido y sin rodeos; lleva la mitad de carga y la antiaérea lo derriba.',
+      camionSum: 'Muévelo adonde esté tu ejército: se planta y da munición, combustible, minas y drones de repuesto a todo lo que tenga alrededor mientras le dure la carga (se gasta según cuántas unidades atiende). Vacío, vuelve solo al puesto logístico, recarga y regresa.', heliSum: 'Como el camión de suministro, pero volando: más rápido y sin rodeos; lleva la mitad de carga y la antiaérea lo derriba.',
       avanzadaMovil: 'Se despliega lejos como puesto de avanzada: red, hospital y pista sin tender líneas.',
       torretaMuro: 'Torreta que se monta sobre un muro reforzado tuyo.', camara: 'Ve lejos y en redondo, descubre a los escondidos y avisa si entra un enemigo.',
       infanteria: 'Barata y versátil; captura puestos, cava y ocupa trincheras.', granadero: 'Desde el nivel 1: granadas de mano a corta distancia, con explosión. La respuesta barata a los primeros vehículos y a la infantería amontonada.', antitanque: 'Infantería con cohetes: contra vehículos y aviones.', explorador: 'Rápido y ve lejos; explora solo con E.', ingeniero: 'Zapador: pone y retira minas, tiende pontones sobre el agua y vuela caminos y puentes (botones al seleccionarlo). Repara solo vehículos y edificios; cava más rápido.', medico: 'Cura solo a la infantería herida cercana.',
@@ -1770,6 +1808,7 @@
       red: (n) => (n === 1 ? '1 edificio fuera de la red' : n + ' edificios fuera de la red') + ' <small>· ingeniero civil</small>',
       luz: (n) => 'Falta energía: ' + n + (n === 1 ? ' edificio' : ' edificios') + ' a media marcha <small>· otra central</small>',
       agua: () => 'Falta agua para entrenar <small>· otra bomba</small>',
+      mun: (n) => (n === 1 ? '1 ficha sin munición' : n + ' fichas sin munición') + ' <small>· camión de suministro</small>',
       dron: (n) => (n === 1 ? '1 operador sin drones' : n + ' operadores sin drones') + ' <small>· estación de drones o camión</small>',
       radio: (n) => (n === 1 ? '1 unidad sin radio' : n + ' unidades sin radio') + ' <small>· torre de radio</small>',
       llenoM: () => 'Almacenes llenos: se pierden minerales <small>· construye un almacén o gasta</small>',

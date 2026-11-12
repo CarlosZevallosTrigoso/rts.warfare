@@ -462,6 +462,10 @@
       c.beginPath(); c.moveTo(X(0.28), Y(0.52)); c.lineTo(X(0.28), Y(0.72)); c.moveTo(X(0.44), Y(0.52)); c.lineTo(X(0.44), Y(0.72)); c.moveTo(X(0.28), Y(0.62)); c.lineTo(X(0.44), Y(0.62)); c.stroke();
       if (e.tipo === 'logistica') { c.fillStyle = col.osc; for (const [fx, fy] of [[0.62, 0.14], [0.78, 0.14], [0.7, 0.3]]) { c.fillRect(X(fx), Y(fy), t * 0.14, t * 0.14); c.strokeRect(X(fx), Y(fy), t * 0.14, t * 0.14); } }
       else if (e.tipo === 'avanzada') { c.fillStyle = col.luz; c.fillRect(X(0.58), Y(0.12), t * 0.3, t * 0.3); c.fillStyle = s.deficit ? col.humo : col.mal; c.fillRect(X(0.61), Y(0.235), t * 0.24, t * 0.07); c.fillRect(X(0.695), Y(0.15), t * 0.07, t * 0.24); }
+    } else if (e.tipo === 'mina') { // castillete con su rueda y la boca del pozo
+      c.fillStyle = col.osc; c.beginPath(); c.arc(X(0.36), Y(0.64), t * 0.16, 0, TAU); c.fill();
+      c.strokeStyle = col.luz; c.lineWidth = lw * 1.4; c.beginPath(); c.moveTo(X(0.36), Y(0.64)); c.lineTo(X(0.68), Y(0.3)); c.moveTo(X(0.5), Y(0.82)); c.lineTo(X(0.68), Y(0.3)); c.lineTo(X(0.84), Y(0.82)); c.stroke();
+      const a = s.deficit ? 0 : (s.tiempo + s.id * 97) * 0.004; c.beginPath(); c.arc(X(0.68), Y(0.3), t * 0.1, 0, TAU); c.moveTo(X(0.68) + Math.cos(a) * t * 0.1, Y(0.3) + Math.sin(a) * t * 0.1); c.lineTo(X(0.68) - Math.cos(a) * t * 0.1, Y(0.3) - Math.sin(a) * t * 0.1); c.stroke();
     } else if (e.tipo === 'torreRadio') { // mástil con tirantes y ondas
       const px = X(0.5), py = Y(0.56);
       c.strokeStyle = col.luz; c.lineWidth = lw * 1.4; c.beginPath(); c.moveTo(px, Y(0.86)); c.lineTo(px, Y(0.2)); c.moveTo(X(0.26), Y(0.86)); c.lineTo(px, Y(0.42)); c.lineTo(X(0.74), Y(0.86)); c.stroke();

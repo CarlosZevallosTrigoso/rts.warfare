@@ -67,6 +67,11 @@
     const d = EDIF[tipo], N = m.N;
     const e = { id: m.sigId++, j, tipo, edif: true, x, y, tam: d.tam, cx: x + d.tam / 2, cy: y + d.tam / 2, vida: d.vida, vidaMax: d.vida, recarga: 0, obj: 0, reunion: null, acum: 0, nace: m.t, cola: [], pago: [], prog: 0, sinAgua: false, sinFondos: false, bucle: false, angT: Math.atan2(N / 2 - y, N / 2 - x) };
     for (let dy = 0; dy < d.tam; dy++) for (let dx = 0; dx < d.tam; dx++) { const i = (y + dy) * N + x + dx; m.ocup[i] = e.id; m.paso[i] = 0; m.pasoV[i] = 0; }
+    if (d.sobreMineral) { // la mina tapa el mineral de superficie: pasa a su pozo
+      e.pozo = ECON.minaPozo;
+      for (let dy = 0; dy < d.tam; dy++) for (let dx = 0; dx < d.tam; dx++) { const i = (y + dy) * N + x + dx; if (m.mapa.mineral[i] > 0 && m.mapa.tipoMin[i] !== 2) { e.pozo += m.mapa.mineral[i]; m.mapa.mineral[i] = 0; quitarMina(m, i); } }
+      m.terrenoV++;
+    }
     m.ents.push(e); m.porId.set(e.id, e); m.redSucia = true;
     return e;
   }
@@ -335,10 +340,11 @@
     };
     if (!m.minasT) m.minasT = [];
     if (q.t === 'minar') {
+      if (u.minasQ !== undefined && u.minasQ <= 0) { m.efectos.push({ tipo: 'sinMina', x1: q.x, y1: q.y, j: u.j, t: m.t, vacio: true }); z.lista = z.lista.filter((k) => k.t !== 'minar'); if (!z.lista.length) { u.orden = 'nada'; u.zapa = null; } return; } // no le quedan: a reponer a la red o junto a un camión
       if (!llegar(q.x, q.y, 1.4)) return;
       if (++z.prog < ECON.minaTiempo) return;
       const c = Math.floor(q.y) * N + Math.floor(q.x); let mias = 0, ya = false; for (const mn of m.minasT) { if (mn.j === u.j) mias++; if (mn.c === c) ya = true; }
-      if (!ya && m.paso[c] && mias < ECON.minasMax && (J.minerales >= ECON.minaCosto || J.dios)) { if (!J.dios) J.minerales -= ECON.minaCosto; m.minasT.push({ x: q.x, y: q.y, c, j: u.j, vis: false }); m.efectos.push({ tipo: 'minaPuesta', x1: q.x, y1: q.y, j: u.j, t: m.t }); }
+      if (!ya && m.paso[c] && mias < ECON.minasMax && (J.minerales >= ECON.minaCosto || J.dios)) { if (!J.dios) J.minerales -= ECON.minaCosto; if (u.minasQ !== undefined) u.minasQ--; m.minasT.push({ x: q.x, y: q.y, c, j: u.j, vis: false }); m.efectos.push({ tipo: 'minaPuesta', x1: q.x, y1: q.y, j: u.j, t: m.t }); }
       else if (!ya) m.efectos.push({ tipo: 'sinMina', x1: q.x, y1: q.y, j: u.j, t: m.t, tope: mias >= ECON.minasMax });
       sig(); return;
     }
@@ -664,7 +670,7 @@
       carga: 0, est: tipo === 'cosechadora' ? 'buscar' : '', celda: -1, ref: 0, espera: 0, pref: null,
       quiere: 1, cargaTipo: 1, // cosechadora: qué busca y qué lleva (1 minerales, 2 raros)
       fuel: d.fuel || 0, repostando: false, casa: 0, enTierra: false, slot: 0, // aviación: su aeródromo y si está posado en él
-      auto: !!d.tiende, comb: W.gastaComb(d) && m.logistica !== false ? ECON.combMax : undefined, cola: [], patrulla: null, explora: false, // órdenes encadenadas, ruta de patrulla, exploración automática
+      auto: !!d.tiende, mun: d.arma && !d.aire && m.logistica !== false ? W.munDe(tipo) : undefined, minasQ: d.minasQ && m.logistica !== false ? d.minasQ : undefined, comb: W.gastaComb(d) && m.logistica !== false ? ECON.combMax : undefined, cola: [], patrulla: null, explora: false, // órdenes encadenadas, ruta de patrulla, exploración automática
       retira: m.jug[j].retiro, retirando: false, volver: null, tRet: 0, huye: 0, // retirada automática a reparar; cosechadora que huye
       bajas: 0, rango: 0, // veteranía
       trazas: [], // excavadora: tramos de camino pendientes
@@ -713,14 +719,16 @@
   W.porQueNo = function (m, j, tipo, x, y) {
     const d = EDIF[tipo], N = m.N, t = d.tam;
     if (x < 0 || y < 0 || x + t > N || y + t > N) return 'fuera del mapa';
-    let sitio = false;
+    let sitio = false, hayMin = false;
     const c0 = y * N + x, mu = murosDe(m)[c0], enMuro = t === 1 && m.muroJ[c0] === j + 1 && (d.sobreMuro ? mu === 3 : d.enMuro ? mu === 2 || mu === 3 : false); // sobre un muro propio
     if (d.sobreMuro && !enMuro) return 'va sobre un muro propio';
     for (let dy = 0; dy < t; dy++) for (let dx = 0; dx < t; dx++) {
       const i = (y + dy) * N + x + dx;
-      if (m.mapa.terreno[i] !== T.LLANO || m.ocup[i] || m.mapa.mineral[i] || (m.muro[i] && !enMuro)) return m.ocup[i] ? 'ese sitio está ocupado' : m.mapa.mineral[i] ? 'hay mineral debajo' : m.muro[i] ? 'hay un muro' : 'hace falta llano despejado';
+      const esMin = d.sobreMineral && m.mapa.mineral[i] > 0 && m.mapa.tipoMin[i] !== 2; if (esMin) hayMin = true; // la mina sí va encima del mineral
+      if (m.mapa.terreno[i] !== T.LLANO || m.ocup[i] || (m.mapa.mineral[i] && !esMin) || (m.muro[i] && !enMuro)) return m.ocup[i] ? 'ese sitio está ocupado' : m.mapa.mineral[i] ? 'hay mineral debajo' : m.muro[i] ? 'hay un muro' : 'hace falta llano despejado';
       if (m.mapa.sitioEn[i]) { if (!d.sobre || m.mapa.sitioTipo.get(i) !== d.sobre) return 'ese sitio es para otro edificio'; sitio = true; }
     }
+    if (d.sobreMineral && !hayMin) return 'va sobre un yacimiento de minerales';
     if (d.sobre && !sitio) return d.sobre === 'petroleo' ? 'va sobre un yacimiento de petróleo' : 'va sobre un campo de conocimiento'; // debe cubrir su yacimiento o su campo
     if (d.juntoA === 'agua') { // debe tener agua a dos celdas o menos
       let agua = false;
@@ -1857,10 +1865,14 @@
   }
   // Los efectos son avisos para la interfaz (dibujo y sonido); la simulación no los lee.
   function disparar(m, a, b, arma) {
-    const clave = a.edif ? EDIF[a.tipo].arma : UNID[a.tipo].arma, ax = posX(a), ay = posY(a), bx = posX(b), by = posY(b);
+    let corta = false;
+    if (a.mun !== undefined) { // munición: cada disparo gasta una; a cero, la infantería tira de arma corta y lo demás calla
+      if (a.mun <= 0) { if (a.edif || UNID[a.tipo].cat !== 'inf') { a.recarga = 20; return; } arma = ARMAS.pistola; corta = true; }
+      else if (--a.mun === 0) m.efectos.push({ tipo: 'sinMun', x1: posX(a), y1: posY(a), j: a.j, t: m.t });
+    }
+    const clave = corta ? 'pistola' : a.edif ? EDIF[a.tipo].arma : UNID[a.tipo].arma, ax = posX(a), ay = posY(a), bx = posX(b), by = posY(b);
     const mult = (!a.edif && UNID[a.tipo].cat === 'inf' && m.jug[a.j].mejoras.perforante ? 1.25 : 1) * (a.edif ? 1 : 1 + ECON.rangoDano * a.rango);
     a.recarga = arma.recarga >= 8 ? Math.round(arma.recarga * (0.9 + ((a.id * 31 + m.t * 17) % 21) / 100)) : arma.recarga;
-    if (!a.edif && sinSuministro(a)) a.recarga = Math.round(a.recarga * ECON.sinSumRecarga); // sin suministro: dispara más despacio
     a.tDisparo = m.t; // (cada arma lleva su compás, ±10 %: un grupo no dispara como un metrónomo)
     if (arma.vuelo) { // obús: vuela hasta donde estaba el blanco al disparar
       m.proy.push({ ox: ax, oy: ay, x: ax, y: ay, px: ax, py: ay, tx: bx, ty: by, obj: b.id, j: a.j, arma: clave, mult, de: a.id });
@@ -2519,8 +2531,9 @@
       else if (EDIF[e.tipo].arma) tickTorreta(m, e);
       else if (EDIF[e.tipo].da) { // extracción continua; con déficit de energía rinde la mitad
         const da = EDIF[e.tipo].da, J = m.jug[e.j];
+        if (da.rec === 'minerales' && ((e.conRed === false && m.logistica !== false) || e.pozo <= 0)) continue; // la mina: sin red no saca nada; y el pozo se acaba
         e.acum += (e.sinLuz ? 0.5 : 1) * (e.tipo === 'estacion' && J.mejoras.analisis ? 1.5 : 1) * bonoE(e);
-        if (e.acum >= da.cada) { e.acum -= da.cada; if (da.rec === 'petroleo') { entra(m, J, 'petroleo', 1); J.extraido++; } else J[da.rec]++; }
+        if (e.acum >= da.cada) { e.acum -= da.cada; if (da.rec === 'petroleo') { entra(m, J, 'petroleo', 1); J.extraido++; } else if (da.rec === 'minerales') { const q = entra(m, J, 'minerales', 1); e.pozo -= q; J.cosechado += q; } else J[da.rec]++; }
       }
     }
     separar(m);
@@ -2536,9 +2549,12 @@
     if (m.t % 10 === 5) tickEscoltas(m);
     if (m.t % 10 === 0 && m.logistica !== false) { // suministro: fuera de la cobertura el contador sube; dentro, baja rápido. Los aviones repostan en su base: no cuenta.
       const pts = tickSuministro(m);
+      for (const e of m.gr.edifs) { if (!EDIF[e.tipo].arma) continue; const cap = W.munDe(e.tipo, true); if (e.mun === undefined) e.mun = cap; else if (e.mun < cap && e.conRed !== false && !e.sinLuz) e.mun = Math.min(cap, e.mun + Math.ceil(cap / 40)); } // las torres reponen por la red
       for (const u of m.ents) { if (u.edif || UNID[u.tipo].aire || UNID[u.tipo].suministro) continue; let dentro = m.cob[u.j][Math.floor(u.y) * m.N + Math.floor(u.x)] || m.jug[u.j].dios;
         if (!dentro) for (const q of pts) if (q.j === u.j && (u.x - q.x) * (u.x - q.x) + (u.y - q.y) * (u.y - q.y) <= q.r2) { dentro = 1; q.u.sumiN++; break; } /* fuera de la red, pero junto a un camión o helicóptero de suministro plantado: gasta de su carga */
         u.sinSum = dentro ? Math.max(0, (u.sinSum || 0) - 40) : Math.min(ECON.sinSum + 200, (u.sinSum || 0) + 10);
+        if (dentro && u.mun !== undefined) { const cap = W.munDe(u.tipo); if (u.mun < cap) u.mun = Math.min(cap, u.mun + Math.ceil(cap / 20)); } // repone munición (llena en diez segundos)
+        if (dentro && u.minasQ !== undefined && u.minasQ < UNID[u.tipo].minasQ && m.t % 60 === 0) u.minasQ++;
         if (dentro && u.comb !== undefined && u.comb < ECON.combMax) { // reposta: dentro de la red o junto a un suministro móvil, y pagando petróleo
           const J = m.jug[u.j], cuanto = Math.min(ECON.combMax - u.comb, ECON.combCarga), precio = cuanto * ECON.combPet;
           if (J.dios || J.petroleo >= precio) { if (!J.dios) J.petroleo -= precio; u.comb += cuanto; }

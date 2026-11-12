@@ -1244,7 +1244,7 @@ prueba('la red: cobertura, territorio, energía por red, depósito y suministro'
   W.orden(m, { t: 'atacar', j: 0, ids: [fuera.id, dentro.id], obj: blanco.id });
   const rec = { f: 0, d: 0 }; let uf = -1, ud = -1;
   for (let i = 0; i < 900; i++) { W.tick(m); if (fuera.tDisparo !== uf && fuera.tDisparo !== undefined) { uf = fuera.tDisparo; rec.f = Math.max(rec.f, fuera.recarga); } if (dentro.tDisparo !== ud && dentro.tDisparo !== undefined) { ud = dentro.tDisparo; if (!(dentro.sinSum >= W.ECON.sinSum)) rec.d = Math.max(rec.d, dentro.recarga); } }
-  assert.ok(rec.f >= W.ARMAS.canon.recarga * 1.3, 'sin suministro recarga más lento: ' + rec.f);
+  assert.ok(fuera.mun < W.munDe('tanque') - 5 && dentro.mun > fuera.mun + 4, 'sin suministro gasta munición y no la repone; dentro de la red, sí: ' + fuera.mun + ' / ' + dentro.mun);
   W.orden(m, { t: 'mover', j: 0, ids: [fuera.id], x: medio + 0.5, y: py + 1.5 }); avanza(500);
   assert.ok(!(fuera.sinSum >= W.ECON.sinSum), 'de vuelta en la red, se recupera: ' + fuera.sinSum);
   // cortar el camino deja otra vez aislado el extremo
@@ -2036,6 +2036,68 @@ prueba('v1, drones: batería, retirada para repararse, tres drones por operador 
   W.orden(m, { t: 'mover', j: 0, ids: [op.id], x: px + dir * 30.5, y: py + 0.5 }); avanza(3); for (let i = 0; i < 2500 && op.orden !== 'nada'; i++) W.tick(m);
   const t1 = W.crearUnidad(m, 1, 'tanque', cel(px + dir * 38, py)); t1.guardia = true; t1.recarga = 99999; avanza(500);
   assert.ok(op.drFpv < 4 && t1.vida < t1.vidaMax, 'cada kamikaze lanzado sale de las existencias (quedan ' + op.drFpv + ')');
+});
+
+prueba('v1, munición: se gasta al disparar, a cero el vehículo calla y la infantería tira de arma corta; se repone en la red o junto a un camión', () => {
+  const m = W.crearMundo(31, { N: 128, logistica: true }), N = m.N, J = m.jug[0];
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const cel = (x, y) => y * N + x, patio = m.ents.find((e) => e.j === 0 && e.tipo === 'patio'), px = Math.floor(patio.cx), py = Math.floor(patio.cy), dir = px < 64 ? 1 : -1;
+  for (let y = py - 14; y <= py + 14; y++) for (let x = Math.min(px, px + dir * 80) - 2; x <= Math.max(px, px + dir * 80) + 2; x++) { const i = cel(x, y); if (x < 2 || y < 2 || x >= N - 2 || y >= N - 2 || m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  m.terrenoV++;
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  J.minerales = 20000; J.petroleo = 2000;
+  for (const k of [25, 50]) W.crearEdificio(m, 0, 'torreRadio', px + dir * k, py - 12);
+  const fx = px + dir * 50, tq = W.crearUnidad(m, 0, 'tanque', cel(fx, py)), inf = W.crearUnidad(m, 0, 'infanteria', cel(fx, py + 6));
+  assert.strictEqual(tq.mun, W.MUN.canon); assert.strictEqual(inf.mun, W.MUN.fusil);
+  const b1 = W.crearEdificio(m, 1, 'central', fx + dir * 3, py - 1), b2 = W.crearEdificio(m, 1, 'central', fx + dir * 3, py + 5); b1.vida = b1.vidaMax = b2.vida = b2.vidaMax = 999999;
+  W.orden(m, { t: 'atacar', j: 0, ids: [tq.id], obj: b1.id }); W.orden(m, { t: 'atacar', j: 0, ids: [inf.id], obj: b2.id }); avanza(300);
+  assert.ok(tq.mun < W.MUN.canon && inf.mun < W.MUN.fusil, 'cada disparo gasta munición (' + tq.mun + ', ' + inf.mun + ')');
+  tq.mun = 2; inf.mun = 2; avanza(300);
+  assert.strictEqual(tq.mun, 0); assert.strictEqual(inf.mun, 0);
+  const v1 = b1.vida, v2 = b2.vida; avanza(400);
+  if (process.env.DEP) console.log('tq', tq.mun, tq.orden, tq.obj, 'inf', inf.mun, inf.obj, 'b1', v1 - b1.vida, 'b2', v2 - b2.vida, 'ids', b1.id, b2.id, 'dist', Math.hypot(inf.x - b1.cx, inf.y - b1.cy).toFixed(1), Math.hypot(inf.x - b2.cx, inf.y - b2.cy).toFixed(1));
+  assert.ok(b1.vida >= v1, 'sin munición el tanque no dispara');
+  const pistola = v2 - b2.vida; assert.ok(pistola > 0, 'la infantería sigue con el arma corta');
+  inf.mun = 100000; const v3 = b2.vida; avanza(400); assert.ok(v3 - b2.vida > pistola * 1.5, 'que hace bastante menos daño que el fusil (' + pistola.toFixed(1) + ' contra ' + (v3 - b2.vida).toFixed(1) + ')'); inf.mun = 0;
+  // un camión de suministro los rearma
+  W.crearEdificio(m, 0, 'central', px + dir * 4, py + 4); W.crearEdificio(m, 0, 'logistica', px + dir * 8, py); avanza(3);
+  const cam = W.crearUnidad(m, 0, 'camionSum', cel(fx - dir * 2, py + 3)); W.orden(m, { t: 'mover', j: 0, ids: [cam.id], x: fx - dir * 1.5, y: py + 3.5 }); avanza(400);
+  assert.strictEqual(tq.mun, W.MUN.canon, 'junto al camión el tanque se rearma'); assert.ok(inf.mun > 50, 'y la infantería también');
+  const v4 = b1.vida; avanza(200); assert.ok(b1.vida < v4, 'y vuelve a disparar');
+  // la torreta: fuera de la red no repone
+  const tr = W.crearEdificio(m, 0, 'torreta', fx - dir * 6, py - 8); avanza(15); assert.strictEqual(tr.mun, W.munDe('torreta', true)); tr.mun = 5; avanza(200);
+  assert.ok(tr.mun <= 5, 'una torreta fuera de la red no repone munición');
+  // el ingeniero lleva cuatro minas
+  const ing = W.crearUnidad(m, 0, 'ingeniero', cel(fx - dir * 20, py - 4)); assert.strictEqual(ing.minasQ, 4);
+  for (let k = 0; k < 6; k++) W.orden(m, { t: 'zapar', j: 0, ids: [ing.id], que: 'minar', x: fx - dir * 20 + 0.5, y: py - 8.5 - k, enc: k > 0 });
+  avanza(3); for (let i = 0; i < 3000 && ing.orden === 'zapar'; i++) W.tick(m);
+  assert.strictEqual(m.minasT.length, 4, 'pone cuatro y se queda sin minas'); assert.strictEqual(ing.minasQ, 0);
+  // partida clásica: sin munición que contar
+  const mc = W.crearMundo(31, { N: 128, logistica: false }); assert.strictEqual(W.crearUnidad(mc, 0, 'tanque', cel(64, 64)).mun, undefined);
+});
+
+prueba('v1, la mina: va sobre un yacimiento, saca minerales de un pozo sin cosechadoras y necesita red', () => {
+  const m = W.crearMundo(31, { N: 128, logistica: true }), N = m.N, J = m.jug[0];
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const cel = (x, y) => y * N + x, patio = m.ents.find((e) => e.j === 0 && e.tipo === 'patio'), px = Math.floor(patio.cx), py = Math.floor(patio.cy), dir = px < 64 ? 1 : -1;
+  for (let y = py - 12; y <= py + 12; y++) for (let x = Math.min(px, px + dir * 40) - 2; x <= Math.max(px, px + dir * 40) + 2; x++) { const i = cel(x, y); if (x < 2 || y < 2 || x >= N - 2 || y >= N - 2 || m.ocup[i]) continue; m.mapa.terreno[i] = 0; if (m.mapa.mineral[i]) { m.mapa.mineral[i] = 0; const k = m.minas.indexOf(i); if (k >= 0) m.minas.splice(k, 1); } m.mapa.tipoMin[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  m.terrenoV++; m.niebla[0].fill(1);
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  J.nivel = 2; J.minerales = 1000;
+  W.crearEdificio(m, 0, 'central', px + dir * 4, py + 4); W.crearEdificio(m, 0, 'central', px + dir * 4, py - 6); W.crearEdificio(m, 0, 'refineria', px - dir * 1, py + 5); avanza(3);
+  const mx = px + dir * 9, my = py; // un yacimiento pegado a la base (dentro de la red)
+  for (const [dx, dy] of [[0, 0], [1, 0], [0, 1]]) { const c = cel(mx + dx, my + dy); m.mapa.mineral[c] = 500; m.mapa.tipoMin[c] = 1; m.minas.push(c); }
+  assert.strictEqual(W.porQueNo(m, 0, 'mina', mx + 4, my + 4), 'va sobre un yacimiento de minerales', 'fuera del mineral no se puede');
+  assert.strictEqual(W.porQueNo(m, 0, 'mina', mx, my), '', 'sobre el yacimiento, sí'); assert.ok(W.porQueNo(m, 0, 'cuartel', mx, my), 'los demás edificios siguen sin poder ir sobre mineral');
+  const mi = W.crearEdificio(m, 0, 'mina', mx, my); avanza(3);
+  assert.ok(mi.pozo > W.ECON.minaPozo + 1490 && mi.pozo <= W.ECON.minaPozo + 1500, mi.pozo + ' el mineral de superficie que tapa pasa al pozo'); assert.strictEqual(m.mapa.mineral[cel(mx, my)], 0);
+  assert.ok(mi.conRed, 'está en la red'); const m0 = J.minerales, c0 = J.cosechado, pz = mi.pozo; avanza(600);
+  assert.ok(J.minerales - m0 >= 190, 'los minerales entran en caja'); const sube = pz - mi.pozo; assert.ok(sube > 150 && sube < 260, 'saca unos 200 en medio minuto, sin cosechadoras (' + Math.round(sube) + ')'); assert.ok(J.cosechado - c0 > 150); assert.ok(mi.pozo < W.ECON.minaPozo + 1500);
+  // sin red no saca nada
+  const mx2 = px + dir * 34; for (const [dx, dy] of [[0, 0], [1, 0]]) { const c = cel(mx2 + dx, my + dy); m.mapa.mineral[c] = 500; m.mapa.tipoMin[c] = 1; m.minas.push(c); }
+  const lejos = W.crearEdificio(m, 0, 'mina', mx2, my); avanza(5); assert.ok(!lejos.conRed); const p0 = lejos.pozo; avanza(300); assert.strictEqual(lejos.pozo, p0, 'una mina fuera de la red no rinde');
+  // pozo agotado: se para
+  mi.pozo = 3; const m1 = J.minerales; avanza(400); assert.ok(mi.pozo <= 0 && J.minerales - m1 < 90, 'agotado el pozo, deja de sacar');
 });
 
 prueba('tanda 5: puente aéreo, puesto de avanzada, hospital y traslado de infantería', () => {

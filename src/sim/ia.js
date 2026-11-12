@@ -74,6 +74,14 @@
       }
       return mejor;
     }
+    if (d0.sobreMineral) { // sobre el yacimiento de minerales explorado más cercano
+      for (let k = 0; k < m.minas.length; k += 2) {
+        const c = m.minas[k], x = c % N, y = (c / N) | 0, dd = Math.hypot(x - patio.cx, y - patio.cy);
+        if (dd >= mp || m.mapa.tipoMin[c] !== 1) continue;
+        for (const [ox, oy] of [[0, 0], [-1, 0], [0, -1], [-1, -1]]) if (W.puedeColocar(m, j, tipo, x + ox, y + oy)) { mp = dd; mejor = { x: x + ox, y: y + oy }; break; }
+      }
+      return mejor;
+    }
     if (d0.juntoA) { // junto al agua más cercana
       for (let dy = -24; dy <= 24; dy++) for (let dx = -24; dx <= 24; dx++) {
         const x = Math.floor(patio.cx) + dx, y = Math.floor(patio.cy) + dy, p = Math.hypot(dx, dy);
@@ -163,7 +171,8 @@
     let quiereNuevo = null;
     if (!urgente && J.cuenta.cuartel && J.cuenta.fabrica && !(ia.tAhorro > 0) && !ia.pn) {
       const c = J.cuenta, puede = (t) => W.disponible(m, j, EDIF[t]);
-      if (!c.estDrones && m.t > 9000 && J.minerales > 1200 && puede('estDrones')) quiereNuevo = 'estDrones';
+      if (J.nivel >= 2 && (c.mina || 0) < (m.t > 48000 ? 3 : 1) && J.minerales > 1600 && puede('mina') && buscarSitio(m, j, 'mina', patio)) quiereNuevo = 'mina'; // minas: ingreso que no depende de cosechadoras ni se agota pronto
+      else if (!c.estDrones && m.t > 9000 && J.minerales > 1200 && puede('estDrones')) quiereNuevo = 'estDrones';
       else if (!c.camara && m.t > 14000 && J.minerales > 1200 && puede('camara')) quiereNuevo = 'camara';
       else if (!c.logistica && m.logistica !== false && m.t > 18000 && J.minerales > 2000 && puede('logistica')) quiereNuevo = 'logistica'; // (antes que la central de inteligencia: sin suministro, sus oleadas pelean a media fuerza)
       else if (!c.inteligencia && m.t > 24000 && J.minerales > 3200 && puede('inteligencia')) quiereNuevo = 'inteligencia';
@@ -500,7 +509,11 @@
       if (objetivo) for (const u of sinArma) if (u.tipo === 'operador' && !u.sinDron && u.orden === 'nada' && !u.dronMis && Math.hypot(u.x - tx, u.y - ty) <= 8 && Math.hypot(objetivo.cx - u.x, objetivo.cy - u.y) <= UNID.operador.misionDron) W.orden(m, { t: 'dronMision', j, ids: [u.id], x: objetivo.cx, y: objetivo.cy }); // el operador, en su sitio y con el objetivo a tiro: dron en misión sobre él
       for (const u of sinArma) if ((u.tipo === 'hacker' || (u.tipo === 'operador' && !u.sinDron)) && u.orden === 'nada' && Math.hypot(u.x - tx, u.y - ty) > 8) { const cc = W.cercaLibre(m, tx, ty); W.orden(m, { t: 'mover', j, ids: [u.id], x: (cc % m.N) + 0.5, y: ((cc / m.N) | 0) + 0.5 }); }
     }
-    const reserva = soldados.filter((u) => !ia.atacantes.has(u.id) && u.id !== ia.explorador && !ia.capturan.has(u.id));
+    if (tk % 5 === 2) { // sin munición lejos de casa: deja la oleada y vuelve a reponer (allí entra otra vez en la reserva)
+      const ids = []; for (const u of soldados) if (u.mun === 0 && ia.atacantes.has(u.id)) { ia.atacantes.delete(u.id); if (ia.espera) ia.espera.delete(u.id); ia.reunidos.delete(u.id); ids.push(u.id); }
+      if (ids.length) { const cc = W.cercaLibre(m, patio.cx + (dx / dd) * 8, patio.cy + (dy / dd) * 8); W.orden(m, { t: 'mover', j, ids, x: (cc % m.N) + 0.5, y: ((cc / m.N) | 0) + 0.5 }); }
+    }
+    const reserva = soldados.filter((u) => !ia.atacantes.has(u.id) && u.id !== ia.explorador && !ia.capturan.has(u.id) && u.mun !== 0);
 
     if (J.alerta && m.t - J.alerta.t < 100) { // defensa: acude la reserva ociosa
       const ids = reserva.filter((u) => u.orden === 'nada' && !u.obj).map((u) => u.id);
