@@ -201,6 +201,7 @@
         if (!e.edif && UNID[e.tipo].dronStock && e.j === YO && e.drStock !== undefined) { t += ' · repuestos: ' + e.drStock + (e.drFpv !== undefined ? ' drones y ' + e.drFpv + ' kamikazes' : ' drones'); const q = e.dr && e.dr.rec[0] ? m.porId.get(e.dr.rec[0]) : null; if (q && q.bat !== undefined && conRed) t += ' · batería ' + Math.round(q.bat / W.ECON.dronBat * 100) + ' %' + (q.casa2 ? ' (cargando)' : ''); }
         if (!e.edif && e.orden === 'zapar' && e.zapa && e.zapa.lista[0] && e.j === YO) t += ' · ' + ({ minar: 'minando', desminar: 'desminando', ponton: 'tendiendo un pontón', volar: 'va a volar un camino' })[e.zapa.lista[0].t];
         if (e.ponton) t += ' · pontón';
+        if (e.drLlama && e.j === YO) t += ' · drones llamados: posados hasta que los despliegues';
         if (!e.edif && UNID[e.tipo].ambu && e.j === YO && e.ambC !== undefined) { const a = e.amb || {}; t += ' · material ' + Math.round(e.ambC / UNID[e.tipo].ambu.carga * 100) + ' % · ' + (a.est === 'cura' ? 'atendiendo a un herido' : a.est === 'vuelve' || a.est === 'carga' ? 'recargando en el hospital' : a.est === 'ida' ? 'camino de su puesto' : a.punto ? 'en su puesto: cura a los heridos de la zona' : 'en el hospital: sale sola a por los heridos') + (a.punto ? ' · S: de vuelta al hospital' : ' · muévela y se queda a curar allí'); }
         if (e.edif && EDIF[e.tipo].ambulancias && e.j === YO) { const c = W.cupoAmb(m, YO); t += ' · ambulancias ' + c.hay + '/' + c.cupo; }
         if (e.edif && EDIF[e.tipo].bunker && e.j === YO) { const n = W.enBunker(m, e); t += ' · tropa ' + n + '/' + EDIF[e.tipo].bunker + (n ? ' · selecciónalo y clic derecho en el suelo: salen' : ' · clic derecho con infantería: entra'); }
@@ -1610,6 +1611,9 @@
     let zapaQue = 'minar';
     $('zapa').addEventListener('click', (ev) => { const b = ev.target.closest('[data-z]'); if (!b || !zapadores().length) return; zapaQue = b.dataset.z; modo = 'zapar'; });
     const conMision = () => unidadesSel().filter((u) => u.j === YO && UNID[u.tipo].misionDron);
+    const portadores = () => [...sel].map((id) => m.porId.get(id)).filter((e) => e && e.j === YO && e.vida > 0 && (e.edif ? EDIF[e.tipo] : UNID[e.tipo]) && (e.edif ? EDIF[e.tipo] : UNID[e.tipo]).drones);
+    $('dronLlama').addEventListener('click', () => { const ps = portadores(); if (!ps.length) return; W.orden(m, { t: 'drones', j: YO, ids: ps.map((e) => e.id), on: false }); son.orden(); aviso('Drones de vuelta: se quedan posados hasta que los despliegues'); });
+    $('dronDespl').addEventListener('click', () => { const ps = portadores(); if (!ps.length) return; W.orden(m, { t: 'drones', j: YO, ids: ps.map((e) => e.id), on: true }); son.orden(); aviso('Drones desplegados'); });
     $('dronMis').addEventListener('click', () => { const om = conMision(); if (!om.length) return; if (om.some((u) => u.dronMis)) { W.orden(m, { t: 'dronMision', j: YO, ids: om.map((u) => u.id) }); aviso('Drones de vuelta con su operador'); } else { modo = 'dronMis'; aviso('Elige el punto que vigilará el dron (hasta 45 celdas del operador)'); } });
     $('dronAtk').addEventListener('click', () => { const us = conDrones(); if (us.length) W.orden(m, { t: 'dronAtk', j: YO, ids: us.map((u) => u.id), on: us.some((u) => u.dronAtk === false) }); });
     $('verRed').addEventListener('click', () => { if (conRed) verRed = !verRed; else aviso('Partida clásica: sin red'); });
@@ -1979,6 +1983,7 @@
       { const e = mejorable(), bm = $('mejorar'); bm.hidden = !e; if (e) { const pr = W.costoMejora(e), t = 'Mejorar a nivel ' + ((e.nivelE || 1) + 1) + ' · ' + pr, cl = 'btn' + (J.minerales < pr && !J.dios ? ' caro' : ''); if (bm.textContent !== t) bm.textContent = t; if (bm.className !== cl) bm.className = cl; } }
       pintarForma();
       $('zapa').hidden = !zapadores().length; $('escolta').hidden = !armadas().length;
+      { const ps = portadores(), bl = $('dronLlama'), bd = $('dronDespl'), rec = ps.some((e) => e.drLlama), fue = ps.some((e) => !e.drLlama); bl.hidden = !ps.length; bd.hidden = !ps.length; bl.classList.toggle('listo', ps.length > 0 && !fue); bd.classList.toggle('listo', ps.length > 0 && !rec); }
       { const om = conMision(), bm = $('dronMis'); bm.hidden = !om.length; if (om.length) { const tx = om.some((u) => u.dronMis) ? 'Misión de dron: en curso' : 'Misión de dron'; if (bm.textContent !== tx) bm.textContent = tx; bm.classList.toggle('listo', om.some((u) => u.dronMis)); } }
       { const us = conDrones(), bd = $('dronAtk'); bd.hidden = !us.length; if (us.length) { const t = 'Drones de ataque: ' + (us.every((u) => u.dronAtk !== false) ? 'sí' : us.some((u) => u.dronAtk !== false) ? 'algunos' : 'no'); if (bd.textContent !== t) bd.textContent = t; } }
       { const bv = $('verRed'), t = 'ver la red: ' + (verRed ? 'sí' : 'no'); if (bv.textContent !== t) { bv.textContent = t; bv.classList.toggle('on', verRed); } bv.hidden = !conRed; }

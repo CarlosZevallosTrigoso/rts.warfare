@@ -2081,6 +2081,12 @@ prueba('drones de reconocimiento: se les ordena patrullar por puntos, ir a un pu
   W.orden(m, { t: 'mover', j: 0, ids: [dr.id], x: op.x + 10, y: op.y + 12 }); avanza(200);
   assert.ok(dr.dpat && dr.dpat.pts.length === 1 && Math.abs(Math.hypot(dr.x - op.x - 10, dr.y - op.y - 12) - 2.5) < 1, 'mover: da vueltas sobre el punto');
   W.orden(m, { t: 'detener', j: 0, ids: [dr.id] }); avanza(300); assert.ok(!dr.dpat && Math.hypot(dr.x - op.x, dr.y - op.y) < 12, 'detener: vuelve con su portador');
+  // llamar y desplegar: con los drones llamados, vuelven al portador y no salen; desplegados, retoman lo suyo
+  W.orden(m, { t: 'patrulla', j: 0, ids: [dr.id], pts: [A, B] }); avanza(200); W.orden(m, { t: 'drones', j: 0, ids: [op.id], on: false }); avanza(300);
+  assert.ok(op.drLlama && Math.hypot(dr.x - op.x, dr.y - op.y) < 1.2, 'llamados, vuelven y se posan con su portador'); avanza(200); assert.ok(Math.hypot(dr.x - op.x, dr.y - op.y) < 1.2, 'y ahí se quedan');
+  W.orden(m, { t: 'drones', j: 0, ids: [op.id], on: true }); avanza(300); assert.ok(!op.drLlama && Math.hypot(dr.x - op.x, dr.y - op.y) > 8, 'desplegados, salen otra vez');
+  const est = W.crearEdificio(m, 0, 'estDrones', 60, 70); W.orden(m, { t: 'drones', j: 0, ids: [est.id], on: false }); for (let i = 0; i < 400; i++) { W.tick(m); est.sinLuz = false; }
+  assert.ok(est.drLlama && !m.ents.some((e) => !e.edif && e.base === est.id && Math.hypot(e.x - est.cx, e.y - est.cy) > 1.5), 'también vale para la estación de drones');
   W.orden(m, { t: 'patrulla', j: 0, ids: [dr.id], pts: [A, B] }); avanza(3); W.orden(m, { t: 'mover', j: 0, ids: [op.id], x: op.x - 50, y: op.y }); avanza(1200);
   assert.ok(!dr.dpat && dr.vida > 0, 'si el portador se aleja, el dron deja la patrulla y lo sigue');
 });
@@ -2207,6 +2213,10 @@ prueba('hospital y ambulancia: cura cerca, la ambulancia sale a por los heridos,
   amb.ambC = 0; avanza(12); assert.strictEqual(amb.amb.est, 'vuelve'); avanza(1400);
   assert.ok(amb.ambC > 0 && Math.hypot(amb.x - 90.5, amb.y - 60.5) < 6, 'recarga en el hospital y regresa a su punto (' + amb.x.toFixed(0) + ', ' + amb.amb.est + ')');
   W.orden(m, { t: 'detener', j: 0, ids: [amb.id] }); avanza(900); assert.ok(Math.hypot(amb.x - h.cx, amb.y - h.cy) < 7 && !amb.amb.punto, 'con detener vuelve al hospital');
+  // herido dentro del bosque: la ambulancia no entra, pero llega hasta el borde y lo cura igual
+  for (let y = 44; y < 54; y++) for (let x = 60; x < 72; x++) { const i = cel(x, y); m.mapa.terreno[i] = 3; m.paso[i] = 1; m.pasoV[i] = 0; } m.terrenoV++;
+  const enB = W.crearUnidad(m, 0, 'infanteria', cel(65, 48)); enB.vida = 12; enB.noRetira = true; enB.guardia = true; avanza(900);
+  assert.ok(enB.vida >= enB.vidaMax * 0.9, 'cura al herido que está metido en el bosque (' + enB.vida.toFixed(0) + ')'); enB.vida = 0; avanza(400);
   // cupo: tres por hospital
   for (let k = 0; k < 5; k++) W.orden(m, { t: 'entrenar', j: 0, tipo: 'ambulancia' }); avanza(1500);
   assert.strictEqual(m.ents.filter((e) => e.tipo === 'ambulancia' && e.j === 0).length, 3, 'tres ambulancias por hospital');

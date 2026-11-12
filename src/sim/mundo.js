@@ -265,6 +265,7 @@
         e.sinDron = e.drStock <= 0 && !e.dr.rec.length && !e.dr.bomba.length; // (para la alerta)
       }
       if (!activo) { if (d.quieto && e.dronMis && e.orden !== 'nada') e.dronMis = null; continue; } // si echa a andar, la misión se acaba
+      if (e.drLlama) continue; // drones llamados: ni se lanzan ni atacan hasta que se desplieguen otra vez
       if (!conStock && !e.edif && m.logistica !== false && sinSuministro(e)) continue; // el comando de drones, sin suministro, no repone ni lanza
       const mis = e.dronMis || null;
       const saca = (rol, obj) => { const q = crearUnidad(m, e.j, DRON[rol], Math.floor(y) * N + Math.floor(x)); q.x = q.px = x; q.y = q.py = y; q.base = e.id; q.rol = rol; q.fase = (e.id * 1.7 + e.dr[rol].length * 2.1) % TAU; q.obj = obj || 0; q.est = rol === 'bomba' ? 'espera' : ''; e.dr[rol].push(q.id); return q; };
@@ -495,7 +496,8 @@
       }
       if (!o) { a.est = 'puesto'; if (parado && Math.hypot(u.x - px, u.y - py) > 3.5) ir(px, py); if (!a.punto && casa && Math.hypot(u.x - casa.cx, u.y - casa.cy) <= casa.tam / 2 + 4) u.ambC = Math.min(cfg.carga, u.ambC + ECON.ambCarga); continue; } // sin heridos: a su puesto (y junto al hospital va recargando)
       a.est = 'cura';
-      if (Math.hypot(o.x - u.x, o.y - u.y) > cfg.radio) { if (parado || (m.t / 10) % 4 === 0) ir(o.x, o.y); continue; }
+      const dh = Math.hypot(o.x - u.x, o.y - u.y);
+      if (dh > cfg.radio && !(parado && a.cerca === o.id && dh <= cfg.radio + 6)) { if (parado) { if (a.cerca !== o.id && a.iba === o.id) a.cerca = o.id; else { a.iba = o.id; ir(o.x, o.y); } } else if ((m.t / 10) % 4 === 0) ir(o.x, o.y); continue; } // si no puede acercarse más (el herido está entre árboles), los camilleros llegan a pie hasta 8 celdas
       const q = Math.min(cfg.cura, o.vidaMax - o.vida, u.ambC); o.vida += q; o.curando = m.t; u.ambC -= q;
     }
   }
@@ -586,6 +588,14 @@
     const orbita = (r, cx, cy) => { const a = u.fase + m.t * (0.6 / Math.max(3, r)) * 0.33; ir((cx === undefined ? bx : cx) + Math.cos(a) * r, (cy === undefined ? by : cy) + Math.sin(a) * r, d.vel); };
     const mis = base.dronMis || null;
     const parado = base.edif || (base.orden === 'nada' && base.v < 0.001);
+    if (base.drLlama && u.rol !== 'fpv') { // su portador los ha llamado: vuelven, se posan y cargan hasta que los despliegue
+      if (u.rol === 'bomba') { u.est = 'espera'; u.obj = 0; }
+      const conBat = m.logistica !== false; if (u.bat === undefined) u.bat = ECON.dronBat;
+      if (ir(bx, by, d.vel) > 0.9) { if (conBat && --u.bat <= 0) u.vida = 0; return; }
+      const abastecido = base.edif ? !base.sinLuz && base.conRed !== false : !(conBat && sinSuministro(base));
+      if (abastecido) { u.bat = Math.min(ECON.dronBat, u.bat + ECON.dronBat / ECON.dronCargaT); u.vida = Math.min(u.vidaMax, u.vida + ECON.dronCura); }
+      u.casa2 = false; return;
+    }
     if (u.rol !== 'fpv') { // batería y daños: con poca carga o muy tocado, vuelve a su portador, se posa, carga y se repara, y sale otra vez
       const conBat = m.logistica !== false; if (u.bat === undefined) u.bat = ECON.dronBat;
       if (u.casa2) {
@@ -829,8 +839,9 @@
   // Se recalcula solo cuando algo cambia (m.redSucia) y, por si acaso, cada cinco segundos.
   function calcularRed(m) {
     const N = m.N, NN = N * N;
+    const recargada = !m.cob && m.redT !== undefined; // partida recién cargada: se rehace la tabla sin mover el calendario de recálculos
     if (!m.cob) { m.cob = [new Uint8Array(NN), new Uint8Array(NN)]; m.redCel = new Int32Array(NN); }
-    m.cob[0].fill(0); m.cob[1].fill(0); m.redSucia = false; m.redT = m.t; m.redV = (m.redV || 0) + 1;
+    m.cob[0].fill(0); m.cob[1].fill(0); const sucia = m.redSucia; m.redSucia = recargada ? sucia : false; if (!recargada) m.redT = m.t; m.redV = (m.redV || 0) + 1;
     const its = []; for (const e of m.ents) if (e.edif && e.vida > 0) its.push(e);
     const clasica = m.logistica === false, primero = [-1, -1]; // partida clásica: todo lo de un jugador es una sola red, como antes
     const pad = its.map((e, i) => i), raiz = (i) => { while (pad[i] !== i) { pad[i] = pad[pad[i]]; i = pad[i]; } return i; }, une = (a, b) => { a = raiz(a); b = raiz(b); if (a !== b) pad[Math.max(a, b)] = Math.min(a, b); };
@@ -1256,6 +1267,9 @@
           if (!(cmd.x >= 0 && cmd.y >= 0 && cmd.x < m.N && cmd.y < m.N)) { u.dronMis = null; continue; }
           if (Math.hypot(cmd.x - u.x, cmd.y - u.y) <= al) { u.dronMis = { x: cmd.x, y: cmd.y }; if (u.orden !== 'nada') { limpiar(u); u.orden = 'nada'; u.ruta = null; u.pend = null; } } // (se planta: el operador solo trabaja parado)
         }
+        return;
+      case 'drones': // llamar a los drones (on: false: vuelven a su portador y se quedan posados) o desplegarlos otra vez (on: true)
+        for (const id of cmd.ids || []) { const e = m.porId.get(id); if (e && e.j === cmd.j && e.vida > 0 && (e.edif ? EDIF[e.tipo] : UNID[e.tipo]).drones) e.drLlama = !cmd.on; }
         return;
       case 'dronAtk': // enciende o apaga los drones de ataque de esos portadores
         for (const u of propias(m, cmd)) if (UNID[u.tipo].drones) u.dronAtk = !!cmd.on;
@@ -2652,6 +2666,7 @@
   W.tick = function (m) {
     if (m.ganador >= 0) return;
     const cmds = m.cola; m.cola = [];
+    if (m.logistica !== false && !m.radioCob) calcularRadio(m); // partida recién cargada: la cobertura de radio se rehace antes de repartir órdenes (si no, las primeras llegarían sin retraso)
     if (m.demoras && m.demoras.length) { const ya = m.demoras.filter((q) => q.t <= m.t); if (ya.length) { m.demoras = m.demoras.filter((q) => q.t > m.t); for (const q of ya) aplicar(m, q.cmd); } } // las órdenes que iban con retraso y ya llegan
     for (let k = 0; k < cmds.length; k++) aplicar(m, cmds[k]);
     contar(m);

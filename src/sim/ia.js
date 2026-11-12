@@ -124,6 +124,7 @@
         if (e.tipo === 'patio') patios.push(e);
         else if (e.tipo === 'patioMovil') moviles.push(e);
         else if (!e.edif && UNID[e.tipo].mini) continue; // los drones pequeños van con su portador
+        else if (!e.edif && (e.bunk || e.aBunk || UNID[e.tipo].ambu)) continue; // la guarnición de un búnker se queda en él; las ambulancias van solas
         else if (!e.edif && UNID[e.tipo].aire) aviones.push(e); // la aviación no va con el ejército
         else if (!e.edif && UNID[e.tipo].arma) soldados.push(e);
         else if (!e.edif && e.tipo !== 'cosechadora') sinArma.push(e);
@@ -161,6 +162,7 @@
     // Radio: torres escalonadas cada 38 celdas en la línea hacia el rival, para que sus oleadas vean y obedezcan a tiempo.
     const rivB = m.mapa.bases[1 - j], rvx = rivB.x - patio.cx, rvy = rivB.y - patio.cy, rvd = Math.hypot(rvx, rvy) || 1, nTorres = J.cuenta.torreRadio || 0;
     const quiereTorre = m.logistica !== false && !urgente && J.cuenta.fabrica && m.t > 9000 && J.minerales > 1200 && !(ia.tAhorro > 0) && !ia.pn && nTorres < Math.min(5, Math.floor((rvd - 50) / 38)) && (ia.torresHechas || 0) < 8 && W.disponible(m, j, EDIF.torreRadio); // (con la base ya en marcha y dinero de sobra; y sin reponerlas sin fin si se las tiran)
+    if (obra && (obra.tipo === 'vigia' || obra.tipo === 'bunker' || obra.tipo === 'artFija')) { const D = obra.tipo === 'vigia' ? 16 : obra.tipo === 'bunker' ? 11 : 7; donde = { cx: patio.cx + (rvx / rvd) * D, cy: patio.cy + (rvy / rvd) * D }; } // las defensas, de cara al rival
     if (obra && obra.tipo === 'torreRadio') donde = { cx: patio.cx + (rvx / rvd) * 38 * (nTorres + 1), cy: patio.cy + (rvy / rvd) * 38 * (nTorres + 1) };
     const quiereObras = m.logistica !== false && !J.cuenta.obras && J.cuenta.cuartel && W.tieneReq(m, j, EDIF.obras.req) && J.minerales > 600 && (J.cuenta.fabrica || m.ents.some((e) => e.edif && !e.infra && e.j === j && !e.conRed)); // en cuanto tiene algo que conectar (o fábrica), sus obras civiles
     // Misiles: pasada la primera media hora y con dinero de sobra, una misilera; y un interceptor en cuanto ve volar un misil enemigo o conoce una misilera rival.
@@ -172,6 +174,10 @@
     if (!urgente && J.cuenta.cuartel && J.cuenta.fabrica && !(ia.tAhorro > 0) && !ia.pn) {
       const c = J.cuenta, puede = (t) => W.disponible(m, j, EDIF[t]);
       if (J.nivel >= 2 && (c.mina || 0) < (m.t > 48000 ? 3 : 1) && J.minerales > 1600 && puede('mina') && buscarSitio(m, j, 'mina', patio)) quiereNuevo = 'mina'; // minas: ingreso que no depende de cosechadoras ni se agota pronto
+      else if ((c.bunker || 0) < (ia.estilo === 'defensivo' ? 2 : 1) && m.t > 8000 && J.minerales > 900 && puede('bunker')) quiereNuevo = 'bunker'; // un búnker de cara al rival, que luego guarnece
+      else if ((c.vigia || 0) < 1 && m.t > 7000 && J.minerales > 900 && puede('vigia')) quiereNuevo = 'vigia';
+      else if (!c.hospital && m.t > 12000 && J.minerales > 1500 && puede('hospital')) quiereNuevo = 'hospital';
+      else if (!c.artFija && J.nivel >= 2 && m.t > 20000 && J.minerales > 2600 && ia.estilo !== 'asalto' && puede('artFija')) quiereNuevo = 'artFija';
       else if (!c.estDrones && m.t > 9000 && J.minerales > 1200 && puede('estDrones')) quiereNuevo = 'estDrones';
       else if (!c.camara && m.t > 14000 && J.minerales > 1200 && puede('camara')) quiereNuevo = 'camara';
       else if (!c.logistica && m.logistica !== false && m.t > 18000 && J.minerales > 2000 && puede('logistica')) quiereNuevo = 'logistica'; // (antes que la central de inteligencia: sin suministro, sus oleadas pelean a media fuerza)
@@ -393,6 +399,14 @@
       }
       const civil = sinArma.find((u) => u.tipo === 'civil');
       if (civil && civil.orden === 'nada' && !civil.auto && tk % 10 === 6) W.orden(m, { t: 'autoCivil', j, ids: [civil.id], on: true });
+      // Guarnición: cada búnker con sitio recibe infantería de fusil que esté ociosa cerca y no vaya en la oleada.
+      if (c.bunker && tk % 20 === 13) for (const b of m.ents) {
+        if (b.j !== j || b.tipo !== 'bunker' || b.vida <= 0) continue;
+        let libres = EDIF.bunker.bunker - W.enBunker(m, b); for (const u of m.ents) if (!u.edif && u.aBunk === b.id) libres--;
+        if (libres <= 0) continue;
+        const ids = soldados.filter((u) => u.tipo === 'infanteria' && u.orden === 'nada' && !ia.atacantes.has(u.id) && u.id !== ia.explorador && !ia.capturan.has(u.id) && Math.hypot(u.x - b.cx, u.y - b.cy) < 28).slice(0, libres).map((u) => u.id);
+        if (ids.length) W.orden(m, { t: 'guarnecer', j, ids, en: b.id });
+      }
       // Ingeniero militar (solo el rival de estilo defensivo): ocho minas en un arco por delante de la base, de cara al rival.
       if (ia.estilo === 'defensivo' && tk % 20 === 11 && m.t > 12000 && J.minerales > 500 && (ia.minasP || 0) < 8 && !urgente) {
         const z = sinArma.find((u) => u.tipo === 'ingeniero' && u.orden === 'nada' && !u.arregla);
