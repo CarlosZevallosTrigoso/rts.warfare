@@ -1216,7 +1216,8 @@ prueba('la red: cobertura, territorio, energía por red, depósito y suministro'
   assert.ok(!tLejos.conRed && tLejos.sinLuz, 'la torreta aislada no tiene red ni energía');
   assert.ok(!cob()[cel(lejos, py)], 'un edificio suelto no da cobertura');
   // un depósito suelto tampoco da cobertura…
-  const dep = W.crearEdificio(m, 0, 'deposito', lejos - dir * 4, py + 2); avanza(2);
+  const dm = W.ECON.depositoMax; W.ECON.depositoMax = 10; // (para esta parte: que no se cablee solo)
+  const dep = W.crearEdificio(m, 0, 'deposito', lejos - dir * 4, py + 2); avanza(2); W.ECON.depositoMax = dm;
   assert.ok(!dep.conRed && !cob()[cel(lejos, py)], 'el depósito sin conexión no sirve');
   // …hasta que un camino lo une a la base: entonces da cobertura, y la torreta de al lado recibe energía
   // (un camino militar no conecta nada: solo sirve para moverse)
@@ -2358,6 +2359,30 @@ prueba('enlace de datos: sin cable ni radio, la torre de vigilancia y la cámara
   assert.ok(W.enlazado(m, art) && tq.vida < v0, 'con enlace por radio, sí');
   // en la base, por cable, todo enlazado
   const cam = W.crearEdificio(m, 0, 'vigia', Math.floor(patio.cx) + (patio.cx < 128 ? 9 : -9), Math.floor(patio.cy)); avanza(25); assert.ok(W.enlazado(m, cam), 'junto a la base está enlazada por la red');
+});
+
+prueba('depósitos: van a 40 celdas o menos de la red, se cablean solos y hay que encadenarlos; ninguna línea pasa de 40', () => {
+  const m = W.crearMundo(31, { N: 256, logistica: true }), N = m.N, J = m.jug[0];
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const cel = (x, y) => y * N + x, patio = m.ents.find((e) => e.j === 0 && e.tipo === 'patio'), px = Math.floor(patio.cx), py = Math.floor(patio.cy), dir = px < 128 ? 1 : -1;
+  for (let y = py - 10; y <= py + 10; y++) for (let x = Math.min(px, px + dir * 130) - 4; x <= Math.max(px, px + dir * 130) + 4; x++) { const i = cel(x, y); if (x < 2 || y < 2 || x >= N - 2 || y >= N - 2 || m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.mapa.tipoMin[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  m.terrenoV++; m.niebla[0].fill(1); J.minerales = 20000;
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  avanza(3); const M = W.ECON.depositoMax;
+  assert.ok(/demasiado lejos de tu red/.test(W.porQueNo(m, 0, 'deposito', px + dir * (M + 20), py)), 'a 60 celdas de la red no se puede poner');
+  assert.strictEqual(W.porQueNo(m, 0, 'deposito', px + dir * (M - 4), py), '', 'a 36, sí');
+  const d1 = W.crearEdificio(m, 0, 'deposito', px + dir * (M - 4), py); avanza(4);
+  assert.ok(d1.conRed && m.ents.some((e) => e.linea && !e.tubo && e.a === d1.id), 'y se cablea solo hasta la red');
+  assert.strictEqual(W.cobertura(m, 0)[cel(d1.x + dir * 10, py)], 1, 'da su zona'); assert.strictEqual(W.cobertura(m, 0)[cel(d1.x + 11, py + 11)], 0, 'que es redonda: la esquina del cuadrado queda fuera');
+  assert.strictEqual(W.porQueNo(m, 0, 'deposito', d1.x + dir * (M - 4), py), '', 'desde el primero se alcanza el segundo'); assert.ok(W.porQueNo(m, 0, 'deposito', d1.x + dir * (M + 15), py), 'pero no se salta más allá');
+  const d2 = W.crearEdificio(m, 0, 'deposito', d1.x + dir * (M - 4), py); avanza(4); assert.ok(d2.conRed, 'encadenados');
+  // una línea de servicio no llega a más de 40 celdas, ni a mano ni en automático
+  const lejos = W.crearEdificio(m, 0, 'torreta', d2.x + dir * (M + 12), py + 3); avanza(4); assert.ok(!lejos.conRed);
+  W.crearEdificio(m, 0, 'torreRadio', d2.x - dir * 4, py - 4); avanza(25); // (con radio, para que las órdenes lleguen al momento)
+  const civ = W.crearUnidad(m, 0, 'civil', cel(d2.x + dir * 3, py + 2)); civ.auto = false;
+  W.orden(m, { t: 'conectar', j: 0, ids: [civ.id], edifs: [d2.id, lejos.id] }); avanza(5); assert.strictEqual(civ.orden, 'nada', 'la orden de conectar a 52 celdas no se acepta');
+  civ.auto = true; avanza(400); assert.ok(!lejos.conRed && civ.orden !== 'conectar', 'ni lo intenta por su cuenta');
+  const cerca = W.crearEdificio(m, 0, 'torreta', d2.x + dir * 30, py - 3); avanza(1500); assert.ok(cerca.conRed, 'a 30 celdas (más de lo que alcanza el cable automático) el ingeniero civil sí la conecta');
 });
 
 prueba('tanda 5: puente aéreo, puesto de avanzada, hospital y traslado de infantería', () => {
