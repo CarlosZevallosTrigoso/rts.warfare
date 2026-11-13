@@ -2421,6 +2421,38 @@ prueba('desgaste: el vehículo se desgasta al andar y disparar, va más lento y 
   const c = W.crearMundo(31, { N: 128 }); const tc = W.crearUnidad(c, 0, 'tanque', (60 * 128) + 60); W.orden(c, { t: 'mover', j: 0, ids: [tc.id], x: 70.5, y: 60.5 }); for (let i = 0; i < 300; i++) W.tick(c); assert.ok(!tc.desg, 'sin infraestructura, sin desgaste');
 });
 
+prueba('acero: lo pesado lo pide, la fundición lo saca del mineral, tiene tope y reserva; en la partida clásica no existe', () => {
+  const m = W.crearMundo(31, { N: 128, logistica: true }), N = m.N, J = m.jug[0], E = W.ECON;
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const cel = (x, y) => y * N + x, patio = m.ents.find((e) => e.j === 0 && e.tipo === 'patio'), px = Math.floor(patio.cx), py = Math.floor(patio.cy), dir = px < 64 ? 1 : -1;
+  for (let y = py - 12; y <= py + 12; y++) for (let x = Math.min(px, px + dir * 30) - 4; x <= Math.max(px, px + dir * 30) + 4; x++) { const i = cel(x, y); if (x < 2 || y < 2 || x >= N - 2 || y >= N - 2 || m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.mapa.tipoMin[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  m.terrenoV++; J.minerales = 3000; J.petroleo = 400; J.capMin = 1e9;
+  const avanza = (n) => { for (let i = 0; i < n; i++) { W.tick(m); J.aguaProd = 99; } };
+  assert.strictEqual(J.acero, E.aceroInicio, 'se empieza con algo de acero'); assert.ok(W.UNID.tanque.acero > 0 && W.EDIF.bunker.acero > 0 && !W.UNID.infanteria.acero && !W.UNID.blindado.acero, 'solo lo pesado pide acero');
+  for (const [t, x, y] of [['eolica', 4, 6], ['eolica', 6, 6], ['eolica', 8, 6], ['eolica', 10, 6], ['central', 4, -7], ['refineria', 9, -8], ['fabrica', 14, 2]]) W.crearEdificio(m, 0, t, px + dir * x, py + y); avanza(120);
+  // 1) sin acero no hay tanque (y el juego lo dice); la infantería y el blindado no lo piden
+  J.acero = W.UNID.tanque.acero - 1; assert.ok(!W.puedePagar(J, W.UNID.tanque) && W.puedePagar(J, W.UNID.blindado), 'sin acero suficiente no se puede pagar el tanque, sí el blindado');
+  W.orden(m, { t: 'entrenar', j: 0, tipo: 'tanque' }); avanza(3); assert.strictEqual(J.colas.tanque.n, 0, 'y no se encarga');
+  // 2) con acero: se cobra al encargar y se devuelve al cancelar
+  J.acero = 100; const m0 = J.minerales; W.orden(m, { t: 'entrenar', j: 0, tipo: 'tanque' }); avanza(3);
+  assert.strictEqual(J.colas.tanque.n, 1); assert.strictEqual(J.acero, 100 - W.UNID.tanque.acero, 'el tanque gasta su acero'); assert.ok(J.minerales < m0);
+  W.orden(m, { t: 'cancelar', j: 0, tipo: 'tanque' }); avanza(3); if (J.colas.tanque.n === 0) assert.strictEqual(J.acero, 100, 'al cancelar se devuelve');
+  // 3) la fundición: 2 de mineral por 1 de acero, 60 en medio minuto; sube el tope
+  for (const e of m.ents) if (e.cola) { e.cola.length = 0; e.pago.length = 0; } J.colas.tanque.n = 0;
+  J.acero = 0; J.minerales = 5000; assert.strictEqual(W.capAcero(J), E.aceroBase); const fu = W.crearEdificio(m, 0, 'fundicion', px + dir * 14, py - 7); avanza(120);
+  assert.strictEqual(W.capAcero(J), E.aceroBase + E.aceroPorFund, 'cada fundición amplía lo que cabe'); assert.ok(fu.conRed && !fu.sinLuz, 'en la red y con energía');
+  const a0 = J.acero, q0 = J.minerales; avanza(600); const hecho = J.acero - a0;
+  assert.ok(hecho >= 58 && hecho <= 62, 'saca 60 de acero en medio minuto (' + hecho + ')'); assert.ok(Math.abs((q0 - J.minerales) - hecho * E.aceroMin) <= 2, 'a 2 de mineral cada uno (' + (q0 - J.minerales) + ')');
+  // 4) no deja la caja seca, ni pasa del tope
+  const a1 = J.acero; for (let i = 0; i < 100; i++) { J.minerales = E.aceroReserva; W.tick(m); } assert.ok(J.acero === a1 && fu.parada === 'mineral', 'con poco mineral se para (' + (J.acero - a1) + ', ' + fu.parada + ')');
+  J.minerales = 5000; J.acero = W.capAcero(J); const q1 = J.minerales; avanza(100); assert.ok(J.acero === W.capAcero(J) && J.minerales === q1 && fu.parada === 'lleno', 'lleno, también');
+  // 5) fuera de la red no funde
+  fu.vida = 0; avanza(3); J.acero = 0; const lejos = W.crearEdificio(m, 0, 'fundicion', px + dir * 28, py + 9); for (const e of m.ents) if (e.linea && e.a === lejos.id) e.vida = 0; for (const e of m.ents) if (e.linea) e.vida = 0; avanza(120);
+  if (!lejos.conRed) { const a2 = J.acero; avanza(200); assert.strictEqual(J.acero, a2, 'sin red, la fundición no trabaja'); }
+  // 6) en la partida clásica no hay acero
+  const c = W.crearMundo(31, { N: 128 }); assert.strictEqual(c.jug[0].acero, undefined); assert.ok(W.puedePagar(Object.assign(c.jug[0], { minerales: 5000, petroleo: 500 }), W.UNID.tanque), 'sin infraestructura, el tanque solo pide mineral y petróleo');
+});
+
 prueba('tanda 5: puente aéreo, puesto de avanzada, hospital y traslado de infantería', () => {
   const m = W.crearMundo(31, { N: 128, logistica: true }), N = m.N, J = m.jug[0];
   m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);

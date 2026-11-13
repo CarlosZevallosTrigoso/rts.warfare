@@ -50,6 +50,7 @@
       const haciaCentro = j === 0 ? 1 : -1;
       for (let k = 0; k < 2; k++) crearUnidad(m, j, 'infanteria', W.cercaLibre(m, b.x + (3 + k) * haciaCentro, b.y - 3 * haciaCentro));
     }
+    if (m.logistica !== false) for (const J of m.jug) J.acero = ECON.aceroInicio; // el acero solo existe en la partida con infraestructura
     // Los alrededores de cada base ya se conocen al empezar: ahí están el agua, el campo y el primer yacimiento.
     for (let j = 0; j < 2; j++) {
       const b = mapa.bases[j], R = ECON.vistaInicial;
@@ -1055,9 +1056,22 @@
   }
 
   // ---------- pagos ----------
-  W.puedePagar = function (J, d) { return J.minerales >= (d.costo || 0) && J.petroleo >= (d.pet || 0) && J.raros >= (d.raros || 0) && J.info >= (d.info || 0); };
-  function cobrar(J, d) { J.minerales -= d.costo || 0; J.petroleo -= d.pet || 0; J.raros -= d.raros || 0; J.info -= d.info || 0; }
-  function devolver(J, d) { J.minerales += d.costo || 0; J.petroleo += d.pet || 0; J.raros += d.raros || 0; J.info += d.info || 0; }
+  // El acero solo cuenta en la partida con infraestructura (J.acero definido); el modo ADMIN no lo pide.
+  W.puedePagar = function (J, d) { return J.minerales >= (d.costo || 0) && J.petroleo >= (d.pet || 0) && J.raros >= (d.raros || 0) && J.info >= (d.info || 0) && (J.acero === undefined || J.dios || J.acero >= (d.acero || 0)); };
+  function cobrar(J, d) { J.minerales -= d.costo || 0; J.petroleo -= d.pet || 0; J.raros -= d.raros || 0; J.info -= d.info || 0; if (J.acero !== undefined && !J.dios) J.acero -= d.acero || 0; }
+  function devolver(J, d) { J.minerales += d.costo || 0; J.petroleo += d.pet || 0; J.raros += d.raros || 0; J.info += d.info || 0; if (J.acero !== undefined && !J.dios) J.acero += d.acero || 0; }
+  W.capAcero = (J) => ECON.aceroBase + ECON.aceroPorFund * (J.cuenta.fundicion || 0);
+  // Fundiciones: cada medio segundo, cada una en la red y con energía pasa aceroMin de mineral a 1 de acero (a media marcha, la mitad), mientras quepa y sobre mineral.
+  function tickFundiciones(m) {
+    for (const e of m.ents) {
+      if (!e.edif || e.vida <= 0 || !EDIF[e.tipo].funde || e.hack > m.t || e.conRed === false) continue;
+      const J = m.jug[e.j]; if (J.acero === undefined) continue;
+      if (e.sinLuz && (m.t / 10) % 2 === 1) continue;
+      e.parada = J.acero >= W.capAcero(J) ? 'lleno' : J.minerales < ECON.aceroReserva + ECON.aceroMin ? 'mineral' : '';
+      if (e.parada) continue;
+      J.minerales -= ECON.aceroMin; J.acero += 1; J.fundido = (J.fundido || 0) + 1;
+    }
+  }
 
   // ---------- comandos ----------
   // Con m.registro (una lista), cada orden queda apuntada con su tick: reproducidas en un mundo igual, dan la misma partida.
@@ -2830,6 +2844,7 @@
     if (m.t % 10 === 5) tickEscoltas(m);
     if (m.t % 40 === 7) tickRadar(m);
     if (m.logistica !== false && m.t % ECON.quemaCada === 11) tickCentrales(m);
+    if (m.logistica !== false && m.t % 10 === 6) tickFundiciones(m);
     if (m.t % 10 === 0 && m.logistica !== false) { // suministro: fuera de la cobertura el contador sube; dentro, baja rápido. Los aviones repostan en su base: no cuenta.
       const pts = tickSuministro(m);
       for (const e of m.gr.edifs) { if (!EDIF[e.tipo].arma) continue; const cap = W.munDe(e.tipo, true); if (e.mun === undefined) e.mun = cap; else if (e.mun < cap && e.conRed !== false && !e.sinLuz) e.mun = Math.min(cap, e.mun + Math.ceil(cap / 40)); } // las torres reponen por la red
