@@ -115,6 +115,7 @@
   W.iaTick = function (m, ia) {
     if ((m.t + ia.j * 7) % 20 !== 0 || m.ganador >= 0) return;
     const j = ia.j, J = m.jug[j];
+    J.esIA = true; // (lo usa la simulación: la IA conserva el alcance antiguo de líneas y depósitos)
     if (!J.vivo) return;
     const E = ESTILOS[ia.estilo];
     const tk = (m.t + ia.j * 7) / 20; // cuántas veces ha pensado: las reglas que van cada cierto tiempo se cuentan con esto (con m.t, las del jugador 2 no caían nunca en su turno)
@@ -158,23 +159,8 @@
     }
     if (obra && segundo && (obra.tipo === 'refineria' || obra.tipo === 'torreta' || (obra.tipo === 'central' && m.logistica !== false)) && !m.ents.some((e) => e.j === j && e.tipo === obra.tipo && Math.hypot(e.cx - segundo.cx, e.cy - segundo.cy) < 16)) donde = segundo;
     // La red: terminada su vía, levanta un depósito en la punta, para que la cobertura (suministro y territorio) llegue hasta allí.
-    // Un edificio propio que quedó a más de una línea de la red (un extractor o una mina lejanos, la segunda base…): depósitos encadenados hacia él.
-    let depHacia = null;
-    const depEnObra = J.obras.some((o) => o.tipo === 'deposito');
-    if (m.logistica !== false && (depEnObra || ((J.cuenta.deposito || 0) < 6 && W.tieneReq(m, j, EDIF.deposito.req) && J.minerales > 700))) {
-      for (const e of m.ents) {
-        if (!e.edif || e.infra || e.j !== j || e.vida <= 0 || e.conRed || e.tipo === 'avanzada' || e.tipo === 'torreRadio' || e.tipo === 'vigia') continue;
-        let a = null, da = Infinity; for (const o of m.ents) if (o.edif && !o.infra && o.j === j && o.vida > 0 && o.conRed) { const d0 = Math.hypot(o.cx - e.cx, o.cy - e.cy); if (d0 < da) { da = d0; a = o; } }
-        if (a && da > W.ECON.lineaMax) { const t = W.ECON.depositoMax - 6; depHacia = { cx: a.cx + ((e.cx - a.cx) / da) * t, cy: a.cy + ((e.cy - a.cy) / da) * t }; break; }
-      }
-    }
-    const quiereDeposito = (!!depHacia && !depEnObra) || (m.logistica !== false && ia.via && ia.viaFin && (J.cuenta.deposito || 0) < 4 && !m.ents.some((e) => e.edif && e.j === j && e.tipo === 'deposito' && Math.hypot(e.cx - ia.viaFin.x, e.cy - ia.viaFin.y) < 16) && !J.obras.some((o) => o.tipo === 'deposito') && W.tieneReq(m, j, EDIF.deposito.req) && J.minerales > 900 && !!J.cuenta.obras);
-    if (obra && obra.tipo === 'deposito' && depHacia) donde = depHacia;
-    else if (obra && obra.tipo === 'deposito' && ia.viaFin) { // hacia el final de su vía; si queda más lejos de lo que alcanza un depósito, uno intermedio (encadena hasta llegar)
-      donde = { cx: ia.viaFin.x, cy: ia.viaFin.y }; let a = null, da = Infinity;
-      for (const e of m.ents) if (e.edif && !e.infra && e.j === j && e.vida > 0 && e.conRed) { const d0 = Math.hypot(e.cx - ia.viaFin.x, e.cy - ia.viaFin.y); if (d0 < da) { da = d0; a = e; } }
-      const tope = W.ECON.depositoMax - 6; if (a && da > tope) donde = { cx: a.cx + (ia.viaFin.x - a.cx) / da * tope, cy: a.cy + (ia.viaFin.y - a.cy) / da * tope };
-    }
+    const quiereDeposito = m.logistica !== false && ia.via && ia.viaFin && !J.cuenta.deposito && W.tieneReq(m, j, EDIF.deposito.req) && J.minerales > 900 && !!J.cuenta.obras;
+    if (obra && obra.tipo === 'deposito' && ia.viaFin) donde = { cx: ia.viaFin.x, cy: ia.viaFin.y };
     // Radio: torres escalonadas cada 38 celdas en la línea hacia el rival, para que sus oleadas vean y obedezcan a tiempo.
     const rivB = m.mapa.bases[1 - j], rvx = rivB.x - patio.cx, rvy = rivB.y - patio.cy, rvd = Math.hypot(rvx, rvy) || 1, nTorres = J.cuenta.torreRadio || 0;
     const quiereTorre = m.logistica !== false && !urgente && J.cuenta.fabrica && m.t > 9000 && J.minerales > 1200 && !(ia.tAhorro > 0) && !ia.pn && nTorres < Math.min(5, Math.floor((rvd - 50) / 38)) && (ia.torresHechas || 0) < 8 && W.disponible(m, j, EDIF.torreRadio); // (con la base ya en marcha y dinero de sobra; y sin reponerlas sin fin si se las tiran)

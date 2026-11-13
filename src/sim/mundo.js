@@ -182,7 +182,7 @@
       if (Math.max(o.x - (e.x + e.tam), e.x - (o.x + o.tam), 0) <= ECON.enlace && Math.max(o.y - (e.y + e.tam), e.y - (o.y + o.tam), 0) <= ECON.enlace) return; // ya queda unido por cercanía
       const dd = Math.hypot(o.cx - e.cx, o.cy - e.cy); if (dd < da) { da = dd; a = o; }
     }
-    if (!a || da > (e.tipo === 'deposito' ? ECON.depositoMax : ECON.cableMax)) return;
+    if (!a || da > (e.tipo === 'deposito' && !m.jug[e.j].esIA ? ECON.depositoMax : ECON.cableMax)) return;
     const ux = (e.cx - a.cx) / da, uy = (e.cy - a.cy) / da; let ult = a.id, prev = null;
     for (let h = 0; h < da; h += 5) { const s = Math.min(da, h + 5), tr = crearLinea(m, e.j, a.cx + ux * h, a.cy + uy * h, a.cx + ux * s, a.cy + uy * s, ult); if (prev) prev.a = tr.id; prev = tr; ult = tr.id; }
     if (prev) prev.a = e.id;
@@ -208,6 +208,7 @@
     return e;
   }
   // Ingeniero civil en automático: busca el edificio propio sin red que tenga más cerca (y que no esté ya encargado a otro) y lo une con el edificio conectado más próximo a él.
+  const lineaMaxDe = (m, j) => (m.jug[j].esIA ? ECON.autoLargo : ECON.lineaMax); // largo máximo de una línea de servicio: el jugador, 40; la IA, lo de antes
   function autoConectar(m, u) {
     if (m.jug[u.j].minerales < ECON.autoReserva && !m.jug[u.j].dios) return; // solo con algo de dinero de sobra
     const tomados = new Set();
@@ -216,7 +217,7 @@
     for (const e of m.ents) {
       if (!e.edif || e.infra || e.j !== u.j || e.vida <= 0 || e.conRed || e.tipo === 'avanzada' || tomados.has(e.id)) continue;
       const d0 = Math.hypot(e.cx - u.x, e.cy - u.y); if (d0 >= db) continue;
-      let ok = false; for (const o of m.ents) if (o.edif && !o.infra && o.j === u.j && o.vida > 0 && o.conRed && Math.hypot(o.cx - e.cx, o.cy - e.cy) <= ECON.lineaMax) { ok = true; break; }
+      let ok = false; for (const o of m.ents) if (o.edif && !o.infra && o.j === u.j && o.vida > 0 && o.conRed && Math.hypot(o.cx - e.cx, o.cy - e.cy) <= lineaMaxDe(m, u.j)) { ok = true; break; }
       if (ok) { db = d0; b = e; } // (los que quedan a más de una línea de la red no se pueden conectar: hace falta un depósito intermedio)
     }
     if (!b) return;
@@ -225,7 +226,7 @@
       if (!e.edif || e.infra || e.j !== u.j || e.vida <= 0 || !e.conRed) continue;
       const d0 = Math.hypot(e.cx - b.cx, e.cy - b.cy); if (d0 < da) { da = d0; a = e; }
     }
-    if (!a || da > ECON.lineaMax) return;
+    if (!a || da > lineaMaxDe(m, u.j)) return;
     u.orden = 'conectar'; u.obra = { pares: [[a.id, b.id]], prog: 0, hecho: 0, ult: 0, auto: true }; u.ruta = null; u.pend = null; u.obj = 0;
   }
   // El ingeniero civil conectando: va al primer edificio del par y, desde ahí, la línea avanza sola hasta el segundo, tramo a tramo y pagando cada uno.
@@ -918,7 +919,7 @@
       if (!agua) return 'necesita agua a dos celdas o menos';
     }
     if (d.libre && !m.niebla[j][y * N + x]) return 'terreno sin explorar'; // solo en terreno explorado
-    if (tipo === 'deposito' && m.logistica !== false && !m.jug[j].tr.libre) { // el depósito alarga la red, pero no salta a cualquier parte: ha de quedar al alcance de algo ya conectado
+    if (tipo === 'deposito' && m.logistica !== false && !m.jug[j].tr.libre && !m.jug[j].esIA) { // (la IA conserva el alcance de antes: con este tope no sabe sostener su red) // el depósito alarga la red, pero no salta a cualquier parte: ha de quedar al alcance de algo ya conectado
       const cx = x + t / 2, cy = y + t / 2; let cerca = false;
       for (const e of m.ents) if (e.edif && !e.infra && e.j === j && e.vida > 0 && e.conRed && Math.hypot(e.cx - cx, e.cy - cy) <= ECON.depositoMax) { cerca = true; break; }
       if (!cerca) return 'demasiado lejos de tu red: un depósito va a ' + ECON.depositoMax + ' celdas o menos de un edificio conectado';
@@ -1464,7 +1465,7 @@
       case 'conectar': { // el ingeniero civil une edificios propios con líneas de servicio: cmd.edifs en orden; con enc, se añade a lo que ya tiene encargado
         const u = propias(m, cmd).find((q) => UNID[q.tipo].tiende), es = (cmd.edifs || []).map((id) => m.porId.get(id)).filter((e) => e && e.edif && !e.infra && e.j === cmd.j && e.vida > 0);
         if (!u || es.length < 2) return;
-        const pares = []; for (let k = 0; k + 1 < es.length; k++) if (es[k] !== es[k + 1] && Math.hypot(es[k].cx - es[k + 1].cx, es[k].cy - es[k + 1].cy) <= ECON.lineaMax) pares.push([es[k].id, es[k + 1].id]); // una línea no llega más lejos que eso
+        const pares = []; for (let k = 0; k + 1 < es.length; k++) if (es[k] !== es[k + 1] && Math.hypot(es[k].cx - es[k + 1].cx, es[k].cy - es[k + 1].cy) <= lineaMaxDe(m, cmd.j)) pares.push([es[k].id, es[k + 1].id]); // una línea no llega más lejos que eso
         if (!pares.length) return;
         if (cmd.enc && u.orden === 'conectar' && u.obra) { for (const p of pares) if (u.obra.pares.length < 12) u.obra.pares.push(p); return; }
         limpiar(u); u.obj = 0; u.ruta = null; u.pend = null; u.guardia = false; u.orden = 'conectar'; u.obra = { pares, prog: 0, hecho: 0, ult: 0 };
