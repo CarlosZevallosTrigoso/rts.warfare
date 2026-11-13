@@ -2311,7 +2311,7 @@ prueba('ruinas y cráteres: el edificio destruido deja ruina (no el demolido) qu
   assert.ok(J.obras.some((o) => o.listo && o.tipo === 'cuartel'), 'el cuartel nuevo está listo'); const m0 = J.minerales;
   W.orden(m, { t: 'colocar', j: 0, tipo: 'cuartel', x: cx0, y: py - 1 }); avanza(3);
   assert.ok(m.ents.some((e) => e.tipo === 'cuartel' && e.j === 0 && e.vida > 0 && e.x === cx0) && !W.ruinaEn(m, cx0, py - 1), 'se levanta sobre la ruina, que desaparece');
-  assert.strictEqual(Math.round(J.minerales - m0), Math.floor(W.EDIF.cuartel.costo * W.ECON.ruinaVale), 'y recuperas la mitad del costo');
+  assert.strictEqual(Math.round(J.minerales - m0), Math.floor(W.EDIF.cuartel.costo * W.ECON.ruinaVale), 'y recuperas parte del costo');
   // 4) despejar con el ingeniero civil
   const to = W.crearEdificio(m, 0, 'refineria', px + dir * 18, py - 8); avanza(3); to.vida = 0; avanza(3); assert.ok(W.ruinaEn(m, px + dir * 18, py - 8));
   const civ = W.crearUnidad(m, 0, 'civil', cel(px + dir * 14, py - 4)); civ.auto = false;
