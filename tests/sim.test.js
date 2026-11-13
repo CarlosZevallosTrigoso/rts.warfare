@@ -2289,6 +2289,50 @@ prueba('oleoductos y centrales: el extractor tiende su tubería, sin ella rinde 
   assert.strictEqual(J.prod - pr, 160, 'y da 160 de energía sin gastar petróleo');
 });
 
+prueba('ruinas y cráteres: el edificio destruido deja ruina (no el demolido) que frena a los vehículos, se reconstruye a mitad de precio o se despeja; los cráteres frenan y rompen cables', () => {
+  const m = W.crearMundo(31, { N: 128, logistica: true }), N = m.N, J = m.jug[0];
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const cel = (x, y) => y * N + x, patio = m.ents.find((e) => e.j === 0 && e.tipo === 'patio'), px = Math.floor(patio.cx), py = Math.floor(patio.cy), dir = px < 64 ? 1 : -1, dy = py < 64 ? 1 : -1;
+  for (let y = py - 14; y <= py + 14; y++) for (let x = px - 6; x <= px + 6 + 40; x++) { const xx = dir > 0 ? x : px - (x - px), i = cel(xx, y); if (xx < 2 || y < 2 || xx >= N - 2 || y >= N - 2 || m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.mapa.tipoMin[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  m.terrenoV++; J.minerales = 20000; J.dios = false;
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  W.crearEdificio(m, 0, 'central', px + dir * 4, py + 5); J.petroleo = 500; avanza(3);
+  // 1) destruido: ruina; los vehículos no pasan, la infantería sí
+  const cx0 = px + dir * 10, cu = W.crearEdificio(m, 0, 'cuartel', cx0, py - 1); avanza(3); const tam = cu.tam; cu.vida = 0; avanza(3);
+  const r = W.ruinaEn(m, cx0, py - 1); assert.ok(r && r.tipo === 'cuartel' && r.j === 0, 'el cuartel destruido deja su ruina');
+  assert.ok(m.pasoV[cel(cx0, py - 1)] === 1 && m.paso[cel(cx0, py - 1)] === 1 && m.escombro[cel(cx0, py - 1)] === 1, 'la ruina no cierra el paso');
+  { const t = W.crearUnidad(m, 0, 'tanque', cel(cx0 - dir * 4, py)); W.orden(m, { t: 'mover', j: 0, ids: [t.id], x: cx0 + dir * 6 + 0.5, y: py + 0.5 }); let vr = 9; for (let i = 0; i < 500; i++) { W.tick(m); if (m.escombro[Math.floor(t.y) * N + Math.floor(t.x)] && t.v > 0) vr = Math.min(vr, t.v); }
+    assert.ok(vr <= W.UNID.tanque.vel * W.ECON.ruinaFreno + 1e-6, 'entre cascotes va muy despacio (' + vr.toFixed(3) + ')'); assert.ok(Math.abs(t.x - (cx0 + dir * 6 + 0.5)) < 2, 'el tanque cruza la ruina, despacio, y llega'); t.vida = 0; avanza(2); }
+  // 2) demolido por su dueño: sin ruina
+  const ce = W.crearEdificio(m, 0, 'central', px + dir * 10, py + 6); avanza(3); W.orden(m, { t: 'vender', j: 0, id: ce.id }); avanza(4);
+  assert.ok(!W.ruinaEn(m, px + dir * 10, py + 6), 'lo que demuele su dueño no deja ruina');
+  // 3) reconstruir encima el mismo edificio: se recupera la mitad
+  W.orden(m, { t: 'construir', j: 0, tipo: 'cuartel' }); for (let i = 0; i < 2000 && !J.obras.some((o) => o.listo && o.tipo === 'cuartel'); i++) W.tick(m);
+  assert.ok(J.obras.some((o) => o.listo && o.tipo === 'cuartel'), 'el cuartel nuevo está listo'); const m0 = J.minerales;
+  W.orden(m, { t: 'colocar', j: 0, tipo: 'cuartel', x: cx0, y: py - 1 }); avanza(3);
+  assert.ok(m.ents.some((e) => e.tipo === 'cuartel' && e.j === 0 && e.vida > 0 && e.x === cx0) && !W.ruinaEn(m, cx0, py - 1), 'se levanta sobre la ruina, que desaparece');
+  assert.strictEqual(Math.round(J.minerales - m0), Math.floor(W.EDIF.cuartel.costo * W.ECON.ruinaVale), 'y recuperas parte del costo');
+  // 4) despejar con el ingeniero civil
+  const to = W.crearEdificio(m, 0, 'refineria', px + dir * 18, py - 8); avanza(3); to.vida = 0; avanza(3); assert.ok(W.ruinaEn(m, px + dir * 18, py - 8));
+  const civ = W.crearUnidad(m, 0, 'civil', cel(px + dir * 14, py - 4)); civ.auto = false;
+  W.orden(m, { t: 'despejar', j: 0, ids: [civ.id], x: px + dir * 18 + 0.5, y: py - 8 + 0.5 }); avanza(900);
+  assert.ok(!W.ruinaEn(m, px + dir * 18, py - 8) && m.escombro[cel(px + dir * 18, py - 8)] === 0, 'el ingeniero civil despeja la ruina');
+  // 5) cráteres: una explosión grande deja uno, frena a los vehículos y daña el cable que pilla; el ingeniero civil lo rellena
+  const far = W.crearEdificio(m, 0, 'central', px + dir * 20, py + 2); avanza(3); const cable = m.ents.find((e) => e.linea && !e.tubo && e.a === far.id); assert.ok(cable, 'la central lejana tiene su cable');
+  const mx = (cable.pts[0] + cable.pts[2]) / 2, my = (cable.pts[1] + cable.pts[3]) / 2, v0 = cable.vida;
+  W.dejarCrater(m, mx, my, 1.0); assert.ok(!m.crateres.length && cable.vida === v0, 'una explosión pequeña no deja cráter');
+  W.dejarCrater(m, mx, my, 1.6); assert.ok(cable.vida < v0, 'una grande daña el cable que pasa por ahí'); 
+  const cc = cel(px + dir * 26, py - 3); W.dejarCrater(m, (cc % N) + 0.5, ((cc / N) | 0) + 0.5, 1.6); assert.ok(m.crater[cc] === 1, 'y deja un cráter en llano');
+  const tq = W.crearUnidad(m, 0, 'tanque', cel(px + dir * 26 - dir * 6, py - 3)), tq2 = W.crearUnidad(m, 0, 'tanque', cel(px + dir * 26 - dir * 6, py - 6));
+  W.orden(m, { t: 'mover', j: 0, ids: [tq.id], x: px + dir * 26 + dir * 8 + 0.5, y: py - 3 + 0.5 }); W.orden(m, { t: 'mover', j: 0, ids: [tq2.id], x: px + dir * 26 + dir * 8 + 0.5, y: py - 6 + 0.5 });
+  let lento = false; for (let i = 0; i < 400; i++) { W.tick(m); if (Math.floor(tq.y) * N + Math.floor(tq.x) === cc && tq.v > 0 && tq.v <= W.UNID.tanque.vel * W.ECON.craterFreno + 1e-6) lento = true; }
+  assert.ok(lento, 'el tanque que cruza el cráter va a media velocidad');
+  civ.auto = true; avanza(1500); assert.ok(!m.crater[cc] && !m.crateres.includes(cc), 'el ingeniero civil en automático rellena el cráter');
+  // 6) tope de cráteres
+  for (let k = 0; k < W.ECON.craterMax + 40; k++) { const x = px + dir * (2 + (k % 36)), y = py - 13 + Math.floor(k / 36) * 1; if (y > 2 && y < N - 2 && x > 2 && x < N - 2) W.dejarCrater(m, x + 0.5, y + 0.5, 2); }
+  assert.ok(m.crateres.length <= W.ECON.craterMax, 'nunca hay más de ' + W.ECON.craterMax + ' cráteres'); void tam; void dy;
+});
+
 prueba('tanda 5: puente aéreo, puesto de avanzada, hospital y traslado de infantería', () => {
   const m = W.crearMundo(31, { N: 128, logistica: true }), N = m.N, J = m.jug[0];
   m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
