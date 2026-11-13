@@ -1732,6 +1732,7 @@
     let freno = 1; // alambrada enemiga: a la infantería la frena mucho; un vehículo la aplasta al pasar
     if (m.muro && !d.aire) { const ca = Math.floor(u.y) * N + Math.floor(u.x); if (m.muro[ca] === 1 && m.muroJ[ca] - 1 !== u.j) { if (d.cat === 'veh') quitarMuro(m, ca); else freno = 0.3; } }
     if (m.crater && d.cat === 'veh') { const ca = Math.floor(u.y) * N + Math.floor(u.x); if (m.escombro[ca]) freno *= ECON.ruinaFreno; else if (m.crater[ca]) freno *= ECON.craterFreno; } // cascotes y cráteres frenan a los vehículos
+    if (u.desg >= ECON.desgLento) freno *= u.desg >= ECON.desgMal ? ECON.desgVel2 : ECON.desgVel1; // desgastado: más lento
     const vmax = (u.comb !== undefined && u.comb <= 0 ? 0 : 1) * freno * (u.tope && u.tope < vel && !u.suelto ? u.tope : vel) * (u.marcha ? u.fm || 1 : 1) * (u.orden === 'trazar' && !(viaDe(m)[u.j][Math.floor(u.y) * N + Math.floor(u.x)] && m.via[u.j][c]) ? ECON.trazaVel : d.cat === 'veh' && terr >= T.CAMINO && viaDe(m)[u.j][Math.floor(u.y) * N + Math.floor(u.x)] ? ECON.caminoVel : 1); // (trazando sobre camino ya hecho va a su paso normal) // por camino los vehículos van más rápido; trazándolo, despacio
     const alFinal = u.ri === u.ruta.length - 1 && u.fin;
     const carril = !alFinal && d.cat === 'veh' && u.orden !== 'trazar' && m.carrilX && m.carrilX[c] > 0 && m.mapa.terreno[c] >= T.CAMINO && viaDe(m)[u.j][c]; // por camino, los vehículos van por el carril y no por el centro de cada celda
@@ -2115,6 +2116,10 @@
       if (a.mun <= 0) { if (a.edif || UNID[a.tipo].cat !== 'inf') { a.recarga = 20; return; } arma = ARMAS.pistola; corta = true; }
       else if (--a.mun === 0) m.efectos.push({ tipo: 'sinMun', x1: posX(a), y1: posY(a), j: a.j, t: m.t });
     }
+    if (a.comb !== undefined) { // desgaste: cada tiro suma; muy desgastado, alguno se encasquilla
+      a.desg = Math.min(100, (a.desg || 0) + ECON.desgTiro);
+      if (a.desg >= ECON.desgMal && (a.id * 31 + m.t * 17) % 100 < ECON.desgFallo) { a.recarga = arma.recarga; a.tDisparo = m.t; m.efectos.push({ tipo: 'encasquilla', x1: posX(a), y1: posY(a), j: a.j, t: m.t }); return; }
+    }
     const clave = corta ? 'pistola' : a.edif ? EDIF[a.tipo].arma : UNID[a.tipo].arma, ax = posX(a), ay = posY(a), bx = posX(b), by = posY(b);
     const mult = (!a.edif && UNID[a.tipo].cat === 'inf' && m.jug[a.j].mejoras.perforante ? 1.25 : 1) * (a.edif ? 1 : 1 + ECON.rangoDano * a.rango);
     a.recarga = arma.recarga >= 8 ? Math.round(arma.recarga * (0.9 + ((a.id * 31 + m.t * 17) % 21) / 100)) : arma.recarga;
@@ -2274,11 +2279,11 @@
   function tickIngeniero(m, u) {
     const med = !!UNID[u.tipo].cura;
     let o = u.arregla ? m.porId.get(u.arregla) : null;
-    if (o && (o.vida <= 0 || o.vida >= o.vidaMax)) { o = null; u.arregla = 0; u.ruta = null; }
+    if (o && (o.vida <= 0 || (o.vida >= o.vidaMax && !(o.desg > 0)))) { o = null; u.arregla = 0; u.ruta = null; }
     if (!o && (m.t + u.id) % 10 === 0) {
       const du = UNID[u.tipo]; let md = u.guardia ? 1.6 : du.reparaR || ECON.reparaRadio;
       for (const e of m.ents) {
-        if (e.j !== u.j || e.vida >= e.vidaMax || e.vida <= 0 || e.enTierra || e === u) continue;
+        if (e.j !== u.j || (e.vida >= e.vidaMax && !(!med && e.desg > ECON.desgAviso)) || e.vida <= 0 || e.enTierra || e === u) continue; // dañado, o (para el ingeniero) desgastado
         if (med ? e.edif || UNID[e.tipo].cat !== 'inf' : !e.edif && UNID[e.tipo].cat !== 'veh') continue;
         if (du.soloEdif && !e.edif) continue; // el ingeniero civil solo arregla edificios y cables
         const dd = dist(u.x, u.y, e);
@@ -2290,6 +2295,7 @@
     if (dist(u.x, u.y, o) <= 1.6) {
       u.ruta = null; u.v = 0; u.ang = Math.atan2(posY(o) - u.y, posX(o) - u.x);
       o.vida = Math.min(o.vidaMax, o.vida + (med ? ECON.curaMedico : o.edif ? ECON.reparaEdif : ECON.reparaVeh)); o.curando = m.t;
+      if (!med && o.desg > 0) o.desg = Math.max(0, o.desg - ECON.desgRepara); // y le hace el mantenimiento
     } else {
       if (!u.pend && (!u.ruta || (!o.edif && (m.t + u.id) % 20 === 0))) pedirRuta(m, u, posX(o), posY(o), o.edif ? o.tam / 2 + 1 : 1);
       avanzar(m, u);
@@ -2601,10 +2607,11 @@
         if (fab.sinFondos) continue;
         cobrar(J, UNID[tipo]); fab.pago[0] = true;
       }
-      fab.prog += fab.hack > m.t ? 0 : base * (fab.sinLuz ? 0.5 : 1); // hackeado: parado
+      fab.prog += fab.hack > m.t ? 0 : base * (fab.sinLuz ? 0.5 : 1) * (m.logistica !== false && fab.desg >= ECON.desgProd1 ? (fab.desg >= ECON.desgProd2 ? 0.7 : 0.85) : 1); // hackeado: parado; desgastado: más lento
       if (fab.prog > q.prog) q.prog = fab.prog;
       if (fab.prog < UNID[tipo].tiempo) continue;
       fab.cola.shift(); fab.pago.shift(); fab.prog = 0; q.n--; J.aguaUso += UNID[tipo].agua || 0;
+      if (m.logistica !== false) fab.desg = Math.min(100, (fab.desg || 0) + ECON.desgProd); // cada unidad que saca lo desgasta un poco
       if (fab.bucle && (cat !== 'aire' || W.cupoAire(m, j, W.hangarDe(UNID[tipo])).hay + 1 < W.cupoAire(m, j, W.hangarDe(UNID[tipo])).cupo)) { fab.cola.push(tipo); fab.pago.push(false); q.n++; }
       const u = crearUnidad(m, j, tipo, cat === 'aire' ? Math.floor(fab.cy) * m.N + Math.floor(fab.cx) : W.cercaLibre(m, fab.cx, fab.y + fab.tam + 0.5, cat === 'veh'));
       if (cat === 'aire') { const casa = aerodromoLibre(m, u) || fab; posar(m, u, casa); } // el avión nace posado en un aeródromo con sitio
@@ -2797,7 +2804,8 @@
     for (let k = 0, n = m.ents.length; k < n; k++) {
       const e = m.ents[k];
       if (!e.edif) { if (e.comb === 0 && (e.orden === 'mover' || e.orden === 'amover' || e.patrulla)) { e.orden = 'nada'; e.ruta = null; e.pend = null; e.cola.length = 0; e.patrulla = null; } // sin combustible no hay marcha: se queda de guardia donde está
-        tickUnidad(m, e); if (e.comb !== undefined && e.comb > 0) { e.comb -= Math.hypot(e.x - e.px, e.y - e.py); if (e.comb <= 0) { e.comb = 0; m.efectos.push({ tipo: 'sinComb', x1: e.x, y1: e.y, j: e.j, t: m.t }); } } } // lo que anda, lo gasta
+        tickUnidad(m, e); if (e.comb !== undefined) e.desg = Math.min(100, (e.desg || 0) + Math.hypot(e.x - e.px, e.y - e.py) * ECON.desgCelda); // el vehículo de combate se desgasta con lo que anda
+        if (e.comb !== undefined && e.comb > 0) { e.comb -= Math.hypot(e.x - e.px, e.y - e.py); if (e.comb <= 0) { e.comb = 0; m.efectos.push({ tipo: 'sinComb', x1: e.x, y1: e.y, j: e.j, t: m.t }); } } } // lo que anda, lo gasta
       else if (e.hack > m.t) { e.obj = 0; } // edificio hackeado: apagado
       else if (EDIF[e.tipo].arma) tickTorreta(m, e);
       else if (EDIF[e.tipo].da) { // extracción continua; con déficit de energía rinde la mitad
@@ -2829,6 +2837,10 @@
         if (!dentro) for (const q of pts) if (q.j === u.j && (u.x - q.x) * (u.x - q.x) + (u.y - q.y) * (u.y - q.y) <= q.r2) { dentro = 1; q.u.sumiN++; break; } /* fuera de la red, pero junto a un camión o helicóptero de suministro plantado: gasta de su carga */
         u.sinSum = dentro ? Math.max(0, (u.sinSum || 0) - 40) : Math.min(ECON.sinSum + 200, (u.sinSum || 0) + 10);
         if (dentro && u.mun !== undefined) { const cap = W.munDe(u.tipo); if (u.mun < cap) u.mun = Math.min(cap, u.mun + Math.ceil(cap / 20)); } // repone munición (llena en diez segundos)
+        if (u.desg > 0) { // mantenimiento: dentro de la red (o con un camión de suministro), o junto a un taller de campaña parado
+          let mant = !!dentro; if (!mant) for (const tl of m.ents) if (!tl.edif && tl.j === u.j && tl.vida > 0 && UNID[tl.tipo].taller && tl !== u && tl.orden === 'nada' && Math.hypot(tl.x - u.x, tl.y - u.y) <= UNID[tl.tipo].taller) { mant = true; break; }
+          if (mant) u.desg = Math.max(0, u.desg - ECON.desgMant);
+        }
         if (dentro && u.minasQ !== undefined && u.minasQ < UNID[u.tipo].minasQ && m.t % 60 === 0) u.minasQ++;
         if (dentro && u.comb !== undefined && u.comb < ECON.combMax) { // reposta: dentro de la red o junto a un suministro móvil, y pagando petróleo
           const J = m.jug[u.j], cuanto = Math.min(ECON.combMax - u.comb, ECON.combCarga), precio = cuanto * ECON.combPet;

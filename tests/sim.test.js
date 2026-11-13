@@ -2385,6 +2385,42 @@ prueba('depósitos: van a 40 celdas o menos de la red, se cablean solos y hay qu
   const cerca = W.crearEdificio(m, 0, 'torreta', d2.x + dir * 30, py - 3); avanza(1500); assert.ok(cerca.conRed, 'a 30 celdas (más de lo que alcanza el cable automático) el ingeniero civil sí la conecta');
 });
 
+prueba('desgaste: el vehículo se desgasta al andar y disparar, va más lento y falla tiros; se le pasa en la red o junto a un taller; los edificios que producen, con el ingeniero civil', () => {
+  const m = W.crearMundo(31, { N: 256, logistica: true }), N = m.N, J = m.jug[0], E = W.ECON;
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const cel = (x, y) => y * N + x, patio = m.ents.find((e) => e.j === 0 && e.tipo === 'patio'), px = Math.floor(patio.cx), py = Math.floor(patio.cy), dir = px < 128 ? 1 : -1;
+  for (let y = py - 10; y <= py + 10; y++) for (let x = Math.min(px, px + dir * 150) - 4; x <= Math.max(px, px + dir * 150) + 4; x++) { const i = cel(x, y); if (x < 2 || y < 2 || x >= N - 2 || y >= N - 2 || m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.mapa.tipoMin[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  m.terrenoV++; m.niebla[0].fill(1); J.minerales = 20000; J.petroleo = 2000;
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  // 1) andando lejos de la red se desgasta: unos 12 puntos cada 100 celdas
+  const tq = W.crearUnidad(m, 0, 'tanque', cel(px + dir * 30, py)); tq.comb = 1e9; const x0 = tq.x;
+  W.orden(m, { t: 'mover', j: 0, ids: [tq.id], x: px + dir * 130 + 0.5, y: py + 0.5 }); avanza(3); for (let i = 0; i < 3000 && tq.orden !== 'nada'; i++) W.tick(m);
+  const andado = Math.abs(tq.x - x0); assert.ok(andado > 90 && Math.abs(tq.desg - andado * E.desgCelda) < 1.5, 'tras ' + Math.round(andado) + ' celdas lleva ' + tq.desg.toFixed(1) + ' de desgaste');
+  assert.ok(!(tq.desg >= E.desgLento), 'aún no le afecta');
+  // 2) desgastado va más lento; muy desgastado, más aún
+  const vel = (dg) => { tq.desg = dg; W.orden(m, { t: 'mover', j: 0, ids: [tq.id], x: tq.x - dir * 12, y: tq.y }); let mx = 0; for (let i = 0; i < 140; i++) { W.tick(m); tq.desg = dg; mx = Math.max(mx, tq.v); } return mx; };
+  const v0 = vel(10), v1 = vel(E.desgLento + 5), v2 = vel(E.desgMal + 5);
+  assert.ok(Math.abs(v1 / v0 - E.desgVel1) < 0.05 && Math.abs(v2 / v0 - E.desgVel2) < 0.05, 'a ' + (v1 / v0).toFixed(2) + ' y ' + (v2 / v0).toFixed(2) + ' de su velocidad');
+  // 3) muy desgastado falla tiros (y disparar desgasta)
+  const cuenta = (dg) => { tq.desg = dg; tq.mun = 9999; tq.orden = 'nada'; const en = W.crearUnidad(m, 1, 'pesado', cel(Math.floor(tq.x) - dir * 4, Math.floor(tq.y))); en.recarga = 99999; en.vidaMax = en.vida = 1e6; let tiros = 0, fallos = 0, ult = -1; for (let i = 0; i < 2400; i++) { W.tick(m); en.recarga = 99999; if (dg >= E.desgMal) tq.desg = dg; if (tq.tDisparo !== ult && tq.tDisparo !== undefined) { ult = tq.tDisparo; tiros++; } for (const f of m.efectos) if (f.tipo === 'encasquilla' && f.t === m.t - 1) fallos++; } en.vida = 0; W.tick(m); return [tiros, fallos]; };
+  const [t0, f0] = cuenta(0); assert.ok(t0 > 20 && f0 === 0, 'en buen estado no falla (' + t0 + ' tiros)'); assert.ok(tq.desg > t0 * E.desgTiro * 0.8, 'y disparar desgasta (' + tq.desg.toFixed(1) + ')');
+  const [t1, f1] = cuenta(E.desgMal + 5); assert.ok(f1 > 0 && f1 / t1 > 0.05 && f1 / t1 < 0.3, 'muy desgastado se le encasquillan ' + f1 + ' de ' + t1);
+  // 4) junto a un taller de campaña parado, fuera de la red, se le pasa
+  m.cascos = []; tq.desg = 80; const tl = W.crearUnidad(m, 0, 'tallerMovil', cel(Math.floor(tq.x) + 2, Math.floor(tq.y) + 1)); avanza(300);
+  assert.ok(tq.desg < 30, 'el taller de campaña le quita el desgaste (' + tq.desg.toFixed(0) + ')'); tl.vida = 0; avanza(2);
+  tq.desg = 80; avanza(300); assert.ok(tq.desg >= 79, 'sin taller ni red, no se le pasa');
+  // 5) dentro de la red se mantiene solo
+  const tb = W.crearUnidad(m, 0, 'tanque', cel(px + dir * 6, py + 3)); tb.desg = 80; avanza(450); assert.ok(tb.desg === 0, 'en la red, mantenimiento automático (' + tb.desg + ')');
+  // 6) el edificio que produce se desgasta y va más lento; el ingeniero civil lo mantiene
+  W.crearEdificio(m, 0, 'central', px + dir * 4, py + 5); const cu = W.crearEdificio(m, 0, 'cuartel', px + dir * 8, py - 5); W.crearEdificio(m, 0, 'bomba', px - dir * 2, py + 6); J.aguaProd = 99; avanza(120);
+  const tarda = () => { const n0 = m.ents.filter((e) => e.tipo === 'infanteria' && e.j === 0).length; W.orden(m, { t: 'entrenar', j: 0, tipo: 'infanteria' }); let k = 0; while (m.ents.filter((e) => e.tipo === 'infanteria' && e.j === 0).length === n0 && k < 3000) { W.tick(m); J.aguaProd = 99; k++; } return k; };
+  cu.desg = 0; const n1 = tarda(); assert.ok(Math.abs(cu.desg - E.desgProd) < 1e-9, 'cada unidad lo desgasta ' + E.desgProd);
+  cu.desg = E.desgProd2 + 1; const n2 = tarda(); assert.ok(n2 / n1 > 1.3 && n2 / n1 < 1.55, 'muy desgastado tarda ' + (n2 / n1).toFixed(2) + ' veces más');
+  const civ = W.crearUnidad(m, 0, 'civil', cel(px + dir * 5, py - 2)); avanza(900); assert.ok(cu.desg < 5, 'el ingeniero civil lo deja como nuevo (' + cu.desg.toFixed(0) + ')'); void civ;
+  // 7) en la partida clásica no hay desgaste
+  const c = W.crearMundo(31, { N: 128 }); const tc = W.crearUnidad(c, 0, 'tanque', (60 * 128) + 60); W.orden(c, { t: 'mover', j: 0, ids: [tc.id], x: 70.5, y: 60.5 }); for (let i = 0; i < 300; i++) W.tick(c); assert.ok(!tc.desg, 'sin infraestructura, sin desgaste');
+});
+
 prueba('tanda 5: puente aéreo, puesto de avanzada, hospital y traslado de infantería', () => {
   const m = W.crearMundo(31, { N: 128, logistica: true }), N = m.N, J = m.jug[0];
   m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);

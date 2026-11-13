@@ -204,6 +204,7 @@
         if (!e.edif && UNID[e.tipo].dronStock && e.j === YO && e.drStock !== undefined) { t += ' · repuestos: ' + e.drStock + (e.drFpv !== undefined ? ' drones y ' + e.drFpv + ' kamikazes' : ' drones'); const q = e.dr && e.dr.rec[0] ? m.porId.get(e.dr.rec[0]) : null; if (q && q.bat !== undefined && conRed) t += ' · batería ' + Math.round(q.bat / W.ECON.dronBat * 100) + ' %' + (q.casa2 ? (e.sinSum >= W.ECON.sinSum ? ' (posado: sin suministro no carga)' : ' (cargando)') : ''); }
         if (!e.edif && e.orden === 'zapar' && e.zapa && e.zapa.lista[0] && e.j === YO) t += ' · ' + ({ minar: 'minando', desminar: 'desminando', ponton: 'tendiendo un pontón', volar: 'va a volar un camino' })[e.zapa.lista[0].t];
         if (e.ponton) t += ' · pontón';
+        if (e.j === YO && conRed && e.desg >= 20) t += ' · desgaste ' + Math.round(e.desg) + ' %' + (e.edif ? (e.desg >= W.ECON.desgProd1 ? (e.desg >= W.ECON.desgProd2 ? ': produce al 70 %' : ': produce al 85 %') : '') : e.desg >= W.ECON.desgMal ? ': lento y falla tiros' : e.desg >= W.ECON.desgLento ? ': va más lento' : '');
         if (e.edif && EDIF[e.tipo].drones && e.j === YO && (e.sinLuz || (conRed && e.conRed === false))) t += ' · así sus drones no cargan batería';
         if (e.drLlama && e.j === YO) t += ' · drones llamados: posados hasta que los despliegues';
         if (!e.edif && UNID[e.tipo].ambu && e.j === YO && e.ambC !== undefined) { const a = e.amb || {}; t += ' · material ' + Math.round(e.ambC / UNID[e.tipo].ambu.carga * 100) + ' % · ' + (a.est === 'cura' ? 'atendiendo a un herido' : a.est === 'vuelve' || a.est === 'carga' ? 'recargando en el hospital' : a.est === 'ida' ? 'camino de su puesto' : a.punto ? 'en su puesto: cura a los heridos de la zona' : 'en el hospital: sale sola a por los heridos') + (a.punto ? ' · S: de vuelta al hospital' : ' · muévela y se queda a curar allí'); }
@@ -310,11 +311,13 @@
         if (conRed && e.conRed === false && !EDIF[e.tipo].helipuerto && !(EDIF[e.tipo].datos && EDIF[e.tipo].libre) && e.tipo !== 'torreRadio') return 'red'; // (la torre de vigilancia enlazada por radio no necesita cable; la torre de radio lleva su generador) // (la pista avanzada va fuera de la red a propósito)
         if (e.sinLuz) return 'luz';
         if (conRed && e.sinComb) return 'quema';
+        if (conRed && e.desg >= W.ECON.desgProd2) return 'desgE';
         if (conRed && e.tipo === 'extractor' && e.sinTubo) return 'tubo';
         if (e.cola && e.cola.length && e.sinAgua) return 'agua';
         return '';
       }
       if (e.comb !== undefined && e.comb <= 0) return 'comb';
+      if (conRed && e.desg >= W.ECON.desgMal) return 'desg';
       if (e.mun === 0) return 'mun';
       if (e.sinDron) return 'dron';
       if (conRed && UNID[e.tipo].drones && !UNID[e.tipo].mini && e.sinSum >= W.ECON.sinSum) return 'sumDron'; // el portador de drones sin suministro: no carga baterías ni repone
@@ -334,12 +337,15 @@
       hack: 'hackeado: apagado unos segundos',
       sumDron: 'sin suministro: sus drones no cargan batería ni se reponen · acércalo a tu red o a un camión de suministro',
       datos: 'sin enlace de datos: no te da visión · únelo a tu red o pon una torre de radio cerca',
+      desg: 'muy desgastado: va lento y falla tiros · llévalo a tu red, a un camión de suministro o a un taller de campaña',
+      desgE: 'muy desgastado: produce al 70 % · lo mantiene un ingeniero civil',
       quema: 'sin petróleo que quemar: da el 30 % · extrae petróleo o pon eólicas',
       tubo: 'sin oleoducto: rinde el 30 % · ingeniero civil, o una refinería o tanque a menos de 30 celdas',
     };
     function icono(x, y, k) { // disco rojo con el dibujo en blanco
       if (k === 'quema' || k === 'tubo') k = 'comb';
       if (k === 'sumDron') k = 'sum';
+      if (k === 'desg' || k === 'desgE') k = 'comb';
       if (k === 'datos') k = 'radio';
       ctx.fillStyle = P.mal; ctx.beginPath(); ctx.arc(x, y, 8, 0, TAU); ctx.fill();
       ctx.strokeStyle = '#ffffff'; ctx.fillStyle = '#ffffff'; ctx.lineWidth = 1.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath();
@@ -1632,7 +1638,7 @@
       extractor: 'Saca petróleo de un yacimiento y lo manda por un oleoducto que se tiende solo hasta la refinería, tanque o patio más cercano (30 celdas). Sin oleoducto, o si te lo cortan, rinde el 30 %.',
       radar: 'Nivel 2. No levanta la niebla ni dice qué hay, pero marca con un punto que pulsa cada unidad enemiga que esté a 60 celdas; el punto se actualiza cada 2 segundos. No detecta espías ni edificios. Necesita energía y red.',
       torreRadio: 'Da cobertura de radio a 60 celdas (el patio, 60; el vehículo de mando, 30; el puesto de avanzada, 35). Fuera de la cobertura tus unidades de tierra solo ven lo que tienen encima y obedecen con 3 segundos de retraso. El explorador, el espía y todo lo que vuela llevan radio propia. Se coloca en cualquier terreno explorado.', mina: 'Nivel 2. Se construye sobre un yacimiento de minerales y saca de un pozo profundo (40 000) de forma continua, sin cosechadoras: unos 400 por minuto, más si la mejoras. Hay que conectarla a la red.', almacen: 'Guarda 3000 minerales más. Con los almacenes llenos, lo que cosechas se pierde. Si te lo destruyen pierdes su parte, y la mitad queda en el suelo para quien la recoja.', tanqueComb: 'Guarda 800 de petróleo más. Si te lo destruyen, pierdes su parte.', pistaAv: 'Se coloca en cualquier terreno explorado, sin red ni energía. Clic derecho en ella con helicópteros de combate: la toman por base, repostan allí y su radio de vuelo se cuenta desde allí.', logistica: 'En la base: de aquí salen los camiones y helicópteros de suministro y los vuelos que mantienen los puestos de avanzada; tiene pista para trasladar infantería.', avanzada: 'No se construye: lo despliega el puesto móvil. Con enlace aéreo está en tu red, cura a la infantería cercana y tiene pista.',
-      tallerMovil: 'Parado, repara los vehículos que tenga a 4 celdas aunque estén sin suministro, y recupera los vehículos destruidos cercanos (tuyos o del rival) a mitad de precio: va solo, o clic derecho sobre el casco.',
+      tallerMovil: 'Parado, repara los vehículos que tenga a 4 celdas aunque estén sin suministro, y recupera los vehículos destruidos cercanos (tuyos o del rival) a mitad de precio: va solo, o clic derecho sobre el casco. También les quita el desgaste.',
       ambulancia: 'Sale sola del hospital a curar a la infantería herida que haya a 30 celdas y vuelve a recargar cuando se le acaba el material. Si la mueves a un punto, se queda allí curando a los de esa zona, y vuelve al hospital solo a recargar.',
       camionSum: 'Muévelo adonde esté tu ejército: se planta y da munición, combustible, minas y drones de repuesto a todo lo que tenga alrededor mientras le dure la carga (se gasta según cuántas unidades atiende). Vacío, vuelve solo al puesto logístico, recarga y regresa.', heliSum: 'Como el camión de suministro, pero volando: más rápido y sin rodeos; lleva la mitad de carga y la antiaérea lo derriba.',
       avanzadaMovil: 'Se despliega lejos como puesto de avanzada: red, hospital y pista sin tender líneas.',
@@ -1642,7 +1648,7 @@
       tanque: 'El vehículo de combate básico.', artilleria: 'Dispara muy lejos, en área, a lo que vea cualquiera de los tuyos.', pesado: 'Tanque lento, muy duro y de gran pegada.', blindado: 'Rápido, con ametralladora: contra infantería.', antiaereoMovil: 'Antiaérea sobre ruedas para acompañar al ejército.',
       radioOp: 'Lleva la radio a pie: da cobertura a 15 celdas a su alrededor, para que la tropa que acompaña vea y obedezca sin retraso lejos de tus torres.', vehRadio: 'Radio sobre ruedas: cobertura a 36 celdas. Sin armas; llévalo detrás del ejército.', dronRadio: 'Repetidor volante: cobertura a 30 celdas donde lo mandes patrullar, mientras le dure el combustible; luego vuelve a repostar a la central de inteligencia.',
       transporte: 'Lleva infantería dentro, rápido.', lanzacohetes: 'Salvas de cohetes a mucha distancia, sobre una zona.', mando: 'Los tuyos a su alrededor ven en redondo y giran más rápido; interfiere drones enemigos. Gasta información.', comandoDrones: 'Lleva drones de reconocimiento, bombarderos y kamikazes que atacan solos.',
-      patioMovil: 'Se despliega como un patio nuevo donde lo lleves.', cosechadora: 'Recoge minerales (y chatarra) y los lleva a la refinería.', excavadora: 'Traza caminos militares: abre el bosque y tiende puentes.', civil: 'En automático repara los edificios dañados, vuelve a tender los cables y oleoductos que corte el enemigo y rellena los cráteres. Con clic derecho sobre una ruina, la despeja. También conecta a mano edificios que queden a más de 24 celdas de la red.',
+      patioMovil: 'Se despliega como un patio nuevo donde lo lleves.', cosechadora: 'Recoge minerales (y chatarra) y los lleva a la refinería.', excavadora: 'Traza caminos militares: abre el bosque y tiende puentes.', civil: 'En automático repara y mantiene los edificios (los que producen se desgastan con el uso), vuelve a tender los cables y oleoductos que corte el enemigo y rellena los cráteres. Con clic derecho sobre una ruina, la despeja. También conecta a mano edificios que queden a más de 24 celdas de la red.',
       caza: 'Avión contra aviones y vehículos; ataca de pasada.', bombardero: 'Suelta bombas en área sobre edificios y tropa.', dron: 'Avión de reconocimiento de largo alcance, sin armas.', helicoptero: 'Se queda sobre el blanco; bueno contra vehículos.',
     };
     function pintarGuia() {
@@ -1926,6 +1932,8 @@
       hack: (n) => (n === 1 ? '1 edificio hackeado' : n + ' edificios hackeados'),
       sumDron: (n) => (n === 1 ? '1 portador de drones sin suministro: sus drones no cargan' : n + ' portadores de drones sin suministro: sus drones no cargan') + ' <small>· acércalo a tu red o a un camión</small>',
       datos: (n) => (n === 1 ? '1 sensor sin enlace de datos: no te da visión' : n + ' sensores sin enlace de datos: no te dan visión') + ' <small>· cable a la red o torre de radio</small>',
+      desg: (n) => (n === 1 ? '1 vehículo muy desgastado' : n + ' vehículos muy desgastados') + ' <small>· a la red o a un taller de campaña</small>',
+      desgE: (n) => (n === 1 ? '1 edificio muy desgastado: produce' : n + ' edificios muy desgastados: producen') + ' al 70 % <small>· ingeniero civil</small>',
       quema: (n) => (n === 1 ? '1 central sin petróleo: da' : n + ' centrales sin petróleo: dan') + ' el 30 % <small>· extrae petróleo o pon eólicas</small>',
       tubo: (n) => (n === 1 ? '1 extractor sin oleoducto: rinde' : n + ' extractores sin oleoducto: rinden') + ' el 30 % <small>· ingeniero civil</small>',
     };
