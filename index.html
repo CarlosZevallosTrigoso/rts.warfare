@@ -272,6 +272,7 @@
       <div class="fila" title="La semilla de este mapa. Clic para copiarla: con la misma semilla y el mismo tamaño, en el menú inicial, sale el mismo mapa."><span>semilla</span><b id="rSem" style="cursor:pointer;text-decoration:underline dotted"></b></div>
       <div class="fila" title="Se guardan en el patio y en los almacenes. Con todo lleno, lo que entra se pierde."><span>minerales</span><b id="rMin">0</b></div>
       <div class="fila" title="Lo da el extractor, sobre un yacimiento. Lo piden la fábrica y los vehículos."><span>petróleo</span><b id="rPet">0</b></div>
+      <div class="fila" id="filaAcero" title="Lo saca la fundición a partir del mineral (2 de mineral por 1 de acero). Lo piden los tanques, la artillería, la torre de cañón, la artillería fija y el búnker."><span>acero</span><b id="rAce">0</b></div>
       <div class="fila" title="Vetas violetas: señálalas con una cosechadora. Se usarán en lo avanzado."><span>raros</span><b id="rRar">0</b></div>
       <div class="fila" title="La da la estación, sobre un campo de conocimiento. Pagará tecnología y mejoras."><span>información</span><b id="rInf">0</b></div>
       <div class="fila" title="Usada / disponible. Cada unidad consume agua; el patio y las bombas la dan. Sin agua libre no sale más tropa."><span>agua</span><b id="rAgu">0 / 0</b></div>
@@ -346,12 +347,12 @@
   <button type="button" id="empezar">Empezar</button>
   <button type="button" id="tutorial">Tutorial guiado<small style="display:block;color:var(--suave);font-size:10px">ocho pasos, con el rival dormido hasta el final</small></button>
   <button type="button" id="continuar" hidden>Continuar la partida guardada</button>
-  <div id="version">versión 90</div>
+  <div id="version">versión 91</div>
 </div></div>
 <div id="guia" hidden><div class="caja"><div class="cab"><strong>Guía: para qué sirve cada cosa</strong><button type="button" id="cierraGuia">cerrar</button></div><div id="guiaTxt"></div></div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finVer" href="#" title="Vuelve a ver la partida entera, con todo el mapa a la vista y a la velocidad que quieras.">ver repetición</a><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 90' };
+globalThis.W = { VERSION: 'versión 91' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -390,7 +391,7 @@ globalThis.W = { VERSION: 'versión 90' };
     extractor: { nombre: 'Extractor', tam: 2, vida: 600,  costo: 700,  tiempo: 300, energia: -20, vision: 5, req: ['refineria'], sobre: 'petroleo', libre: true, da: { rec: 'petroleo', cada: 6 }, mejora: true },
     fabrica:   { nombre: 'Fábrica',   tam: 3, vida: 1000, costo: 1400, pet: 100, tiempo: 500, energia: -40, vision: 5, req: ['refineria'] },
     torreta:   { nombre: 'Torreta',   tam: 1, vida: 600,  costo: 350,  tiempo: 300, energia: -25, vision: 8, req: ['cuartel'], arma: 'bateria', giroT: 0.2 },
-    torreCanon: { nombre: 'Torre de cañón', tam: 2, vida: 1100, costo: 900, pet: 60, tiempo: 500, energia: -40, vision: 9, req: ['fabrica'], arma: 'canonTorre', nivel: 2, giroT: 0.1 },
+    torreCanon: { nombre: 'Torre de cañón', tam: 2, vida: 1100, costo: 900, acero: 80, pet: 60, tiempo: 500, energia: -40, vision: 9, req: ['fabrica'], arma: 'canonTorre', nivel: 2, giroT: 0.1 },
     aerodromo: { nombre: 'Aeródromo', tam: 3, vida: 900,  costo: 1600, pet: 150, tiempo: 500, energia: -40, vision: 6, req: ['fabrica'], nivel: 2 },
     antiaerea: { nombre: 'Antiaérea', tam: 1, vida: 500,  costo: 450,  tiempo: 300, energia: -20, vision: 9, req: ['cuartel'], arma: 'flak', nivel: 2, giroT: 0.28 },
     estacion:  { nombre: 'Estación',  tam: 2, vida: 500,  costo: 900,  tiempo: 400, energia: -30, vision: 7, req: ['cuartel'], sobre: 'conocimiento', libre: true, da: { rec: 'info', cada: 20 }, mejora: true },
@@ -424,12 +425,15 @@ globalThis.W = { VERSION: 'versión 90' };
     // de radio. Sin enlace siguen en pie, pero no te dan visión ni descubren a nadie, y la artillería solo tira a lo que ve ella misma.
     // Defensas baratas. Búnker: hasta 4 de infantería entran (clic derecho sobre él) y disparan desde dentro recibiendo la cuarta parte del daño.
     // Torre de vigilancia: sin armas, ve muy lejos y descubre a los escondidos. Artillería fija: mucho alcance, no dispara a lo que tiene encima.
-    bunker:    { nombre: 'Búnker', tam: 1, vida: 900, costo: 250, tiempo: 200, energia: 0, vision: 7, req: ['cuartel'], bunker: 4 },
+    bunker:    { nombre: 'Búnker', tam: 1, vida: 900, costo: 250, acero: 30, tiempo: 200, energia: 0, vision: 7, req: ['cuartel'], bunker: 4 },
     vigia:     { nombre: 'Torre de vigilancia', tam: 1, vida: 250, costo: 150, tiempo: 120, energia: 0, vision: 16, req: ['cuartel'], libre: true, detecta: 8, datos: true },
-    artFija:   { nombre: 'Artillería fija', tam: 2, vida: 700, costo: 1000, pet: 50, tiempo: 450, energia: -30, vision: 8, req: ['fabrica'], arma: 'obusFijo', nivel: 2, giroT: 0.06, datos: true },
+    artFija:   { nombre: 'Artillería fija', tam: 2, vida: 700, costo: 1000, acero: 100, pet: 50, tiempo: 450, energia: -30, vision: 8, req: ['fabrica'], arma: 'obusFijo', nivel: 2, giroT: 0.06, datos: true },
     // Hospital: cura a la infantería que tenga a 6 celdas y aloja hasta 3 ambulancias (llega con una). Las ambulancias salen solas a curar a los heridos
     // que haya a 30 celdas de su puesto (el hospital, o el punto adonde las mandes), y vuelven a recargar cuando se les acaba el material.
     hospital:  { nombre: 'Hospital', tam: 2, vida: 700, costo: 600, tiempo: 300, energia: -20, vision: 6, req: ['cuartel'], cura: 6, ambulancias: 3, radioAmb: 30 },
+    // Fundición: convierte mineral en acero (2 de mineral por 1 de acero, 120 por minuto). Lo pesado pide acero además de mineral: tanques, artillería,
+    // lanzacohetes, torre de cañón, artillería fija y búnker. Cada fundición amplía lo que se puede guardar.
+    fundicion: { nombre: 'Fundición', tam: 2, vida: 800, costo: 700, tiempo: 300, energia: -30, vision: 5, req: ['refineria'], funde: true },
     radar:     { nombre: 'Radar', tam: 2, vida: 400, costo: 700, tiempo: 300, energia: -40, vision: 6, req: ['fabrica'], nivel: 2, radar: 60 }, // no levanta la niebla: marca con un punto lo que se mueve dentro de su alcance
     // Mina: se construye sobre un yacimiento de minerales y saca de un pozo profundo, de forma continua y sin cosechadoras. Hay que conectarla a la red.
     mina:      { nombre: 'Mina', tam: 2, vida: 800, costo: 1200, tiempo: 400, energia: -30, vision: 5, req: ['refineria'], nivel: 2, sobreMineral: true, libre: true, da: { rec: 'minerales', cada: 3 }, mejora: true },
@@ -454,12 +458,12 @@ globalThis.W = { VERSION: 'versión 90' };
   // agua: cuánta agua consume mientras vive (el agua es un balance, como la energía, y limita la tropa).
   W.UNID = {
     infanteria:  { nombre: 'Infantería',  cat: 'inf', vida: 60,  vel: 0.06, costo: 100, tiempo: 100, blindaje: 'ligero', arma: 'fusil', vision: 6, radio: 0.11, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, arco: 0.5 },
-    tanque:      { nombre: 'Tanque',      cat: 'veh', vida: 300, vel: 0.10, costo: 600, pet: 50, tiempo: 300, blindaje: 'pesado', arma: 'canon', vision: 7, radio: 0.20, req: ['fabrica'], agua: 2, giro: 0.13, acel: 0.006, giroT: 0.16, cono: 0.85 },
+    tanque:      { nombre: 'Tanque',      cat: 'veh', vida: 300, vel: 0.10, costo: 600, acero: 40, pet: 50, tiempo: 300, blindaje: 'pesado', arma: 'canon', vision: 7, radio: 0.20, req: ['fabrica'], agua: 2, giro: 0.13, acel: 0.006, giroT: 0.16, cono: 0.85 },
     // Granadero: desde el nivel 1; granadas de mano a corta distancia, con explosión en área. La respuesta temprana a los primeros vehículos.
     granadero:   { nombre: 'Granadero',   cat: 'inf', vida: 65,  vel: 0.058, costo: 160, tiempo: 130, blindaje: 'ligero', arma: 'granadaMano', vision: 6, radio: 0.11, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, arco: 0.5 },
     antitanque:  { nombre: 'Antitanque',  cat: 'inf', vida: 70,  vel: 0.055, costo: 250, tiempo: 160, blindaje: 'ligero', arma: 'cohete', vision: 6, radio: 0.115, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, arco: 0.35 },
-    artilleria:  { nombre: 'Artillería',  cat: 'veh', vida: 180, vel: 0.06, costo: 900, pet: 70, tiempo: 400, blindaje: 'pesado', arma: 'obus', vision: 7, radio: 0.21, req: ['fabrica'], agua: 2, giro: 0.08, acel: 0.004, nivel: 2, cono: 0.7 },
-    pesado:      { nombre: 'Tanque pesado', cat: 'veh', vida: 700, vel: 0.07, costo: 1500, pet: 120, raros: 60, tiempo: 520, blindaje: 'pesado', arma: 'canonPesado', vision: 7, radio: 0.27, req: ['fabrica'], agua: 3, giro: 0.08, acel: 0.004, nivel: 3, giroT: 0.1, cono: 0.8 },
+    artilleria:  { nombre: 'Artillería',  cat: 'veh', vida: 180, vel: 0.06, costo: 900, acero: 50, pet: 70, tiempo: 400, blindaje: 'pesado', arma: 'obus', vision: 7, radio: 0.21, req: ['fabrica'], agua: 2, giro: 0.08, acel: 0.004, nivel: 2, cono: 0.7 },
+    pesado:      { nombre: 'Tanque pesado', cat: 'veh', vida: 700, vel: 0.07, costo: 1500, acero: 90, pet: 120, raros: 60, tiempo: 520, blindaje: 'pesado', arma: 'canonPesado', vision: 7, radio: 0.27, req: ['fabrica'], agua: 3, giro: 0.08, acel: 0.004, nivel: 3, giroT: 0.1, cono: 0.8 },
     // Aviación (cat 'aire', sale del aeródromo): vuela sobre cualquier terreno y en línea recta. fuel: ticks de vuelo;
     // pasada: ataca de pasada, como un avión: entra hacia el blanco disparando, sigue de largo, vira y vuelve a entrar.
     // (El helicóptero no: se queda en el aire frente al blanco.)
@@ -498,7 +502,7 @@ globalThis.W = { VERSION: 'versión 90' };
     // Hacker: no combate. Por orden, apaga desde lejos un vehículo o un edificio enemigo durante unos segundos; cada hackeo cuesta información.
     hacker:      { nombre: 'Hacker',      cat: 'inf', vida: 45,  vel: 0.06, costo: 400, info: 30, tiempo: 240, blindaje: 'ligero', arma: null, vision: 8, radio: 0.105, req: ['estacion'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, hackea: true, alcanceHack: 9 },
     transporte:  { nombre: 'Transporte', cat: 'veh', vida: 260, vel: 0.13, costo: 500, pet: 30, tiempo: 220, blindaje: 'pesado', arma: null, vision: 7, radio: 0.24, req: ['fabrica'], agua: 1, giro: 0.14, acel: 0.008, nivel: 2, plazas: 6 },
-    lanzacohetes: { nombre: 'Lanzacohetes', cat: 'veh', vida: 200, vel: 0.07, costo: 1300, pet: 90, raros: 50, tiempo: 480, blindaje: 'pesado', arma: 'salva', vision: 7, radio: 0.23, req: ['fabrica'], agua: 2, giro: 0.07, acel: 0.004, nivel: 3, arco: 0.1, cono: 0.7 },
+    lanzacohetes: { nombre: 'Lanzacohetes', cat: 'veh', vida: 200, vel: 0.07, costo: 1300, acero: 60, pet: 90, raros: 50, tiempo: 480, blindaje: 'pesado', arma: 'salva', vision: 7, radio: 0.23, req: ['fabrica'], agua: 2, giro: 0.07, acel: 0.004, nivel: 3, arco: 0.1, cono: 0.7 },
     mando:       { nombre: 'Vehículo de mando', cat: 'veh', vida: 300, vel: 0.08, costo: 1200, pet: 60, tiempo: 420, blindaje: 'pesado', arma: null, vision: 8, radio: 0.24, req: ['fabrica'], agua: 2, giro: 0.1, acel: 0.005, nivel: 3, mando: 7, radioCom: 30, enlace: true },
     caza:        { nombre: 'Caza',        cat: 'aire', aire: true, vida: 160, vel: 0.22, costo: 900, pet: 120, tiempo: 360, blindaje: 'aire', arma: 'misil', vision: 9, radio: 0.25, req: ['aerodromo'], agua: 1, giro: 0.16, acel: 0.012, nivel: 2, fuel: 1800, arco: 0.3, radioVuelo: 70, pasada: true },
     bombardero:  { nombre: 'Bombardero',  cat: 'aire', aire: true, vida: 260, vel: 0.15, costo: 1600, pet: 200, raros: 40, tiempo: 520, blindaje: 'aire', arma: 'bomba', vision: 8, radio: 0.38, req: ['aerodromo'], agua: 2, giro: 0.09, acel: 0.008, nivel: 3, fuel: 2400, radioVuelo: 90, pasada: true },
@@ -606,7 +610,7 @@ globalThis.W = { VERSION: 'versión 90' };
     minaPozo: 40000, // minerales del pozo de una mina (más lo que hubiera en la superficie que tapa)
     vigilaRadio: 8, vigilaMax: 14, protegeDist: 4,
     espiaRadio: 6, espiaInfo: 2, sumiBase: 1, sumiUnidad: 0.5, sumiCarga: 40, // suministro móvil: gasto por ciclo (medio segundo) en vacío y por unidad atendida; y lo que carga por ciclo en el puesto logístico
-    dronMisRadio: 8, autoReserva: 400, autoLargo: 70, cableMax: 24, desgCelda: 0.12, desgTiro: 0.1, desgLento: 60, desgMal: 85, desgVel1: 0.85, desgVel2: 0.7, desgFallo: 15, desgMant: 2, desgRepara: 1, desgAviso: 30, desgProd: 5, desgProd1: 50, desgProd2: 80, /* desgaste (0 a 100). Vehículos de combate: lo que suma cada celda andada y cada disparo; desde desgLento van a desgVel1 de su velocidad, y desde desgMal a desgVel2 y fallan desgFallo de cada 100 tiros. Con suministro (o junto a un taller de campaña) baja desgMant cada medio segundo; un ingeniero lo baja desgRepara por tick. Edificios que producen: desgProd por unidad hecha; desde desgProd1 producen al 85 % y desde desgProd2 al 70 % */ depositoMax: 40, lineaMax: 40, /* un depósito va, como mucho, a esa distancia de un edificio conectado (y se cablea solo hasta él); ninguna línea de servicio puede ser más larga */ sinEnlaceVision: 2, ruinaVale: 0.25, despejaT: 200, craterMax: 300, craterArea: 1.4, craterFreno: 0.5, ruinaFreno: 0.4, craterDano: 150, rellenaT: 60, /* ruinas: lo que se recupera al reconstruir encima y lo que tarda en despejarse una; cráteres: tope, radio mínimo de explosión que los deja, freno a los vehículos, daño a cables y caminos, y lo que tarda en rellenarse uno */ tuboMax: 30, sinTubo: 0.3, quemaCada: 80, sinCombEnergia: 0.3, /* oleoducto: largo máximo y rendimiento del extractor sin él; central: cada cuántos ticks quema 1 de petróleo y qué fracción da sin él */ bunkerDano: 0.25, ambCarga: 8, hospitalCura: 0.6, /* largo máximo del cable que un edificio nuevo tiende solo hasta la red */
+    dronMisRadio: 8, autoReserva: 400, autoLargo: 70, cableMax: 24, aceroInicio: 300, aceroBase: 400, aceroPorFund: 600, aceroMin: 2, aceroReserva: 300, /* acero: con cuánto se empieza, cuánto cabe sin fundición y cuánto añade cada una, cuánto mineral cuesta cada unidad, y por debajo de cuánto mineral la fundición no trabaja (para no dejarte seco) */ desgCelda: 0.12, desgTiro: 0.1, desgLento: 60, desgMal: 85, desgVel1: 0.85, desgVel2: 0.7, desgFallo: 15, desgMant: 2, desgRepara: 1, desgAviso: 30, desgProd: 5, desgProd1: 50, desgProd2: 80, /* desgaste (0 a 100). Vehículos de combate: lo que suma cada celda andada y cada disparo; desde desgLento van a desgVel1 de su velocidad, y desde desgMal a desgVel2 y fallan desgFallo de cada 100 tiros. Con suministro (o junto a un taller de campaña) baja desgMant cada medio segundo; un ingeniero lo baja desgRepara por tick. Edificios que producen: desgProd por unidad hecha; desde desgProd1 producen al 85 % y desde desgProd2 al 70 % */ depositoMax: 40, lineaMax: 40, /* un depósito va, como mucho, a esa distancia de un edificio conectado (y se cablea solo hasta él); ninguna línea de servicio puede ser más larga */ sinEnlaceVision: 2, ruinaVale: 0.25, despejaT: 200, craterMax: 300, craterArea: 1.4, craterFreno: 0.5, ruinaFreno: 0.4, craterDano: 150, rellenaT: 60, /* ruinas: lo que se recupera al reconstruir encima y lo que tarda en despejarse una; cráteres: tope, radio mínimo de explosión que los deja, freno a los vehículos, daño a cables y caminos, y lo que tarda en rellenarse uno */ tuboMax: 30, sinTubo: 0.3, quemaCada: 80, sinCombEnergia: 0.3, /* oleoducto: largo máximo y rendimiento del extractor sin él; central: cada cuántos ticks quema 1 de petróleo y qué fracción da sin él */ bunkerDano: 0.25, ambCarga: 8, hospitalCura: 0.6, /* largo máximo del cable que un edificio nuevo tiende solo hasta la red */
     rutaNodos: 30000, // presupuesto de celdas que se exploran por tick buscando rutas
     misilesMax: 10, mejoraMax: 3, mejoraCosto: 0.6, mejoraBono: 0.5, // mejora de un edificio: hasta nivel 3; cada nivel cuesta el 60 % del edificio por el nivel que tiene y rinde un 50 % más
     inicio: 2500, petInicio: 150, cosecha: 5, descarga: 25, colaMax: 9, separacionColocar: 3, goteoCada: 5, vistaInicial: 22, obrasMax: 8, curaUnidad: 0.01, curaEdificio: 0.0025, curaCosto: 0.15, venta: 0.5, trinchera: 0.45, arco: 0.14, arcoTrinchera: 1.05, visAd: 1.3, visLado: 0.75, visAt: 0.3, cono: 1.05, periferia: 1.83, flanco: 1.25, espalda: 1.5, bosqueVeh: 0.6, bosqueCubre: 0.7, reposta: 12, retiroBajo: 0.3, retiroAlto: 0.9, huida: 300, dia: 9600, diaLuz: 6000, nocheVis: 0.7, caminoVel: 1.6, tramoLargo: 4, enlace: 5, cobNodo: 14, cobEdif: 6, lineaVel: 0.12, lineaCelda: 3, sinSum: 400, sinSumRecarga: 1.5, abastDura: 1500, heliRepone: 300, cobAvanzada: 10, hospitalCura: 2, dronFpv: 40, dronBomba: 15, dronRepone: 200, dronFpvCada: 60, hackInfo: 25, hackVeh: 240, hackEdif: 300, hackRecarga: 200, hackCanal: 40, trazaVel: 0.45, caminoLlano: 4, caminoBosque: 12, caminoAgua: 30, mandoCada: 40, mandoGiro: 1.5, captura: 600, capturaRadio: 2, antenaRadio: 12, depositoCada: 8, tallerRadio: 4, ocultaVe: 2.5, chatarra: 0.25, reparaRadio: 8, reparaVeh: 0.5, curaMedico: 0.35, reparaEdif: 0.8, rangos: [2, 5, 10], rangoDano: 0.1, rangoVida: 0.1, cupoAviones: 5, pasada: 7, orbita: 3.5, fuelCae: 80, cavar: 80, aplasta: 10, bonoProd: 0.5, bonoMax: 2.5 };
@@ -1018,6 +1022,7 @@ globalThis.W = { VERSION: 'versión 90' };
       const haciaCentro = j === 0 ? 1 : -1;
       for (let k = 0; k < 2; k++) crearUnidad(m, j, 'infanteria', W.cercaLibre(m, b.x + (3 + k) * haciaCentro, b.y - 3 * haciaCentro));
     }
+    if (m.logistica !== false) for (const J of m.jug) J.acero = ECON.aceroInicio; // el acero solo existe en la partida con infraestructura
     // Los alrededores de cada base ya se conocen al empezar: ahí están el agua, el campo y el primer yacimiento.
     for (let j = 0; j < 2; j++) {
       const b = mapa.bases[j], R = ECON.vistaInicial;
@@ -2023,9 +2028,22 @@ globalThis.W = { VERSION: 'versión 90' };
   }
 
   // ---------- pagos ----------
-  W.puedePagar = function (J, d) { return J.minerales >= (d.costo || 0) && J.petroleo >= (d.pet || 0) && J.raros >= (d.raros || 0) && J.info >= (d.info || 0); };
-  function cobrar(J, d) { J.minerales -= d.costo || 0; J.petroleo -= d.pet || 0; J.raros -= d.raros || 0; J.info -= d.info || 0; }
-  function devolver(J, d) { J.minerales += d.costo || 0; J.petroleo += d.pet || 0; J.raros += d.raros || 0; J.info += d.info || 0; }
+  // El acero solo cuenta en la partida con infraestructura (J.acero definido); el modo ADMIN no lo pide.
+  W.puedePagar = function (J, d) { return J.minerales >= (d.costo || 0) && J.petroleo >= (d.pet || 0) && J.raros >= (d.raros || 0) && J.info >= (d.info || 0) && (J.acero === undefined || J.dios || J.acero >= (d.acero || 0)); };
+  function cobrar(J, d) { J.minerales -= d.costo || 0; J.petroleo -= d.pet || 0; J.raros -= d.raros || 0; J.info -= d.info || 0; if (J.acero !== undefined && !J.dios) J.acero -= d.acero || 0; }
+  function devolver(J, d) { J.minerales += d.costo || 0; J.petroleo += d.pet || 0; J.raros += d.raros || 0; J.info += d.info || 0; if (J.acero !== undefined && !J.dios) J.acero += d.acero || 0; }
+  W.capAcero = (J) => ECON.aceroBase + ECON.aceroPorFund * (J.cuenta.fundicion || 0);
+  // Fundiciones: cada medio segundo, cada una en la red y con energía pasa aceroMin de mineral a 1 de acero (a media marcha, la mitad), mientras quepa y sobre mineral.
+  function tickFundiciones(m) {
+    for (const e of m.ents) {
+      if (!e.edif || e.vida <= 0 || !EDIF[e.tipo].funde || e.hack > m.t || e.conRed === false) continue;
+      const J = m.jug[e.j]; if (J.acero === undefined) continue;
+      if (e.sinLuz && (m.t / 10) % 2 === 1) continue;
+      e.parada = J.acero >= W.capAcero(J) ? 'lleno' : J.minerales < ECON.aceroReserva + ECON.aceroMin ? 'mineral' : '';
+      if (e.parada) continue;
+      J.minerales -= ECON.aceroMin; J.acero += 1; J.fundido = (J.fundido || 0) + 1;
+    }
+  }
 
   // ---------- comandos ----------
   // Con m.registro (una lista), cada orden queda apuntada con su tick: reproducidas en un mundo igual, dan la misma partida.
@@ -3798,6 +3816,7 @@ globalThis.W = { VERSION: 'versión 90' };
     if (m.t % 10 === 5) tickEscoltas(m);
     if (m.t % 40 === 7) tickRadar(m);
     if (m.logistica !== false && m.t % ECON.quemaCada === 11) tickCentrales(m);
+    if (m.logistica !== false && m.t % 10 === 6) tickFundiciones(m);
     if (m.t % 10 === 0 && m.logistica !== false) { // suministro: fuera de la cobertura el contador sube; dentro, baja rápido. Los aviones repostan en su base: no cuenta.
       const pts = tickSuministro(m);
       for (const e of m.gr.edifs) { if (!EDIF[e.tipo].arma) continue; const cap = W.munDe(e.tipo, true); if (e.mun === undefined) e.mun = cap; else if (e.mun < cap && e.conRed !== false && !e.sinLuz) e.mun = Math.min(cap, e.mun + Math.ceil(cap / 40)); } // las torres reponen por la red
@@ -4072,6 +4091,7 @@ globalThis.W = { VERSION: 'versión 90' };
       else if (!c.hospital && m.t > 12000 && J.minerales > 1500 && puede('hospital')) quiereNuevo = 'hospital';
       else if (!c.artFija && J.nivel >= 2 && m.t > 20000 && J.minerales > 2600 && ia.estilo !== 'asalto' && puede('artFija')) quiereNuevo = 'artFija';
       else if (!c.estDrones && m.t > 9000 && J.minerales > 1200 && puede('estDrones')) quiereNuevo = 'estDrones';
+      if (J.acero !== undefined && c.refineria && (c.fundicion || 0) < (m.t > 30000 && J.acero < 150 ? 2 : 1) && (c.fabrica || J.acero < 200) && J.minerales > 900 && puede('fundicion')) quiereNuevo = 'fundicion'; // acero para los tanques: lo primero en cuanto hay fábrica
       else if (!c.camara && m.t > 14000 && J.minerales > 1200 && puede('camara')) quiereNuevo = 'camara';
       else if (!c.logistica && m.logistica !== false && m.t > 18000 && J.minerales > 2000 && puede('logistica')) quiereNuevo = 'logistica'; // (antes que la central de inteligencia: sin suministro, sus oleadas pelean a media fuerza)
       else if (!c.inteligencia && m.t > 24000 && J.minerales > 3200 && puede('inteligencia')) quiereNuevo = 'inteligencia';
@@ -4171,6 +4191,7 @@ globalThis.W = { VERSION: 'versión 90' };
       if (J.nivel >= 2 && (c.antiaereoMovil || 0) < 1 + Math.floor(((c.tanque || 0) + (c.pesado || 0)) / 8)) veh = 'antiaereoMovil'; // escolta antiaérea para las columnas
       else if (J.nivel >= 3 && (c.pesado || 0) < 5 && W.puedePagar(J, UNID.pesado)) veh = 'pesado';
       else if (J.nivel >= 2 && (c.artilleria || 0) * 4 < (c.tanque || 0)) veh = 'artilleria';
+      if (J.acero !== undefined && J.acero < (UNID[veh].acero || 0)) veh = 'blindado'; // sin acero para lo pesado: blindados ligeros mientras la fundición trabaja
       // Aviación: cazas, un dron y, con nivel 3, helicópteros y bombarderos; uno a la vez. El estilo aéreo la compra antes que los tanques.
       let av = null;
       if (c.aerodromo && !(J.colas.caza.n + J.colas.bombardero.n + J.colas.helicoptero.n + J.colas.dron.n)) {
@@ -5182,6 +5203,11 @@ globalThis.W = { VERSION: 'versión 90' };
       c.strokeStyle = col.osc; c.lineWidth = lw * 2.4; c.beginPath(); c.arc(X(0.5), Y(0.2), t * 0.4, 0.25, Math.PI - 0.25); c.stroke();
       c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = lw; c.beginPath(); c.rect(X(0.3), Y(0.62), t * 0.4, t * 0.24); c.fill(); c.stroke();
       c.strokeStyle = col.luz; c.lineWidth = lw; c.beginPath(); for (const fx of [0.38, 0.5, 0.62]) { c.moveTo(X(fx), Y(0.46)); c.lineTo(X(fx), Y(0.6)); } c.stroke();
+    } else if (e.tipo === 'fundicion') { // nave con horno (boca al rojo) y chimenea
+      c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = lw; c.beginPath(); c.rect(X(0.12), Y(0.34), t * 0.76, t * 0.5); c.fill(); c.stroke();
+      c.fillStyle = col.osc; c.fillRect(X(0.66), Y(0.08), t * 0.14, t * 0.3); c.beginPath(); c.moveTo(X(0.12), Y(0.34)); c.lineTo(X(0.3), Y(0.2)); c.lineTo(X(0.48), Y(0.34)); c.closePath(); c.fill();
+      c.fillStyle = s.deficit ? col.humo : col.fuego; c.beginPath(); c.arc(X(0.36), Y(0.84), t * 0.13, Math.PI, 0); c.closePath(); c.fill();
+      c.fillStyle = col.luz; c.fillRect(X(0.56), Y(0.5), t * 0.22, t * 0.08); c.fillRect(X(0.56), Y(0.64), t * 0.22, t * 0.08);
     } else if (e.tipo === 'radar') { // plato que gira sobre su base, con el haz de barrido
       const px = X(0.5), py = Y(0.5), a = s.deficit ? 0.6 : s.tiempo * 0.0016;
       c.fillStyle = col.osc; c.beginPath(); c.arc(px, py, t * 0.3, 0, TAU); c.fill();
@@ -5412,7 +5438,7 @@ globalThis.W = { VERSION: 'versión 90' };
 
     // Volumen: la vista sigue siendo cenital, pero cada cosa tiene altura. Los edificios muestran su pared sur y el tejado
     // se dibuja desplazado hacia arriba; las unidades llevan un canto; la roca y el agua, un escalón.
-    const ALTO = { patio: 0.3, central: 0.36, refineria: 0.32, bomba: 0.2, cuartel: 0.26, extractor: 0.3, fabrica: 0.34, torreta: 0.22, torreCanon: 0.36, aerodromo: 0.08, antiaerea: 0.22, estacion: 0.26, deposito: 0.22, obras: 0.28, misilera: 0.12, interceptor: 0.24, torretaMuro: 0.34, camara: 0.3, estDrones: 0.14, laboratorio: 0.26, logistica: 0.16, avanzada: 0.2, inteligencia: 0.3, pistaAv: 0.04, almacen: 0.22, tanqueComb: 0.18, torreRadio: 0.5, mina: 0.3, radar: 0.3, eolica: 0.55, hidro: 0.26, bunker: 0.14, vigia: 0.6, artFija: 0.14, hospital: 0.28 };
+    const ALTO = { patio: 0.3, central: 0.36, refineria: 0.32, bomba: 0.2, cuartel: 0.26, extractor: 0.3, fabrica: 0.34, torreta: 0.22, torreCanon: 0.36, aerodromo: 0.08, antiaerea: 0.22, estacion: 0.26, deposito: 0.22, obras: 0.28, misilera: 0.12, interceptor: 0.24, torretaMuro: 0.34, camara: 0.3, estDrones: 0.14, laboratorio: 0.26, logistica: 0.16, avanzada: 0.2, inteligencia: 0.3, pistaAv: 0.04, almacen: 0.22, tanqueComb: 0.18, torreRadio: 0.5, mina: 0.3, radar: 0.3, fundicion: 0.34, eolica: 0.55, hidro: 0.26, bunker: 0.14, vigia: 0.6, artFija: 0.14, hospital: 0.28 };
     function entEn(wx, wy, holgura) { // holgura: margen extra (en celdas) para acertar con el dedo
       let mejor = null, md = Infinity;
       for (const e of m.ents) {
@@ -5465,6 +5491,7 @@ globalThis.W = { VERSION: 'versión 90' };
         if (!e.edif && UNID[e.tipo].dronStock && e.j === YO && e.drStock !== undefined) { t += ' · repuestos: ' + e.drStock + (e.drFpv !== undefined ? ' drones y ' + e.drFpv + ' kamikazes' : ' drones'); const q = e.dr && e.dr.rec[0] ? m.porId.get(e.dr.rec[0]) : null; if (q && q.bat !== undefined && conRed) t += ' · batería ' + Math.round(q.bat / W.ECON.dronBat * 100) + ' %' + (q.casa2 ? (e.sinSum >= W.ECON.sinSum ? ' (posado: sin suministro no carga)' : ' (cargando)') : ''); }
         if (!e.edif && e.orden === 'zapar' && e.zapa && e.zapa.lista[0] && e.j === YO) t += ' · ' + ({ minar: 'minando', desminar: 'desminando', ponton: 'tendiendo un pontón', volar: 'va a volar un camino' })[e.zapa.lista[0].t];
         if (e.ponton) t += ' · pontón';
+        if (e.edif && EDIF[e.tipo].funde && e.j === YO) t += e.parada === 'lleno' ? ' · parada: no cabe más acero' : e.parada === 'mineral' ? ' · parada: quedan menos de ' + W.ECON.aceroReserva + ' minerales' : ' · fundiendo';
         if (e.j === YO && conRed && e.desg >= 20) t += ' · desgaste ' + Math.round(e.desg) + ' %' + (e.edif ? (e.desg >= W.ECON.desgProd1 ? (e.desg >= W.ECON.desgProd2 ? ': produce al 70 %' : ': produce al 85 %') : '') : e.desg >= W.ECON.desgMal ? ': lento y falla tiros' : e.desg >= W.ECON.desgLento ? ': va más lento' : '');
         if (e.edif && EDIF[e.tipo].drones && e.j === YO && (e.sinLuz || (conRed && e.conRed === false))) t += ' · así sus drones no cargan batería';
         if (e.drLlama && e.j === YO) t += ' · drones llamados: posados hasta que los despliegues';
@@ -6696,9 +6723,9 @@ globalThis.W = { VERSION: 'versión 90' };
     }
 
     // ---------- tecnología e inteligencia ----------
-    const precioCorto = (d) => { const p = [d.costo ? String(d.costo) : '', d.pet ? d.pet + 'p' : '', d.raros ? d.raros + 'r' : '', d.info ? d.info + 'i' : ''].filter(Boolean); return p.length > 1 ? p.join('+') : precio(d); }; // en la casilla: 1400+100p
+    const precioCorto = (d) => { const p = [d.costo ? String(d.costo) : '', d.acero && conRed ? d.acero + 'a' : '', d.pet ? d.pet + 'p' : '', d.raros ? d.raros + 'r' : '', d.info ? d.info + 'i' : ''].filter(Boolean); return p.length > 1 ? p.join('+') : precio(d); }; // en la casilla: 1400+100p
     let hayTecG = false; // hay mejoras que mostrar para lo seleccionado
-    const precio = (d) => [d.costo ? String(d.costo) : '', d.pet ? d.pet + ' pet' : '', d.raros ? d.raros + ' rar' : '', d.info ? d.info + ' inf' : ''].filter(Boolean).join(' + ');
+    const precio = (d) => [d.costo ? String(d.costo) : '', d.acero && conRed ? d.acero + ' acero' : '', d.pet ? d.pet + ' pet' : '', d.raros ? d.raros + ' rar' : '', d.info ? d.info + ' inf' : ''].filter(Boolean).join(' + ');
     let tiposSel = new Set(); // tipos de edificio propios seleccionados: deciden qué muestra la barra
     const botonesTec = [];
     for (const clave in W.TEC) {
@@ -6897,6 +6924,7 @@ globalThis.W = { VERSION: 'versión 90' };
       hospital: 'Cura a la infantería que tenga a 6 celdas y aloja hasta tres ambulancias (llega con una; las demás se encargan en él). Necesita energía y red.',
       central: 'Da 100 de energía quemando petróleo (1 cada 4 segundos). Sin petróleo da solo el 30 %.', eolica: 'Da 25 de energía sin gastar petróleo.', hidro: 'Nivel 2. Da 160 de energía sin gastar petróleo; solo se construye junto al agua.',
       extractor: 'Saca petróleo de un yacimiento y lo manda por un oleoducto que se tiende solo hasta la refinería, tanque o patio más cercano (30 celdas). Sin oleoducto, o si te lo cortan, rinde el 30 %.',
+      fundicion: 'Convierte mineral en acero: 2 de mineral por 1 de acero, unos 120 por minuto. Lo pesado pide acero además de mineral (tanques, artillería, lanzacohetes, torre de cañón, artillería fija y búnker). Cada fundición amplía en 600 el acero que puedes guardar. Deja de trabajar si te quedan menos de 300 minerales. Necesita energía y red.',
       radar: 'Nivel 2. No levanta la niebla ni dice qué hay, pero marca con un punto que pulsa cada unidad enemiga que esté a 60 celdas; el punto se actualiza cada 2 segundos. No detecta espías ni edificios. Necesita energía y red.',
       torreRadio: 'Da cobertura de radio a 60 celdas (el patio, 60; el vehículo de mando, 30; el puesto de avanzada, 35). Fuera de la cobertura tus unidades de tierra solo ven lo que tienen encima y obedecen con 3 segundos de retraso. El explorador, el espía y todo lo que vuela llevan radio propia. Se coloca en cualquier terreno explorado.', mina: 'Nivel 2. Se construye sobre un yacimiento de minerales y saca de un pozo profundo (40 000) de forma continua, sin cosechadoras: unos 400 por minuto, más si la mejoras. Hay que conectarla a la red.', almacen: 'Guarda 3000 minerales más. Con los almacenes llenos, lo que cosechas se pierde. Si te lo destruyen pierdes su parte, y la mitad queda en el suelo para quien la recoja.', tanqueComb: 'Guarda 800 de petróleo más. Si te lo destruyen, pierdes su parte.', pistaAv: 'Se coloca en cualquier terreno explorado, sin red ni energía. Clic derecho en ella con helicópteros de combate: la toman por base, repostan allí y su radio de vuelo se cuenta desde allí.', logistica: 'En la base: de aquí salen los camiones y helicópteros de suministro y los vuelos que mantienen los puestos de avanzada; tiene pista para trasladar infantería.', avanzada: 'No se construye: lo despliega el puesto móvil. Con enlace aéreo está en tu red, cura a la infantería cercana y tiene pista.',
       tallerMovil: 'Parado, repara los vehículos que tenga a 4 celdas aunque estén sin suministro, y recupera los vehículos destruidos cercanos (tuyos o del rival) a mitad de precio: va solo, o clic derecho sobre el casco. También les quita el desgaste.',
@@ -7143,7 +7171,7 @@ globalThis.W = { VERSION: 'versión 90' };
       }
       if (!esEdif && d.ambu) { const c = W.cupoAmb(m, YO); if (c.hay >= c.cupo) return 'cupo lleno (' + c.hay + '/' + c.cupo + '): hace falta otro hospital'; }
       if (!esEdif && d.aire && !d.mini) { const c = W.cupoAire(m, YO, W.hangarDe(d)); if (c.hay >= c.cupo) return 'cupo lleno (' + c.hay + '/' + c.cupo + '): hace falta otro ' + EDIF[W.lugarDe(d)].nombre.toLowerCase(); }
-      if (!W.puedePagar(J, d)) { const f = []; if (J.minerales < (d.costo || 0)) f.push('minerales'); if (J.petroleo < (d.pet || 0)) f.push('petróleo'); if (J.raros < (d.raros || 0)) f.push('minerales raros'); if (J.info < (d.info || 0)) f.push('información'); return 'falta ' + (f.join(' y ') || 'recursos'); }
+      if (!W.puedePagar(J, d)) { const f = []; if (J.minerales < (d.costo || 0)) f.push('minerales'); if (J.petroleo < (d.pet || 0)) f.push('petróleo'); if (J.acero !== undefined && J.acero < (d.acero || 0)) f.push('acero (lo saca la fundición)'); if (J.raros < (d.raros || 0)) f.push('minerales raros'); if (J.info < (d.info || 0)) f.push('información'); return 'falta ' + (f.join(' y ') || 'recursos'); }
       if (!W.disponible(m, YO, d)) return 'todavía no disponible';
       return '';
     }
@@ -7244,6 +7272,7 @@ globalThis.W = { VERSION: 'versión 90' };
       { const fin = isFinite(J.capMin) && !J.dios, llM = fin && J.minerales >= J.capMin, llP = fin && J.petroleo >= J.capPet; // con almacenes: «tengo / cabe», en rojo cuando está lleno
         $('rMin').textContent = num(J.minerales) + (fin ? ' / ' + num(J.capMin) : ''); $('rPet').textContent = num(J.petroleo) + (fin ? ' / ' + num(J.capPet) : ''); $('rMin').style.color = llM ? 'var(--mal)' : ''; $('rPet').style.color = llP ? 'var(--mal)' : ''; }
        $('rRar').textContent = num(J.raros); $('rInf').textContent = num(J.info);
+       $('filaAcero').hidden = J.acero === undefined; if (J.acero !== undefined) $('rAce').textContent = num(J.acero) + ' / ' + num(W.capAcero(J));
       { const otras = J.tr.requisitos || J.tr.libre || J.tr.vel > 1 || J.tr.mapa || J.tr.invulnerable || iaQuieta, t = otras ? 'ADMIN' : 'GOD'; $('dios').hidden = !J.dios && !otras; if ($('dios').textContent !== t) $('dios').textContent = t; } actualizarAdmin(); $('sinColmena').hidden = J.colmena;
       const e = $('rEne'); { let sl = 0; for (const b of m.ents) if (b.edif && b.j === YO && b.sinLuz) sl++; e.textContent = J.uso + ' / ' + J.prod + (sl ? ' · ' + sl + ' sin luz' : ''); e.className = J.uso > J.prod || sl ? 'mal' : ''; }
       const ag = $('rAgu'); ag.textContent = J.aguaUso + ' / ' + (J.dios ? '∞' : J.aguaProd); ag.className = !J.dios && J.aguaUso >= J.aguaProd ? 'mal' : '';

@@ -512,6 +512,11 @@
       c.strokeStyle = col.osc; c.lineWidth = lw * 2.4; c.beginPath(); c.arc(X(0.5), Y(0.2), t * 0.4, 0.25, Math.PI - 0.25); c.stroke();
       c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = lw; c.beginPath(); c.rect(X(0.3), Y(0.62), t * 0.4, t * 0.24); c.fill(); c.stroke();
       c.strokeStyle = col.luz; c.lineWidth = lw; c.beginPath(); for (const fx of [0.38, 0.5, 0.62]) { c.moveTo(X(fx), Y(0.46)); c.lineTo(X(fx), Y(0.6)); } c.stroke();
+    } else if (e.tipo === 'fundicion') { // nave con horno (boca al rojo) y chimenea
+      c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = lw; c.beginPath(); c.rect(X(0.12), Y(0.34), t * 0.76, t * 0.5); c.fill(); c.stroke();
+      c.fillStyle = col.osc; c.fillRect(X(0.66), Y(0.08), t * 0.14, t * 0.3); c.beginPath(); c.moveTo(X(0.12), Y(0.34)); c.lineTo(X(0.3), Y(0.2)); c.lineTo(X(0.48), Y(0.34)); c.closePath(); c.fill();
+      c.fillStyle = s.deficit ? col.humo : col.fuego; c.beginPath(); c.arc(X(0.36), Y(0.84), t * 0.13, Math.PI, 0); c.closePath(); c.fill();
+      c.fillStyle = col.luz; c.fillRect(X(0.56), Y(0.5), t * 0.22, t * 0.08); c.fillRect(X(0.56), Y(0.64), t * 0.22, t * 0.08);
     } else if (e.tipo === 'radar') { // plato que gira sobre su base, con el haz de barrido
       const px = X(0.5), py = Y(0.5), a = s.deficit ? 0.6 : s.tiempo * 0.0016;
       c.fillStyle = col.osc; c.beginPath(); c.arc(px, py, t * 0.3, 0, TAU); c.fill();

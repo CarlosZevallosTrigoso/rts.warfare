@@ -181,6 +181,7 @@
       else if (!c.hospital && m.t > 12000 && J.minerales > 1500 && puede('hospital')) quiereNuevo = 'hospital';
       else if (!c.artFija && J.nivel >= 2 && m.t > 20000 && J.minerales > 2600 && ia.estilo !== 'asalto' && puede('artFija')) quiereNuevo = 'artFija';
       else if (!c.estDrones && m.t > 9000 && J.minerales > 1200 && puede('estDrones')) quiereNuevo = 'estDrones';
+      if (J.acero !== undefined && c.refineria && (c.fundicion || 0) < (m.t > 30000 && J.acero < 150 ? 2 : 1) && (c.fabrica || J.acero < 200) && J.minerales > 900 && puede('fundicion')) quiereNuevo = 'fundicion'; // acero para los tanques: lo primero en cuanto hay fábrica
       else if (!c.camara && m.t > 14000 && J.minerales > 1200 && puede('camara')) quiereNuevo = 'camara';
       else if (!c.logistica && m.logistica !== false && m.t > 18000 && J.minerales > 2000 && puede('logistica')) quiereNuevo = 'logistica'; // (antes que la central de inteligencia: sin suministro, sus oleadas pelean a media fuerza)
       else if (!c.inteligencia && m.t > 24000 && J.minerales > 3200 && puede('inteligencia')) quiereNuevo = 'inteligencia';
@@ -280,6 +281,7 @@
       if (J.nivel >= 2 && (c.antiaereoMovil || 0) < 1 + Math.floor(((c.tanque || 0) + (c.pesado || 0)) / 8)) veh = 'antiaereoMovil'; // escolta antiaérea para las columnas
       else if (J.nivel >= 3 && (c.pesado || 0) < 5 && W.puedePagar(J, UNID.pesado)) veh = 'pesado';
       else if (J.nivel >= 2 && (c.artilleria || 0) * 4 < (c.tanque || 0)) veh = 'artilleria';
+      if (J.acero !== undefined && J.acero < (UNID[veh].acero || 0)) veh = 'blindado'; // sin acero para lo pesado: blindados ligeros mientras la fundición trabaja
       // Aviación: cazas, un dron y, con nivel 3, helicópteros y bombarderos; uno a la vez. El estilo aéreo la compra antes que los tanques.
       let av = null;
       if (c.aerodromo && !(J.colas.caza.n + J.colas.bombardero.n + J.colas.helicoptero.n + J.colas.dron.n)) {
