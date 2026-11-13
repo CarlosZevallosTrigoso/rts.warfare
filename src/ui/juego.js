@@ -306,7 +306,8 @@
         if (e.hack > m.t) return 'hack';
         if (e.mun === 0) return 'mun';
         if (e.tipo === 'avanzada') return e.abast > m.t ? '' : 'enlace';
-        if (conRed && e.conRed === false && !EDIF[e.tipo].helipuerto) return 'red'; // (la pista avanzada va fuera de la red a propósito)
+        if (conRed && EDIF[e.tipo].datos && !W.enlazado(m, e)) return 'datos';
+        if (conRed && e.conRed === false && !EDIF[e.tipo].helipuerto && !(EDIF[e.tipo].datos && EDIF[e.tipo].libre) && e.tipo !== 'torreRadio') return 'red'; // (la torre de vigilancia enlazada por radio no necesita cable; la torre de radio lleva su generador) // (la pista avanzada va fuera de la red a propósito)
         if (e.sinLuz) return 'luz';
         if (conRed && e.sinComb) return 'quema';
         if (conRed && e.tipo === 'extractor' && e.sinTubo) return 'tubo';
@@ -332,12 +333,14 @@
       radio: 'sin radio: no ves lo que ve y obedece con retraso · torre de radio o vehículo de mando',
       hack: 'hackeado: apagado unos segundos',
       sumDron: 'sin suministro: sus drones no cargan batería ni se reponen · acércalo a tu red o a un camión de suministro',
+      datos: 'sin enlace de datos: no te da visión · únelo a tu red o pon una torre de radio cerca',
       quema: 'sin petróleo que quemar: da el 30 % · extrae petróleo o pon eólicas',
       tubo: 'sin oleoducto: rinde el 30 % · ingeniero civil, o una refinería o tanque a menos de 30 celdas',
     };
     function icono(x, y, k) { // disco rojo con el dibujo en blanco
       if (k === 'quema' || k === 'tubo') k = 'comb';
       if (k === 'sumDron') k = 'sum';
+      if (k === 'datos') k = 'radio';
       ctx.fillStyle = P.mal; ctx.beginPath(); ctx.arc(x, y, 8, 0, TAU); ctx.fill();
       ctx.strokeStyle = '#ffffff'; ctx.fillStyle = '#ffffff'; ctx.lineWidth = 1.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath();
       if (k === 'mun') { // tres cartuchos
@@ -1614,7 +1617,7 @@
       cuartel: 'Produce la infantería.', fabrica: 'Produce los vehículos.', torreta: 'Defensa fija contra tierra y aire.', torreCanon: 'Defensa pesada de largo alcance contra blindados.', aerodromo: 'Produce y aloja hasta cinco aviones.',
       antiaerea: 'Defensa fija solo contra el aire: aviones y drones.', estacion: 'Sobre un campo de conocimiento da información rápido; aloja la inteligencia.', laboratorio: 'Da información en la base, sin campo, más despacio. Vale como estación.', obras: 'Produce las unidades civiles: ingeniero civil y excavadora.',
       deposito: 'Crea una zona con suministro donde también puedes construir. Como todo edificio, tiende solo su cable hasta la red si está a menos de 24 celdas.', misilera: 'Fabrica, guarda y lanza misiles balísticos.', interceptor: 'Derriba los misiles enemigos que entran en su radio.', estDrones: 'Mantiene dos drones de reconocimiento vigilando a su alrededor. Mejorada lleva además bombarderos y kamikazes, y guarda las tecnologías del operador.', inteligencia: 'Entrena espías, aloja dos drones espía de largo alcance y permite el mapeo satelital.',
-      bunker: 'Entran hasta 4 de infantería (clic derecho sobre él con la tropa seleccionada) y disparan desde dentro recibiendo solo la cuarta parte del daño. Para sacarlos: selecciona el búnker y clic derecho en el suelo. Si lo destruyen, salen heridos.', vigia: 'Sin armas y muy barata: ve a 16 celdas y descubre a los escondidos a 8. Se puede poner fuera de la red.', artFija: 'Nivel 2. Obús fijo con 20 celdas de alcance sobre lo que vea cualquiera de los tuyos; no dispara a menos de 6 celdas. Gasta munición: la repone por la red.',
+      bunker: 'Entran hasta 4 de infantería (clic derecho sobre él con la tropa seleccionada) y disparan desde dentro recibiendo solo la cuarta parte del daño. Para sacarlos: selecciona el búnker y clic derecho en el suelo. Si lo destruyen, salen heridos.', vigia: 'Sin armas y muy barata: ve a 16 celdas y descubre a los escondidos a 8. Se puede poner fuera de la red, pero necesita enlace de datos: un cable hasta tu red (se tiende solo a menos de 24 celdas) o cobertura de radio. Sin enlace no te enseña nada.', artFija: 'Nivel 2. Obús fijo con 20 celdas de alcance sobre lo que vea cualquiera de los tuyos; no dispara a menos de 6 celdas. Gasta munición: la repone por la red. Sin enlace de datos (red o radio) solo tira a lo que ve ella misma, a 8 celdas.',
       hospital: 'Cura a la infantería que tenga a 6 celdas y aloja hasta tres ambulancias (llega con una; las demás se encargan en él). Necesita energía y red.',
       central: 'Da 100 de energía quemando petróleo (1 cada 4 segundos). Sin petróleo da solo el 30 %.', eolica: 'Da 25 de energía sin gastar petróleo.', hidro: 'Nivel 2. Da 160 de energía sin gastar petróleo; solo se construye junto al agua.',
       extractor: 'Saca petróleo de un yacimiento y lo manda por un oleoducto que se tiende solo hasta la refinería, tanque o patio más cercano (30 celdas). Sin oleoducto, o si te lo cortan, rinde el 30 %.',
@@ -1913,6 +1916,7 @@
       enlace: (n) => (n === 1 ? 'Puesto de avanzada sin enlace aéreo' : n + ' puestos de avanzada sin enlace aéreo'),
       hack: (n) => (n === 1 ? '1 edificio hackeado' : n + ' edificios hackeados'),
       sumDron: (n) => (n === 1 ? '1 portador de drones sin suministro: sus drones no cargan' : n + ' portadores de drones sin suministro: sus drones no cargan') + ' <small>· acércalo a tu red o a un camión</small>',
+      datos: (n) => (n === 1 ? '1 sensor sin enlace de datos: no te da visión' : n + ' sensores sin enlace de datos: no te dan visión') + ' <small>· cable a la red o torre de radio</small>',
       quema: (n) => (n === 1 ? '1 central sin petróleo: da' : n + ' centrales sin petróleo: dan') + ' el 30 % <small>· extrae petróleo o pon eólicas</small>',
       tubo: (n) => (n === 1 ? '1 extractor sin oleoducto: rinde' : n + ' extractores sin oleoducto: rinden') + ' el 30 % <small>· ingeniero civil</small>',
     };

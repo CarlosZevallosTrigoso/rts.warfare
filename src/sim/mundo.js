@@ -312,9 +312,12 @@
     ob.avisado = false; ob.t = 0; ob.i++; ponerMuro(m, u.j, n, c);
   }
   // Cámaras: cada medio segundo descubren a los escondidos que tengan cerca y, si entra un enemigo, avisan (como mucho cada 15 s).
+  // Enlace de datos: el edificio está unido a la red por cable (o por cercanía) o dentro de la cobertura de radio de su dueño.
+  W.enlazado = (m, e) => m.logistica === false || m.jug[e.j].dios || e.conRed !== false || !!(m.radioCob && m.radioCob[e.j][Math.floor(e.cy) * m.N + Math.floor(e.cx)]);
   function tickCamaras(m) {
     for (const e of m.ents) {
       if (!e.edif || e.infra || !EDIF[e.tipo].detecta || e.sinLuz || e.hack > m.t) continue;
+      if (EDIF[e.tipo].datos && !W.enlazado(m, e)) continue; // sin enlace de datos no avisa de nada
       const r = EDIF[e.tipo].detecta; let visto = null;
       for (const u of m.ents) { if (u.edif || u.j === e.j || u.vida <= 0 || u.enTierra || Math.abs(u.x - e.cx) > r || Math.hypot(u.x - e.cx, u.y - e.cy) > r) continue; u.camT = m.t; visto = visto || u; }
       if (visto && m.t - (e.tAviso === undefined ? -999 : e.tAviso) > 300) { e.tAviso = m.t; m.efectos.push({ tipo: 'camara', x1: e.cx, y1: e.cy, x2: visto.x, y2: visto.y, j: e.j, clase: visto.tipo, t: m.t }); }
@@ -1931,6 +1934,7 @@
       if (oculta(m, e)) { if (d > ECON.ocultaVe) return; e.delatada = m.t; } // escondida: solo se la ve de muy cerca
       if (a.edif && arma.alcanceMin && d < arma.alcanceMin) return; // la artillería fija no tira a lo que tiene encima
       if (a.edif && arma.indirecto && m.niebla[a.j][Math.floor(posY(e)) * m.N + Math.floor(posX(e))] !== 2) return; // y solo a lo que alguien de los suyos esté viendo
+      if (a.edif && arma.indirecto && EDIF[a.tipo].datos && d > EDIF[a.tipo].vision && !W.enlazado(m, a)) return; // sin enlace de datos nadie le canta los blancos: solo tira a lo que ve ella
       if (!a.edif) { // una unidad solo detecta por sí misma lo que cae en su visión; el arma indirecta, lo que vea cualquiera de los suyos
         if (arma.indirecto ? m.niebla[a.j][Math.floor(posY(e)) * m.N + Math.floor(posX(e))] !== 2 : !veDir(m, a, e, d)) return;
       }
@@ -2722,7 +2726,7 @@
       const e = m.ents[k], f = m.niebla[e.j], L = m.vistas[e.j];
       const cx = Math.floor(posX(e)), cy = Math.floor(posY(e));
       if (e.edif) { // los edificios ven en círculo
-        const r = EDIF[e.tipo].vision + e.tam / 2, r2 = r * r, R = Math.ceil(r);
+        const r = (EDIF[e.tipo].datos && !W.enlazado(m, e) ? ECON.sinEnlaceVision : EDIF[e.tipo].vision) + e.tam / 2, r2 = r * r, R = Math.ceil(r); // (un sensor sin enlace de datos no te enseña más que su sitio)
         for (let dy = -R; dy <= R; dy++) {
           const y = cy + dy; if (y < 0 || y >= N) continue;
           for (let dx = -R; dx <= R; dx++) {

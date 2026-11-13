@@ -2333,6 +2333,33 @@ prueba('ruinas y cráteres: el edificio destruido deja ruina (no el demolido) qu
   assert.ok(m.crateres.length <= W.ECON.craterMax, 'nunca hay más de ' + W.ECON.craterMax + ' cráteres'); void tam; void dy;
 });
 
+prueba('enlace de datos: sin cable ni radio, la torre de vigilancia y la cámara no dan visión y la artillería fija solo tira a lo que ve', () => {
+  const m = W.crearMundo(31, { N: 256, logistica: true }), N = m.N;
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const patio = m.ents.find((e) => e.j === 0 && e.tipo === 'patio'), lx = Math.floor(patio.cx < 128 ? patio.cx + 110 : patio.cx - 110), ly = Math.floor(patio.cy < 128 ? patio.cy + 110 : patio.cy - 110), cel = (x, y) => y * N + x;
+  for (let y = ly - 40; y <= ly + 40; y++) for (let x = lx - 40; x <= lx + 40; x++) { const i = cel(x, y); if (x < 2 || y < 2 || x >= N - 2 || y >= N - 2 || m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.mapa.tipoMin[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  m.terrenoV++; m.niebla[0].fill(1);
+  const avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  // torre de vigilancia a 150 celdas de la base: ni cable ni radio
+  const vg = W.crearEdificio(m, 0, 'vigia', lx, ly); avanza(25);
+  assert.ok(!W.enlazado(m, vg) && vg.conRed === false, 'tan lejos no tiene enlace');
+  assert.strictEqual(m.niebla[0][cel(lx + 1, ly)], 2, 'se ve su sitio'); assert.notStrictEqual(m.niebla[0][cel(lx + 10, ly)], 2, 'pero no te enseña nada alrededor');
+  const fr = W.crearUnidad(m, 1, 'francotirador', cel(lx + 5, ly + 1)); fr.guardia = true; fr.recarga = 99999; avanza(30); assert.ok(W.oculta(m, fr), 'ni descubre al escondido');
+  // con una torre de radio cerca: enlace por radio
+  const tr = W.crearEdificio(m, 0, 'torreRadio', lx - 6, ly - 6); avanza(45);
+  assert.ok(W.enlazado(m, vg), 'la torre de radio le da enlace'); assert.strictEqual(m.niebla[0][cel(lx + 14, ly)], 2, 'ahora ve a 14 celdas'); assert.ok(!W.oculta(m, fr), 'y descubre al escondido');
+  // artillería fija sin enlace: no tira a lo que le cantan otros
+  tr.vida = 0; fr.vida = 0; avanza(45); assert.ok(!W.enlazado(m, vg));
+  const art = W.crearEdificio(m, 0, 'artFija', lx, ly + 10); const ojo = W.crearUnidad(m, 0, 'explorador', cel(lx + 14, ly + 14)); ojo.recarga = 99999; ojo.ang = 0;
+  const tq = W.crearUnidad(m, 1, 'tanque', cel(lx + 17, ly + 11)); tq.recarga = 99999; const v0 = tq.vida;
+  for (let i = 0; i < 500; i++) { W.tick(m); art.sinLuz = false; tq.recarga = 99999; tq.orden = 'nada'; tq.obj = 0; ojo.vida = ojo.vidaMax; }
+  assert.strictEqual(m.niebla[0][cel(Math.floor(tq.x), Math.floor(tq.y))], 2, 'el explorador ve al tanque'); assert.ok(!W.enlazado(m, art)); assert.strictEqual(tq.vida, v0, 'sin enlace, la artillería fija no le tira aunque otro lo vea');
+  W.crearEdificio(m, 0, 'torreRadio', lx - 6, ly + 4); for (let i = 0; i < 600; i++) { W.tick(m); art.sinLuz = false; tq.recarga = 99999; tq.orden = 'nada'; tq.obj = 0; ojo.vida = ojo.vidaMax; }
+  assert.ok(W.enlazado(m, art) && tq.vida < v0, 'con enlace por radio, sí');
+  // en la base, por cable, todo enlazado
+  const cam = W.crearEdificio(m, 0, 'vigia', Math.floor(patio.cx) + (patio.cx < 128 ? 9 : -9), Math.floor(patio.cy)); avanza(25); assert.ok(W.enlazado(m, cam), 'junto a la base está enlazada por la red');
+});
+
 prueba('tanda 5: puente aéreo, puesto de avanzada, hospital y traslado de infantería', () => {
   const m = W.crearMundo(31, { N: 128, logistica: true }), N = m.N, J = m.jug[0];
   m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);

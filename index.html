@@ -345,12 +345,12 @@
   <button type="button" id="empezar">Empezar</button>
   <button type="button" id="tutorial">Tutorial guiado<small style="display:block;color:var(--suave);font-size:10px">ocho pasos, con el rival dormido hasta el final</small></button>
   <button type="button" id="continuar" hidden>Continuar la partida guardada</button>
-  <div id="version">versión 87</div>
+  <div id="version">versión 88</div>
 </div></div>
 <div id="guia" hidden><div class="caja"><div class="cab"><strong>Guía: para qué sirve cada cosa</strong><button type="button" id="cierraGuia">cerrar</button></div><div id="guiaTxt"></div></div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finVer" href="#" title="Vuelve a ver la partida entera, con todo el mapa a la vista y a la velocidad que quieras.">ver repetición</a><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 87' };
+globalThis.W = { VERSION: 'versión 88' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -410,7 +410,7 @@ globalThis.W = { VERSION: 'versión 87' };
     // Estación de drones: barata; mantiene dos drones de reconocimiento dando vueltas a su alrededor.
     estDrones: { nombre: 'Estación de drones', tam: 1, vida: 350, costo: 300, tiempo: 160, energia: -10, vision: 5, req: ['cuartel'], drones: { rec: 2 }, radioDron: 16, mejora: true, dronesN: { 2: { rec: 2, bomba: 1, radio: 18 }, 3: { rec: 3, bomba: 2, fpv: 2, radio: 20 } } }, // mejorada lleva más drones, y de ataque
     // Torreta de muro: solo se monta sobre un muro reforzado propio (y ahí puede ir fuera de la cobertura). Cámara: ve lejos y en redondo, descubre a los escondidos y avisa; en la cobertura o sobre un muro propio.
-    camara:    { nombre: 'Cámara', tam: 1, vida: 150, costo: 150, tiempo: 100, energia: -5, vision: 11, req: ['obras'], detecta: 11, enMuro: true },
+    camara:    { nombre: 'Cámara', tam: 1, vida: 150, costo: 150, tiempo: 100, energia: -5, vision: 11, req: ['obras'], detecta: 11, enMuro: true, datos: true },
     // Depósito: nodo de la red. Conectado por camino (o por cercanía) a un patio, extiende la cobertura: suministro, energía y dónde se puede construir.
     // Pista avanzada: va en cualquier terreno explorado, sin red ni energía. Los helicópteros de combate pueden tomarla por base: repostan en ella y su radio de vuelo se cuenta desde allí.
     pistaAv:   { nombre: 'Pista avanzada', tam: 2, vida: 400, costo: 600, pet: 40, tiempo: 240, energia: 0, vision: 6, req: ['aerodromo'], nivel: 2, libre: true, hangar: 2, helipuerto: true },
@@ -419,11 +419,13 @@ globalThis.W = { VERSION: 'versión 87' };
     tanqueComb: { nombre: 'Tanque de combustible', tam: 2, vida: 450, costo: 400, tiempo: 200, energia: -5, vision: 4, req: ['refineria'], guarda: { min: 0, pet: 800 } },
     // Torre de radio: va en cualquier terreno explorado, con su propio generador. Dentro de la cobertura de radio se ve lo que ven las unidades y las órdenes llegan al instante.
     torreRadio: { nombre: 'Torre de radio', tam: 1, vida: 300, costo: 300, tiempo: 160, energia: 0, vision: 6, req: ['cuartel'], libre: true, radioCom: 60 },
+    // Enlace de datos (datos: true): cámara, torre de vigilancia y artillería fija solo te sirven si están unidas a tu red por cable o dentro de tu cobertura
+    // de radio. Sin enlace siguen en pie, pero no te dan visión ni descubren a nadie, y la artillería solo tira a lo que ve ella misma.
     // Defensas baratas. Búnker: hasta 4 de infantería entran (clic derecho sobre él) y disparan desde dentro recibiendo la cuarta parte del daño.
     // Torre de vigilancia: sin armas, ve muy lejos y descubre a los escondidos. Artillería fija: mucho alcance, no dispara a lo que tiene encima.
     bunker:    { nombre: 'Búnker', tam: 1, vida: 900, costo: 250, tiempo: 200, energia: 0, vision: 7, req: ['cuartel'], bunker: 4 },
-    vigia:     { nombre: 'Torre de vigilancia', tam: 1, vida: 250, costo: 150, tiempo: 120, energia: 0, vision: 16, req: ['cuartel'], libre: true, detecta: 8 },
-    artFija:   { nombre: 'Artillería fija', tam: 2, vida: 700, costo: 1000, pet: 50, tiempo: 450, energia: -30, vision: 8, req: ['fabrica'], arma: 'obusFijo', nivel: 2, giroT: 0.06 },
+    vigia:     { nombre: 'Torre de vigilancia', tam: 1, vida: 250, costo: 150, tiempo: 120, energia: 0, vision: 16, req: ['cuartel'], libre: true, detecta: 8, datos: true },
+    artFija:   { nombre: 'Artillería fija', tam: 2, vida: 700, costo: 1000, pet: 50, tiempo: 450, energia: -30, vision: 8, req: ['fabrica'], arma: 'obusFijo', nivel: 2, giroT: 0.06, datos: true },
     // Hospital: cura a la infantería que tenga a 6 celdas y aloja hasta 3 ambulancias (llega con una). Las ambulancias salen solas a curar a los heridos
     // que haya a 30 celdas de su puesto (el hospital, o el punto adonde las mandes), y vuelven a recargar cuando se les acaba el material.
     hospital:  { nombre: 'Hospital', tam: 2, vida: 700, costo: 600, tiempo: 300, energia: -20, vision: 6, req: ['cuartel'], cura: 6, ambulancias: 3, radioAmb: 30 },
@@ -603,7 +605,7 @@ globalThis.W = { VERSION: 'versión 87' };
     minaPozo: 40000, // minerales del pozo de una mina (más lo que hubiera en la superficie que tapa)
     vigilaRadio: 8, vigilaMax: 14, protegeDist: 4,
     espiaRadio: 6, espiaInfo: 2, sumiBase: 1, sumiUnidad: 0.5, sumiCarga: 40, // suministro móvil: gasto por ciclo (medio segundo) en vacío y por unidad atendida; y lo que carga por ciclo en el puesto logístico
-    dronMisRadio: 8, autoReserva: 400, autoLargo: 70, cableMax: 24, ruinaVale: 0.25, despejaT: 200, craterMax: 300, craterArea: 1.4, craterFreno: 0.5, ruinaFreno: 0.4, craterDano: 150, rellenaT: 60, /* ruinas: lo que se recupera al reconstruir encima y lo que tarda en despejarse una; cráteres: tope, radio mínimo de explosión que los deja, freno a los vehículos, daño a cables y caminos, y lo que tarda en rellenarse uno */ tuboMax: 30, sinTubo: 0.3, quemaCada: 80, sinCombEnergia: 0.3, /* oleoducto: largo máximo y rendimiento del extractor sin él; central: cada cuántos ticks quema 1 de petróleo y qué fracción da sin él */ bunkerDano: 0.25, ambCarga: 8, hospitalCura: 0.6, /* largo máximo del cable que un edificio nuevo tiende solo hasta la red */
+    dronMisRadio: 8, autoReserva: 400, autoLargo: 70, cableMax: 24, sinEnlaceVision: 2, ruinaVale: 0.25, despejaT: 200, craterMax: 300, craterArea: 1.4, craterFreno: 0.5, ruinaFreno: 0.4, craterDano: 150, rellenaT: 60, /* ruinas: lo que se recupera al reconstruir encima y lo que tarda en despejarse una; cráteres: tope, radio mínimo de explosión que los deja, freno a los vehículos, daño a cables y caminos, y lo que tarda en rellenarse uno */ tuboMax: 30, sinTubo: 0.3, quemaCada: 80, sinCombEnergia: 0.3, /* oleoducto: largo máximo y rendimiento del extractor sin él; central: cada cuántos ticks quema 1 de petróleo y qué fracción da sin él */ bunkerDano: 0.25, ambCarga: 8, hospitalCura: 0.6, /* largo máximo del cable que un edificio nuevo tiende solo hasta la red */
     rutaNodos: 30000, // presupuesto de celdas que se exploran por tick buscando rutas
     misilesMax: 10, mejoraMax: 3, mejoraCosto: 0.6, mejoraBono: 0.5, // mejora de un edificio: hasta nivel 3; cada nivel cuesta el 60 % del edificio por el nivel que tiene y rinde un 50 % más
     inicio: 2500, petInicio: 150, cosecha: 5, descarga: 25, colaMax: 9, separacionColocar: 3, goteoCada: 5, vistaInicial: 22, obrasMax: 8, curaUnidad: 0.01, curaEdificio: 0.0025, curaCosto: 0.15, venta: 0.5, trinchera: 0.45, arco: 0.14, arcoTrinchera: 1.05, visAd: 1.3, visLado: 0.75, visAt: 0.3, cono: 1.05, periferia: 1.83, flanco: 1.25, espalda: 1.5, bosqueVeh: 0.6, bosqueCubre: 0.7, reposta: 12, retiroBajo: 0.3, retiroAlto: 0.9, huida: 300, dia: 9600, diaLuz: 6000, nocheVis: 0.7, caminoVel: 1.6, tramoLargo: 4, enlace: 5, cobNodo: 14, cobEdif: 6, lineaVel: 0.12, lineaCelda: 3, sinSum: 400, sinSumRecarga: 1.5, abastDura: 1500, heliRepone: 300, cobAvanzada: 10, hospitalCura: 2, dronFpv: 40, dronBomba: 15, dronRepone: 200, dronFpvCada: 60, hackInfo: 25, hackVeh: 240, hackEdif: 300, hackRecarga: 200, hackCanal: 40, trazaVel: 0.45, caminoLlano: 4, caminoBosque: 12, caminoAgua: 30, mandoCada: 40, mandoGiro: 1.5, captura: 600, capturaRadio: 2, antenaRadio: 12, depositoCada: 8, tallerRadio: 4, ocultaVe: 2.5, chatarra: 0.25, reparaRadio: 8, reparaVeh: 0.5, curaMedico: 0.35, reparaEdif: 0.8, rangos: [2, 5, 10], rangoDano: 0.1, rangoVida: 0.1, cupoAviones: 5, pasada: 7, orbita: 3.5, fuelCae: 80, cavar: 80, aplasta: 10, bonoProd: 0.5, bonoMax: 2.5 };
@@ -1277,9 +1279,12 @@ globalThis.W = { VERSION: 'versión 87' };
     ob.avisado = false; ob.t = 0; ob.i++; ponerMuro(m, u.j, n, c);
   }
   // Cámaras: cada medio segundo descubren a los escondidos que tengan cerca y, si entra un enemigo, avisan (como mucho cada 15 s).
+  // Enlace de datos: el edificio está unido a la red por cable (o por cercanía) o dentro de la cobertura de radio de su dueño.
+  W.enlazado = (m, e) => m.logistica === false || m.jug[e.j].dios || e.conRed !== false || !!(m.radioCob && m.radioCob[e.j][Math.floor(e.cy) * m.N + Math.floor(e.cx)]);
   function tickCamaras(m) {
     for (const e of m.ents) {
       if (!e.edif || e.infra || !EDIF[e.tipo].detecta || e.sinLuz || e.hack > m.t) continue;
+      if (EDIF[e.tipo].datos && !W.enlazado(m, e)) continue; // sin enlace de datos no avisa de nada
       const r = EDIF[e.tipo].detecta; let visto = null;
       for (const u of m.ents) { if (u.edif || u.j === e.j || u.vida <= 0 || u.enTierra || Math.abs(u.x - e.cx) > r || Math.hypot(u.x - e.cx, u.y - e.cy) > r) continue; u.camT = m.t; visto = visto || u; }
       if (visto && m.t - (e.tAviso === undefined ? -999 : e.tAviso) > 300) { e.tAviso = m.t; m.efectos.push({ tipo: 'camara', x1: e.cx, y1: e.cy, x2: visto.x, y2: visto.y, j: e.j, clase: visto.tipo, t: m.t }); }
@@ -2896,6 +2901,7 @@ globalThis.W = { VERSION: 'versión 87' };
       if (oculta(m, e)) { if (d > ECON.ocultaVe) return; e.delatada = m.t; } // escondida: solo se la ve de muy cerca
       if (a.edif && arma.alcanceMin && d < arma.alcanceMin) return; // la artillería fija no tira a lo que tiene encima
       if (a.edif && arma.indirecto && m.niebla[a.j][Math.floor(posY(e)) * m.N + Math.floor(posX(e))] !== 2) return; // y solo a lo que alguien de los suyos esté viendo
+      if (a.edif && arma.indirecto && EDIF[a.tipo].datos && d > EDIF[a.tipo].vision && !W.enlazado(m, a)) return; // sin enlace de datos nadie le canta los blancos: solo tira a lo que ve ella
       if (!a.edif) { // una unidad solo detecta por sí misma lo que cae en su visión; el arma indirecta, lo que vea cualquiera de los suyos
         if (arma.indirecto ? m.niebla[a.j][Math.floor(posY(e)) * m.N + Math.floor(posX(e))] !== 2 : !veDir(m, a, e, d)) return;
       }
@@ -3687,7 +3693,7 @@ globalThis.W = { VERSION: 'versión 87' };
       const e = m.ents[k], f = m.niebla[e.j], L = m.vistas[e.j];
       const cx = Math.floor(posX(e)), cy = Math.floor(posY(e));
       if (e.edif) { // los edificios ven en círculo
-        const r = EDIF[e.tipo].vision + e.tam / 2, r2 = r * r, R = Math.ceil(r);
+        const r = (EDIF[e.tipo].datos && !W.enlazado(m, e) ? ECON.sinEnlaceVision : EDIF[e.tipo].vision) + e.tam / 2, r2 = r * r, R = Math.ceil(r); // (un sensor sin enlace de datos no te enseña más que su sitio)
         for (let dy = -R; dy <= R; dy++) {
           const y = cy + dy; if (y < 0 || y >= N) continue;
           for (let dx = -R; dx <= R; dx++) {
@@ -5537,7 +5543,8 @@ globalThis.W = { VERSION: 'versión 87' };
         if (e.hack > m.t) return 'hack';
         if (e.mun === 0) return 'mun';
         if (e.tipo === 'avanzada') return e.abast > m.t ? '' : 'enlace';
-        if (conRed && e.conRed === false && !EDIF[e.tipo].helipuerto) return 'red'; // (la pista avanzada va fuera de la red a propósito)
+        if (conRed && EDIF[e.tipo].datos && !W.enlazado(m, e)) return 'datos';
+        if (conRed && e.conRed === false && !EDIF[e.tipo].helipuerto && !(EDIF[e.tipo].datos && EDIF[e.tipo].libre) && e.tipo !== 'torreRadio') return 'red'; // (la torre de vigilancia enlazada por radio no necesita cable; la torre de radio lleva su generador) // (la pista avanzada va fuera de la red a propósito)
         if (e.sinLuz) return 'luz';
         if (conRed && e.sinComb) return 'quema';
         if (conRed && e.tipo === 'extractor' && e.sinTubo) return 'tubo';
@@ -5563,12 +5570,14 @@ globalThis.W = { VERSION: 'versión 87' };
       radio: 'sin radio: no ves lo que ve y obedece con retraso · torre de radio o vehículo de mando',
       hack: 'hackeado: apagado unos segundos',
       sumDron: 'sin suministro: sus drones no cargan batería ni se reponen · acércalo a tu red o a un camión de suministro',
+      datos: 'sin enlace de datos: no te da visión · únelo a tu red o pon una torre de radio cerca',
       quema: 'sin petróleo que quemar: da el 30 % · extrae petróleo o pon eólicas',
       tubo: 'sin oleoducto: rinde el 30 % · ingeniero civil, o una refinería o tanque a menos de 30 celdas',
     };
     function icono(x, y, k) { // disco rojo con el dibujo en blanco
       if (k === 'quema' || k === 'tubo') k = 'comb';
       if (k === 'sumDron') k = 'sum';
+      if (k === 'datos') k = 'radio';
       ctx.fillStyle = P.mal; ctx.beginPath(); ctx.arc(x, y, 8, 0, TAU); ctx.fill();
       ctx.strokeStyle = '#ffffff'; ctx.fillStyle = '#ffffff'; ctx.lineWidth = 1.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath();
       if (k === 'mun') { // tres cartuchos
@@ -6845,7 +6854,7 @@ globalThis.W = { VERSION: 'versión 87' };
       cuartel: 'Produce la infantería.', fabrica: 'Produce los vehículos.', torreta: 'Defensa fija contra tierra y aire.', torreCanon: 'Defensa pesada de largo alcance contra blindados.', aerodromo: 'Produce y aloja hasta cinco aviones.',
       antiaerea: 'Defensa fija solo contra el aire: aviones y drones.', estacion: 'Sobre un campo de conocimiento da información rápido; aloja la inteligencia.', laboratorio: 'Da información en la base, sin campo, más despacio. Vale como estación.', obras: 'Produce las unidades civiles: ingeniero civil y excavadora.',
       deposito: 'Crea una zona con suministro donde también puedes construir. Como todo edificio, tiende solo su cable hasta la red si está a menos de 24 celdas.', misilera: 'Fabrica, guarda y lanza misiles balísticos.', interceptor: 'Derriba los misiles enemigos que entran en su radio.', estDrones: 'Mantiene dos drones de reconocimiento vigilando a su alrededor. Mejorada lleva además bombarderos y kamikazes, y guarda las tecnologías del operador.', inteligencia: 'Entrena espías, aloja dos drones espía de largo alcance y permite el mapeo satelital.',
-      bunker: 'Entran hasta 4 de infantería (clic derecho sobre él con la tropa seleccionada) y disparan desde dentro recibiendo solo la cuarta parte del daño. Para sacarlos: selecciona el búnker y clic derecho en el suelo. Si lo destruyen, salen heridos.', vigia: 'Sin armas y muy barata: ve a 16 celdas y descubre a los escondidos a 8. Se puede poner fuera de la red.', artFija: 'Nivel 2. Obús fijo con 20 celdas de alcance sobre lo que vea cualquiera de los tuyos; no dispara a menos de 6 celdas. Gasta munición: la repone por la red.',
+      bunker: 'Entran hasta 4 de infantería (clic derecho sobre él con la tropa seleccionada) y disparan desde dentro recibiendo solo la cuarta parte del daño. Para sacarlos: selecciona el búnker y clic derecho en el suelo. Si lo destruyen, salen heridos.', vigia: 'Sin armas y muy barata: ve a 16 celdas y descubre a los escondidos a 8. Se puede poner fuera de la red, pero necesita enlace de datos: un cable hasta tu red (se tiende solo a menos de 24 celdas) o cobertura de radio. Sin enlace no te enseña nada.', artFija: 'Nivel 2. Obús fijo con 20 celdas de alcance sobre lo que vea cualquiera de los tuyos; no dispara a menos de 6 celdas. Gasta munición: la repone por la red. Sin enlace de datos (red o radio) solo tira a lo que ve ella misma, a 8 celdas.',
       hospital: 'Cura a la infantería que tenga a 6 celdas y aloja hasta tres ambulancias (llega con una; las demás se encargan en él). Necesita energía y red.',
       central: 'Da 100 de energía quemando petróleo (1 cada 4 segundos). Sin petróleo da solo el 30 %.', eolica: 'Da 25 de energía sin gastar petróleo.', hidro: 'Nivel 2. Da 160 de energía sin gastar petróleo; solo se construye junto al agua.',
       extractor: 'Saca petróleo de un yacimiento y lo manda por un oleoducto que se tiende solo hasta la refinería, tanque o patio más cercano (30 celdas). Sin oleoducto, o si te lo cortan, rinde el 30 %.',
@@ -7144,6 +7153,7 @@ globalThis.W = { VERSION: 'versión 87' };
       enlace: (n) => (n === 1 ? 'Puesto de avanzada sin enlace aéreo' : n + ' puestos de avanzada sin enlace aéreo'),
       hack: (n) => (n === 1 ? '1 edificio hackeado' : n + ' edificios hackeados'),
       sumDron: (n) => (n === 1 ? '1 portador de drones sin suministro: sus drones no cargan' : n + ' portadores de drones sin suministro: sus drones no cargan') + ' <small>· acércalo a tu red o a un camión</small>',
+      datos: (n) => (n === 1 ? '1 sensor sin enlace de datos: no te da visión' : n + ' sensores sin enlace de datos: no te dan visión') + ' <small>· cable a la red o torre de radio</small>',
       quema: (n) => (n === 1 ? '1 central sin petróleo: da' : n + ' centrales sin petróleo: dan') + ' el 30 % <small>· extrae petróleo o pon eólicas</small>',
       tubo: (n) => (n === 1 ? '1 extractor sin oleoducto: rinde' : n + ' extractores sin oleoducto: rinden') + ' el 30 % <small>· ingeniero civil</small>',
     };
