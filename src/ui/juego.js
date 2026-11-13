@@ -44,6 +44,8 @@
     const continuar = () => {
       try {
         const c = W.cargar(localStorage.getItem('rts.guardado'));
+        const rara = c.m.ents.find((e) => !(e.edif ? W.EDIF : W.UNID)[e.tipo]) || c.m.jug.some((J) => (J.obras || []).some((o) => !W.EDIF[o.tipo])); // una pieza que esta versión ya no tiene: no se puede abrir
+        if (rara) { $('continuar').textContent = 'La partida guardada es de otra versión (' + (c.version || '¿?') + ') y usa piezas que ya no existen: no se puede abrir'; $('continuar').disabled = true; return; }
         $('menu').hidden = true;
         W.jugar(Object.assign({}, c.extra.op, { guardado: c }));
       } catch (e) { $('continuar').textContent = 'La partida guardada no se pudo leer'; $('continuar').disabled = true; }
@@ -51,6 +53,7 @@
     let hayGuardada = false;
     try { hayGuardada = !!localStorage.getItem('rts.guardado'); } catch (e) { /* sin almacenamiento */ }
     $('continuar').hidden = !hayGuardada;
+    if (hayGuardada) try { const v = /"version":"([^"]*)"/.exec(localStorage.getItem('rts.guardado').slice(0, 200)); if (v && v[1] !== W.VERSION) $('continuar').textContent = 'Continuar la partida guardada (es de la ' + (v[1] || 'versión ¿?') + '; el juego va por la ' + W.VERSION + ': puede fallar)'; } catch (e) { /* se deja el texto normal */ }
     $('continuar').addEventListener('click', continuar);
     if (hayGuardada && params.get('cargar')) { try { history.replaceState(null, '', location.pathname); } catch (e) { /* da igual */ } continuar(); return; }
     $('op-s').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') empezar(); });
@@ -1137,7 +1140,7 @@
       for (let k = avisos.length - 1, fila = 0; k >= 0; k--) { // avisos, arriba al centro
         const a = avisos[k], edad = (performance.now() - a.t0) / 6000;
         if (edad >= 1) { avisos.splice(k, 1); continue; }
-        const w = ctx.measureText(a.txt).width + 16, x = (cw - w) / 2, y = 10 + fila++ * 24;
+        const w = ctx.measureText(a.txt).width + 16, x = Math.max(268, (cw - w) / 2), y = 10 + fila++ * 24; // (a la derecha de los botones de arriba)
         ctx.globalAlpha = Math.min(1, (1 - edad) * 3);
         ctx.fillStyle = P.tinta; ctx.fillRect(x, y, w, 20); ctx.fillStyle = P.fondo; ctx.fillText(a.txt, x + 8, y + 14);
         ctx.globalAlpha = 1;
@@ -1479,12 +1482,16 @@
     // Guardar y cargar: la partida entera va al almacenamiento del navegador (una sola, la última).
     function guardar() {
       try {
-        const txt = W.guardar(m, { ia, hist, cam, op: { semilla, N: op.N, inicio: op.inicio, ia: op.ia, estilo: op.estilo, red: op.red, consulta: op.consulta } });
+        const txt = W.guardar(m, { ia, hist, cam, op: { semilla, N: op.N, inicio: op.inicio, ia: op.ia, estilo: op.estilo, red: op.red, mapa: op.mapa, consulta: op.consulta } });
         localStorage.setItem('rts.guardado', txt);
-        aviso('Partida guardada (' + Math.round(txt.length / 1024) + ' KB). Se continúa desde el menú inicial.');
+        aviso('Partida guardada (' + Math.round(txt.length / 1024) + ' KB), minuto ' + Math.floor(m.t / 1200) + '. Se continúa desde el menú inicial; cada guardado pisa el anterior.');
       } catch (e) { aviso('No se pudo guardar: ' + (e && e.name === 'QuotaExceededError' ? 'no cabe en el almacenamiento del navegador' : 'el navegador no lo permite')); }
     }
     $('guardar').addEventListener('click', guardar);
+    $('guardaB').addEventListener('click', (ev) => { guardar(); ev.currentTarget.blur(); });
+    const ponPausa = (v) => { pausa = v; if (pausa) son.motor(0); const b = $('pausaB'); b.classList.toggle('on', pausa); b.textContent = pausa ? 'seguir' : 'pausa'; };
+    $('pausaB').addEventListener('click', (ev) => { ponPausa(!pausa); ev.currentTarget.blur(); });
+    if (cargado && cargado.version !== W.VERSION) setTimeout(() => aviso('Esta partida se guardó con la ' + (cargado.version || 'versión ¿?') + ' y el juego ya va por la ' + W.VERSION + ': puede comportarse raro'), 800);
     $('recargar').addEventListener('click', () => { let hay = false; try { hay = !!localStorage.getItem('rts.guardado'); } catch (e) { /* nada */ } if (!hay) { aviso('No hay ninguna partida guardada'); return; } location.href = location.pathname + '?cargar=1'; });
     // Historial para el resumen final: lo cosechado, el valor del ejército y las bajas de cada bando.
     function muestra() {
@@ -2385,7 +2392,7 @@
         case 'KeyH': cam.x = m.mapa.bases[YO].x; cam.y = m.mapa.bases[YO].y; break;
         case 'Space': if (J.alerta) { cam.x = J.alerta.x; cam.y = J.alerta.y; } break;
         case 'KeyL': if (conRed) { verRed = !verRed; aviso(verRed ? 'Vista de la red: lo sombreado es tu cobertura; en rojo, las líneas que no llegan a tu red' : 'Vista de la red apagada'); } else aviso('Partida clásica: sin red'); break;
-        case 'KeyP': pausa = !pausa; if (pausa) son.motor(0); break;
+        case 'KeyP': ponPausa(!pausa); break;
         case 'KeyM': deslizar = !deslizar; break;
         case 'KeyN': son.alternar(); break;
         case 'Equal': case 'NumpadAdd': raton.x = cw / 2; raton.y = ch / 2; zoom(1.25); break;
