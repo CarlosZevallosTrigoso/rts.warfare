@@ -115,6 +115,7 @@
   W.iaTick = function (m, ia) {
     if ((m.t + ia.j * 7) % 20 !== 0 || m.ganador >= 0) return;
     const j = ia.j, J = m.jug[j];
+    J.esIA = true; // (lo usa la simulación: la IA conserva el alcance antiguo de líneas y depósitos)
     if (!J.vivo) return;
     const E = ESTILOS[ia.estilo];
     const tk = (m.t + ia.j * 7) / 20; // cuántas veces ha pensado: las reglas que van cada cierto tiempo se cuentan con esto (con m.t, las del jugador 2 no caían nunca en su turno)

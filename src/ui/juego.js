@@ -401,7 +401,16 @@
         ctx.fillStyle = COL.rocaLuz; ctx.fill(luz);
         ctx.fillStyle = COL.copa; ctx.fill(copas);
       }
-      if (conRed && (verRed || modo === 'colocar')) { if (redVista !== m.redV) pintarRed(); ctx.drawImage(cRed, ox, oy, N * z, N * z); } // la cobertura: dónde hay suministro y dónde se puede construir
+      if (conRed && (verRed || modo === 'colocar')) { // la cobertura: dónde hay suministro y dónde se puede construir. Círculos lisos (uno por edificio conectado), rellenos de una vez para que no se sumen
+        ctx.fillStyle = P.yo; ctx.globalAlpha = 0.17; ctx.beginPath();
+        for (const e of m.ents) { if (!e.edif || e.infra || e.j !== YO || e.vida <= 0 || !e.conRed) continue; const r = W.cobRadio(e) * z, px = ox + (Math.floor(e.cx) + 0.5) * z, py = oy + (Math.floor(e.cy) + 0.5) * z; if (px + r < 0 || py + r < 0 || px - r > cw || py - r > ch) continue; ctx.moveTo(px + r, py); ctx.arc(px, py, r, 0, TAU); }
+        ctx.fill(); ctx.globalAlpha = 1;
+        if (modo === 'colocar' && tipoColocar === 'deposito' && raton.dentro) { // el depósito que se va a poner: su zona y hasta dónde puede ir
+          ctx.strokeStyle = P.yo; ctx.lineWidth = 1.5; ctx.setLineDash([5, 5]); ctx.globalAlpha = 0.8; ctx.beginPath(); ctx.arc(raton.x, raton.y, (W.ECON.cobNodo + 0.5) * z, 0, TAU); ctx.stroke();
+          ctx.globalAlpha = 0.35; ctx.setLineDash([2, 6]); ctx.beginPath(); for (const e of m.ents) { if (!e.edif || e.infra || e.j !== YO || e.vida <= 0 || !e.conRed || (e.tipo !== 'patio' && e.tipo !== 'deposito')) continue; const px = ox + e.cx * z, py = oy + e.cy * z, r = W.ECON.depositoMax * z; ctx.moveTo(px + r, py); ctx.arc(px, py, r, 0, TAU); } ctx.stroke(); // alcance desde los nodos de la red
+          ctx.setLineDash([]); ctx.globalAlpha = 1;
+        }
+      }
       const infra = m.ents.filter((e) => e.infra && !e.muro), tramos = infra.filter((e) => !e.linea), lineas = infra.filter((e) => e.linea && !e.tubo), tubos = infra.filter((e) => e.tubo); // caminos: cada tramo es una pieza de infraestructura, dibujada como un carril continuo con su borde
       if (tramos.length) {
         const linea = (p) => { ctx.moveTo(ox + p[0] * z, oy + p[1] * z); if (p.length < 4) ctx.lineTo(ox + p[0] * z + 0.01, oy + p[1] * z); for (let k = 2; k < p.length; k += 2) ctx.lineTo(ox + p[k] * z, oy + p[k + 1] * z); };
@@ -1616,7 +1625,7 @@
       patio: 'El centro de la base: desde él se encargan los edificios. Si pierdes todos, pierdes la partida.', central: 'Da energía a los edificios de su red.', refineria: 'Donde descargan las cosechadoras; trae una.', bomba: 'Da agua, que es el tope de tropa. Va junto al agua.',
       cuartel: 'Produce la infantería.', fabrica: 'Produce los vehículos.', torreta: 'Defensa fija contra tierra y aire.', torreCanon: 'Defensa pesada de largo alcance contra blindados.', aerodromo: 'Produce y aloja hasta cinco aviones.',
       antiaerea: 'Defensa fija solo contra el aire: aviones y drones.', estacion: 'Sobre un campo de conocimiento da información rápido; aloja la inteligencia.', laboratorio: 'Da información en la base, sin campo, más despacio. Vale como estación.', obras: 'Produce las unidades civiles: ingeniero civil y excavadora.',
-      deposito: 'Crea una zona con suministro donde también puedes construir. Como todo edificio, tiende solo su cable hasta la red si está a menos de 24 celdas.', misilera: 'Fabrica, guarda y lanza misiles balísticos.', interceptor: 'Derriba los misiles enemigos que entran en su radio.', estDrones: 'Mantiene dos drones de reconocimiento vigilando a su alrededor. Mejorada lleva además bombarderos y kamikazes, y guarda las tecnologías del operador.', inteligencia: 'Entrena espías, aloja dos drones espía de largo alcance y permite el mapeo satelital.',
+      deposito: 'Alarga tu red: crea una zona redonda con suministro donde también puedes construir. Va a 40 celdas o menos de un edificio ya conectado y se cablea solo hasta él; para llegar más lejos, encadena varios.', misilera: 'Fabrica, guarda y lanza misiles balísticos.', interceptor: 'Derriba los misiles enemigos que entran en su radio.', estDrones: 'Mantiene dos drones de reconocimiento vigilando a su alrededor. Mejorada lleva además bombarderos y kamikazes, y guarda las tecnologías del operador.', inteligencia: 'Entrena espías, aloja dos drones espía de largo alcance y permite el mapeo satelital.',
       bunker: 'Entran hasta 4 de infantería (clic derecho sobre él con la tropa seleccionada) y disparan desde dentro recibiendo solo la cuarta parte del daño. Para sacarlos: selecciona el búnker y clic derecho en el suelo. Si lo destruyen, salen heridos.', vigia: 'Sin armas y muy barata: ve a 16 celdas y descubre a los escondidos a 8. Se puede poner fuera de la red, pero necesita enlace de datos: un cable hasta tu red (se tiende solo a menos de 24 celdas) o cobertura de radio. Sin enlace no te enseña nada.', artFija: 'Nivel 2. Obús fijo con 20 celdas de alcance sobre lo que vea cualquiera de los tuyos; no dispara a menos de 6 celdas. Gasta munición: la repone por la red. Sin enlace de datos (red o radio) solo tira a lo que ve ella misma, a 8 celdas.',
       hospital: 'Cura a la infantería que tenga a 6 celdas y aloja hasta tres ambulancias (llega con una; las demás se encargan en él). Necesita energía y red.',
       central: 'Da 100 de energía quemando petróleo (1 cada 4 segundos). Sin petróleo da solo el 30 %.', eolica: 'Da 25 de energía sin gastar petróleo.', hidro: 'Nivel 2. Da 160 de energía sin gastar petróleo; solo se construye junto al agua.',
@@ -2118,7 +2127,7 @@
         if (modo === 'conectar') { // cada clic en un edificio propio lo une con el anterior
           const e = entEn(wx, wy), ids = unidadesSel().filter((u) => UNID[u.tipo].tiende).map((u) => u.id);
           if (!e || !e.edif || e.infra || e.j !== YO) { aviso('Toca un edificio tuyo'); return; }
-          if (conectaDesde && conectaDesde !== e.id && ids.length) { W.orden(m, { t: 'conectar', j: YO, ids, edifs: [conectaDesde, e.id], enc: conectaN > 0 }); conectaN++; son.orden(); }
+          if (conectaDesde && conectaDesde !== e.id && ids.length) { const a = m.porId.get(conectaDesde); if (a && Math.hypot(a.cx - e.cx, a.cy - e.cy) > W.ECON.lineaMax) { aviso('Demasiado lejos: una línea llega a ' + W.ECON.lineaMax + ' celdas. Pon un depósito intermedio'); return; } W.orden(m, { t: 'conectar', j: YO, ids, edifs: [conectaDesde, e.id], enc: conectaN > 0 }); conectaN++; son.orden(); }
           conectaDesde = e.id; marca(e.cx, e.cy, P.bien);
           return;
         }
