@@ -201,9 +201,10 @@
         if (e.mun !== undefined && e.j === YO) { const cap = W.munDe(e.tipo, e.edif); t += e.mun > 0 ? ' · munición ' + Math.round(e.mun / cap * 100) + ' %' : !e.edif && UNID[e.tipo].cat === 'inf' ? ' · sin munición: solo arma corta' : ' · sin munición'; }
         if (!e.edif && e.minasQ !== undefined && e.j === YO) t += ' · minas: ' + e.minasQ;
         if (!e.edif && e.dronMis && e.j === YO) t += ' · dron en misión lejana';
-        if (!e.edif && UNID[e.tipo].dronStock && e.j === YO && e.drStock !== undefined) { t += ' · repuestos: ' + e.drStock + (e.drFpv !== undefined ? ' drones y ' + e.drFpv + ' kamikazes' : ' drones'); const q = e.dr && e.dr.rec[0] ? m.porId.get(e.dr.rec[0]) : null; if (q && q.bat !== undefined && conRed) t += ' · batería ' + Math.round(q.bat / W.ECON.dronBat * 100) + ' %' + (q.casa2 ? ' (cargando)' : ''); }
+        if (!e.edif && UNID[e.tipo].dronStock && e.j === YO && e.drStock !== undefined) { t += ' · repuestos: ' + e.drStock + (e.drFpv !== undefined ? ' drones y ' + e.drFpv + ' kamikazes' : ' drones'); const q = e.dr && e.dr.rec[0] ? m.porId.get(e.dr.rec[0]) : null; if (q && q.bat !== undefined && conRed) t += ' · batería ' + Math.round(q.bat / W.ECON.dronBat * 100) + ' %' + (q.casa2 ? (e.sinSum >= W.ECON.sinSum ? ' (posado: sin suministro no carga)' : ' (cargando)') : ''); }
         if (!e.edif && e.orden === 'zapar' && e.zapa && e.zapa.lista[0] && e.j === YO) t += ' · ' + ({ minar: 'minando', desminar: 'desminando', ponton: 'tendiendo un pontón', volar: 'va a volar un camino' })[e.zapa.lista[0].t];
         if (e.ponton) t += ' · pontón';
+        if (e.edif && EDIF[e.tipo].drones && e.j === YO && (e.sinLuz || (conRed && e.conRed === false))) t += ' · así sus drones no cargan batería';
         if (e.drLlama && e.j === YO) t += ' · drones llamados: posados hasta que los despliegues';
         if (!e.edif && UNID[e.tipo].ambu && e.j === YO && e.ambC !== undefined) { const a = e.amb || {}; t += ' · material ' + Math.round(e.ambC / UNID[e.tipo].ambu.carga * 100) + ' % · ' + (a.est === 'cura' ? 'atendiendo a un herido' : a.est === 'vuelve' || a.est === 'carga' ? 'recargando en el hospital' : a.est === 'ida' ? 'camino de su puesto' : a.punto ? 'en su puesto: cura a los heridos de la zona' : 'en el hospital: sale sola a por los heridos') + (a.punto ? ' · S: de vuelta al hospital' : ' · muévela y se queda a curar allí'); }
         if (e.edif && EDIF[e.tipo].ambulancias && e.j === YO) { const c = W.cupoAmb(m, YO); t += ' · ambulancias ' + c.hay + '/' + c.cupo; }
@@ -315,6 +316,7 @@
       if (e.comb !== undefined && e.comb <= 0) return 'comb';
       if (e.mun === 0) return 'mun';
       if (e.sinDron) return 'dron';
+      if (conRed && UNID[e.tipo].drones && !UNID[e.tipo].mini && e.sinSum >= W.ECON.sinSum) return 'sumDron'; // el portador de drones sin suministro: no carga baterías ni repone
       if (conRed && W.sinRadio(m, e)) return 'radio';
       return conRed && UNID[e.tipo].arma && e.sinSum >= W.ECON.sinSum ? 'sum' : ''; // (a quien no dispara, el suministro no le cambia nada)
     }
@@ -329,11 +331,13 @@
       dron: 'sin drones · llévalo junto a una estación de drones, un puesto logístico o un camión de suministro',
       radio: 'sin radio: no ves lo que ve y obedece con retraso · torre de radio o vehículo de mando',
       hack: 'hackeado: apagado unos segundos',
+      sumDron: 'sin suministro: sus drones no cargan batería ni se reponen · acércalo a tu red o a un camión de suministro',
       quema: 'sin petróleo que quemar: da el 30 % · extrae petróleo o pon eólicas',
       tubo: 'sin oleoducto: rinde el 30 % · ingeniero civil, o una refinería o tanque a menos de 30 celdas',
     };
     function icono(x, y, k) { // disco rojo con el dibujo en blanco
       if (k === 'quema' || k === 'tubo') k = 'comb';
+      if (k === 'sumDron') k = 'sum';
       ctx.fillStyle = P.mal; ctx.beginPath(); ctx.arc(x, y, 8, 0, TAU); ctx.fill();
       ctx.strokeStyle = '#ffffff'; ctx.fillStyle = '#ffffff'; ctx.lineWidth = 1.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath();
       if (k === 'mun') { // tres cartuchos
@@ -1167,10 +1171,15 @@
       if (raton.dentro && !raton.izq && !raton.arrastre && !raton.medio && !giroCerca && !toque) {
         const txt = bajoCursor();
         if (txt) {
-          const w = ctx.measureText(txt).width + 12, x = Math.min(raton.x + 14, cw - w - 4), y = Math.min(raton.y + 18, ch - 22);
-          ctx.fillStyle = P.fondo; ctx.globalAlpha = 0.92; ctx.fillRect(x, y, w, 18); ctx.globalAlpha = 1;
-          ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.strokeRect(x + 0.5, y + 0.5, w - 1, 17);
-          ctx.fillStyle = P.tinta; ctx.fillText(txt, x + 6, y + 13);
+          // Si no cabe en una línea, se parte por los « · » en varias (antes se salía de la pantalla y no se leía el principio).
+          const tope = Math.min(620, cw - 24), lineas = []; let act = '';
+          for (const trozo of txt.split(' · ')) { const cand = act ? act + ' · ' + trozo : trozo; if (act && ctx.measureText(cand).width > tope) { lineas.push(act); act = trozo; } else act = cand; }
+          if (act) lineas.push(act);
+          let w = 0; for (const l of lineas) w = Math.max(w, ctx.measureText(l).width); w = Math.min(w, cw - 20) + 12;
+          const alto = 16 * lineas.length + 2, x = Math.max(4, Math.min(raton.x + 14, cw - w - 4)), y = Math.max(4, Math.min(raton.y + 18, ch - alto - 4));
+          ctx.fillStyle = P.fondo; ctx.globalAlpha = 0.92; ctx.fillRect(x, y, w, alto); ctx.globalAlpha = 1;
+          ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.strokeRect(x + 0.5, y + 0.5, w - 1, alto - 1);
+          ctx.fillStyle = P.tinta; lineas.forEach((l, k) => ctx.fillText(l, x + 6, y + 13 + k * 16));
         }
       }
     }
@@ -1903,6 +1912,7 @@
       sum: (n) => (n === 1 ? '1 unidad sin suministro' : n + ' unidades sin suministro') + ' <small>· fuera de tu red</small>',
       enlace: (n) => (n === 1 ? 'Puesto de avanzada sin enlace aéreo' : n + ' puestos de avanzada sin enlace aéreo'),
       hack: (n) => (n === 1 ? '1 edificio hackeado' : n + ' edificios hackeados'),
+      sumDron: (n) => (n === 1 ? '1 portador de drones sin suministro: sus drones no cargan' : n + ' portadores de drones sin suministro: sus drones no cargan') + ' <small>· acércalo a tu red o a un camión</small>',
       quema: (n) => (n === 1 ? '1 central sin petróleo: da' : n + ' centrales sin petróleo: dan') + ' el 30 % <small>· extrae petróleo o pon eólicas</small>',
       tubo: (n) => (n === 1 ? '1 extractor sin oleoducto: rinde' : n + ' extractores sin oleoducto: rinden') + ' el 30 % <small>· ingeniero civil</small>',
     };
