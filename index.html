@@ -192,6 +192,7 @@
       <div><kbd>Mayús</kbd>+clic derecho: encadenar órdenes</div>
       <div><kbd>R</kbd> patrulla: marca los puntos con clic y cierra con clic derecho · <kbd>E</kbd> explorar sola · <kbd>F</kbd> formación</div>
       <div><kbd>L</kbd> vista de la red: cobertura (suministro y dónde construir) y qué está conectado</div>
+      <div>un edificio destruido deja una ruina que frena mucho a los vehículos; construye encima el mismo edificio y recuperas la mitad, o despéjala con un ingeniero civil (clic derecho). Las explosiones grandes dejan cráteres que frenan a los vehículos y rompen cables</div>
       <div>los edificios tienden solos su cable hasta la red (24 celdas); <kbd>J</kbd> con un ingeniero civil: conectar a mano lo que quede más lejos · <kbd>K</kbd> con la excavadora: camino militar</div>
       <div><kbd>Supr</kbd> demoler el edificio seleccionado</div>
       <div><kbd>G</kbd> guardia: la unidad queda fija · <kbd>C</kbd> colmena sí/no</div>
@@ -602,7 +603,7 @@ globalThis.W = { VERSION: 'versión 85' };
     minaPozo: 40000, // minerales del pozo de una mina (más lo que hubiera en la superficie que tapa)
     vigilaRadio: 8, vigilaMax: 14, protegeDist: 4,
     espiaRadio: 6, espiaInfo: 2, sumiBase: 1, sumiUnidad: 0.5, sumiCarga: 40, // suministro móvil: gasto por ciclo (medio segundo) en vacío y por unidad atendida; y lo que carga por ciclo en el puesto logístico
-    dronMisRadio: 8, autoReserva: 400, autoLargo: 70, cableMax: 24, tuboMax: 30, sinTubo: 0.3, quemaCada: 80, sinCombEnergia: 0.3, /* oleoducto: largo máximo y rendimiento del extractor sin él; central: cada cuántos ticks quema 1 de petróleo y qué fracción da sin él */ bunkerDano: 0.25, ambCarga: 8, hospitalCura: 0.6, /* largo máximo del cable que un edificio nuevo tiende solo hasta la red */
+    dronMisRadio: 8, autoReserva: 400, autoLargo: 70, cableMax: 24, ruinaVale: 0.5, despejaT: 200, craterMax: 300, craterArea: 1.4, craterFreno: 0.5, ruinaFreno: 0.4, craterDano: 150, rellenaT: 60, /* ruinas: lo que se recupera al reconstruir encima y lo que tarda en despejarse una; cráteres: tope, radio mínimo de explosión que los deja, freno a los vehículos, daño a cables y caminos, y lo que tarda en rellenarse uno */ tuboMax: 30, sinTubo: 0.3, quemaCada: 80, sinCombEnergia: 0.3, /* oleoducto: largo máximo y rendimiento del extractor sin él; central: cada cuántos ticks quema 1 de petróleo y qué fracción da sin él */ bunkerDano: 0.25, ambCarga: 8, hospitalCura: 0.6, /* largo máximo del cable que un edificio nuevo tiende solo hasta la red */
     rutaNodos: 30000, // presupuesto de celdas que se exploran por tick buscando rutas
     misilesMax: 10, mejoraMax: 3, mejoraCosto: 0.6, mejoraBono: 0.5, // mejora de un edificio: hasta nivel 3; cada nivel cuesta el 60 % del edificio por el nivel que tiene y rinde un 50 % más
     inicio: 2500, petInicio: 150, cosecha: 5, descarga: 25, colaMax: 9, separacionColocar: 3, goteoCada: 5, vistaInicial: 22, obrasMax: 8, curaUnidad: 0.01, curaEdificio: 0.0025, curaCosto: 0.15, venta: 0.5, trinchera: 0.45, arco: 0.14, arcoTrinchera: 1.05, visAd: 1.3, visLado: 0.75, visAt: 0.3, cono: 1.05, periferia: 1.83, flanco: 1.25, espalda: 1.5, bosqueVeh: 0.6, bosqueCubre: 0.7, reposta: 12, retiroBajo: 0.3, retiroAlto: 0.9, huida: 300, dia: 9600, diaLuz: 6000, nocheVis: 0.7, caminoVel: 1.6, tramoLargo: 4, enlace: 5, cobNodo: 14, cobEdif: 6, lineaVel: 0.12, lineaCelda: 3, sinSum: 400, sinSumRecarga: 1.5, abastDura: 1500, heliRepone: 300, cobAvanzada: 10, hospitalCura: 2, dronFpv: 40, dronBomba: 15, dronRepone: 200, dronFpvCada: 60, hackInfo: 25, hackVeh: 240, hackEdif: 300, hackRecarga: 200, hackCanal: 40, trazaVel: 0.45, caminoLlano: 4, caminoBosque: 12, caminoAgua: 30, mandoCada: 40, mandoGiro: 1.5, captura: 600, capturaRadio: 2, antenaRadio: 12, depositoCada: 8, tallerRadio: 4, ocultaVe: 2.5, chatarra: 0.25, reparaRadio: 8, reparaVeh: 0.5, curaMedico: 0.35, reparaEdif: 0.8, rangos: [2, 5, 10], rangoDano: 0.1, rangoVida: 0.1, cupoAviones: 5, pasada: 7, orbita: 3.5, fuelCae: 80, cavar: 80, aplasta: 10, bonoProd: 0.5, bonoMax: 2.5 };
@@ -1032,6 +1033,8 @@ globalThis.W = { VERSION: 'versión 85' };
     const d = EDIF[tipo], N = m.N;
     const e = { id: m.sigId++, j, tipo, edif: true, x, y, tam: d.tam, cx: x + d.tam / 2, cy: y + d.tam / 2, vida: d.vida, vidaMax: d.vida, recarga: 0, obj: 0, reunion: null, acum: 0, nace: m.t, cola: [], pago: [], prog: 0, sinAgua: false, sinFondos: false, bucle: false, angT: Math.atan2(N / 2 - y, N / 2 - x) };
     for (let dy = 0; dy < d.tam; dy++) for (let dx = 0; dx < d.tam; dx++) { const i = (y + dy) * N + x + dx; m.ocup[i] = e.id; m.paso[i] = 0; m.pasoV[i] = 0; }
+    if (m.ruinas && m.ruinas.length) for (const r of m.ruinas.slice()) if (x < r.x + r.tam && r.x < x + d.tam && y < r.y + r.tam && r.y < y + d.tam) quitarRuina(m, r); // se construye sobre la ruina: se despeja
+    if (m.crater) for (let dy = 0; dy < d.tam; dy++) for (let dx = 0; dx < d.tam; dx++) quitarCrater(m, (y + dy) * N + x + dx);
     if (d.sobreMineral) { // la mina tapa el mineral de superficie: pasa a su pozo
       e.pozo = ECON.minaPozo;
       for (let dy = 0; dy < d.tam; dy++) for (let dx = 0; dx < d.tam; dx++) { const i = (y + dy) * N + x + dx; if (m.mapa.mineral[i] > 0 && m.mapa.tipoMin[i] !== 2) { e.pozo += m.mapa.mineral[i]; m.mapa.mineral[i] = 0; quitarMina(m, i); } }
@@ -1044,6 +1047,54 @@ globalThis.W = { VERSION: 'versión 85' };
       else if (DESTINO_TUBO[tipo]) for (const o of m.ents.slice()) if (o.edif && o.j === j && o.tipo === 'extractor' && o.vida > 0 && !W.entubado(m, o)) autoTubo(m, o);
     }
     return e;
+  }
+  // ---------- ruinas y cráteres ----------
+  // Ruina: lo que deja un edificio destruido. No es una ficha: es una marca en el mapa (m.ruinas y m.escombro por celda). Los vehículos la cruzan
+  // muy despacio; la infantería, sin problema. Se quita construyendo encima (y si es el mismo edificio y dueño, se recupera ECON.ruinaVale del costo) o despejándola.
+  // Cráter: lo deja una explosión grande en llano. Frena a los vehículos y daña el cable, el oleoducto o el camino que pille.
+  function capas(m) { if (!m.escombro) { m.escombro = new Uint8Array(m.N * m.N); m.ruinas = []; } if (!m.crater) { m.crater = new Uint8Array(m.N * m.N); m.crateres = []; } return m; }
+  W.capas = capas;
+  function ponerRuina(m, e) {
+    capas(m); const N = m.N;
+    m.ruinas.push({ x: e.x, y: e.y, tam: e.tam, tipo: e.tipo, j: e.j, t: m.t });
+    for (let dy = 0; dy < e.tam; dy++) for (let dx = 0; dx < e.tam; dx++) m.escombro[(e.y + dy) * N + e.x + dx] = 1; // (no cierra el paso: entre cascotes los vehículos van muy despacio)
+  }
+  W.ruinaEn = (m, x, y) => { if (!m.ruinas) return null; for (const r of m.ruinas) if (x >= r.x && y >= r.y && x < r.x + r.tam && y < r.y + r.tam) return r; return null; };
+  function quitarRuina(m, r) {
+    const k = m.ruinas.indexOf(r); if (k < 0) return; m.ruinas.splice(k, 1); const N = m.N;
+    for (let dy = 0; dy < r.tam; dy++) for (let dx = 0; dx < r.tam; dx++) m.escombro[(r.y + dy) * N + r.x + dx] = 0;
+  }
+  function quitarCrater(m, c) { if (!m.crater || !m.crater[c]) return; m.crater[c] = 0; const k = m.crateres.indexOf(c); if (k >= 0) m.crateres.splice(k, 1); }
+  function dejarCrater(m, x, y, area) {
+    if (m.logistica === false || !(area >= ECON.craterArea)) return;
+    capas(m); const N = m.N, cx = Math.floor(x), cy = Math.floor(y); if (cx < 1 || cy < 1 || cx >= N - 1 || cy >= N - 1) return;
+    const c = cy * N + cx;
+    for (const e of m.ents) { // el cable o el oleoducto que pase por ahí se lleva lo suyo
+      if (!e.linea || e.vida <= 0) continue; const p = e.pts, ax = p[0], ay = p[1], bx = p[2] - ax, by = p[3] - ay, l2 = bx * bx + by * by || 1;
+      const t = Math.max(0, Math.min(1, ((x - ax) * bx + (y - ay) * by) / l2)); if (Math.hypot(ax + bx * t - x, ay + by * t - y) <= 1) e.vida -= ECON.craterDano;
+    }
+    const tr = m.tramoEn && m.tramoEn[c] ? m.porId.get(m.tramoEn[c]) : null; if (tr && tr.vida > 0) { tr.vida -= ECON.craterDano; return; } // sobre camino o puente: lo daña, sin cráter
+    if (m.mapa.terreno[c] !== T.LLANO || m.ocup[c] || m.mapa.mineral[c] || m.mapa.sitioEn[c] || m.escombro[c] || m.crater[c]) return;
+    m.crater[c] = 1; m.crateres.push(c);
+    if (m.crateres.length > ECON.craterMax) m.crater[m.crateres.shift()] = 0; // los más viejos se van cegando solos
+  }
+  W.dejarCrater = dejarCrater;
+  // Ingeniero civil en automático y sin nada mejor que hacer: rellena el cráter más cercano (a 40 celdas como mucho).
+  function autoRellenar(m, u) {
+    if (!m.crateres || !m.crateres.length) return; const N = m.N; let b = -1, db = 40;
+    for (const c of m.crateres) { const d0 = Math.hypot((c % N) + 0.5 - u.x, ((c / N) | 0) + 0.5 - u.y); if (d0 < db) { db = d0; b = c; } }
+    if (b >= 0) { u.orden = 'despejar'; u.despeja = { x: b % N, y: (b / N) | 0, crater: true }; u.despT = 0; u.ruta = null; u.pend = null; }
+  }
+  // Orden «despejar»: ir hasta una ruina (o un cráter) y quitarla.
+  function tickDespejar(m, u) {
+    const q = u.despeja, fin = () => { u.orden = 'nada'; u.despeja = null; u.despT = 0; u.ruta = null; };
+    if (!q) { fin(); return; }
+    const r = q.crater ? null : W.ruinaEn(m, q.x, q.y), hay = q.crater ? m.crater && m.crater[q.y * m.N + q.x] : !!r;
+    if (!hay) { fin(); return; }
+    const tx = q.crater ? q.x + 0.5 : r.x + r.tam / 2, ty = q.crater ? q.y + 0.5 : r.y + r.tam / 2, cerca = q.crater ? 1.6 : r.tam / 2 + 1.6;
+    if (Math.hypot(u.x - tx, u.y - ty) > cerca) { if (u.fallo) { u.fallo = false; u.autoT = m.t + 400; fin(); return; } if (!u.pend && !u.ruta) pedirRuta(m, u, tx, ty, cerca - 0.4); avanzar(m, u); return; }
+    u.ruta = null; u.v = 0; u.despT = (u.despT || 0) + 1;
+    if (u.despT >= (q.crater ? ECON.rellenaT : ECON.despejaT)) { if (q.crater) quitarCrater(m, q.y * m.N + q.x); else quitarRuina(m, r); fin(); }
   }
   // Oleoducto: del extractor al edificio propio más cercano que recibe petróleo (refinería, tanque o patio), hasta ECON.tuboMax celdas.
   // Son tramos como los del cable, pero no llevan energía ni red: solo petróleo. Si el enemigo corta uno, el extractor rinde ECON.sinTubo.
@@ -1683,6 +1734,7 @@ globalThis.W = { VERSION: 'versión 85' };
       danarMuros(m, q.tx, q.ty, d.area, arma, 0.7, 0, -1); // primero se les da blanco a los muros de la zona, y luego cae sobre todo
       for (const e of m.ents) { if (e.vida <= 0 || e.muro) continue; const r = dist(q.tx, q.ty, e); if (r <= d.area) herir(m, e, arma, 1 - 0.6 * (r / d.area), 0); }
       m.efectos.push({ tipo: 'impactoMisil', x2: q.tx, y2: q.ty, area: d.area, j: q.j, clase: q.tipo, t: m.t });
+      dejarCrater(m, q.tx, q.ty, d.area); dejarCrater(m, q.tx + 1, q.ty, d.area); dejarCrater(m, q.tx, q.ty + 1, d.area); dejarCrater(m, q.tx - 1, q.ty - 1, d.area); // un misil deja el suelo hecho un colador
       m.misiles.splice(k, 1);
     }
   }
@@ -2404,7 +2456,9 @@ globalThis.W = { VERSION: 'versión 85' };
       case 'colocar': {
         const i = J.obras.findIndex((o) => o.listo && o.tipo === cmd.tipo);
         if (i < 0 || !W.puedeColocar(m, cmd.j, cmd.tipo, cmd.x, cmd.y)) return;
+        const vieja = m.ruinas ? m.ruinas.find((r) => r.j === cmd.j && r.tipo === cmd.tipo && cmd.x < r.x + r.tam && r.x < cmd.x + EDIF[cmd.tipo].tam && cmd.y < r.y + r.tam && r.y < cmd.y + EDIF[cmd.tipo].tam) : null;
         const e = crearEdificio(m, cmd.j, cmd.tipo, cmd.x, cmd.y);
+        if (vieja) { const q = Math.floor(EDIF[cmd.tipo].costo * ECON.ruinaVale); J.minerales += q; m.efectos.push({ tipo: 'reconstruye', x1: e.cx, y1: e.cy, j: cmd.j, n: q, t: m.t }); } // sobre su propia ruina: se aprovecha la mitad
         J.obras.splice(i, 1);
         if (e.tipo === 'refineria') crearUnidad(m, cmd.j, 'cosechadora', W.cercaLibre(m, e.cx, e.y + e.tam + 0.5));
         if (e.tipo === 'hospital') crearUnidad(m, cmd.j, 'ambulancia', W.cercaLibre(m, e.cx, e.y + e.tam + 0.5, true)); // llega con una ambulancia
@@ -2579,6 +2633,11 @@ globalThis.W = { VERSION: 'versión 85' };
         if (e && e.edif && e.j === cmd.j && W.PRODUCE[e.tipo]) e.reunion = { x: cmd.x, y: cmd.y };
         return;
       }
+      case 'despejar': { // el ingeniero civil (o la excavadora) va a una ruina y la despeja
+        const r = W.ruinaEn(m, Math.floor(cmd.x), Math.floor(cmd.y)); if (!r) return;
+        for (const u of propias(m, cmd)) { if (!UNID[u.tipo].tiende && u.tipo !== 'excavadora') continue; limpiar(u); u.orden = 'despejar'; u.despeja = { x: r.x, y: r.y }; u.despT = 0; u.ruta = null; u.pend = null; u.obj = 0; }
+        return;
+      }
       case 'guarnecer': { // la infantería entra en un búnker propio
         const b = m.porId.get(cmd.en); if (!b || !b.edif || b.j !== cmd.j || !EDIF[b.tipo].bunker || b.vida <= 0) return;
         let libres = EDIF[b.tipo].bunker - W.enBunker(m, b); for (const u of m.ents) if (!u.edif && u.aBunk === b.id) libres--;
@@ -2624,6 +2683,7 @@ globalThis.W = { VERSION: 'versión 85' };
     const terr = m.mapa.terreno[Math.floor(u.y) * N + Math.floor(u.x)];
     let freno = 1; // alambrada enemiga: a la infantería la frena mucho; un vehículo la aplasta al pasar
     if (m.muro && !d.aire) { const ca = Math.floor(u.y) * N + Math.floor(u.x); if (m.muro[ca] === 1 && m.muroJ[ca] - 1 !== u.j) { if (d.cat === 'veh') quitarMuro(m, ca); else freno = 0.3; } }
+    if (m.crater && d.cat === 'veh') { const ca = Math.floor(u.y) * N + Math.floor(u.x); if (m.escombro[ca]) freno *= ECON.ruinaFreno; else if (m.crater[ca]) freno *= ECON.craterFreno; } // cascotes y cráteres frenan a los vehículos
     const vmax = (u.comb !== undefined && u.comb <= 0 ? 0 : 1) * freno * (u.tope && u.tope < vel && !u.suelto ? u.tope : vel) * (u.marcha ? u.fm || 1 : 1) * (u.orden === 'trazar' && !(viaDe(m)[u.j][Math.floor(u.y) * N + Math.floor(u.x)] && m.via[u.j][c]) ? ECON.trazaVel : d.cat === 'veh' && terr >= T.CAMINO && viaDe(m)[u.j][Math.floor(u.y) * N + Math.floor(u.x)] ? ECON.caminoVel : 1); // (trazando sobre camino ya hecho va a su paso normal) // por camino los vehículos van más rápido; trazándolo, despacio
     const alFinal = u.ri === u.ruta.length - 1 && u.fin;
     const carril = !alFinal && d.cat === 'veh' && u.orden !== 'trazar' && m.carrilX && m.carrilX[c] > 0 && m.mapa.terreno[c] >= T.CAMINO && viaDe(m)[u.j][c]; // por camino, los vehículos van por el carril y no por el centro de cada celda
@@ -3032,7 +3092,7 @@ globalThis.W = { VERSION: 'versión 85' };
       if (dd > vel) { p.x += (dx / dd) * vel; p.y += (dy / dd) * vel; continue; }
       let acierto = false;
       if (arma.area) { // explosión: daña a todo enemigo dentro del radio
-        danarMuros(m, p.tx, p.ty, arma.area, arma, p.mult, p.de, p.j);
+        danarMuros(m, p.tx, p.ty, arma.area, arma, p.mult, p.de, p.j); dejarCrater(m, p.tx, p.ty, arma.area);
         for (const e of m.ents) if (e.j !== p.j && e.vida > 0 && !e.muro && dist(p.tx, p.ty, e) <= arma.area) { herir(m, e, arma, p.mult, p.de); acierto = true; }
       } else {
         const o = m.porId.get(p.obj);
@@ -3274,13 +3334,14 @@ globalThis.W = { VERSION: 'versión 85' };
       if (u.orden === 'trazar') { tickTraza(m, u); return; }
       if (u.orden === 'conectar') { tickConectar(m, u); return; }
       if (u.orden === 'entubar') { tickEntubar(m, u); return; }
+      if (u.orden === 'despejar') { tickDespejar(m, u); return; }
       if (u.orden === 'hackear') { tickHackear(m, u); return; }
       if (u.orden === 'murar') { tickMurar(m, u); return; }
       if (u.orden === 'zapar') { tickZapar(m, u); return; }
       if (u.orden === 'recuperar') { tickRecuperar(m, u); return; }
       if (u.orden !== 'nada') { u.arregla = 0; if (avanzar(m, u) || (!u.ruta && !u.pend)) u.orden = 'nada'; return; }
       if (d.recupera && (m.t + u.id) % 40 === 0 && m.cascos && m.cascos.length) autoRecuperar(m, u);
-      if (d.tiende && u.auto && m.logistica !== false && (m.t + u.id) % 30 === 0 && m.t >= (u.autoT || 0)) { autoConectar(m, u); if (u.orden === 'nada') autoEntubar(m, u); }
+      if (d.tiende && u.auto && m.logistica !== false && (m.t + u.id) % 30 === 0 && m.t >= (u.autoT || 0)) { autoConectar(m, u); if (u.orden === 'nada') autoEntubar(m, u); if (u.orden === 'nada' && !u.arregla) autoRellenar(m, u); }
       if (d.repara || d.cura) tickIngeniero(m, u);
       return;
     }
@@ -3763,6 +3824,7 @@ globalThis.W = { VERSION: 'versión 85' };
         e.cola.length = 0;
         for (let dy = 0; dy < e.tam; dy++) for (let dx = 0; dx < e.tam; dx++) { const i = (e.y + dy) * N + e.x + dx; m.ocup[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
         if (e.tam === 1 && m.muro && m.muro[e.y * N + e.x] >= 2) { m.paso[e.y * N + e.x] = 0; m.pasoV[e.y * N + e.x] = 0; } // debajo sigue el muro
+        if (m.logistica !== false && !e.vendido && !EDIF[e.tipo].sobreMineral && e.tipo !== 'avanzada' && EDIF[e.tipo].costo >= 300) ponerRuina(m, e); // destruido (no demolido): queda la ruina
       }
     }
     if (muertos) {
@@ -5416,6 +5478,8 @@ globalThis.W = { VERSION: 'versión 85' };
       const sitio = sitioPorCelda.get(c);
       if (sitio) return sitio === 'petroleo' ? 'Yacimiento de petróleo' : 'Campo de conocimiento';
       if (m.mapa.tipoMin[c] === 1) return 'Minerales · ' + m.mapa.mineral[c];
+      { const ru = W.ruinaEn(m, c % N, (c / N) | 0); if (ru) return 'Ruina de ' + EDIF[ru.tipo].nombre.toLowerCase() + ' · frena mucho a los vehículos' + (ru.j === YO ? ' · reconstrúyelo encima a mitad de precio, o clic derecho con ingeniero civil: despejar' : ' · clic derecho con ingeniero civil: despejar'); }
+      if (m.crater && m.crater[c]) return 'Cráter · frena a los vehículos · lo rellena un ingeniero civil';
       if (W.vetaDe(m)[c] && !m.mapa.mineral[c] && !m.ocup[c]) return 'Veta agotada en superficie · aquí se puede construir una mina (nivel 2)';
       if (m.mapa.tipoMin[c] === 2) return 'Minerales raros · ' + m.mapa.mineral[c];
       return NOMBRE_TERRENO[m.mapa.terreno[c]];
@@ -5691,6 +5755,22 @@ globalThis.W = { VERSION: 'versión 85' };
         for (const c of vs) { if (mp.mineral[c] > 0 || m.ocup[c] || !f[c]) continue; const x = c % N, y = (c / N) | 0; if (fuera(x, y)) continue; const px = ox + (x + 0.5) * z, py = oy + (y + 0.5) * z, r = z * (0.3 + 0.12 * Math.sin(c * 1.3)); ctx.moveTo(px + r, py); ctx.arc(px, py, r, 0, TAU); }
         ctx.fill();
         if (z >= 8) { ctx.fillStyle = 'rgba(50,70,45,0.45)'; ctx.beginPath(); for (const c of vs) { if (mp.mineral[c] > 0 || m.ocup[c] || !f[c]) continue; const x = c % N, y = (c / N) | 0; if (fuera(x, y)) continue; for (let k = 0; k < 3; k++) { const a = c * 1.7 + k * 2.1, qx = ox + (x + 0.5) * z + Math.cos(a) * z * 0.22, qy = oy + (y + 0.5) * z + Math.sin(a) * z * 0.22; ctx.moveTo(qx + z * 0.05, qy); ctx.arc(qx, qy, z * 0.05, 0, TAU); } } ctx.fill(); }
+      }
+      if (m.crateres && m.crateres.length) { // cráteres: un hoyo oscuro con el borde levantado
+        ctx.fillStyle = 'rgba(60,52,44,0.5)'; ctx.beginPath();
+        for (const c of m.crateres) { if (!f[c]) continue; const x = c % N, y = (c / N) | 0; if (fuera(x, y)) continue; const px = ox + (x + 0.5) * z, py = oy + (y + 0.5) * z, r = z * (0.3 + 0.08 * Math.sin(c * 2.1)); ctx.moveTo(px + r, py); ctx.arc(px, py, r, 0, TAU); }
+        ctx.fill();
+        if (z >= 7) { ctx.strokeStyle = 'rgba(60,52,44,0.55)'; ctx.lineWidth = Math.max(1, z * 0.07); ctx.beginPath(); for (const c of m.crateres) { if (!f[c]) continue; const x = c % N, y = (c / N) | 0; if (fuera(x, y)) continue; const px = ox + (x + 0.5) * z, py = oy + (y + 0.5) * z, r = z * 0.44; ctx.moveTo(px + r, py); ctx.arc(px, py, r, 0, TAU); } ctx.stroke(); }
+      }
+      if (m.ruinas && m.ruinas.length) { // ruinas: la planta del edificio en gris, con cascotes
+        for (const r of m.ruinas) {
+          if (!f[r.y * N + r.x] && !f[(r.y + r.tam - 1) * N + r.x + r.tam - 1]) continue; if (fuera(r.x, r.y) && fuera(r.x + r.tam, r.y + r.tam)) continue;
+          const px = ox + r.x * z, py = oy + r.y * z, t = r.tam * z;
+          ctx.fillStyle = 'rgba(90,88,84,0.35)'; ctx.fillRect(px + t * 0.06, py + t * 0.06, t * 0.88, t * 0.88);
+          ctx.strokeStyle = 'rgba(70,68,64,0.8)'; ctx.lineWidth = Math.max(1, z * 0.08); ctx.setLineDash([z * 0.35, z * 0.25]); ctx.strokeRect(px + t * 0.06, py + t * 0.06, t * 0.88, t * 0.88); ctx.setLineDash([]);
+          ctx.fillStyle = 'rgba(60,58,54,0.75)'; const n = 4 + r.tam * 4;
+          for (let k = 0; k < n; k++) { const a = Math.sin(r.x * 7.3 + r.y * 3.1 + k * 12.9898) * 43758.5453, b = Math.sin(r.x * 1.7 + r.y * 9.2 + k * 78.233) * 12543.123, fx = a - Math.floor(a), fy = b - Math.floor(b), w = t * (0.07 + 0.09 * ((k * 37) % 5) / 5); ctx.fillRect(px + t * (0.1 + fx * 0.72), py + t * (0.1 + fy * 0.72), w, w * 0.7); }
+        }
       }
       const chatarra = [];
       ctx.fillStyle = P.mineral; ctx.beginPath();
@@ -6433,6 +6513,8 @@ globalThis.W = { VERSION: 'versión 85' };
         } else if (d.tipo === 'minaPuesta') {
         } else if (d.tipo === 'demora') {
           if (d.j === YO && performance.now() - (dibujar.tDemora || 0) > 6000) { dibujar.tDemora = performance.now(); aviso('Fuera de cobertura de radio: la orden llegará en 3 segundos'); }
+        } else if (d.tipo === 'reconstruye') {
+          if (d.j === YO) aviso('Reconstruido sobre su ruina: recuperas ' + d.n + ' minerales');
         } else if (d.tipo === 'almacenPerdido') {
           if (d.j === YO) { aviso('Almacén destruido: pierdes ' + d.n + ' minerales' + (d.pet ? ' y ' + d.pet + ' de petróleo' : '') + '; la mitad queda como botín'); son.alerta(); } else if (d.n) aviso('Botín: ' + Math.floor(d.n / 2) + ' minerales del rival en el suelo');
         } else if (d.tipo === 'dronRepuesto') {
@@ -6770,7 +6852,7 @@ globalThis.W = { VERSION: 'versión 85' };
       tanque: 'El vehículo de combate básico.', artilleria: 'Dispara muy lejos, en área, a lo que vea cualquiera de los tuyos.', pesado: 'Tanque lento, muy duro y de gran pegada.', blindado: 'Rápido, con ametralladora: contra infantería.', antiaereoMovil: 'Antiaérea sobre ruedas para acompañar al ejército.',
       radioOp: 'Lleva la radio a pie: da cobertura a 15 celdas a su alrededor, para que la tropa que acompaña vea y obedezca sin retraso lejos de tus torres.', vehRadio: 'Radio sobre ruedas: cobertura a 36 celdas. Sin armas; llévalo detrás del ejército.', dronRadio: 'Repetidor volante: cobertura a 30 celdas donde lo mandes patrullar, mientras le dure el combustible; luego vuelve a repostar a la central de inteligencia.',
       transporte: 'Lleva infantería dentro, rápido.', lanzacohetes: 'Salvas de cohetes a mucha distancia, sobre una zona.', mando: 'Los tuyos a su alrededor ven en redondo y giran más rápido; interfiere drones enemigos. Gasta información.', comandoDrones: 'Lleva drones de reconocimiento, bombarderos y kamikazes que atacan solos.',
-      patioMovil: 'Se despliega como un patio nuevo donde lo lleves.', cosechadora: 'Recoge minerales (y chatarra) y los lleva a la refinería.', excavadora: 'Traza caminos militares: abre el bosque y tiende puentes.', civil: 'En automático repara los edificios dañados y vuelve a tender los cables que corte el enemigo. También conecta a mano edificios que queden a más de 24 celdas de la red.',
+      patioMovil: 'Se despliega como un patio nuevo donde lo lleves.', cosechadora: 'Recoge minerales (y chatarra) y los lleva a la refinería.', excavadora: 'Traza caminos militares: abre el bosque y tiende puentes.', civil: 'En automático repara los edificios dañados, vuelve a tender los cables y oleoductos que corte el enemigo y rellena los cráteres. Con clic derecho sobre una ruina, la despeja. También conecta a mano edificios que queden a más de 24 celdas de la red.',
       caza: 'Avión contra aviones y vehículos; ataca de pasada.', bombardero: 'Suelta bombas en área sobre edificios y tropa.', dron: 'Avión de reconocimiento de largo alcance, sin armas.', helicoptero: 'Se queda sobre el blanco; bueno contra vehículos.',
     };
     function pintarGuia() {
@@ -7327,6 +7409,8 @@ globalThis.W = { VERSION: 'versión 85' };
             W.orden(m, { t: 'aerotransporte', j: YO, ids: infs.map((u) => u.id), de: de.id, a: o.id }); marca(wx, wy, P.bien); son.orden(); aviso('Traslado por aire · ' + UNID.heliTropa.costo + ' minerales por cada ocho'); return;
           }
         }
+        { const ru = W.ruinaEn(m, Math.floor(wx), Math.floor(wy)), obr = us.filter((u) => UNID[u.tipo].tiende || u.tipo === 'excavadora'); // clic derecho sobre una ruina con ingeniero civil o excavadora: la despeja
+          if (ru && obr.length) { W.orden(m, { t: 'despejar', j: YO, ids: obr.map((u) => u.id), x: wx, y: wy }); marca(wx, wy, P.bien); son.orden(); aviso('A despejar la ruina'); return; } }
         if (o && o.j === YO && o.edif && EDIF[o.tipo] && EDIF[o.tipo].bunker && us.some((u) => UNID[u.tipo].cat === 'inf')) { // clic derecho sobre un búnker propio: la infantería entra
           if (W.enBunker(m, o) >= EDIF[o.tipo].bunker) { aviso('El búnker está lleno'); return; }
           W.orden(m, { t: 'guarnecer', j: YO, ids: us.filter((u) => UNID[u.tipo].cat === 'inf').map((u) => u.id), en: o.id }); marca(wx, wy, P.bien); son.orden();

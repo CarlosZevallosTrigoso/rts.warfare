@@ -247,6 +247,8 @@
       const sitio = sitioPorCelda.get(c);
       if (sitio) return sitio === 'petroleo' ? 'Yacimiento de petróleo' : 'Campo de conocimiento';
       if (m.mapa.tipoMin[c] === 1) return 'Minerales · ' + m.mapa.mineral[c];
+      { const ru = W.ruinaEn(m, c % N, (c / N) | 0); if (ru) return 'Ruina de ' + EDIF[ru.tipo].nombre.toLowerCase() + ' · frena mucho a los vehículos' + (ru.j === YO ? ' · reconstrúyelo encima a mitad de precio, o clic derecho con ingeniero civil: despejar' : ' · clic derecho con ingeniero civil: despejar'); }
+      if (m.crater && m.crater[c]) return 'Cráter · frena a los vehículos · lo rellena un ingeniero civil';
       if (W.vetaDe(m)[c] && !m.mapa.mineral[c] && !m.ocup[c]) return 'Veta agotada en superficie · aquí se puede construir una mina (nivel 2)';
       if (m.mapa.tipoMin[c] === 2) return 'Minerales raros · ' + m.mapa.mineral[c];
       return NOMBRE_TERRENO[m.mapa.terreno[c]];
@@ -522,6 +524,22 @@
         for (const c of vs) { if (mp.mineral[c] > 0 || m.ocup[c] || !f[c]) continue; const x = c % N, y = (c / N) | 0; if (fuera(x, y)) continue; const px = ox + (x + 0.5) * z, py = oy + (y + 0.5) * z, r = z * (0.3 + 0.12 * Math.sin(c * 1.3)); ctx.moveTo(px + r, py); ctx.arc(px, py, r, 0, TAU); }
         ctx.fill();
         if (z >= 8) { ctx.fillStyle = 'rgba(50,70,45,0.45)'; ctx.beginPath(); for (const c of vs) { if (mp.mineral[c] > 0 || m.ocup[c] || !f[c]) continue; const x = c % N, y = (c / N) | 0; if (fuera(x, y)) continue; for (let k = 0; k < 3; k++) { const a = c * 1.7 + k * 2.1, qx = ox + (x + 0.5) * z + Math.cos(a) * z * 0.22, qy = oy + (y + 0.5) * z + Math.sin(a) * z * 0.22; ctx.moveTo(qx + z * 0.05, qy); ctx.arc(qx, qy, z * 0.05, 0, TAU); } } ctx.fill(); }
+      }
+      if (m.crateres && m.crateres.length) { // cráteres: un hoyo oscuro con el borde levantado
+        ctx.fillStyle = 'rgba(60,52,44,0.5)'; ctx.beginPath();
+        for (const c of m.crateres) { if (!f[c]) continue; const x = c % N, y = (c / N) | 0; if (fuera(x, y)) continue; const px = ox + (x + 0.5) * z, py = oy + (y + 0.5) * z, r = z * (0.3 + 0.08 * Math.sin(c * 2.1)); ctx.moveTo(px + r, py); ctx.arc(px, py, r, 0, TAU); }
+        ctx.fill();
+        if (z >= 7) { ctx.strokeStyle = 'rgba(60,52,44,0.55)'; ctx.lineWidth = Math.max(1, z * 0.07); ctx.beginPath(); for (const c of m.crateres) { if (!f[c]) continue; const x = c % N, y = (c / N) | 0; if (fuera(x, y)) continue; const px = ox + (x + 0.5) * z, py = oy + (y + 0.5) * z, r = z * 0.44; ctx.moveTo(px + r, py); ctx.arc(px, py, r, 0, TAU); } ctx.stroke(); }
+      }
+      if (m.ruinas && m.ruinas.length) { // ruinas: la planta del edificio en gris, con cascotes
+        for (const r of m.ruinas) {
+          if (!f[r.y * N + r.x] && !f[(r.y + r.tam - 1) * N + r.x + r.tam - 1]) continue; if (fuera(r.x, r.y) && fuera(r.x + r.tam, r.y + r.tam)) continue;
+          const px = ox + r.x * z, py = oy + r.y * z, t = r.tam * z;
+          ctx.fillStyle = 'rgba(90,88,84,0.35)'; ctx.fillRect(px + t * 0.06, py + t * 0.06, t * 0.88, t * 0.88);
+          ctx.strokeStyle = 'rgba(70,68,64,0.8)'; ctx.lineWidth = Math.max(1, z * 0.08); ctx.setLineDash([z * 0.35, z * 0.25]); ctx.strokeRect(px + t * 0.06, py + t * 0.06, t * 0.88, t * 0.88); ctx.setLineDash([]);
+          ctx.fillStyle = 'rgba(60,58,54,0.75)'; const n = 4 + r.tam * 4;
+          for (let k = 0; k < n; k++) { const a = Math.sin(r.x * 7.3 + r.y * 3.1 + k * 12.9898) * 43758.5453, b = Math.sin(r.x * 1.7 + r.y * 9.2 + k * 78.233) * 12543.123, fx = a - Math.floor(a), fy = b - Math.floor(b), w = t * (0.07 + 0.09 * ((k * 37) % 5) / 5); ctx.fillRect(px + t * (0.1 + fx * 0.72), py + t * (0.1 + fy * 0.72), w, w * 0.7); }
+        }
       }
       const chatarra = [];
       ctx.fillStyle = P.mineral; ctx.beginPath();
@@ -1264,6 +1282,8 @@
         } else if (d.tipo === 'minaPuesta') {
         } else if (d.tipo === 'demora') {
           if (d.j === YO && performance.now() - (dibujar.tDemora || 0) > 6000) { dibujar.tDemora = performance.now(); aviso('Fuera de cobertura de radio: la orden llegará en 3 segundos'); }
+        } else if (d.tipo === 'reconstruye') {
+          if (d.j === YO) aviso('Reconstruido sobre su ruina: recuperas ' + d.n + ' minerales');
         } else if (d.tipo === 'almacenPerdido') {
           if (d.j === YO) { aviso('Almacén destruido: pierdes ' + d.n + ' minerales' + (d.pet ? ' y ' + d.pet + ' de petróleo' : '') + '; la mitad queda como botín'); son.alerta(); } else if (d.n) aviso('Botín: ' + Math.floor(d.n / 2) + ' minerales del rival en el suelo');
         } else if (d.tipo === 'dronRepuesto') {
@@ -1601,7 +1621,7 @@
       tanque: 'El vehículo de combate básico.', artilleria: 'Dispara muy lejos, en área, a lo que vea cualquiera de los tuyos.', pesado: 'Tanque lento, muy duro y de gran pegada.', blindado: 'Rápido, con ametralladora: contra infantería.', antiaereoMovil: 'Antiaérea sobre ruedas para acompañar al ejército.',
       radioOp: 'Lleva la radio a pie: da cobertura a 15 celdas a su alrededor, para que la tropa que acompaña vea y obedezca sin retraso lejos de tus torres.', vehRadio: 'Radio sobre ruedas: cobertura a 36 celdas. Sin armas; llévalo detrás del ejército.', dronRadio: 'Repetidor volante: cobertura a 30 celdas donde lo mandes patrullar, mientras le dure el combustible; luego vuelve a repostar a la central de inteligencia.',
       transporte: 'Lleva infantería dentro, rápido.', lanzacohetes: 'Salvas de cohetes a mucha distancia, sobre una zona.', mando: 'Los tuyos a su alrededor ven en redondo y giran más rápido; interfiere drones enemigos. Gasta información.', comandoDrones: 'Lleva drones de reconocimiento, bombarderos y kamikazes que atacan solos.',
-      patioMovil: 'Se despliega como un patio nuevo donde lo lleves.', cosechadora: 'Recoge minerales (y chatarra) y los lleva a la refinería.', excavadora: 'Traza caminos militares: abre el bosque y tiende puentes.', civil: 'En automático repara los edificios dañados y vuelve a tender los cables que corte el enemigo. También conecta a mano edificios que queden a más de 24 celdas de la red.',
+      patioMovil: 'Se despliega como un patio nuevo donde lo lleves.', cosechadora: 'Recoge minerales (y chatarra) y los lleva a la refinería.', excavadora: 'Traza caminos militares: abre el bosque y tiende puentes.', civil: 'En automático repara los edificios dañados, vuelve a tender los cables y oleoductos que corte el enemigo y rellena los cráteres. Con clic derecho sobre una ruina, la despeja. También conecta a mano edificios que queden a más de 24 celdas de la red.',
       caza: 'Avión contra aviones y vehículos; ataca de pasada.', bombardero: 'Suelta bombas en área sobre edificios y tropa.', dron: 'Avión de reconocimiento de largo alcance, sin armas.', helicoptero: 'Se queda sobre el blanco; bueno contra vehículos.',
     };
     function pintarGuia() {
@@ -2158,6 +2178,8 @@
             W.orden(m, { t: 'aerotransporte', j: YO, ids: infs.map((u) => u.id), de: de.id, a: o.id }); marca(wx, wy, P.bien); son.orden(); aviso('Traslado por aire · ' + UNID.heliTropa.costo + ' minerales por cada ocho'); return;
           }
         }
+        { const ru = W.ruinaEn(m, Math.floor(wx), Math.floor(wy)), obr = us.filter((u) => UNID[u.tipo].tiende || u.tipo === 'excavadora'); // clic derecho sobre una ruina con ingeniero civil o excavadora: la despeja
+          if (ru && obr.length) { W.orden(m, { t: 'despejar', j: YO, ids: obr.map((u) => u.id), x: wx, y: wy }); marca(wx, wy, P.bien); son.orden(); aviso('A despejar la ruina'); return; } }
         if (o && o.j === YO && o.edif && EDIF[o.tipo] && EDIF[o.tipo].bunker && us.some((u) => UNID[u.tipo].cat === 'inf')) { // clic derecho sobre un búnker propio: la infantería entra
           if (W.enBunker(m, o) >= EDIF[o.tipo].bunker) { aviso('El búnker está lleno'); return; }
           W.orden(m, { t: 'guarnecer', j: YO, ids: us.filter((u) => UNID[u.tipo].cat === 'inf').map((u) => u.id), en: o.id }); marca(wx, wy, P.bien); son.orden();
