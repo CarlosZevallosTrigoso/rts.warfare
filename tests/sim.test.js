@@ -2638,6 +2638,48 @@ prueba('panel ADMIN: cada interruptor por separado', () => {
   assert.ok(J.nivel === 3 && J.mejoras.canonLargo && !J.admin, 'nivel y mejoras quedan puestos');
 });
 
+prueba('clima: sale de la semilla; la lluvia frena y gasta fuera de camino, el vado más; la tormenta deja en tierra lo que vuela; en la partida clásica no hay', () => {
+  const E = W.ECON, B = E.climaBloque;
+  const bloque = (m, est) => { for (let k = E.climaCalma; k < 400; k++) { m.t = k * B; if (W.clima(m) === est) return k; } throw new Error('sin bloque ' + est); };
+  { const m = W.crearMundo(5, {}); for (let k = 0; k < 60; k++) { m.t = k * B; assert.strictEqual(W.clima(m), 0, 'clima en la partida clásica'); } }
+  { const m = W.crearMundo(5, { logistica: true, clima: false }); for (let k = 0; k < 60; k++) { m.t = k * B; assert.strictEqual(W.clima(m), 0, 'clima apagado'); } }
+  const a = W.crearMundo(5, { logistica: true }), b = W.crearMundo(5, { logistica: true }); let sec = '';
+  for (let k = 0; k < 60; k++) { a.t = b.t = k * B; assert.strictEqual(W.clima(a), W.clima(b)); sec += W.clima(a); if (k < E.climaCalma) assert.strictEqual(W.clima(a), 0, 'los primeros minutos, despejados'); }
+  assert.ok(sec.includes('1') && sec.includes('2') && sec.split('0').length > 25, 'reparto raro: ' + sec);
+  { const k = bloque(a, 1); a.t = k * B - 400; let sg = W.climaSig(a); if (W.clima(a) !== 1) { assert.strictEqual(sg.est, 1); assert.strictEqual(sg.en, 400); } }
+  // Un tanque en llano, lejos de todo: lo que anda en 200 ticks y lo que gasta, con cada clima.
+  const anda = (est, vado) => {
+    const m = W.crearMundo(5, { logistica: true }); m.jug[0].dios = true; m.t = est ? bloque(m, est) * B + 5 : 5;
+    const N = m.N, t = m.mapa.terreno; let c0 = -1;
+    for (let y = 30; y < N - 30 && c0 < 0; y++) for (let x = 30; x < N - 60 && c0 < 0; x++) { let bien = true; for (let d = -2; d < 40 && bien; d++) for (let e = -2; e <= 2; e++) { const c = (y + e) * N + x + d; if (t[c] !== 0 || m.ocup[c] || W.esVado(m, c)) { bien = false; break; } } if (bien) c0 = y * N + x; }
+    assert.ok(c0 >= 0, 'sin llano para la prueba');
+    if (vado) for (let d = -2; d < 40; d++) for (let e = -2; e <= 2; e++) m.vado[c0 + e * N + d] = 1;
+    const u = W.crearUnidad(m, 0, 'tanque', c0), x0 = u.x, comb0 = u.comb;
+    W.orden(m, { t: 'mover', j: 0, ids: [u.id], x: u.x + 36, y: u.y }); for (let i = 0; i < 260; i++) W.tick(m);
+    return { d: u.x - x0, gasto: (comb0 - u.comb) / (u.x - x0) };
+  };
+  const seco = anda(0), lluvia = anda(1), vado = anda(1, true), torm = anda(2);
+  assert.ok(lluvia.d < seco.d * 0.85 && lluvia.d > seco.d * 0.6, 'la lluvia no frena lo esperado: ' + seco.d + ' / ' + lluvia.d);
+  assert.ok(vado.d < lluvia.d * 0.8, 'el vado no frena más que el barro: ' + lluvia.d + ' / ' + vado.d);
+  assert.ok(torm.d < seco.d * 0.85, 'la tormenta no frena');
+  assert.ok(lluvia.gasto > seco.gasto * 1.3, 'la lluvia no gasta más: ' + seco.gasto + ' / ' + lluvia.gasto);
+  // Tormenta: un caza posado con orden no despega hasta que pasa, y uno en vuelo vuelve a posarse.
+  { const m = W.crearMundo(5, { logistica: true }); m.jug[0].dios = true; const pt = m.ents.find((e) => e.tipo === 'patio' && e.j === 0);
+    let ae = null; for (let d = 6; d < 30 && !ae; d++) for (let an = 0; an < 6.3 && !ae; an += 0.3) { const x = Math.round(pt.cx + Math.cos(an) * d), y = Math.round(pt.cy + Math.sin(an) * d); if (!W.porQueNo(m, 0, 'aerodromo', x, y)) ae = W.crearEdificio(m, 0, 'aerodromo', x, y); }
+    assert.ok(ae, 'sin sitio para el aeródromo');
+    const cz = W.crearUnidad(m, 0, 'caza', W.cercaLibre(m, ae.cx, ae.cy, true)); cz.casa = ae.id;
+    for (let i = 0; i < 200; i++) W.tick(m); assert.ok(cz.enTierra, 'el caza no se posó');
+    W.orden(m, { t: 'mover', j: 0, ids: [cz.id], x: ae.cx + 25, y: ae.cy }); for (let i = 0; i < 60; i++) W.tick(m);
+    assert.ok(!cz.enTierra, 'con buen tiempo el caza no despegó');
+    const k = bloque(m, 2); m.t = k * B + 1; for (let i = 0; i < 400; i++) W.tick(m);
+    assert.ok(cz.enTierra && cz.vida > 0, 'con tormenta el caza no volvió a posarse');
+    W.orden(m, { t: 'mover', j: 0, ids: [cz.id], x: ae.cx + 25, y: ae.cy }); for (let i = 0; i < 100; i++) W.tick(m);
+    assert.ok(cz.enTierra, 'el caza despegó en plena tormenta');
+    let k2 = k; do { k2++; m.t = k2 * B + 1; } while (W.clima(m) === 2); for (let i = 0; i < 80; i++) W.tick(m);
+    assert.ok(!cz.enTierra, 'pasada la tormenta, la orden pendiente no lo hizo despegar');
+  }
+});
+
 prueba('guardar y cargar: la partida cargada sigue exactamente igual que la original', () => {
   const m = W.crearMundo(2026, { N: 128, logistica: true }), a = W.iaCrear(0), b = W.iaCrear(1, 'normal', 'asalto');
   const paso = (mm, x, y) => { W.iaTick(mm, x); W.iaTick(mm, y); W.tick(mm); };

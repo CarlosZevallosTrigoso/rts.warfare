@@ -50,6 +50,7 @@
       const haciaCentro = j === 0 ? 1 : -1;
       for (let k = 0; k < 2; k++) crearUnidad(m, j, 'infanteria', W.cercaLibre(m, b.x + (3 + k) * haciaCentro, b.y - 3 * haciaCentro));
     }
+    if (op.clima === false) m.sinClima = true;
     if (m.logistica !== false) for (const J of m.jug) J.acero = ECON.aceroInicio; // el acero solo existe en la partida con infraestructura
     // Los alrededores de cada base ya se conocen al empezar: ahí están el agua, el campo y el primer yacimiento.
     for (let j = 0; j < 2; j++) {
@@ -368,7 +369,7 @@
         e.sinDron = e.drStock <= 0 && !e.dr.rec.length && !e.dr.bomba.length; // (para la alerta)
       }
       if (!activo) { if (d.quieto && e.dronMis && e.orden !== 'nada') e.dronMis = null; continue; } // si echa a andar, la misión se acaba
-      if (e.drLlama) continue; // drones llamados: ni se lanzan ni atacan hasta que se desplieguen otra vez
+      if (e.drLlama || W.clima(m) === 2) continue; // drones llamados (o tormenta): ni se lanzan ni atacan hasta que se desplieguen otra vez
       if (!conStock && !e.edif && m.logistica !== false && sinSuministro(e)) continue; // el comando de drones, sin suministro, no repone ni lanza
       const mis = e.dronMis || null;
       const saca = (rol, obj) => { const q = crearUnidad(m, e.j, DRON[rol], Math.floor(y) * N + Math.floor(x)); q.x = q.px = x; q.y = q.py = y; q.base = e.id; q.rol = rol; q.fase = (e.id * 1.7 + e.dr[rol].length * 2.1) % TAU; q.obj = obj || 0; q.est = rol === 'bomba' ? 'espera' : ''; e.dr[rol].push(q.id); return q; };
@@ -540,7 +541,7 @@
       u.sumiN = 0;
       const parado = u.orden === 'nada' && !u.pend;
       if (s.est === 'ida') {
-        if (aire && (u.enTierra || u.repostando)) { if (u.enTierra && !u.repostando && parado) asignar(m, u, { t: 'mover', x: s.x, y: s.y }); }
+        if (aire && (u.enTierra || u.repostando)) { if (u.enTierra && !u.repostando && parado && W.clima(m) !== 2) asignar(m, u, { t: 'mover', x: s.x, y: s.y }); }
         else if (parado) { if (Math.hypot(u.x - s.x, u.y - s.y) < 3.5) s.est = 'puesto'; else if ((s.n = (s.n || 0) + 1) > 6) { s.x = u.x; s.y = u.y; s.est = 'puesto'; } else asignar(m, u, { t: 'mover', x: s.x, y: s.y }); } // (si no consigue llegar, se planta donde está)
       } else if (s.est === 'puesto') {
         if (u.sumC <= 0 || (aire && u.repostando)) {
@@ -691,7 +692,7 @@
     const orbita = (r, cx, cy) => { const a = u.fase + m.t * (0.6 / Math.max(3, r)) * 0.33; ir((cx === undefined ? bx : cx) + Math.cos(a) * r, (cy === undefined ? by : cy) + Math.sin(a) * r, d.vel); };
     const mis = base.dronMis || null;
     const parado = base.edif || (base.orden === 'nada' && base.v < 0.001);
-    if (base.drLlama && u.rol !== 'fpv') { // su portador los ha llamado: vuelven, se posan y cargan hasta que los despliegue
+    if ((base.drLlama || W.clima(m) === 2) && u.rol !== 'fpv') { // su portador los ha llamado: vuelven, se posan y cargan hasta que los despliegue
       if (u.rol === 'bomba') { u.est = 'espera'; u.obj = 0; }
       const conBat = m.logistica !== false; if (u.bat === undefined) u.bat = ECON.dronBat;
       if (ir(bx, by, d.vel) > 0.9) { if (conBat && --u.bat <= 0) u.vida = 0; return; }
@@ -1747,6 +1748,7 @@
     if (m.muro && !d.aire) { const ca = Math.floor(u.y) * N + Math.floor(u.x); if (m.muro[ca] === 1 && m.muroJ[ca] - 1 !== u.j) { if (d.cat === 'veh') quitarMuro(m, ca); else freno = 0.3; } }
     if (m.crater && d.cat === 'veh') { const ca = Math.floor(u.y) * N + Math.floor(u.x); if (m.escombro[ca]) freno *= ECON.ruinaFreno; else if (m.crater[ca]) freno *= ECON.craterFreno; } // cascotes y cráteres frenan a los vehículos
     if (u.desg >= ECON.desgLento) freno *= u.desg >= ECON.desgMal ? ECON.desgVel2 : ECON.desgVel1; // desgastado: más lento
+    if (!d.aire && terr < T.CAMINO && W.clima(m)) freno *= terr === T.LLANO && vadoDe(m)[Math.floor(u.y) * N + Math.floor(u.x)] ? ECON.lluviaVado : d.cat === 'veh' ? ECON.lluviaVeh : ECON.lluviaInf; // lluvia: barro fuera de camino, y más en los vados
     const vmax = (u.comb !== undefined && u.comb <= 0 ? 0 : 1) * freno * (u.tope && u.tope < vel && !u.suelto ? u.tope : vel) * (u.marcha ? u.fm || 1 : 1) * (u.orden === 'trazar' && !(viaDe(m)[u.j][Math.floor(u.y) * N + Math.floor(u.x)] && m.via[u.j][c]) ? ECON.trazaVel : d.cat === 'veh' && terr >= T.CAMINO && viaDe(m)[u.j][Math.floor(u.y) * N + Math.floor(u.x)] ? ECON.caminoVel : 1); // (trazando sobre camino ya hecho va a su paso normal) // por camino los vehículos van más rápido; trazándolo, despacio
     const alFinal = u.ri === u.ruta.length - 1 && u.fin;
     const carril = !alFinal && d.cat === 'veh' && u.orden !== 'trazar' && m.carrilX && m.carrilX[c] > 0 && m.mapa.terreno[c] >= T.CAMINO && viaDe(m)[u.j][c]; // por camino, los vehículos van por el carril y no por el centro de cada celda
@@ -1908,7 +1910,7 @@
   for (const t in UNID) { const a = UNID[t].cono || ECON.cono, c = Math.cos(a); CAMPO[t] = { todo: a >= Math.PI, cos: c, k: c * Math.abs(c) }; }
   // ¿Ve la unidad a ese enemigo? Cerca, en todas direcciones; lejos, solo dentro del cono frontal.
   function veDir(m, a, e, d) {
-    const v = UNID[a.tipo].vision * (W.esNoche(m) ? ECON.nocheVis : 1);
+    const v = UNID[a.tipo].vision * (W.esNoche(m) ? ECON.nocheVis : 1) * (W.clima(m) === 2 ? ECON.tormentaVis : 1);
     const dx = posX(e) - a.x, dy = posY(e) - a.y;
     if (a.bunk) return d <= v * ECON.visAd; // desde el búnker se vigila en redondo, por las troneras
     const q = trincheraDe(m, a);
@@ -2221,12 +2223,13 @@
       if (u.enTierra) { u.vida = 0; return true; } // estaba dentro del aeródromo destruido
       base = aerodromoLibre(m, u); u.casa = base ? base.id : 0;
     }
+    const tormenta = W.clima(m) === 2; // con tormenta nada despega y lo que vuela vuelve a casa
     const conOrden = u.orden !== 'nada' || u.obj || u.cola.length > 0 || !!u.patrulla || u.acude || (u.sumi && u.sumi.est === 'puesto'); // (el helicóptero de suministro se queda sobre su punto)
     if (u.enTierra) {
       u.fuel = Math.min(d.fuel, u.fuel + ECON.reposta);
       if (u.fuel >= d.fuel) u.repostando = false;
       if (u.repostando) { u.orden = 'nada'; u.obj = 0; u.cola.length = 0; return true; } // hasta llenar el depósito no despega
-      if (conOrden && u.fuel >= d.fuel * 0.3) { u.enTierra = false; return false; } // despega
+      if (conOrden && !tormenta && u.fuel >= d.fuel * 0.3) { u.enTierra = false; return false; } // despega (con tormenta, no: la orden espera)
       return true;
     }
     u.fuel--;
@@ -2237,7 +2240,7 @@
       u.repostando = true; u.orden = 'nada'; u.obj = 0; u.ruta = null; u.cola.length = 0; u.acude = 0;
       m.efectos.push({ tipo: 'reposta', x1: u.x, y1: u.y, x2: base.cx, y2: base.cy, j: u.j, t: m.t });
     }
-    if (u.repostando) { u.orden = 'nada'; u.obj = 0; u.cola.length = 0; }
+    if (u.repostando || tormenta) { u.orden = 'nada'; u.obj = 0; u.cola.length = 0; u.acude = 0; }
     else if (conOrden) return false;
     // de vuelta a casa: por combustible o porque ya no tiene nada que hacer
     if (md <= 1.7) { posar(m, u, base); return true; }
@@ -2741,6 +2744,26 @@
   // ---------- niebla ----------
   // Día y noche: ciclo fijo; W.luz va de 1 (día) a 0 (noche), con un minuto de transición, para el velo de la interfaz.
   W.esNoche = (m) => m.t % ECON.dia >= ECON.diaLuz;
+  // Clima (solo en la partida con infraestructura): 0 despejado, 1 lluvia, 2 tormenta. Va por bloques de ECON.climaBloque ticks y sale
+  // de la semilla y del número de bloque, sin estado: se puede preguntar por cualquier momento (también por el que viene, para avisar).
+  function climaDe(m, k) {
+    if (m.logistica === false || m.sinClima || k < ECON.climaCalma) return 0;
+    let h = (Math.imul(m.semilla | 0, 0x9E3779B1) ^ Math.imul(k + 1, 0x85EBCA6B)) >>> 0;
+    h ^= h >>> 15; h = Math.imul(h, 0x2C1B3C6D) >>> 0; h ^= h >>> 12; h = Math.imul(h, 0x297A2D39) >>> 0; h ^= h >>> 15;
+    const r = (h >>> 0) / 4294967296;
+    return r < ECON.climaTormenta ? 2 : r < ECON.climaTormenta + ECON.climaLluvia ? 1 : 0;
+  }
+  W.clima = (m) => { const k = Math.floor(m.t / ECON.climaBloque); if (m.climaK !== k) { m.climaK = k; m.climaE = climaDe(m, k); } return m.climaE; };
+  W.climaSig = (m) => { const k = Math.floor(m.t / ECON.climaBloque), e = W.clima(m); for (let i = 1; i <= 6; i++) { const s = climaDe(m, k + i); if (s !== e) return { est: s, en: (k + i) * ECON.climaBloque - m.t }; } return null; }; // el próximo cambio y cuánto falta
+  // Vados: celdas de tierra con agua a los dos lados (en alguna de las cuatro direcciones, a 5 celdas o menos). Con lluvia se embarran.
+  function vadoDe(m) {
+    if (m.vado) return m.vado;
+    const N = m.N, t = m.mapa.terreno, v = (m.vado = new Uint8Array(N * N)), DIR = [[1, 0], [0, 1], [1, 1], [1, -1]];
+    const agua = (x, y, dx, dy) => { for (let s = 1; s <= 5; s++) { const X = x + dx * s, Y = y + dy * s; if (X < 0 || Y < 0 || X >= N || Y >= N) return false; if (t[Y * N + X] === T.AGUA || t[Y * N + X] === T.PUENTE) return true; } return false; };
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { if (t[y * N + x] !== T.LLANO) continue; for (const [dx, dy] of DIR) if (agua(x, y, dx, dy) && agua(x, y, -dx, -dy)) { v[y * N + x] = 1; break; } }
+    return v;
+  }
+  W.esVado = (m, c) => vadoDe(m)[c] === 1;
   W.luz = (m) => { const f = m.t % ECON.dia, T2 = 600; return f < ECON.diaLuz - T2 ? 1 : f < ECON.diaLuz ? (ECON.diaLuz - f) / T2 : f < ECON.dia - T2 ? 0 : (f - (ECON.dia - T2)) / T2; };
   W.actualizarNiebla = function (m) {
     const N = m.N, NN = N * N;
@@ -2752,7 +2775,7 @@
       else for (let k = 0; k < L.n; k++) f[L[k]] = 1;
       L.n = 0;
     }
-    const noche = W.esNoche(m) ? ECON.nocheVis : 1; // de noche las unidades ven menos (los edificios, igual)
+    const noche = (W.esNoche(m) ? ECON.nocheVis : 1) * (W.clima(m) === 2 ? ECON.tormentaVis : 1); // de noche y con tormenta las unidades ven menos (los edificios, igual)
     for (let k = 0; k < m.ents.length; k++) {
       const e = m.ents[k], f = m.niebla[e.j], L = m.vistas[e.j];
       const cx = Math.floor(posX(e)), cy = Math.floor(posY(e));
@@ -2819,7 +2842,7 @@
       const e = m.ents[k];
       if (!e.edif) { if (e.comb === 0 && (e.orden === 'mover' || e.orden === 'amover' || e.patrulla)) { e.orden = 'nada'; e.ruta = null; e.pend = null; e.cola.length = 0; e.patrulla = null; } // sin combustible no hay marcha: se queda de guardia donde está
         tickUnidad(m, e); if (e.comb !== undefined) e.desg = Math.min(100, (e.desg || 0) + Math.hypot(e.x - e.px, e.y - e.py) * ECON.desgCelda); // el vehículo de combate se desgasta con lo que anda
-        if (e.comb !== undefined && e.comb > 0) { e.comb -= Math.hypot(e.x - e.px, e.y - e.py); if (e.comb <= 0) { e.comb = 0; m.efectos.push({ tipo: 'sinComb', x1: e.x, y1: e.y, j: e.j, t: m.t }); } } } // lo que anda, lo gasta
+        if (e.comb !== undefined && e.comb > 0) { e.comb -= Math.hypot(e.x - e.px, e.y - e.py) * (W.clima(m) && m.mapa.terreno[Math.floor(e.y) * m.N + Math.floor(e.x)] < T.CAMINO ? ECON.lluviaGasto : 1); if (e.comb <= 0) { e.comb = 0; m.efectos.push({ tipo: 'sinComb', x1: e.x, y1: e.y, j: e.j, t: m.t }); } } } // lo que anda, lo gasta
       else if (e.hack > m.t) { e.obj = 0; } // edificio hackeado: apagado
       else if (EDIF[e.tipo].arma) tickTorreta(m, e);
       else if (EDIF[e.tipo].da) { // extracción continua; con déficit de energía rinde la mitad

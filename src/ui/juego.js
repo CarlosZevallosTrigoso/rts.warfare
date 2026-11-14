@@ -195,6 +195,7 @@
       if (e) {
         let t = (e.muro ? W.MURO_N[e.muro] : (e.edif ? EDIF : UNID)[e.tipo]).nombre + (e.j === YO ? '' : ' rival') + ' · ' + Math.ceil(e.vida) + '/' + e.vidaMax;
         if (e.tipo === 'cosechadora' && e.j === YO) t += ' · carga ' + e.carga;
+        if (!e.edif && UNID[e.tipo].aire && e.j === YO && conRed && W.clima(m) === 2) t += e.enTierra ? ' · en tierra por la tormenta' : ' · tormenta: vuelve a su base';
         if (!e.edif && UNID[e.tipo].tiende && e.j === YO && m.logistica !== false) t += e.orden === 'conectar' ? ' · tendiendo línea' : e.auto ? ' · automático' : ' · manual';
         if (!e.edif && UNID[e.tipo].espia && e.j === YO) t += e.infiltrado ? ' · infiltrado: informando' : ' · acércalo a un edificio enemigo';
         if (!e.edif && e.comb !== undefined && e.j === YO) t += e.comb > 0 ? ' · combustible ' + Math.round(e.comb / W.ECON.combMax * 100) + ' %' : ' · sin combustible';
@@ -962,6 +963,12 @@
 
       ctx.imageSmoothingEnabled = true;
       { const luz = W.luz(m); if (luz < 1) { ctx.fillStyle = 'rgba(14,20,48,' + (0.36 * (1 - luz)).toFixed(3) + ')'; ctx.fillRect(0, 0, cw, ch); } } // la noche: un velo azulado sobre el mapa
+      { const cl = conRed ? W.clima(m) : 0; if (cl) { /* lluvia: trazos inclinados en pantalla (130; con tormenta, 260 y un velo gris) */
+        const n = cl === 2 ? 260 : 130, L = cl === 2 ? 20 : 13, inc = cl === 2 ? -0.5 : -0.22, ts = performance.now() / 1000;
+        if (cl === 2) { ctx.fillStyle = 'rgba(40,48,66,0.12)'; ctx.fillRect(0, 0, cw, ch); }
+        ctx.strokeStyle = cl === 2 ? 'rgba(38,56,88,0.45)' : 'rgba(60,82,116,0.32)'; ctx.lineWidth = 1; ctx.beginPath();
+        for (let i = 0; i < n; i++) { const y = ((i * 0.3247) % 1 * ch + ts * (620 + (i % 7) * 70)) % ch, x = (((i * 0.618034) % 1 * cw + inc * y) % cw + cw) % cw; ctx.moveTo(x, y); ctx.lineTo(x + inc * L, y + L); }
+        ctx.stroke(); } }
       ctx.drawImage(cNie, ox, oy, N * z, N * z);
       ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.strokeRect(ox - 0.5, oy - 0.5, N * z + 1, N * z + 1);
 
@@ -1663,6 +1670,7 @@
       h += '<h3>Drones (los saca su portador)</h3>' + fila('dronRec', 'De reconocimiento', '40', 'Da vueltas alrededor del portador y ve.') + fila('dronFpv', 'Kamikaze', '40 por salida', 'Un solo uso, contra vehículos y edificios armados.') + fila('dronBomba', 'Bombardero', '15 por salida', 'Suelta una granada sobre la infantería y vuelve a recargar.');
       h += '<h3>Misiles (misilera)</h3>'; for (const k in W.MISILES) h += fila('', W.MISILES[k].nombre, precio(W.MISILES[k]), W.MISILES[k].que + ' Nivel ' + W.MISILES[k].nivel + '.');
       h += '<h3>Infraestructura</h3>' + fila('', 'Camino militar', '4 a 30 por celda', 'Lo traza la excavadora. Solo tus vehículos corren por él.') + fila('', 'Línea de servicio', '3 por celda', 'La tiende el ingeniero civil entre dos edificios: lleva energía y mete el edificio en tu red.') + fila('', 'Trinchera', 'gratis', 'La cava la infantería (Z). Cuatro puestos a cubierto; clic derecho para ocuparla.');
+      if (conRed) h += '<h3>Clima</h3>' + fila('', 'Lluvia', '—', 'Fuera de camino los vehículos van un 25 % más lentos (la infantería, un 10 %) y gastan la mitad más de combustible. En los vados se va a media velocidad: un puente o un camino lo evitan.') + fila('', 'Tormenta', '—', 'Lo de la lluvia y, además, las unidades ven un 30 % menos y aviones y drones se quedan en tierra (los que vuelan vuelven a su base). El panel avisa un minuto antes.');
       $('guiaTxt').innerHTML = h;
     }
     $('abreGuia').addEventListener('click', () => { pintarGuia(); $('guia').hidden = false; });
@@ -1926,6 +1934,8 @@
       mun: (n) => (n === 1 ? '1 ficha sin munición' : n + ' fichas sin munición') + ' <small>· camión de suministro</small>',
       dron: (n) => (n === 1 ? '1 operador sin drones' : n + ' operadores sin drones') + ' <small>· estación de drones o camión</small>',
       radio: (n) => (n === 1 ? '1 unidad sin radio' : n + ' unidades sin radio') + ' <small>· torre de radio</small>',
+      tormenta: () => 'Tormenta: aviones y drones en tierra, se ve menos <small>· espera a que escampe</small>',
+      lluvia: () => 'Lluvia: fuera de camino se anda más lento y se gasta más <small>· usa los caminos</small>',
       llenoM: () => 'Almacenes llenos: se pierden minerales <small>· construye un almacén o gasta</small>',
       llenoP: () => 'Tanques llenos: se pierde petróleo <small>· tanque de combustible</small>',
       comb: (n) => (n === 1 ? '1 vehículo sin combustible' : n + ' vehículos sin combustible') + ' <small>· camión de suministro</small>',
@@ -1944,6 +1954,7 @@
       const donde = {};
       if (!rep) for (const e of m.ents) { if (e.j !== YO) continue; const pb = problema(e); if (pb) (donde[pb] || (donde[pb] = [])).push(e.id); }
       if (!rep && J.lleno) { if (m.t - (J.lleno.minerales === undefined ? -999 : J.lleno.minerales) < 200) donde.llenoM = [0]; if (m.t - (J.lleno.petroleo === undefined ? -999 : J.lleno.petroleo) < 200) donde.llenoP = [0]; }
+      if (!rep && conRed) { const cl = W.clima(m); if (cl === 2) donde.tormenta = [0]; else if (cl === 1) donde.lluvia = [0]; }
       const firma = Object.keys(ALERTA).map((k) => (donde[k] ? k + donde[k].length : '')).join('');
       alertaDonde = donde;
       if (firma === alertaFirma) return;
@@ -1952,7 +1963,8 @@
     }
     $('alertas').addEventListener('click', (ev) => {
       const b = ev.target.closest('button'); if (!b) return;
-      const k = b.dataset.k; if (k === 'llenoM' || k === 'llenoP') { aviso(k === 'llenoM' ? 'Cada almacén guarda 3000 minerales más' : 'Cada tanque de combustible guarda 800 de petróleo más'); return; }
+      const k = b.dataset.k; if (k === 'tormenta' || k === 'lluvia') { aviso(k === 'tormenta' ? 'Con tormenta nada despega y lo que vuela vuelve a su base; las órdenes dadas en tierra esperan' : 'Con lluvia los vehículos van un 25 % más lentos fuera de camino y los vados se embarran'); return; }
+      if (k === 'llenoM' || k === 'llenoP') { aviso(k === 'llenoM' ? 'Cada almacén guarda 3000 minerales más' : 'Cada tanque de combustible guarda 800 de petróleo más'); return; }
       const ids = (alertaDonde[k] || []).filter((id) => m.porId.has(id)); if (!ids.length) return;
       alertaIdx[k] = ((alertaIdx[k] === undefined ? -1 : alertaIdx[k]) + 1) % ids.length;
       const e = m.porId.get(ids[alertaIdx[k]]);
@@ -1981,6 +1993,7 @@
     function actualizarBarra() {
       if (cuadros % 30 === 0) { actualizarAlertas(); actualizarTuto(); }
       { const f = m.t % W.ECON.dia, noche = W.esNoche(m), falta = Math.ceil(((noche ? W.ECON.dia : W.ECON.diaLuz) - f) / 20), t = (noche ? 'noche · amanece en ' : 'día · anochece en ') + Math.floor(falta / 60) + ':' + String(falta % 60).padStart(2, '0'); if ($('rHora').textContent !== t) $('rHora').textContent = t; }
+      { const fc = $('filaClima'); if (fc.hidden !== !conRed) fc.hidden = !conRed; if (conRed) { const NOM = ['despejado', 'lluvia', 'tormenta'], cl = W.clima(m), sg = W.climaSig(m); let t = NOM[cl]; if (sg && sg.en <= 1200) { const s = Math.ceil(sg.en / 20); t += ' · ' + (sg.est === 0 ? 'escampa' : NOM[sg.est]) + ' en ' + Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); } const rc = $('rClima'); if (rc.textContent !== t) { rc.textContent = t; rc.style.color = cl === 2 || (sg && sg.en <= 1200 && sg.est === 2) ? '#b3261e' : ''; } } }
       const num = (v) => (J.dios ? '∞' : String(Math.floor(v)));
       { const fin = isFinite(J.capMin) && !J.dios, llM = fin && J.minerales >= J.capMin, llP = fin && J.petroleo >= J.capPet; // con almacenes: «tengo / cabe», en rojo cuando está lleno
         $('rMin').textContent = num(J.minerales) + (fin ? ' / ' + num(J.capMin) : ''); $('rPet').textContent = num(J.petroleo) + (fin ? ' / ' + num(J.capPet) : ''); $('rMin').style.color = llM ? 'var(--mal)' : ''; $('rPet').style.color = llP ? 'var(--mal)' : ''; }
