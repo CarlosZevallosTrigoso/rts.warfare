@@ -2149,7 +2149,7 @@
       m.efectos.push({ tipo: 'boca', x1: ax, y1: ay, x2: bx, y2: by, j: a.j, t: m.t, arma: clave });
     } else {
       herir(m, b, arma, mult, a.id, ax, ay);
-      m.efectos.push({ tipo: 'traza', x1: ax, y1: ay, x2: bx, y2: by, j: a.j, t: m.t, arma: clave });
+      m.efectos.push({ tipo: 'traza', x1: ax, y1: ay, x2: bx, y2: by, j: a.j, t: m.t, arma: clave, de: a.id, ob: b.id, bl: b.edif ? 'edif' : UNID[b.tipo].cat }); // de, ob y bl son para el dibujo: quién tira, a quién y de qué clase es
     }
     alertar(m, a, b);
   }
@@ -2160,16 +2160,16 @@
       p.px = p.x; p.py = p.y;
       const vel = p.vel || arma.vuelo;
       if (dd > vel) { p.x += (dx / dd) * vel; p.y += (dy / dd) * vel; continue; }
-      let acierto = false;
+      let acierto = false, bl = '', rebote = false; // bl y rebote son para el dibujo: en qué dio y si el blindaje lo escupió (de frente, algunas veces)
       if (arma.area) { // explosión: daña a todo enemigo dentro del radio
         danarMuros(m, p.tx, p.ty, arma.area, arma, p.mult, p.de, p.j); dejarCrater(m, p.tx, p.ty, arma.area);
         for (const e of m.ents) if (e.j !== p.j && e.vida > 0 && !e.muro && dist(p.tx, p.ty, e) <= arma.area) { herir(m, e, arma, p.mult, p.de); acierto = true; }
       } else {
         const o = m.porId.get(p.obj);
         acierto = !!o && o.vida > 0 && dist(p.tx, p.ty, o) <= 0.9; // si el blanco se apartó, falla
-        if (acierto) herir(m, o, arma, p.mult, p.de, p.ox, p.oy);
+        if (acierto) { bl = o.edif ? 'edif' : UNID[o.tipo].cat; rebote = bl === 'veh' && W.sector(m, o, { x: p.ox, y: p.oy }) === 0 && (p.de * 13 + m.t * 7) % 10 < 4; herir(m, o, arma, p.mult, p.de, p.ox, p.oy); }
       }
-      m.efectos.push({ tipo: 'impacto', x1: p.x, y1: p.y, x2: p.tx, y2: p.ty, j: p.j, t: m.t, arma: p.arma, acierto });
+      m.efectos.push({ tipo: 'impacto', x1: p.ox, y1: p.oy, x2: p.tx, y2: p.ty, j: p.j, t: m.t, arma: p.arma, acierto, bl, rebote });
       m.proy[k] = m.proy[m.proy.length - 1]; m.proy.pop();
     }
   }

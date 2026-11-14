@@ -261,7 +261,7 @@
     // ---------- partículas y marcas en el suelo: solo dibujo, la simulación no las conoce ----------
     const parts = [], suelo = [], senales = [], azar = Math.random; // senales: ondas de llamada y enlaces de la colmena
     let dtCuadro = 16;
-    function parte(k, x, y, vx, vy, vida, s) { if (parts.length > 700) parts.shift(); parts.push({ k, x, y, vx, vy, v: 0, m: vida, s }); }
+    function parte(k, x, y, vx, vy, vida, s, o) { if (parts.length > 2600) parts.shift(); const q = { k, x, y, vx, vy, v: 0, m: vida, s }; if (o) Object.assign(q, o); parts.push(q); }
     function marcaSuelo(k, x, y, s, ang, dur, clase) { if (suelo.length > 500) suelo.shift(); suelo.push({ k, x, y, s, ang, t0: performance.now(), dur, clase }); }
     function estallido(x, y, tam) { // tam: 1 impacto, 2 unidad, 3 edificio
       parte('fogonazo', x, y, 0, 0, 0.13, 0.28 + tam * 0.22);
@@ -290,15 +290,114 @@
     const retroceso = (e, arma) => { const r = Math.max(0, (e.recarga / W.ARMAS[arma].recarga - 0.7) / 0.3); return r * r * (3 - 2 * r); }; // 1 justo al disparar; vuelve suave a su sitio
     // Balas ligeras (fusil, pistola, ametralladora, rifle): el disparo es instantáneo en la simulación, pero aquí la bala viaja.
     const balas = [];
+    // ---------- efectos de disparo ----------
+    // Todo esto es dibujo: la simulación decide el daño; aquí se decide cómo se ve. Con freno: lo menudo (casquillos, brasas,
+    // restos, rebotes) solo de cerca (fino), y con la vista lejana (ni medio) se queda en lo de siempre.
+    let fino = true, medio = true, relojFx = 0, sacude = 0, destelloP = 0, cuentaMg = 0;
+    const colaFx = [], calor = new Map(), suprT = new Map(); // sucesos aplazados; calor del cañón por tirador; hasta cuándo va cuerpo a tierra cada infante
+    const luego = (s, fn) => { if (colaFx.length < 600) colaFx.push({ t: relojFx + s, fn }); };
+    const cHalo = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,214,120,0.75)'); gr.addColorStop(0.4, 'rgba(242,170,70,0.3)'); gr.addColorStop(1, 'rgba(242,170,70,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return c; })();
+    const sacudir = (f, x, y) => { if (visible(x, y)) sacude = Math.min(0.5, Math.max(sacude, f * (fino ? 1 : 0.5))); };
+    const fogonazoD = (x, y, ang, tam) => { parte('cono', x, y, 0, 0, 0.09, tam, { ang }); parte('fogonazo', x, y, 0, 0, 0.06, tam * 0.3); };
+    const haloF = (x, y, s, dur) => parte('halo', x, y, 0, 0, dur, s);
+    const ondaF = (x, y, s) => parte('onda', x, y, 0, 0, 0.32, s);
+    const polvoSuelo = (x, y, n, s) => { for (let i = 0; i < n; i++) parte('polvo', x + (azar() - 0.5) * s, y + (azar() - 0.5) * s * 0.5, (azar() - 0.5) * 0.6, -0.2 - azar() * 0.35, 0.5 + azar() * 0.6, 0.11 + azar() * 0.11); };
+    const rafagaPolvo = (x, y, ang, n) => { for (let i = 0; i < n; i++) { const a = ang + (azar() - 0.5) * 0.9, v = 2.3 + azar() * 5; parte('polvoR', x, y, Math.cos(a) * v, Math.sin(a) * v, 0.5 + azar() * 0.5, 0.14 + azar() * 0.14); } };
+    const esquirlas = (x, y, ang, n, v, abre) => { for (let i = 0; i < n; i++) { const a = ang + (azar() - 0.5) * abre, s = v * (0.4 + azar()); parte('chispa', x, y, Math.cos(a) * s, Math.sin(a) * s, 0.15 + azar() * 0.35, 0); } };
+    const tierraF = (x, y, n, v) => { for (let i = 0; i < n; i++) { const a = azar() * TAU, s = v * (0.3 + azar()); parte('terron', x, y, Math.cos(a) * s, Math.sin(a) * s * 0.6, 0.5 + azar() * 0.5, 0.07 + azar() * 0.09, { vz: 3.2 + azar() * 5, zz: 0 }); } };
+    const columna = (x, y, n, dur, s) => { for (let i = 0; i < n; i++) luego(i * 0.09, () => parte('humoN', x + (azar() - 0.5) * 0.36, y + (azar() - 0.5) * 0.22, 0.22 + (azar() - 0.5) * 0.27, -0.64 - azar() * 0.55, dur * (0.7 + azar() * 0.5), s * (0.7 + azar() * 0.6))); };
+    const casquillo = (x, y, ang) => { if (!fino) return; const l = ang + (azar() < 0.5 ? 1 : -1) * (1.3 + azar() * 0.5), v = 0.8 + azar() * 1; parte('casq', x, y, Math.cos(l) * v, Math.sin(l) * v, 3, 0.05, { vz: 2.5 + azar() * 1.8, zz: 0.14 }); };
+    const brasas = (x, y, n) => { if (!fino) return; for (let i = 0; i < n; i++) parte('brasa', x + (azar() - 0.5) * 0.7, y + (azar() - 0.5) * 0.36, (azar() - 0.5) * 0.45, -0.27 - azar() * 0.73, 1.4 + azar() * 2, 0.036 + azar() * 0.045); };
+    const fragmentos = (x, y, n, v) => { if (!fino) return; for (let i = 0; i < n; i++) { const a = azar() * TAU, s = v * (0.3 + azar()); parte('frag', x, y, Math.cos(a) * s, Math.sin(a) * s * 0.6, 1 + azar() * 0.9, 0.04 + azar() * 0.06, { vz: 4 + azar() * 6.8, zz: 0, rot: azar() * TAU, vr: (azar() - 0.5) * 22 }); } };
+    const fuego = (x, y, dur, s) => { for (let i = 0, n = dur / 0.11; i < n; i++) luego(i * 0.11, () => { parte('llama', x + (azar() - 0.5) * s, y + (azar() - 0.5) * s * 0.5, (azar() - 0.5) * 0.27, -0.64 - azar() * 0.55, 0.42, (0.14 + azar() * 0.16) * (1 - (i / n) * 0.6)); if (i % 3 === 0) parte('humoN', x + (azar() - 0.5) * 0.27, y - 0.23, 0.18, -0.9 - azar() * 0.36, 2 + azar(), 0.2 + azar() * 0.09); }); };
+    // Balas ligeras (fusil, pistola, ametralladora, rifle): el disparo es instantáneo en la simulación, pero aquí la bala viaja.
+    function trazadora(x1, y1, x2, y2, o) { if (balas.length > 500) balas.shift(); balas.push(Object.assign({ x1, y1, x2, y2, t0: performance.now() + (o.tras || 0), dur: (Math.hypot(x2 - x1, y2 - y1) / (o.vel || 57)) * 1000, k: 'bala' }, o)); }
+    const rebote = (x, y, ang) => { if (!fino) return; const a = ang + Math.PI + (azar() - 0.5) * 2.6, L = 1.4 + azar() * 2.3; trazadora(x, y, x + Math.cos(a) * L, y + Math.sin(a) * L, { vel: 30, larga: 0.4, fina: true, brillo: true }); };
     function bala(d) {
-      const dx = d.x2 - d.x1, dy = d.y2 - d.y1, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L, x1 = d.x1 + ux * 0.28, y1 = d.y1 + uy * 0.28, ahora = performance.now();
-      if (balas.length > 300) balas.shift();
-      parte('fogonazo', x1, y1, 0, 0, 0.07, d.arma === 'rifle' ? 0.16 : 0.1);
-      if (d.arma === 'rifle') balas.push({ x1, y1, x2: d.x2, y2: d.y2, t0: ahora, dur: 380, k: 'rifle' }); // el rifle: una línea fina que se queda un instante y se apaga
-      else for (let i = 0, n = d.arma === 'ametralladora' ? 2 : 1; i < n; i++) { // la ametralladora suelta dos, algo abiertas
-        const ab = n > 1 ? (azar() - 0.5) * 0.3 : (azar() - 0.5) * 0.08;
-        balas.push({ x1, y1, x2: d.x2 - uy * ab, y2: d.y2 + ux * ab, t0: ahora + i * 45, dur: (L / 42) * 1000, k: 'bala', chispa: i === 0 });
+      const dx = d.x2 - d.x1, dy = d.y2 - d.y1, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L, x1 = d.x1 + ux * 0.28, y1 = d.y1 + uy * 0.28, ahora = performance.now(), ang = Math.atan2(dy, dx);
+      if (!medio) { // de lejos, lo de siempre
+        if (balas.length > 300) balas.shift();
+        if (d.arma === 'rifle') balas.push({ x1, y1, x2: d.x2, y2: d.y2, t0: ahora, dur: 380, k: 'rifle' });
+        else balas.push({ x1, y1, x2: d.x2, y2: d.y2, t0: ahora, dur: (L / 42) * 1000, k: 'bala', chispa: true });
+        return;
       }
+      if (d.bl === 'inf' && d.ob) suprT.set(d.ob, ahora + 1500); // al que le tiran se echa cuerpo a tierra
+      const fin = (x2, y2, da) => () => { // lo que pasa donde cae cada bala
+        if (!visible(x2, y2)) return;
+        if (!da) { polvoSuelo(x2, y2, 2, 0.25); if (azar() < 0.3) rebote(x2, y2, ang); }
+        else if (d.bl === 'veh' || d.bl === 'edif') { esquirlas(x2, y2, ang + Math.PI, 3, 3.5, 1.5); if (d.bl === 'veh' && azar() < 0.35) rebote(x2, y2, ang); }
+        else if (d.bl === 'aire') esquirlas(x2, y2, ang + Math.PI, 2, 3, TAU);
+        else esquirlas(x2, y2, ang + Math.PI, 2, 2.6, 1.4);
+      };
+      if (d.arma === 'rifle') { // el rifle: un solo tiro, una línea fina que se queda un instante y se apaga
+        if (balas.length > 500) balas.shift();
+        balas.push({ x1, y1, x2: d.x2, y2: d.y2, t0: ahora, dur: 380, k: 'rifle' }); fogonazoD(x1, y1, ang, 0.55); haloF(x1, y1, 0.9, 0.1); casquillo(d.x1, d.y1, ang); fin(d.x2, d.y2, true)(); return;
+      }
+      if (d.arma === 'misil') { fogonazoD(x1, y1, ang, 0.45); haloF(x1, y1, 0.8, 0.1); trazadora(x1, y1, d.x2, d.y2, { vel: 34, larga: 0.9, brillo: true, humo: true, fin: fin(d.x2, d.y2, true) }); return; }
+      if (d.arma === 'ametralladora' || d.arma === 'gatling') { // chorro: la que da y, alrededor, las que se abren; una de cada tantas es trazadora; el cañón se calienta
+        const gat = d.arma === 'gatling', c = calor.get(d.de) || { c: 0 }; c.c = Math.min(1, c.c + (gat ? 0.035 : 0.07)); c.x = x1; c.y = y1; calor.set(d.de, c);
+        for (let i = 0, n = gat ? 1 : 2; i < n; i++) {
+          const da = i === 0 && azar() < 0.6, a = ang + (da ? 0 : (azar() - 0.5) * 0.14), L2 = da ? L : L + (azar() - 0.3) * 1.8, viva = (cuentaMg++) % (gat ? 3 : 2) === 0;
+          luego(i * 0.05, () => { fogonazoD(x1, y1, a, 0.3 + azar() * 0.22); haloF(x1, y1, 0.6, 0.07); casquillo(d.x1, d.y1, ang); });
+          trazadora(x1, y1, x1 + Math.cos(a) * L2, y1 + Math.sin(a) * L2, { tras: i * 50, larga: viva ? 1.1 : 0.4, fina: !viva, tenue: !viva, brillo: viva, fin: fin(x1 + Math.cos(a) * L2, y1 + Math.sin(a) * L2, da) });
+        }
+        if (c.c > 0.5 && cuentaMg % 3 === 0) parte('humoN', x1, y1, 0.25, -0.35, 1.6, 0.16 + c.c * 0.1);
+        return;
+      }
+      const n = d.arma === 'pistola' ? 1 : 3, cual = Math.floor(azar() * n); // fusil: ráfaga corta; una da y las otras pasan de largo
+      for (let i = 0; i < n; i++) {
+        const da = i === cual, a = ang + (da ? 0 : (azar() - 0.5) * 0.1), L2 = da ? L : L + 0.9 + azar() * 2.3;
+        luego(i * 0.07, () => { fogonazoD(x1, y1, a, 0.36); haloF(x1, y1, 0.7, 0.09); casquillo(d.x1, d.y1, ang); });
+        trazadora(x1, y1, x1 + Math.cos(a) * L2, y1 + Math.sin(a) * L2, { tras: i * 70, vel: 59, larga: 0.8, fina: true, brillo: true, fin: fin(x1 + Math.cos(a) * L2, y1 + Math.sin(a) * L2, da) });
+      }
+    }
+    // El fogonazo de lo que dispara proyectiles: cada familia, el suyo.
+    function boca(d) {
+      const ang = Math.atan2(d.y2 - d.y1, d.x2 - d.x1), c = Math.cos(ang), s = Math.sin(ang), k = d.arma;
+      if (!medio) { parte('humo', d.x1, d.y1, (azar() - 0.5) * 0.4, -0.3, 0.6, 0.16); return; }
+      if (k === 'obus' || k === 'obusFijo') {
+        const x = d.x1 + c * 0.7, y = d.y1 + s * 0.7, g = k === 'obusFijo' ? 1.25 : 1;
+        fogonazoD(x, y, ang, 1.2 * g); haloF(x, y, 2.1 * g, 0.14); ondaF(x, y, 1.4 * g); parte('anilloP', d.x1, d.y1, 0, 0, 0.6, 1.7 * g); rafagaPolvo(d.x1 - c * 0.5, d.y1 - s * 0.5, ang + Math.PI, 7);
+        for (let i = 0; i < 6; i++) parte('humoN', x + (azar() - 0.5) * 0.3, y + (azar() - 0.5) * 0.3, c * (0.5 + azar() * 0.5), s * (0.5 + azar() * 0.5) - 0.4, 1.1 + azar() * 0.9, 0.23 + azar() * 0.14);
+        sacudir(0.1 * g, x, y);
+      } else if (k === 'salva' || k === 'cohete' || k === 'coheteAire') { // rebufo por detrás
+        const g = k === 'salva' ? 1 : 0.55, x = d.x1 - c * 0.6 * g, y = d.y1 - s * 0.6 * g;
+        parte('cono', x, y, 0, 0, 0.18, 1.1 * g, { ang: ang + Math.PI }); haloF(x, y, 2 * g, 0.16); rafagaPolvo(x, y, ang + Math.PI, Math.round(6 * g));
+        for (let i = 0; i < 5 * g; i++) parte('humoN', x - c * azar() * 0.45, y - s * azar() * 0.45, -c * (1.4 + azar() * 1.4), -s * (1.4 + azar() * 1.4), 1.3 + azar(), (0.23 + azar() * 0.18) * g);
+        if (k === 'salva') sacudir(0.06, x, y);
+      } else if (k === 'canon' || k === 'canonPesado' || k === 'canonTorre' || k === 'bateria') {
+        const g = k === 'canonPesado' ? 1.25 : k === 'bateria' ? 0.6 : 1, x = d.x1 + c * 0.95, y = d.y1 + s * 0.95;
+        parte('cono', x, y, 0, 0, 0.13, 1.35 * g, { ang }); parte('cono', x - c * 0.14, y - s * 0.14, 0, 0, 0.1, 0.63 * g, { ang: ang + 1.9 }); parte('cono', x - c * 0.14, y - s * 0.14, 0, 0, 0.1, 0.63 * g, { ang: ang - 1.9 }); parte('fogonazo', x, y, 0, 0, 0.08, 0.45 * g);
+        haloF(x + c * 0.27, y + s * 0.27, 2.3 * g, 0.14); ondaF(x, y, 1.5 * g); parte('anilloP', d.x1, d.y1, 0, 0, 0.55, 1.5 * g); rafagaPolvo(x, y, ang, Math.round(11 * g));
+        if (fino) for (let i = -1; i <= 1; i++) parte('frag', x + c * 0.27, y + s * 0.27, c * (5.5 + azar() * 3.6) - s * i * 2, s * (5.5 + azar() * 3.6) + c * i * 2, 0.5, 0.06, { vz: 1.8, zz: 0.18, rot: azar() * TAU, vr: 20 }); // los pétalos del proyectil
+        for (let i = 0; i < 6 * g; i++) parte('humoN', x + c * azar() * 0.45, y + s * azar() * 0.45, c * (0.9 + azar() * 1.1), s * (0.9 + azar() * 1.1) - 0.3, 1 + azar() * 0.8, 0.23 + azar() * 0.14);
+        for (let i = 0; i < 6; i++) luego(0.25 + i * 0.14, () => parte('humoN', x, y, 0.09, -0.36, 1.3, 0.11)); // el tubo sigue echando humo
+        sacudir(0.09 * g, x, y);
+      } else if (k === 'flak' || k === 'flakMovil') { fogonazoD(d.x1 + c * 0.5, d.y1 + s * 0.5, ang, 0.6); haloF(d.x1 + c * 0.5, d.y1 + s * 0.5, 1, 0.08); if (azar() < 0.5) parte('humoN', d.x1 + c * 0.5, d.y1 + s * 0.5, c * 0.5, s * 0.5 - 0.3, 0.9, 0.16); }
+      else parte('humo', d.x1, d.y1, (azar() - 0.5) * 0.4, -0.3, 0.6, 0.16);
+    }
+    // Donde cae un proyectil: según el arma y en qué dio.
+    function impactoFx(d) {
+      const A = W.ARMAS[d.arma], area = A.area || 0, x = d.x2, y = d.y2, ang = Math.atan2(d.y2 - d.y1, d.x2 - d.x1), c = Math.cos(ang), s = Math.sin(ang);
+      if (!medio) { estallido(x, y, area ? 2 : 1); marcaSuelo('quemado', x, y, area || 0.42, 0, 15000); return; }
+      if (area) { // explosión de área: destello, onda, tierra en abanico, restos, columna de humo, cráter y polvo que vuelve a caer
+        const g = Math.min(1.5, area / 1.4), ahora = performance.now();
+        parte('fogonazo', x, y, 0, 0, 0.13, 1 * g); haloF(x, y, 3.6 * g, 0.22); ondaF(x, y, 2.8 * g); parte('anillo', x, y, 0, 0, 0.45, 1.7 * g); parte('anilloP', x, y, 0, 0, 1, 2.5 * g);
+        tierraF(x, y, Math.round(22 * g), 4.8 * g); fragmentos(x, y, Math.round(8 * g), 4.5 * g); esquirlas(x, y, 0, Math.round(10 * g), 7.5, TAU); columna(x, y, Math.round(8 * g), 3.2, 0.34 * g); brasas(x, y, Math.round(8 * g));
+        marcaSuelo('crater', x, y, area * 0.9, azar() * TAU, 22000); luego(0.55, () => polvoSuelo(x, y, 12, area * 2));
+        if (d.arma === 'salva' || d.arma === 'fpv' || d.arma === 'bomba') fuego(x, y, 2.4, area * 0.5);
+        sacudir(0.3 * g, x, y); if (area >= 1.4 && visible(x, y)) destelloP = Math.max(destelloP, 0.05 * g);
+        for (const e of m.ents) if (!e.edif && e.vida > 0 && UNID[e.tipo].cat === 'inf' && Math.abs(e.x - x) < area + 1.5 && Math.abs(e.y - y) < area + 1.5) suprT.set(e.id, ahora + 2600);
+      } else if (!d.acierto) { // falló
+        if (d.arma === 'flak' || d.arma === 'flakMovil') { parte('fogonazo', x, y, 0, 0, 0.1, 0.4); esquirlas(x, y, 0, 6, 5, TAU); for (let i = 0; i < 3; i++) parte('humoN', x + (azar() - 0.5) * 0.4, y + (azar() - 0.5) * 0.4, (azar() - 0.5) * 0.3, (azar() - 0.5) * 0.3, 1.4 + azar(), 0.22); return; }
+        parte('fogonazo', x, y, 0, 0, 0.1, 0.35); tierraF(x, y, 10, 3); polvoSuelo(x, y, 5, 0.6); marcaSuelo('quemado', x, y, 0.42, 0, 15000);
+      } else if (d.bl === 'veh') { // en el blindaje: o lo escupe, o entra
+        parte('destello', x, y, 0, 0, 0.16, 1); haloF(x, y, 1.8, 0.12); esquirlas(x, y, ang + Math.PI, 14, 9, 1.5); sacudir(0.14, x, y);
+        if (d.rebote) { const a = ang + (azar() < 0.5 ? 1 : -1) * (1.9 + azar() * 0.6); trazadora(x, y, x + Math.cos(a) * 5, y + Math.sin(a) * 5, { vel: 40, larga: 1.2, brillo: true }); }
+        else { parte('fogonazo', x, y, 0, 0, 0.1, 0.65); ondaF(x, y, 1.4); esquirlas(x + c * 0.9, y + s * 0.9, ang, 8, 10, 0.5); fragmentos(x, y, 4, 3.2); columna(x, y, 6, 2.4, 0.27); marcaSuelo('quemado', x, y, 0.5, 0, 15000); if (d.arma !== 'canon' && d.arma !== 'canonPesado' && d.arma !== 'canonTorre') fuego(x, y, 1.2, 0.3); }
+      } else if (d.bl === 'aire') { parte('fogonazo', x, y, 0, 0, 0.1, 0.5); haloF(x, y, 1.4, 0.12); esquirlas(x, y, 0, 10, 6, TAU); for (let i = 0; i < 3; i++) parte('humoN', x + (azar() - 0.5) * 0.4, y + (azar() - 0.5) * 0.4, (azar() - 0.5) * 0.4, (azar() - 0.5) * 0.4, 1.4 + azar(), 0.24); }
+      else if (d.bl === 'edif') { parte('fogonazo', x, y, 0, 0, 0.1, 0.5); haloF(x, y, 1.5, 0.12); esquirlas(x, y, ang + Math.PI, 6, 6, 1.8); polvoSuelo(x, y, 8, 0.9); fragmentos(x, y, 5, 3); columna(x, y, 4, 2, 0.25); }
+      else { parte('fogonazo', x, y, 0, 0, 0.1, 0.4); tierraF(x, y, 10, 3); polvoSuelo(x, y, 5, 0.6); marcaSuelo('quemado', x, y, 0.42, 0, 15000); }
     }
 
     // ---------- dibujo ----------
@@ -371,7 +470,12 @@
       ctx.lineCap = 'butt'; ctx.lineJoin = 'miter';
     }
     function dibujar(alfa) {
-      const z = cam.z, ox = cw / 2 - cam.x * z, oy = ch / 2 - cam.y * z, f = m.niebla[YO], mp = m.mapa;
+      const z = cam.z, f = m.niebla[YO], mp = m.mapa;
+      fino = z >= 16; medio = z >= 8;
+      { const dsF = pausa ? 0 : dtCuadro / 1000; relojFx += dsF; sacude = Math.max(0, sacude - dsF); destelloP = Math.max(0, destelloP - dsF); // efectos aplazados, temblor y destello
+        for (let i = colaFx.length - 1; i >= 0; i--) if (colaFx[i].t <= relojFx) { const q = colaFx[i]; colaFx[i] = colaFx[colaFx.length - 1]; colaFx.pop(); q.fn(); }
+        for (const [id, c] of calor) { c.c -= dsF * 0.14; if (c.c <= 0) calor.delete(id); } }
+      const ox = cw / 2 - cam.x * z + (sacude > 0 && !pausa ? (azar() - 0.5) * sacude * 14 : 0), oy = ch / 2 - cam.y * z + (sacude > 0 && !pausa ? (azar() - 0.5) * sacude * 14 : 0);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.fillStyle = P.fondo; ctx.fillRect(0, 0, cw, ch);
       ctx.imageSmoothingEnabled = false;
@@ -637,6 +741,11 @@
         if (!lod || fuera(q.x, q.y) || !f[Math.floor(q.y) * N + Math.floor(q.x)]) continue;
         const a = 1 - edad, sx = ox + q.x * z, sy = oy + q.y * z;
         if (q.k === 'quemado') { ctx.globalAlpha = 0.26 * a; ctx.fillStyle = P.tinta; ctx.beginPath(); ctx.arc(sx, sy, z * q.s, 0, TAU); ctx.fill(); }
+        else if (q.k === 'crater') { // quemadura, hoyo más oscuro y rayos de tierra alrededor
+          const R = z * q.s; ctx.fillStyle = P.tinta; ctx.globalAlpha = 0.16 * a; ctx.beginPath(); ctx.ellipse(sx, sy, R, R * 0.7, 0, 0, TAU); ctx.fill();
+          ctx.globalAlpha = 0.26 * a; ctx.beginPath(); ctx.ellipse(sx, sy, R * 0.45, R * 0.32, 0, 0, TAU); ctx.fill();
+          if (lod === 2) { ctx.globalAlpha = 0.2 * a; ctx.strokeStyle = '#5a5145'; ctx.lineWidth = Math.max(1, z * 0.07); ctx.beginPath(); for (let k = 0; k < 9; k++) { const an = q.ang + k * 0.7 + Math.sin(k * 12.9 + q.ang) * 0.25, l = 1.05 + (Math.sin(k * 7.3 + q.ang * 3) * 0.5 + 0.5) * 0.5; ctx.moveTo(sx + Math.cos(an) * R * 0.7, sy + Math.sin(an) * R * 0.5); ctx.lineTo(sx + Math.cos(an) * R * l, sy + Math.sin(an) * R * l * 0.7); } ctx.stroke(); }
+        }
         else if (q.k === 'huella') {
           const c = Math.cos(q.ang), s = Math.sin(q.ang), w = q.s * z * 0.78, l = z * 0.26;
           ctx.globalAlpha = 0.15 * a; ctx.strokeStyle = P.tinta; ctx.lineWidth = Math.max(1, z * 0.1); ctx.beginPath();
@@ -824,7 +933,8 @@
           ang: (d.cat === 'inf' && e.obj && !anda ? g.t : g.a) + mec, angT: g.t, retro: d.arma ? retroceso(e, d.arma) : 0, hundido: d.cat === 'inf' && W.enTrinchera(m, e), monta: d.monta ? (e.monta || 0) / d.monta : 1,
           anda, tiempo, carga: e.carga / (d.carga || 1), cosecha: e.est === 'cosechar', raro: e.cargaTipo === 2,
         };
-        const canto = lod && !d.aire && r >= 3.5 && !st.hundido ? Math.max(1, r * 0.26) : 0; // el cuerpo de la unidad: su silueta en oscuro, y encima la ficha
+        let tumbado = false; if (d.cat === 'inf' && lod && suprT.size) { const h = suprT.get(e.id); if (h) { if (h > tiempo) tumbado = !st.hundido && !anda; else suprT.delete(e.id); } } // le están tirando: cuerpo a tierra (solo si está quieto)
+        const canto = lod && !d.aire && r >= 3.5 && !st.hundido && !tumbado ? Math.max(1, r * 0.26) : 0; // el cuerpo de la unidad: su silueta en oscuro, y encima la ficha
         if (canto) { W.fichaUnidad(ctx, e, r, 1, e.j === YO ? COL.yoLado : COL.rivalLado, st); ctx.translate(0, -canto); }
         if (d.cat === 'veh' && !d.aire && lod) { // el casco tiene peso: cabecea al frenar y al arrancar, y recula con el disparo
           const quiere = Math.max(-1, Math.min(2, -(g.ac || 0) / d.acel)) * 0.075;
@@ -832,6 +942,7 @@
           const golpe = st.retro * 0.17;
           ctx.translate((Math.cos(g.a) * g.cab - Math.cos(g.t) * golpe) * r, (Math.sin(g.a) * g.cab - Math.sin(g.t) * golpe) * r);
         }
+        if (tumbado) { ctx.rotate(st.ang); ctx.scale(1.3, 0.64); ctx.rotate(-st.ang); }
         W.fichaUnidad(ctx, e, r, lod, e.j === YO ? COL.yo : COL.rival, st);
         ctx.restore();
         if (lod && !d.aire) { // si está pegada a la cara norte de un edificio, este la tapa
@@ -915,6 +1026,30 @@
         const x = p.px + (p.x - p.px) * alfa, y = p.py + (p.y - p.py) * alfa;
         if (fuera(x, y) || !visible(x, y)) continue;
         const a = Math.atan2(p.ty - p.y, p.tx - p.x), c = Math.cos(a), s = Math.sin(a), sx = ox + x * z, sy = oy + y * z;
+        if (medio && p.arma !== 'bomba') {
+          const A = W.ARMAS[p.arma], dxT = p.tx - p.ox, dyT = p.ty - p.oy, LT = Math.hypot(dxT, dyT) || 1, fr = Math.min(1, Math.hypot(x - p.ox, y - p.oy) / LT), coh = p.arma === 'salva' || p.arma === 'cohete' || p.arma === 'coheteAire';
+          if (A.indirecto || p.arma === 'granadaMano') { // tiro curvo: sube y baja; la sombra va por el suelo y el proyectil, arriba y más grande
+            const H = Math.min(3.2, LT * 0.22), alt = Math.sin(fr * Math.PI) * H, ai = Math.atan2(dyT - Math.cos(fr * Math.PI) * H * Math.PI, dxT), esc = (1 + alt / 2.2) * (p.arma === 'granadaMano' ? 0.5 : 1), py2 = sy - alt * z;
+            if (fr > 0.45 && A.area && visible(p.tx, p.ty)) { const k = (fr - 0.45) / 0.55, R = z * A.area * (1.25 - 0.45 * k); ctx.globalAlpha = 0.13 * k; ctx.fillStyle = P.tinta; ctx.beginPath(); ctx.ellipse(ox + p.tx * z, oy + p.ty * z, R, R * 0.7, 0, 0, TAU); ctx.fill(); } // la sombra que avisa dónde cae
+            ctx.globalAlpha = 0.22; ctx.fillStyle = P.tinta; ctx.beginPath(); ctx.ellipse(sx, sy, z * 0.18, z * 0.1, 0, 0, TAU); ctx.fill();
+            ctx.globalAlpha = 1; ctx.save(); ctx.translate(sx, py2); ctx.rotate(ai);
+            if (coh) { ctx.fillStyle = '#e8912d'; ctx.beginPath(); ctx.moveTo(-z * 0.18 * esc, -z * 0.07 * esc); ctx.lineTo(-z * (0.36 + azar() * 0.23) * esc, 0); ctx.lineTo(-z * 0.18 * esc, z * 0.07 * esc); ctx.fill(); }
+            ctx.fillStyle = P.tinta; ctx.beginPath(); ctx.ellipse(0, 0, Math.max(2, z * 0.19 * esc), Math.max(1, z * 0.07 * esc), 0, 0, TAU); ctx.fill(); ctx.restore();
+            if (coh && !pausa) { parte('humoN', x, y - alt, (azar() - 0.5) * 0.25, (azar() - 0.5) * 0.25, 1.6 + azar(), 0.12 + azar() * 0.08); if (fino) { parte('humoN', x - c * 0.14, y - alt + (azar() - 0.5) * 0.18, (azar() - 0.5) * 0.7, (azar() - 0.5) * 0.7, 2.4 + azar() * 1.4, 0.1 + azar() * 0.11); if (azar() < 0.4) parte('chispa', x, y - alt, -c * 2.7 + (azar() - 0.5) * 1.8, 0.9 + azar() * 1.4, 0.25, 0); } }
+            continue;
+          }
+          if (coh) { // cohete de tiro tenso: llama y estela de humo
+            ctx.save(); ctx.translate(sx, sy); ctx.rotate(a); ctx.fillStyle = '#e8912d'; ctx.beginPath(); ctx.moveTo(-z * 0.16, -z * 0.06); ctx.lineTo(-z * (0.32 + azar() * 0.2), 0); ctx.lineTo(-z * 0.16, z * 0.06); ctx.fill();
+            ctx.fillStyle = P.tinta; ctx.beginPath(); ctx.ellipse(0, 0, Math.max(2, z * 0.17), Math.max(1, z * 0.06), 0, 0, TAU); ctx.fill(); ctx.restore();
+            if (!pausa) parte('humoN', x - c * 0.2, y - s * 0.2, (azar() - 0.5) * 0.3, (azar() - 0.5) * 0.3, 1 + azar() * 0.8, 0.09 + azar() * 0.07);
+            continue;
+          }
+          // cañón y antiaéreo: casi no se ve el proyectil, solo un trazo de luz con una estela tenue
+          const l1 = Math.min(1.2, Math.hypot(x - p.ox, y - p.oy)), l2 = Math.min(3.2, Math.hypot(x - p.ox, y - p.oy));
+          ctx.globalAlpha = 0.5; ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(1.5, z * 0.1); ctx.beginPath(); ctx.moveTo(sx - c * z * l2, sy - s * z * l2); ctx.lineTo(sx, sy); ctx.stroke();
+          ctx.globalAlpha = 1; ctx.strokeStyle = '#f2c45c'; ctx.lineWidth = Math.max(1.5, z * 0.09); ctx.beginPath(); ctx.moveTo(sx - c * z * l1, sy - s * z * l1); ctx.lineTo(sx, sy); ctx.stroke();
+          continue;
+        }
         ctx.strokeStyle = P.roca; ctx.globalAlpha = 0.45; ctx.lineWidth = Math.max(1, z * 0.06);
         ctx.beginPath(); ctx.moveTo(sx - c * z * 1.3, sy - s * z * 1.3); ctx.lineTo(sx, sy); ctx.stroke();
         ctx.strokeStyle = P.tinta; ctx.globalAlpha = 1; ctx.lineWidth = Math.max(2, z * 0.13);
@@ -926,11 +1061,17 @@
         for (let i = balas.length - 1; i >= 0; i--) {
           const b = balas[i], f = (ahora - b.t0) / b.dur;
           if (f < 0) continue;
-          if (f >= 1) { if (b.chispa && visible(b.x2, b.y2)) parte('chispa', b.x2, b.y2, (azar() - 0.5) * 3, (azar() - 0.5) * 3, 0.18, 0); balas[i] = balas[balas.length - 1]; balas.pop(); continue; }
+          if (f >= 1) { if (b.fin) b.fin(); else if (b.chispa && visible(b.x2, b.y2)) parte('chispa', b.x2, b.y2, (azar() - 0.5) * 3, (azar() - 0.5) * 3, 0.18, 0); balas[i] = balas[balas.length - 1]; balas.pop(); continue; }
           const dx = b.x2 - b.x1, dy = b.y2 - b.y1;
           if (b.k === 'rifle') { // todo el recorrido de golpe, y se desvanece
             ctx.strokeStyle = P.tinta; ctx.globalAlpha = 0.55 * (1 - f) * (1 - f); ctx.lineWidth = 1;
             ctx.beginPath(); ctx.moveTo(ox + b.x1 * z, oy + b.y1 * z); ctx.lineTo(ox + b.x2 * z, oy + b.y2 * z); ctx.stroke();
+          } else if (b.larga) { // trazadora nueva: un trazo corto; la viva, dorada y con resplandor; las demás, apenas un hilo oscuro
+            const L = Math.hypot(dx, dy) || 1, f0 = Math.max(0, f - b.larga / L), xa = ox + (b.x1 + dx * f0) * z, ya = oy + (b.y1 + dy * f0) * z, xb = ox + (b.x1 + dx * f) * z, yb = oy + (b.y1 + dy * f) * z;
+            if (!visible(b.x1 + dx * f, b.y1 + dy * f)) continue;
+            if (b.brillo) { ctx.globalAlpha = 0.28; ctx.strokeStyle = '#e8912d'; ctx.lineWidth = Math.max(3, z * 0.2); ctx.beginPath(); ctx.moveTo(xa, ya); ctx.lineTo(xb, yb); ctx.stroke(); }
+            ctx.globalAlpha = b.tenue ? 0.4 : 0.95; ctx.strokeStyle = b.tenue ? P.tinta : '#f2c45c'; ctx.lineWidth = b.fina ? 1 : Math.max(1.4, z * 0.08); ctx.beginPath(); ctx.moveTo(xa, ya); ctx.lineTo(xb, yb); ctx.stroke();
+            if (b.humo && !pausa && azar() < 0.6) parte('humoN', b.x1 + dx * f, b.y1 + dy * f, (azar() - 0.5) * 0.2, (azar() - 0.5) * 0.2, 0.8 + azar() * 0.6, 0.07 + azar() * 0.05);
           } else { // un trazo que viaja: cabeza brillante y cola que se apaga
             const L = Math.hypot(dx, dy) || 1, cola = Math.min(0.5, 1.1 / L), f0 = Math.max(0, f - cola), fm = Math.max(0, f - cola * 0.4);
             ctx.strokeStyle = '#d9882a'; ctx.lineWidth = Math.max(1, z * 0.045); ctx.globalAlpha = 0.45;
@@ -957,9 +1098,29 @@
         else if (q.k === 'chispa') { q.vx *= 0.93; q.vy *= 0.93; ctx.strokeStyle = '#e8912d'; ctx.lineWidth = Math.max(1, z * 0.06); ctx.moveTo(sx, sy); ctx.lineTo(sx - q.vx * z * 0.07, sy - q.vy * z * 0.07); ctx.stroke(); }
         else if (q.k === 'alma') { ctx.globalAlpha = 0.85 * (1 - fr) * (1 - fr); ctx.fillStyle = P.tinta; ctx.arc(sx, sy, Math.max(1.5, z * q.s * (1 - fr * 0.5)), 0, TAU); ctx.fill(); }
         else if (q.k === 'anillo') { ctx.globalAlpha = 0.8 * (1 - fr); ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.arc(sx, sy, z * q.s * (1 - (1 - fr) * (1 - fr)), 0, TAU); ctx.stroke(); }
+        else if (q.k === 'humoN') { q.vx *= 0.985; q.vy *= 0.985; q.x += 0.5 * ds * (0.3 + fr); ctx.globalAlpha = 0.22 * (1 - fr) * Math.min(1, fr * 8); ctx.fillStyle = fr < 0.2 ? '#6b665e' : P.roca; ctx.arc(sx, sy, z * q.s * (0.7 + fr * 2.2), 0, TAU); ctx.fill(); } // humo que nace oscuro, se abre y se lo lleva el viento
+        else if (q.k === 'polvoR') { q.vx *= 0.9; q.vy *= 0.9; ctx.globalAlpha = 0.36 * (1 - fr); ctx.fillStyle = '#a3977f'; ctx.arc(sx, sy, z * q.s * (0.5 + fr * 1.4), 0, TAU); ctx.fill(); }
+        else if (q.k === 'terron' || q.k === 'casq' || q.k === 'frag') { // cosas que saltan y caen: llevan altura (zz) y gravedad
+          q.vz -= 19 * ds; q.zz += q.vz * ds;
+          if (q.zz <= 0) { q.zz = 0; if (q.k === 'casq' && !q.b) { q.b = 1; q.vz = -q.vz * 0.35; q.vx *= 0.4; q.vy *= 0.4; } else { q.vx = 0; q.vy = 0; q.vz = 0; q.vr = 0; } }
+          const al = Math.min(1, (1 - fr) * 3), yy = sy - q.zz * z;
+          if (q.k === 'terron') { ctx.globalAlpha = al; ctx.fillStyle = '#5a5145'; ctx.arc(sx, yy, Math.max(1, z * q.s), 0, TAU); ctx.fill(); }
+          else if (q.k === 'casq') { ctx.globalAlpha = al; ctx.fillStyle = '#b58a2c'; ctx.fillRect(sx - 1, yy - 0.6, Math.max(2, z * 0.1), Math.max(1.2, z * 0.05)); }
+          else { q.rot += q.vr * ds; const w = Math.max(1.5, z * q.s); ctx.globalAlpha = 0.2 * al; ctx.fillStyle = P.tinta; ctx.ellipse(sx, sy, w, w * 0.5, 0, 0, TAU); ctx.fill(); ctx.globalAlpha = al; ctx.save(); ctx.translate(sx, yy); ctx.rotate(q.rot); ctx.fillRect(-w, -w * 0.45, w * 2, w * 0.9); ctx.restore(); }
+        }
+        else if (q.k === 'cono') { const l = z * q.s * (0.55 + fr * 0.6), w = z * q.s * 0.3; ctx.fillStyle = fr < 0.4 ? '#fff3c4' : '#f2c45c'; ctx.save(); ctx.translate(sx, sy); ctx.rotate(q.ang); ctx.moveTo(0, 0); ctx.lineTo(l * 0.5, -w); ctx.lineTo(l, 0); ctx.lineTo(l * 0.5, w); ctx.fill(); ctx.restore(); }
+        else if (q.k === 'halo') { const R = z * q.s; ctx.globalAlpha = 1 - fr * fr; ctx.drawImage(cHalo, sx - R, sy - R, R * 2, R * 2); }
+        else if (q.k === 'onda') { const rr = z * q.s * (1 - (1 - fr) * (1 - fr)); ctx.globalAlpha = 0.7 * (1 - fr); ctx.strokeStyle = '#fff'; ctx.lineWidth = 4 * (1 - fr) + 1; ctx.ellipse(sx, sy, rr, rr * 0.7, 0, 0, TAU); ctx.stroke(); ctx.beginPath(); ctx.globalAlpha = 0.35 * (1 - fr); ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.ellipse(sx, sy, rr + 2, (rr + 2) * 0.7, 0, 0, TAU); ctx.stroke(); }
+        else if (q.k === 'anilloP') { const rr = z * q.s * (1 - (1 - fr) * (1 - fr)); ctx.globalAlpha = 0.3 * (1 - fr); ctx.strokeStyle = '#a3977f'; ctx.lineWidth = 5 * (1 - fr) + 1; ctx.ellipse(sx, sy, rr, rr * 0.7, 0, 0, TAU); ctx.stroke(); }
+        else if (q.k === 'destello') { ctx.strokeStyle = '#fff3c4'; ctx.lineWidth = 2; for (let k = 0; k < 4; k++) { const an = (k * Math.PI) / 4 + 0.3, l = z * q.s * (1 - fr * 0.4); ctx.moveTo(sx - Math.cos(an) * l, sy - Math.sin(an) * l); ctx.lineTo(sx + Math.cos(an) * l, sy + Math.sin(an) * l); } ctx.stroke(); }
+        else if (q.k === 'brasa') { q.vx += (azar() - 0.5) * 1.8 * ds; ctx.globalAlpha = (1 - fr) * (0.5 + azar() * 0.5); ctx.fillStyle = fr < 0.5 ? '#f2c45c' : '#e8912d'; ctx.arc(sx, sy, Math.max(1, z * q.s), 0, TAU); ctx.fill(); }
+        else if (q.k === 'llama') { ctx.globalAlpha = 0.85 * (1 - fr); ctx.fillStyle = azar() < 0.5 ? '#e8912d' : '#f2c45c'; ctx.arc(sx, sy, z * q.s * (1 - fr * 0.6), 0, TAU); ctx.fill(); }
         else { ctx.fillStyle = '#f2c45c'; ctx.arc(sx, sy, z * q.s * (0.6 + fr * 0.6), 0, TAU); ctx.fill(); }
       }
       ctx.globalAlpha = 1;
+      if (lod === 2) for (const c of calor.values()) if (c.c > 0.3 && visible(c.x, c.y)) { ctx.globalAlpha = Math.min(0.9, c.c); ctx.fillStyle = '#e8912d'; ctx.beginPath(); ctx.arc(ox + c.x * z, oy + c.y * z, Math.max(1.5, z * 0.07), 0, TAU); ctx.fill(); } // el cañón de la ametralladora, al rojo
+      ctx.globalAlpha = 1;
+      if (destelloP > 0) { ctx.globalAlpha = Math.min(0.3, destelloP * 5); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cw, ch); ctx.globalAlpha = 1; }
 
       ctx.imageSmoothingEnabled = true;
       { const luz = W.luz(m); if (luz < 1) { ctx.fillStyle = 'rgba(14,20,48,' + (0.36 * (1 - luz)).toFixed(3) + ')'; ctx.fillRect(0, 0, cw, ch); } } // la noche: un velo azulado sobre el mapa
@@ -1277,13 +1438,12 @@
         if (d.tipo === 'traza' || d.tipo === 'boca') {
           if (!visible(d.x1, d.y1)) continue;
           if (n++ < 6) son.disparo(d.arma, cerca(d.x1, d.y1), paneo(d.x1));
-          if (d.tipo === 'boca') parte('humo', d.x1, d.y1, (azar() - 0.5) * 0.4, -0.3, 0.6, 0.16);
+          if (d.tipo === 'boca') boca(d);
           else bala(d);
         } else if (d.tipo === 'impacto') {
           if (d.mina && d.j !== YO && !rep) { aviso('¡Mina! Manda un ingeniero a desminar'); son.alerta(); senales.push({ k: 'onda', x: d.x1, y: d.y1, r: 2, t0: performance.now(), dur: 900 }); }
           if (!enVista) continue;
-          const area = W.ARMAS[d.arma].area || 0; // los obuses de área dejan un cráter mayor
-          estallido(d.x2, d.y2, area ? 2 : 1); marcaSuelo('quemado', d.x2, d.y2, area || 0.42, 0, 15000);
+          impactoFx(d);
           if (n++ < 6) son.impacto(cerca(d.x2, d.y2), paneo(d.x2));
         } else if (d.tipo === 'explorado') {
           if (d.j === YO && performance.now() - (avisoExpl || 0) > 3000) { avisoExpl = performance.now(); aviso(J.tr.mapa ? 'Nada que explorar: el mapa está revelado desde ADMIN' : 'No queda nada por explorar'); }
@@ -1367,6 +1527,7 @@
             else { // el vehículo se queda en chatarra humeante, sin estallido
               for (let k = 0; k < 4; k++) parte('humo', d.x2 + (azar() - 0.5) * 0.3, d.y2 + (azar() - 0.5) * 0.3, (azar() - 0.5) * 0.3, -0.35 - azar() * 0.5, 1.2 + azar() * 1.2, 0.2 + azar() * 0.12);
               marcaSuelo('quemado', d.x2, d.y2, UNID[d.clase].radio * 1.6, 0, 20000);
+              if (medio && !UNID[d.clase].aire) { fuego(d.x2, d.y2, 3, UNID[d.clase].radio * 1.2); brasas(d.x2, d.y2, 6); fragmentos(d.x2, d.y2, 4, 3); }
             }
             marcaSuelo('resto', d.x2, d.y2, UNID[d.clase].radio, d.ang, 25000, d.clase);
           }
