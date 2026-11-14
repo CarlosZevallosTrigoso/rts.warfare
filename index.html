@@ -279,6 +279,7 @@
       <div id="espia" class="tenue"></div>
       <div class="fila" title="Nivel tecnológico. Se sube desde el patio."><span>nivel</span><b><span id="nivel">1</span><span id="hechas" class="tenue"></span></b></div>
       <div class="fila" title="De noche las unidades ven un 30 % menos; los edificios, igual."><span>hora</span><b id="rHora">día</b></div>
+      <div class="fila" id="filaClima" title="Lluvia: fuera de camino todo anda más lento (los vehículos un 25 %) y gasta la mitad más de combustible; en los vados, a media velocidad. Tormenta: además se ve un 30 % menos y aviones y drones se quedan en tierra. El cambio se avisa un minuto antes."><span>clima</span><b id="rClima">despejado</b></div>
       <div class="fila" title="Usada / disponible. La energía se reparte por red: un edificio sin conexión (por cercanía o por camino) a una central con energía de sobra va a media marcha, y las torretas se apagan."><span>energía</span><b id="rEne">0 / 0</b></div>
     </div>
     <canvas id="mini" width="208" height="208"></canvas>
@@ -347,12 +348,12 @@
   <button type="button" id="empezar">Empezar</button>
   <button type="button" id="tutorial">Tutorial guiado<small style="display:block;color:var(--suave);font-size:10px">ocho pasos, con el rival dormido hasta el final</small></button>
   <button type="button" id="continuar" hidden>Continuar la partida guardada</button>
-  <div id="version">versión 91</div>
+  <div id="version">versión 92</div>
 </div></div>
 <div id="guia" hidden><div class="caja"><div class="cab"><strong>Guía: para qué sirve cada cosa</strong><button type="button" id="cierraGuia">cerrar</button></div><div id="guiaTxt"></div></div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finVer" href="#" title="Vuelve a ver la partida entera, con todo el mapa a la vista y a la velocidad que quieras.">ver repetición</a><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 91' };
+globalThis.W = { VERSION: 'versión 92' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -610,7 +611,7 @@ globalThis.W = { VERSION: 'versión 91' };
     minaPozo: 40000, // minerales del pozo de una mina (más lo que hubiera en la superficie que tapa)
     vigilaRadio: 8, vigilaMax: 14, protegeDist: 4,
     espiaRadio: 6, espiaInfo: 2, sumiBase: 1, sumiUnidad: 0.5, sumiCarga: 40, // suministro móvil: gasto por ciclo (medio segundo) en vacío y por unidad atendida; y lo que carga por ciclo en el puesto logístico
-    dronMisRadio: 8, autoReserva: 400, autoLargo: 70, cableMax: 24, aceroInicio: 300, aceroBase: 400, aceroPorFund: 600, aceroMin: 2, aceroReserva: 300, /* acero: con cuánto se empieza, cuánto cabe sin fundición y cuánto añade cada una, cuánto mineral cuesta cada unidad, y por debajo de cuánto mineral la fundición no trabaja (para no dejarte seco) */ desgCelda: 0.12, desgTiro: 0.1, desgLento: 60, desgMal: 85, desgVel1: 0.85, desgVel2: 0.7, desgFallo: 15, desgMant: 2, desgRepara: 1, desgAviso: 30, desgProd: 5, desgProd1: 50, desgProd2: 80, /* desgaste (0 a 100). Vehículos de combate: lo que suma cada celda andada y cada disparo; desde desgLento van a desgVel1 de su velocidad, y desde desgMal a desgVel2 y fallan desgFallo de cada 100 tiros. Con suministro (o junto a un taller de campaña) baja desgMant cada medio segundo; un ingeniero lo baja desgRepara por tick. Edificios que producen: desgProd por unidad hecha; desde desgProd1 producen al 85 % y desde desgProd2 al 70 % */ depositoMax: 40, lineaMax: 40, /* un depósito va, como mucho, a esa distancia de un edificio conectado (y se cablea solo hasta él); ninguna línea de servicio puede ser más larga */ sinEnlaceVision: 2, ruinaVale: 0.25, despejaT: 200, craterMax: 300, craterArea: 1.4, craterFreno: 0.5, ruinaFreno: 0.4, craterDano: 150, rellenaT: 60, /* ruinas: lo que se recupera al reconstruir encima y lo que tarda en despejarse una; cráteres: tope, radio mínimo de explosión que los deja, freno a los vehículos, daño a cables y caminos, y lo que tarda en rellenarse uno */ tuboMax: 30, sinTubo: 0.3, quemaCada: 80, sinCombEnergia: 0.3, /* oleoducto: largo máximo y rendimiento del extractor sin él; central: cada cuántos ticks quema 1 de petróleo y qué fracción da sin él */ bunkerDano: 0.25, ambCarga: 8, hospitalCura: 0.6, /* largo máximo del cable que un edificio nuevo tiende solo hasta la red */
+    dronMisRadio: 8, autoReserva: 400, autoLargo: 70, cableMax: 24, climaBloque: 3600, climaCalma: 2, climaLluvia: 0.28, climaTormenta: 0.1, lluviaVeh: 0.75, lluviaInf: 0.9, lluviaVado: 0.5, lluviaGasto: 1.5, tormentaVis: 0.7, /* clima: va por bloques de 3 min (los dos primeros, despejados); con lluvia, fuera de camino se anda más lento y se gasta más, y los vados se embarran; la tormenta además quita vista y deja en tierra lo que vuela */ aceroInicio: 300, aceroBase: 400, aceroPorFund: 600, aceroMin: 2, aceroReserva: 300, /* acero: con cuánto se empieza, cuánto cabe sin fundición y cuánto añade cada una, cuánto mineral cuesta cada unidad, y por debajo de cuánto mineral la fundición no trabaja (para no dejarte seco) */ desgCelda: 0.12, desgTiro: 0.1, desgLento: 60, desgMal: 85, desgVel1: 0.85, desgVel2: 0.7, desgFallo: 15, desgMant: 2, desgRepara: 1, desgAviso: 30, desgProd: 5, desgProd1: 50, desgProd2: 80, /* desgaste (0 a 100). Vehículos de combate: lo que suma cada celda andada y cada disparo; desde desgLento van a desgVel1 de su velocidad, y desde desgMal a desgVel2 y fallan desgFallo de cada 100 tiros. Con suministro (o junto a un taller de campaña) baja desgMant cada medio segundo; un ingeniero lo baja desgRepara por tick. Edificios que producen: desgProd por unidad hecha; desde desgProd1 producen al 85 % y desde desgProd2 al 70 % */ depositoMax: 40, lineaMax: 40, /* un depósito va, como mucho, a esa distancia de un edificio conectado (y se cablea solo hasta él); ninguna línea de servicio puede ser más larga */ sinEnlaceVision: 2, ruinaVale: 0.25, despejaT: 200, craterMax: 300, craterArea: 1.4, craterFreno: 0.5, ruinaFreno: 0.4, craterDano: 150, rellenaT: 60, /* ruinas: lo que se recupera al reconstruir encima y lo que tarda en despejarse una; cráteres: tope, radio mínimo de explosión que los deja, freno a los vehículos, daño a cables y caminos, y lo que tarda en rellenarse uno */ tuboMax: 30, sinTubo: 0.3, quemaCada: 80, sinCombEnergia: 0.3, /* oleoducto: largo máximo y rendimiento del extractor sin él; central: cada cuántos ticks quema 1 de petróleo y qué fracción da sin él */ bunkerDano: 0.25, ambCarga: 8, hospitalCura: 0.6, /* largo máximo del cable que un edificio nuevo tiende solo hasta la red */
     rutaNodos: 30000, // presupuesto de celdas que se exploran por tick buscando rutas
     misilesMax: 10, mejoraMax: 3, mejoraCosto: 0.6, mejoraBono: 0.5, // mejora de un edificio: hasta nivel 3; cada nivel cuesta el 60 % del edificio por el nivel que tiene y rinde un 50 % más
     inicio: 2500, petInicio: 150, cosecha: 5, descarga: 25, colaMax: 9, separacionColocar: 3, goteoCada: 5, vistaInicial: 22, obrasMax: 8, curaUnidad: 0.01, curaEdificio: 0.0025, curaCosto: 0.15, venta: 0.5, trinchera: 0.45, arco: 0.14, arcoTrinchera: 1.05, visAd: 1.3, visLado: 0.75, visAt: 0.3, cono: 1.05, periferia: 1.83, flanco: 1.25, espalda: 1.5, bosqueVeh: 0.6, bosqueCubre: 0.7, reposta: 12, retiroBajo: 0.3, retiroAlto: 0.9, huida: 300, dia: 9600, diaLuz: 6000, nocheVis: 0.7, caminoVel: 1.6, tramoLargo: 4, enlace: 5, cobNodo: 14, cobEdif: 6, lineaVel: 0.12, lineaCelda: 3, sinSum: 400, sinSumRecarga: 1.5, abastDura: 1500, heliRepone: 300, cobAvanzada: 10, hospitalCura: 2, dronFpv: 40, dronBomba: 15, dronRepone: 200, dronFpvCada: 60, hackInfo: 25, hackVeh: 240, hackEdif: 300, hackRecarga: 200, hackCanal: 40, trazaVel: 0.45, caminoLlano: 4, caminoBosque: 12, caminoAgua: 30, mandoCada: 40, mandoGiro: 1.5, captura: 600, capturaRadio: 2, antenaRadio: 12, depositoCada: 8, tallerRadio: 4, ocultaVe: 2.5, chatarra: 0.25, reparaRadio: 8, reparaVeh: 0.5, curaMedico: 0.35, reparaEdif: 0.8, rangos: [2, 5, 10], rangoDano: 0.1, rangoVida: 0.1, cupoAviones: 5, pasada: 7, orbita: 3.5, fuelCae: 80, cavar: 80, aplasta: 10, bonoProd: 0.5, bonoMax: 2.5 };
@@ -1022,6 +1023,7 @@ globalThis.W = { VERSION: 'versión 91' };
       const haciaCentro = j === 0 ? 1 : -1;
       for (let k = 0; k < 2; k++) crearUnidad(m, j, 'infanteria', W.cercaLibre(m, b.x + (3 + k) * haciaCentro, b.y - 3 * haciaCentro));
     }
+    if (op.clima === false) m.sinClima = true;
     if (m.logistica !== false) for (const J of m.jug) J.acero = ECON.aceroInicio; // el acero solo existe en la partida con infraestructura
     // Los alrededores de cada base ya se conocen al empezar: ahí están el agua, el campo y el primer yacimiento.
     for (let j = 0; j < 2; j++) {
@@ -1340,7 +1342,7 @@ globalThis.W = { VERSION: 'versión 91' };
         e.sinDron = e.drStock <= 0 && !e.dr.rec.length && !e.dr.bomba.length; // (para la alerta)
       }
       if (!activo) { if (d.quieto && e.dronMis && e.orden !== 'nada') e.dronMis = null; continue; } // si echa a andar, la misión se acaba
-      if (e.drLlama) continue; // drones llamados: ni se lanzan ni atacan hasta que se desplieguen otra vez
+      if (e.drLlama || W.clima(m) === 2) continue; // drones llamados (o tormenta): ni se lanzan ni atacan hasta que se desplieguen otra vez
       if (!conStock && !e.edif && m.logistica !== false && sinSuministro(e)) continue; // el comando de drones, sin suministro, no repone ni lanza
       const mis = e.dronMis || null;
       const saca = (rol, obj) => { const q = crearUnidad(m, e.j, DRON[rol], Math.floor(y) * N + Math.floor(x)); q.x = q.px = x; q.y = q.py = y; q.base = e.id; q.rol = rol; q.fase = (e.id * 1.7 + e.dr[rol].length * 2.1) % TAU; q.obj = obj || 0; q.est = rol === 'bomba' ? 'espera' : ''; e.dr[rol].push(q.id); return q; };
@@ -1512,7 +1514,7 @@ globalThis.W = { VERSION: 'versión 91' };
       u.sumiN = 0;
       const parado = u.orden === 'nada' && !u.pend;
       if (s.est === 'ida') {
-        if (aire && (u.enTierra || u.repostando)) { if (u.enTierra && !u.repostando && parado) asignar(m, u, { t: 'mover', x: s.x, y: s.y }); }
+        if (aire && (u.enTierra || u.repostando)) { if (u.enTierra && !u.repostando && parado && W.clima(m) !== 2) asignar(m, u, { t: 'mover', x: s.x, y: s.y }); }
         else if (parado) { if (Math.hypot(u.x - s.x, u.y - s.y) < 3.5) s.est = 'puesto'; else if ((s.n = (s.n || 0) + 1) > 6) { s.x = u.x; s.y = u.y; s.est = 'puesto'; } else asignar(m, u, { t: 'mover', x: s.x, y: s.y }); } // (si no consigue llegar, se planta donde está)
       } else if (s.est === 'puesto') {
         if (u.sumC <= 0 || (aire && u.repostando)) {
@@ -1663,7 +1665,7 @@ globalThis.W = { VERSION: 'versión 91' };
     const orbita = (r, cx, cy) => { const a = u.fase + m.t * (0.6 / Math.max(3, r)) * 0.33; ir((cx === undefined ? bx : cx) + Math.cos(a) * r, (cy === undefined ? by : cy) + Math.sin(a) * r, d.vel); };
     const mis = base.dronMis || null;
     const parado = base.edif || (base.orden === 'nada' && base.v < 0.001);
-    if (base.drLlama && u.rol !== 'fpv') { // su portador los ha llamado: vuelven, se posan y cargan hasta que los despliegue
+    if ((base.drLlama || W.clima(m) === 2) && u.rol !== 'fpv') { // su portador los ha llamado: vuelven, se posan y cargan hasta que los despliegue
       if (u.rol === 'bomba') { u.est = 'espera'; u.obj = 0; }
       const conBat = m.logistica !== false; if (u.bat === undefined) u.bat = ECON.dronBat;
       if (ir(bx, by, d.vel) > 0.9) { if (conBat && --u.bat <= 0) u.vida = 0; return; }
@@ -2719,6 +2721,7 @@ globalThis.W = { VERSION: 'versión 91' };
     if (m.muro && !d.aire) { const ca = Math.floor(u.y) * N + Math.floor(u.x); if (m.muro[ca] === 1 && m.muroJ[ca] - 1 !== u.j) { if (d.cat === 'veh') quitarMuro(m, ca); else freno = 0.3; } }
     if (m.crater && d.cat === 'veh') { const ca = Math.floor(u.y) * N + Math.floor(u.x); if (m.escombro[ca]) freno *= ECON.ruinaFreno; else if (m.crater[ca]) freno *= ECON.craterFreno; } // cascotes y cráteres frenan a los vehículos
     if (u.desg >= ECON.desgLento) freno *= u.desg >= ECON.desgMal ? ECON.desgVel2 : ECON.desgVel1; // desgastado: más lento
+    if (!d.aire && terr < T.CAMINO && W.clima(m)) freno *= terr === T.LLANO && vadoDe(m)[Math.floor(u.y) * N + Math.floor(u.x)] ? ECON.lluviaVado : d.cat === 'veh' ? ECON.lluviaVeh : ECON.lluviaInf; // lluvia: barro fuera de camino, y más en los vados
     const vmax = (u.comb !== undefined && u.comb <= 0 ? 0 : 1) * freno * (u.tope && u.tope < vel && !u.suelto ? u.tope : vel) * (u.marcha ? u.fm || 1 : 1) * (u.orden === 'trazar' && !(viaDe(m)[u.j][Math.floor(u.y) * N + Math.floor(u.x)] && m.via[u.j][c]) ? ECON.trazaVel : d.cat === 'veh' && terr >= T.CAMINO && viaDe(m)[u.j][Math.floor(u.y) * N + Math.floor(u.x)] ? ECON.caminoVel : 1); // (trazando sobre camino ya hecho va a su paso normal) // por camino los vehículos van más rápido; trazándolo, despacio
     const alFinal = u.ri === u.ruta.length - 1 && u.fin;
     const carril = !alFinal && d.cat === 'veh' && u.orden !== 'trazar' && m.carrilX && m.carrilX[c] > 0 && m.mapa.terreno[c] >= T.CAMINO && viaDe(m)[u.j][c]; // por camino, los vehículos van por el carril y no por el centro de cada celda
@@ -2880,7 +2883,7 @@ globalThis.W = { VERSION: 'versión 91' };
   for (const t in UNID) { const a = UNID[t].cono || ECON.cono, c = Math.cos(a); CAMPO[t] = { todo: a >= Math.PI, cos: c, k: c * Math.abs(c) }; }
   // ¿Ve la unidad a ese enemigo? Cerca, en todas direcciones; lejos, solo dentro del cono frontal.
   function veDir(m, a, e, d) {
-    const v = UNID[a.tipo].vision * (W.esNoche(m) ? ECON.nocheVis : 1);
+    const v = UNID[a.tipo].vision * (W.esNoche(m) ? ECON.nocheVis : 1) * (W.clima(m) === 2 ? ECON.tormentaVis : 1);
     const dx = posX(e) - a.x, dy = posY(e) - a.y;
     if (a.bunk) return d <= v * ECON.visAd; // desde el búnker se vigila en redondo, por las troneras
     const q = trincheraDe(m, a);
@@ -3193,12 +3196,13 @@ globalThis.W = { VERSION: 'versión 91' };
       if (u.enTierra) { u.vida = 0; return true; } // estaba dentro del aeródromo destruido
       base = aerodromoLibre(m, u); u.casa = base ? base.id : 0;
     }
+    const tormenta = W.clima(m) === 2; // con tormenta nada despega y lo que vuela vuelve a casa
     const conOrden = u.orden !== 'nada' || u.obj || u.cola.length > 0 || !!u.patrulla || u.acude || (u.sumi && u.sumi.est === 'puesto'); // (el helicóptero de suministro se queda sobre su punto)
     if (u.enTierra) {
       u.fuel = Math.min(d.fuel, u.fuel + ECON.reposta);
       if (u.fuel >= d.fuel) u.repostando = false;
       if (u.repostando) { u.orden = 'nada'; u.obj = 0; u.cola.length = 0; return true; } // hasta llenar el depósito no despega
-      if (conOrden && u.fuel >= d.fuel * 0.3) { u.enTierra = false; return false; } // despega
+      if (conOrden && !tormenta && u.fuel >= d.fuel * 0.3) { u.enTierra = false; return false; } // despega (con tormenta, no: la orden espera)
       return true;
     }
     u.fuel--;
@@ -3209,7 +3213,7 @@ globalThis.W = { VERSION: 'versión 91' };
       u.repostando = true; u.orden = 'nada'; u.obj = 0; u.ruta = null; u.cola.length = 0; u.acude = 0;
       m.efectos.push({ tipo: 'reposta', x1: u.x, y1: u.y, x2: base.cx, y2: base.cy, j: u.j, t: m.t });
     }
-    if (u.repostando) { u.orden = 'nada'; u.obj = 0; u.cola.length = 0; }
+    if (u.repostando || tormenta) { u.orden = 'nada'; u.obj = 0; u.cola.length = 0; u.acude = 0; }
     else if (conOrden) return false;
     // de vuelta a casa: por combustible o porque ya no tiene nada que hacer
     if (md <= 1.7) { posar(m, u, base); return true; }
@@ -3713,6 +3717,26 @@ globalThis.W = { VERSION: 'versión 91' };
   // ---------- niebla ----------
   // Día y noche: ciclo fijo; W.luz va de 1 (día) a 0 (noche), con un minuto de transición, para el velo de la interfaz.
   W.esNoche = (m) => m.t % ECON.dia >= ECON.diaLuz;
+  // Clima (solo en la partida con infraestructura): 0 despejado, 1 lluvia, 2 tormenta. Va por bloques de ECON.climaBloque ticks y sale
+  // de la semilla y del número de bloque, sin estado: se puede preguntar por cualquier momento (también por el que viene, para avisar).
+  function climaDe(m, k) {
+    if (m.logistica === false || m.sinClima || k < ECON.climaCalma) return 0;
+    let h = (Math.imul(m.semilla | 0, 0x9E3779B1) ^ Math.imul(k + 1, 0x85EBCA6B)) >>> 0;
+    h ^= h >>> 15; h = Math.imul(h, 0x2C1B3C6D) >>> 0; h ^= h >>> 12; h = Math.imul(h, 0x297A2D39) >>> 0; h ^= h >>> 15;
+    const r = (h >>> 0) / 4294967296;
+    return r < ECON.climaTormenta ? 2 : r < ECON.climaTormenta + ECON.climaLluvia ? 1 : 0;
+  }
+  W.clima = (m) => { const k = Math.floor(m.t / ECON.climaBloque); if (m.climaK !== k) { m.climaK = k; m.climaE = climaDe(m, k); } return m.climaE; };
+  W.climaSig = (m) => { const k = Math.floor(m.t / ECON.climaBloque), e = W.clima(m); for (let i = 1; i <= 6; i++) { const s = climaDe(m, k + i); if (s !== e) return { est: s, en: (k + i) * ECON.climaBloque - m.t }; } return null; }; // el próximo cambio y cuánto falta
+  // Vados: celdas de tierra con agua a los dos lados (en alguna de las cuatro direcciones, a 5 celdas o menos). Con lluvia se embarran.
+  function vadoDe(m) {
+    if (m.vado) return m.vado;
+    const N = m.N, t = m.mapa.terreno, v = (m.vado = new Uint8Array(N * N)), DIR = [[1, 0], [0, 1], [1, 1], [1, -1]];
+    const agua = (x, y, dx, dy) => { for (let s = 1; s <= 5; s++) { const X = x + dx * s, Y = y + dy * s; if (X < 0 || Y < 0 || X >= N || Y >= N) return false; if (t[Y * N + X] === T.AGUA || t[Y * N + X] === T.PUENTE) return true; } return false; };
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { if (t[y * N + x] !== T.LLANO) continue; for (const [dx, dy] of DIR) if (agua(x, y, dx, dy) && agua(x, y, -dx, -dy)) { v[y * N + x] = 1; break; } }
+    return v;
+  }
+  W.esVado = (m, c) => vadoDe(m)[c] === 1;
   W.luz = (m) => { const f = m.t % ECON.dia, T2 = 600; return f < ECON.diaLuz - T2 ? 1 : f < ECON.diaLuz ? (ECON.diaLuz - f) / T2 : f < ECON.dia - T2 ? 0 : (f - (ECON.dia - T2)) / T2; };
   W.actualizarNiebla = function (m) {
     const N = m.N, NN = N * N;
@@ -3724,7 +3748,7 @@ globalThis.W = { VERSION: 'versión 91' };
       else for (let k = 0; k < L.n; k++) f[L[k]] = 1;
       L.n = 0;
     }
-    const noche = W.esNoche(m) ? ECON.nocheVis : 1; // de noche las unidades ven menos (los edificios, igual)
+    const noche = (W.esNoche(m) ? ECON.nocheVis : 1) * (W.clima(m) === 2 ? ECON.tormentaVis : 1); // de noche y con tormenta las unidades ven menos (los edificios, igual)
     for (let k = 0; k < m.ents.length; k++) {
       const e = m.ents[k], f = m.niebla[e.j], L = m.vistas[e.j];
       const cx = Math.floor(posX(e)), cy = Math.floor(posY(e));
@@ -3791,7 +3815,7 @@ globalThis.W = { VERSION: 'versión 91' };
       const e = m.ents[k];
       if (!e.edif) { if (e.comb === 0 && (e.orden === 'mover' || e.orden === 'amover' || e.patrulla)) { e.orden = 'nada'; e.ruta = null; e.pend = null; e.cola.length = 0; e.patrulla = null; } // sin combustible no hay marcha: se queda de guardia donde está
         tickUnidad(m, e); if (e.comb !== undefined) e.desg = Math.min(100, (e.desg || 0) + Math.hypot(e.x - e.px, e.y - e.py) * ECON.desgCelda); // el vehículo de combate se desgasta con lo que anda
-        if (e.comb !== undefined && e.comb > 0) { e.comb -= Math.hypot(e.x - e.px, e.y - e.py); if (e.comb <= 0) { e.comb = 0; m.efectos.push({ tipo: 'sinComb', x1: e.x, y1: e.y, j: e.j, t: m.t }); } } } // lo que anda, lo gasta
+        if (e.comb !== undefined && e.comb > 0) { e.comb -= Math.hypot(e.x - e.px, e.y - e.py) * (W.clima(m) && m.mapa.terreno[Math.floor(e.y) * m.N + Math.floor(e.x)] < T.CAMINO ? ECON.lluviaGasto : 1); if (e.comb <= 0) { e.comb = 0; m.efectos.push({ tipo: 'sinComb', x1: e.x, y1: e.y, j: e.j, t: m.t }); } } } // lo que anda, lo gasta
       else if (e.hack > m.t) { e.obj = 0; } // edificio hackeado: apagado
       else if (EDIF[e.tipo].arma) tickTorreta(m, e);
       else if (EDIF[e.tipo].da) { // extracción continua; con déficit de energía rinde la mitad
@@ -5482,6 +5506,7 @@ globalThis.W = { VERSION: 'versión 91' };
       if (e) {
         let t = (e.muro ? W.MURO_N[e.muro] : (e.edif ? EDIF : UNID)[e.tipo]).nombre + (e.j === YO ? '' : ' rival') + ' · ' + Math.ceil(e.vida) + '/' + e.vidaMax;
         if (e.tipo === 'cosechadora' && e.j === YO) t += ' · carga ' + e.carga;
+        if (!e.edif && UNID[e.tipo].aire && e.j === YO && conRed && W.clima(m) === 2) t += e.enTierra ? ' · tormenta: no despega' : ' · tormenta: vuelve a su base';
         if (!e.edif && UNID[e.tipo].tiende && e.j === YO && m.logistica !== false) t += e.orden === 'conectar' ? ' · tendiendo línea' : e.auto ? ' · automático' : ' · manual';
         if (!e.edif && UNID[e.tipo].espia && e.j === YO) t += e.infiltrado ? ' · infiltrado: informando' : ' · acércalo a un edificio enemigo';
         if (!e.edif && e.comb !== undefined && e.j === YO) t += e.comb > 0 ? ' · combustible ' + Math.round(e.comb / W.ECON.combMax * 100) + ' %' : ' · sin combustible';
@@ -6249,6 +6274,12 @@ globalThis.W = { VERSION: 'versión 91' };
 
       ctx.imageSmoothingEnabled = true;
       { const luz = W.luz(m); if (luz < 1) { ctx.fillStyle = 'rgba(14,20,48,' + (0.36 * (1 - luz)).toFixed(3) + ')'; ctx.fillRect(0, 0, cw, ch); } } // la noche: un velo azulado sobre el mapa
+      { const cl = conRed ? W.clima(m) : 0; if (cl) { /* lluvia: trazos inclinados en pantalla (130; con tormenta, 260 y un velo gris) */
+        const n = cl === 2 ? 260 : 130, L = cl === 2 ? 20 : 13, inc = cl === 2 ? -0.5 : -0.22, ts = performance.now() / 1000;
+        if (cl === 2) { ctx.fillStyle = 'rgba(40,48,66,0.12)'; ctx.fillRect(0, 0, cw, ch); }
+        ctx.strokeStyle = cl === 2 ? 'rgba(38,56,88,0.45)' : 'rgba(60,82,116,0.32)'; ctx.lineWidth = 1; ctx.beginPath();
+        for (let i = 0; i < n; i++) { const y = ((i * 0.3247) % 1 * ch + ts * (620 + (i % 7) * 70)) % ch, x = (((i * 0.618034) % 1 * cw + inc * y) % cw + cw) % cw; ctx.moveTo(x, y); ctx.lineTo(x + inc * L, y + L); }
+        ctx.stroke(); } }
       ctx.drawImage(cNie, ox, oy, N * z, N * z);
       ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.strokeRect(ox - 0.5, oy - 0.5, N * z + 1, N * z + 1);
 
@@ -6950,6 +6981,7 @@ globalThis.W = { VERSION: 'versión 91' };
       h += '<h3>Drones (los saca su portador)</h3>' + fila('dronRec', 'De reconocimiento', '40', 'Da vueltas alrededor del portador y ve.') + fila('dronFpv', 'Kamikaze', '40 por salida', 'Un solo uso, contra vehículos y edificios armados.') + fila('dronBomba', 'Bombardero', '15 por salida', 'Suelta una granada sobre la infantería y vuelve a recargar.');
       h += '<h3>Misiles (misilera)</h3>'; for (const k in W.MISILES) h += fila('', W.MISILES[k].nombre, precio(W.MISILES[k]), W.MISILES[k].que + ' Nivel ' + W.MISILES[k].nivel + '.');
       h += '<h3>Infraestructura</h3>' + fila('', 'Camino militar', '4 a 30 por celda', 'Lo traza la excavadora. Solo tus vehículos corren por él.') + fila('', 'Línea de servicio', '3 por celda', 'La tiende el ingeniero civil entre dos edificios: lleva energía y mete el edificio en tu red.') + fila('', 'Trinchera', 'gratis', 'La cava la infantería (Z). Cuatro puestos a cubierto; clic derecho para ocuparla.');
+      if (conRed) h += '<h3>Clima</h3>' + fila('', 'Lluvia', '—', 'Fuera de camino los vehículos van un 25 % más lentos (la infantería, un 10 %) y gastan la mitad más de combustible. En los vados se va a media velocidad: un puente o un camino lo evitan.') + fila('', 'Tormenta', '—', 'Lo de la lluvia y, además, las unidades ven un 30 % menos y aviones y drones se quedan en tierra (los que vuelan vuelven a su base). El panel avisa un minuto antes.');
       $('guiaTxt').innerHTML = h;
     }
     $('abreGuia').addEventListener('click', () => { pintarGuia(); $('guia').hidden = false; });
@@ -7213,6 +7245,8 @@ globalThis.W = { VERSION: 'versión 91' };
       mun: (n) => (n === 1 ? '1 ficha sin munición' : n + ' fichas sin munición') + ' <small>· camión de suministro</small>',
       dron: (n) => (n === 1 ? '1 operador sin drones' : n + ' operadores sin drones') + ' <small>· estación de drones o camión</small>',
       radio: (n) => (n === 1 ? '1 unidad sin radio' : n + ' unidades sin radio') + ' <small>· torre de radio</small>',
+      tormenta: () => 'Tormenta: aviones y drones en tierra, se ve menos <small>· espera a que escampe</small>',
+      lluvia: () => 'Lluvia: fuera de camino se anda más lento y se gasta más <small>· usa los caminos</small>',
       llenoM: () => 'Almacenes llenos: se pierden minerales <small>· construye un almacén o gasta</small>',
       llenoP: () => 'Tanques llenos: se pierde petróleo <small>· tanque de combustible</small>',
       comb: (n) => (n === 1 ? '1 vehículo sin combustible' : n + ' vehículos sin combustible') + ' <small>· camión de suministro</small>',
@@ -7231,6 +7265,7 @@ globalThis.W = { VERSION: 'versión 91' };
       const donde = {};
       if (!rep) for (const e of m.ents) { if (e.j !== YO) continue; const pb = problema(e); if (pb) (donde[pb] || (donde[pb] = [])).push(e.id); }
       if (!rep && J.lleno) { if (m.t - (J.lleno.minerales === undefined ? -999 : J.lleno.minerales) < 200) donde.llenoM = [0]; if (m.t - (J.lleno.petroleo === undefined ? -999 : J.lleno.petroleo) < 200) donde.llenoP = [0]; }
+      if (!rep && conRed) { const cl = W.clima(m); if (cl === 2) donde.tormenta = [0]; else if (cl === 1) donde.lluvia = [0]; }
       const firma = Object.keys(ALERTA).map((k) => (donde[k] ? k + donde[k].length : '')).join('');
       alertaDonde = donde;
       if (firma === alertaFirma) return;
@@ -7239,7 +7274,8 @@ globalThis.W = { VERSION: 'versión 91' };
     }
     $('alertas').addEventListener('click', (ev) => {
       const b = ev.target.closest('button'); if (!b) return;
-      const k = b.dataset.k; if (k === 'llenoM' || k === 'llenoP') { aviso(k === 'llenoM' ? 'Cada almacén guarda 3000 minerales más' : 'Cada tanque de combustible guarda 800 de petróleo más'); return; }
+      const k = b.dataset.k; if (k === 'tormenta' || k === 'lluvia') { aviso(k === 'tormenta' ? 'Con tormenta nada despega y lo que vuela vuelve a su base; las órdenes dadas en tierra esperan' : 'Con lluvia los vehículos van un 25 % más lentos fuera de camino y los vados se embarran'); return; }
+      if (k === 'llenoM' || k === 'llenoP') { aviso(k === 'llenoM' ? 'Cada almacén guarda 3000 minerales más' : 'Cada tanque de combustible guarda 800 de petróleo más'); return; }
       const ids = (alertaDonde[k] || []).filter((id) => m.porId.has(id)); if (!ids.length) return;
       alertaIdx[k] = ((alertaIdx[k] === undefined ? -1 : alertaIdx[k]) + 1) % ids.length;
       const e = m.porId.get(ids[alertaIdx[k]]);
@@ -7268,6 +7304,7 @@ globalThis.W = { VERSION: 'versión 91' };
     function actualizarBarra() {
       if (cuadros % 30 === 0) { actualizarAlertas(); actualizarTuto(); }
       { const f = m.t % W.ECON.dia, noche = W.esNoche(m), falta = Math.ceil(((noche ? W.ECON.dia : W.ECON.diaLuz) - f) / 20), t = (noche ? 'noche · amanece en ' : 'día · anochece en ') + Math.floor(falta / 60) + ':' + String(falta % 60).padStart(2, '0'); if ($('rHora').textContent !== t) $('rHora').textContent = t; }
+      { const fc = $('filaClima'); if (fc.hidden !== !conRed) fc.hidden = !conRed; if (conRed) { const NOM = ['despejado', 'lluvia', 'tormenta'], cl = W.clima(m), sg = W.climaSig(m); let t = NOM[cl]; if (sg && sg.en <= 1200) { const s = Math.ceil(sg.en / 20); t += ' · ' + (sg.est === 0 ? 'escampa' : NOM[sg.est]) + ' en ' + Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); } const rc = $('rClima'); if (rc.textContent !== t) { rc.textContent = t; rc.style.color = cl === 2 || (sg && sg.en <= 1200 && sg.est === 2) ? '#b3261e' : ''; } } }
       const num = (v) => (J.dios ? '∞' : String(Math.floor(v)));
       { const fin = isFinite(J.capMin) && !J.dios, llM = fin && J.minerales >= J.capMin, llP = fin && J.petroleo >= J.capPet; // con almacenes: «tengo / cabe», en rojo cuando está lleno
         $('rMin').textContent = num(J.minerales) + (fin ? ' / ' + num(J.capMin) : ''); $('rPet').textContent = num(J.petroleo) + (fin ? ' / ' + num(J.capPet) : ''); $('rMin').style.color = llM ? 'var(--mal)' : ''; $('rPet').style.color = llP ? 'var(--mal)' : ''; }
