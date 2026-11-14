@@ -348,12 +348,12 @@
   <button type="button" id="empezar">Empezar</button>
   <button type="button" id="tutorial">Tutorial guiado<small style="display:block;color:var(--suave);font-size:10px">ocho pasos, con el rival dormido hasta el final</small></button>
   <button type="button" id="continuar" hidden>Continuar la partida guardada</button>
-  <div id="version">versión 92</div>
+  <div id="version">versión 93</div>
 </div></div>
 <div id="guia" hidden><div class="caja"><div class="cab"><strong>Guía: para qué sirve cada cosa</strong><button type="button" id="cierraGuia">cerrar</button></div><div id="guiaTxt"></div></div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finVer" href="#" title="Vuelve a ver la partida entera, con todo el mapa a la vista y a la velocidad que quieras.">ver repetición</a><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 92' };
+globalThis.W = { VERSION: 'versión 93' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -5506,7 +5506,7 @@ globalThis.W = { VERSION: 'versión 92' };
       if (e) {
         let t = (e.muro ? W.MURO_N[e.muro] : (e.edif ? EDIF : UNID)[e.tipo]).nombre + (e.j === YO ? '' : ' rival') + ' · ' + Math.ceil(e.vida) + '/' + e.vidaMax;
         if (e.tipo === 'cosechadora' && e.j === YO) t += ' · carga ' + e.carga;
-        if (!e.edif && UNID[e.tipo].aire && e.j === YO && conRed && W.clima(m) === 2) t += e.enTierra ? ' · en tierra por la tormenta' : ' · tormenta: vuelve a su base';
+        if (!e.edif && UNID[e.tipo].aire && e.j === YO && conRed && W.clima(m) === 2) t += e.enTierra ? ' · tormenta: no despega' : ' · tormenta: vuelve a su base';
         if (!e.edif && UNID[e.tipo].tiende && e.j === YO && m.logistica !== false) t += e.orden === 'conectar' ? ' · tendiendo línea' : e.auto ? ' · automático' : ' · manual';
         if (!e.edif && UNID[e.tipo].espia && e.j === YO) t += e.infiltrado ? ' · infiltrado: informando' : ' · acércalo a un edificio enemigo';
         if (!e.edif && e.comb !== undefined && e.j === YO) t += e.comb > 0 ? ' · combustible ' + Math.round(e.comb / W.ECON.combMax * 100) + ' %' : ' · sin combustible';

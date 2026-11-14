@@ -195,7 +195,7 @@
       if (e) {
         let t = (e.muro ? W.MURO_N[e.muro] : (e.edif ? EDIF : UNID)[e.tipo]).nombre + (e.j === YO ? '' : ' rival') + ' · ' + Math.ceil(e.vida) + '/' + e.vidaMax;
         if (e.tipo === 'cosechadora' && e.j === YO) t += ' · carga ' + e.carga;
-        if (!e.edif && UNID[e.tipo].aire && e.j === YO && conRed && W.clima(m) === 2) t += e.enTierra ? ' · en tierra por la tormenta' : ' · tormenta: vuelve a su base';
+        if (!e.edif && UNID[e.tipo].aire && e.j === YO && conRed && W.clima(m) === 2) t += e.enTierra ? ' · tormenta: no despega' : ' · tormenta: vuelve a su base';
         if (!e.edif && UNID[e.tipo].tiende && e.j === YO && m.logistica !== false) t += e.orden === 'conectar' ? ' · tendiendo línea' : e.auto ? ' · automático' : ' · manual';
         if (!e.edif && UNID[e.tipo].espia && e.j === YO) t += e.infiltrado ? ' · infiltrado: informando' : ' · acércalo a un edificio enemigo';
         if (!e.edif && e.comb !== undefined && e.j === YO) t += e.comb > 0 ? ' · combustible ' + Math.round(e.comb / W.ECON.combMax * 100) + ' %' : ' · sin combustible';
