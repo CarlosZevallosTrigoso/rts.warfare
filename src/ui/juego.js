@@ -402,6 +402,80 @@
 
     // ---------- dibujo ----------
     // Qué le pasa a algo propio que no rinde (o '' si está bien): un icono encima, la explicación en su rótulo y una línea en el panel de alertas.
+    // ---------- vista de flujos ----------
+    // Qué alimenta a qué y dónde se corta: la energía corre por los cables desde las centrales, el petróleo por los tubos desde los
+    // extractores; cada red dice lo que da y lo que pide, y abajo va el ritmo real por minuto (medido de los contadores de la partida).
+    let verFlujos = false, flujoC = null, flujoT = 0; const flujoH = [];
+    function calcFlujos() {
+      const redes = new Map(), prods = new Map(), tubo = new Map(), J = m.jug[YO];
+      for (const e of m.ents) {
+        if (e.j !== YO || !e.edif || e.vida <= 0 || e.infra || e.muro) continue;
+        let g = redes.get(e.red); if (!g) redes.set(e.red, (g = { prod: e.redP || 0, uso: e.redU || 0, patio: e.conRed !== false, ancla: e }));
+        if (e.tipo === 'patio' || (g.ancla.tipo !== 'patio' && EDIF[e.tipo].energia > 0 && !(EDIF[g.ancla.tipo].energia > 0))) g.ancla = e;
+        if (EDIF[e.tipo].energia > 0) { let l = prods.get(e.red); if (!l) prods.set(e.red, (l = [])); l.push(e); }
+        if (e.tipo === 'extractor' && e.tubos) for (const id of e.tubos) tubo.set(id, e);
+      }
+      return { redes, prods, tubo };
+    }
+    function muestraFlujos() { // una muestra de los contadores cada 2 s de juego; se guardan 30 s
+      const J = m.jug[YO], u = flujoH[flujoH.length - 1];
+      if (u && m.t < u.t) flujoH.length = 0; // partida cargada o reiniciada
+      if (!flujoH.length || m.t - flujoH[flujoH.length - 1].t >= 40) { flujoH.push({ t: m.t, pet: J.extraido || 0, que: J.quemado || 0, ace: J.fundido || 0, min: J.cosechado || 0 }); if (flujoH.length > 16) flujoH.shift(); }
+    }
+    function dibujarFlujos(z, ox, oy, fuera) {
+      const ahora = performance.now(); if (!flujoC || ahora - flujoT > 500) { flujoC = calcFlujos(); flujoT = ahora; }
+      const { redes, prods, tubo } = flujoC, paso = Math.max(6, z * 0.9), des = -(((pausa ? 0 : ahora) / 1000) * z * 1.8) % paso, OK = P.bien, FALTA = '#d9822b', MAL = P.mal, PET = '#7a5a2e', J = m.jug[YO], E = W.ECON;
+      ctx.save(); ctx.fillStyle = P.llano; ctx.globalAlpha = 0.4; ctx.fillRect(0, 0, cw, ch); ctx.globalAlpha = 1; ctx.lineCap = 'butt'; // un velo claro: lo demás se apaga y el flujo destaca
+      const cab = [[], [], []], tub = [[], []]; // cables: fluye, falta, cortado; tubos: fluye, cortado
+      for (const e of m.ents) {
+        if (!e.infra || !e.linea || e.j !== YO || e.vida <= 0) continue;
+        const p = e.pts; let inv = false, lista = null, k = 0;
+        if (e.tubo) { const ex = tubo.get(e.id); k = !ex || ex.sinTubo ? 1 : 0; if (ex) inv = Math.hypot(ex.cx - p[2], ex.cy - p[3]) < Math.hypot(ex.cx - p[0], ex.cy - p[1]); lista = tub[k]; }
+        else { const g = redes.get(e.red), l = prods.get(e.red); k = !e.conRed ? 2 : g && g.uso > g.prod ? 1 : 0; if (l) { let da = 1e9, db = 1e9; for (const q of l) { da = Math.min(da, Math.hypot(q.cx - p[0], q.cy - p[1])); db = Math.min(db, Math.hypot(q.cx - p[2], q.cy - p[3])); } inv = db < da; } lista = cab[k]; }
+        if (inv) lista.push(p[2], p[3], p[0], p[1]); else lista.push(p[0], p[1], p[2], p[3]); // siempre desde el lado de quien produce
+      }
+      const traza = (l, color, ancho, corre) => {
+        if (!l.length) return;
+        ctx.strokeStyle = color; ctx.setLineDash([]); ctx.globalAlpha = 0.3; ctx.lineWidth = ancho; ctx.beginPath(); for (let i = 0; i < l.length; i += 4) { ctx.moveTo(ox + l[i] * z, oy + l[i + 1] * z); ctx.lineTo(ox + l[i + 2] * z, oy + l[i + 3] * z); } ctx.stroke();
+        ctx.globalAlpha = 1; ctx.setLineDash(corre ? [paso * 0.5, paso * 0.5] : [3, 5]); ctx.lineDashOffset = corre ? des : 0; ctx.stroke(); // el trazo que corre (o, si está cortado, punteado y quieto)
+      };
+      const a1 = Math.max(2.5, z * 0.16), a2 = Math.max(3.5, z * 0.24);
+      traza(tub[0], PET, a2, true); traza(tub[1], MAL, a2, false); traza(cab[0], OK, a1, true); traza(cab[1], FALTA, a1, true); traza(cab[2], MAL, a1, false);
+      ctx.setLineDash([]); ctx.lineDashOffset = 0;
+      const rotulo = (txt, x, y, color, negrita) => { ctx.font = (negrita ? 'bold 11px ' : '10px ') + 'ui-monospace, Menlo, Consolas, monospace'; const w = ctx.measureText(txt).width + 8; ctx.fillStyle = 'rgba(255,255,255,0.92)'; ctx.fillRect(x - w / 2, y - 7, w, 14); ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.strokeRect(x - w / 2 + 0.5, y - 6.5, w - 1, 13); ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(txt, x, y + 0.5); };
+      let deficit = 0, sueltas = 0, nRedes = 0;
+      for (const g of redes.values()) { if (!g.prod && !g.uso) continue; nRedes++; if (!g.patio) sueltas++; else if (g.uso > g.prod) deficit++; }
+      if (z >= 7) for (const e of m.ents) { // cada edificio: lo que da o pide, y si está parado, por qué
+        if (e.j !== YO || !e.edif || e.vida <= 0 || e.infra || e.muro || fuera(e.cx, e.cy)) continue;
+        const d = EDIF[e.tipo], en = d.energia; let txt = '', color = P.tinta;
+        if (en > 0) { txt = '+' + Math.round(en * (e.sinComb ? E.sinCombEnergia : 1)); color = OK; if (e.sinComb) { txt += ' sin petróleo'; color = MAL; } }
+        else if (en < 0) { txt = String(en); if (e.conRed === false) { txt += ' sin red'; color = MAL; } else if (e.sinLuz) { txt += ' a medias'; color = FALTA; } }
+        if (e.tipo === 'extractor') { txt += e.sinTubo ? ' · sin tubo: rinde ' + Math.round(E.sinTubo * 100) + ' %' : ' · petróleo'; if (e.sinTubo) color = MAL; }
+        if (d.funde) { txt += e.parada === 'lleno' ? ' · parada: acero lleno' : e.parada === 'mineral' ? ' · parada: falta mineral' : ' · funde'; if (e.parada && color === P.tinta) color = FALTA; }
+        if (txt) rotulo(txt, ox + e.cx * z, oy + (e.cy - e.tam / 2) * z - 9, color, false);
+      }
+      for (const g of redes.values()) { // cada red, en su patio (o en su central): lo que da y lo que pide
+        if ((!g.prod && !g.uso) || fuera(g.ancla.cx, g.ancla.cy)) continue;
+        const mal = !g.patio, falta = g.uso > g.prod;
+        rotulo('red: da ' + g.prod + ' · pide ' + g.uso + (mal ? ' · sin patio' : falta ? ' · no alcanza' : ''), ox + g.ancla.cx * z, oy + (g.ancla.cy + g.ancla.tam / 2) * z + 11, mal ? MAL : falta ? FALTA : OK, true);
+      }
+      // El resumen, abajo: totales y ritmo real del último medio minuto.
+      const h0 = flujoH[0], h1 = flujoH[flujoH.length - 1], dt = h1 && h0 ? h1.t - h0.t : 0, pm = (k) => (dt >= 100 ? Math.round(((h1[k] - h0[k]) / dt) * 1200) + '/min' : '…');
+      let sinTubo = 0, exts = 0, fund = 0, paradas = 0; for (const e of m.ents) { if (e.j !== YO || !e.edif || e.vida <= 0) continue; if (e.tipo === 'extractor') { exts++; if (e.sinTubo) sinTubo++; } if (EDIF[e.tipo].funde) { fund++; if (e.parada || e.conRed === false) paradas++; } }
+      const filas = [
+        ['energía', 'da ' + J.prod + ' · pide ' + J.uso + ' · ' + nRedes + (nRedes === 1 ? ' red' : ' redes') + (deficit ? ' · ' + deficit + ' no alcanza' : '') + (sueltas ? ' · ' + sueltas + ' sin patio' : ''), deficit || sueltas ? (sueltas ? MAL : FALTA) : OK],
+        ['petróleo', '+' + pm('pet') + ' extraído · −' + pm('que') + ' quemado' + (exts ? ' · ' + exts + (exts === 1 ? ' extractor' : ' extractores') : '') + (sinTubo ? ' · ' + sinTubo + ' sin tubo' : ''), sinTubo ? MAL : PET],
+        ['mineral', '+' + pm('min') + ' cosechado', P.tinta],
+      ];
+      if (J.acero !== undefined) filas.push(['acero', '+' + pm('ace') + (fund ? ' · ' + fund + (fund === 1 ? ' fundición' : ' fundiciones') + (paradas ? ' · ' + paradas + (paradas === 1 ? ' parada' : ' paradas') : '') : ' · sin fundición'), paradas ? FALTA : P.tinta]);
+      ctx.font = '11px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      let ancho = 400; for (const f of filas) ancho = Math.max(ancho, 76 + ctx.measureText(f[1]).width + 12);
+      const alto = filas.length * 16 + 30, bx = Math.round(cw - ancho - 10), by = 44; // arriba a la derecha: abajo taparía el mapa donde se juega
+      ctx.fillStyle = 'rgba(255,255,255,0.95)'; ctx.fillRect(bx, by, ancho, alto); ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.strokeRect(bx + 0.5, by + 0.5, ancho - 1, alto - 1);
+      filas.forEach((f, i) => { const y = by + 13 + i * 16; ctx.fillStyle = '#6b6b6b'; ctx.fillText(f[0], bx + 10, y); ctx.fillStyle = f[2]; ctx.fillText(f[1], bx + 76, y); });
+      { const y = by + alto - 12; let x = bx + 10; for (const [c, t] of [[OK, 'fluye'], [FALTA, 'no alcanza'], [MAL, 'cortado'], [PET, 'petróleo']]) { ctx.fillStyle = c; ctx.fillRect(x, y - 2, 16, 4); ctx.fillStyle = '#6b6b6b'; ctx.fillText(t, x + 21, y); x += 30 + ctx.measureText(t).width; } }
+      ctx.restore();
+    }
     function problema(e) {
       if (e.edif) {
         if (e.infra || e.vida <= 0) return '';
@@ -1131,6 +1205,7 @@
         for (let i = 0; i < n; i++) { const y = ((i * 0.3247) % 1 * ch + ts * (620 + (i % 7) * 70)) % ch, x = (((i * 0.618034) % 1 * cw + inc * y) % cw + cw) % cw; ctx.moveTo(x, y); ctx.lineTo(x + inc * L, y + L); }
         ctx.stroke(); } }
       ctx.drawImage(cNie, ox, oy, N * z, N * z);
+      if (verFlujos && conRed) dibujarFlujos(z, ox, oy, fuera); // encima de la niebla: es un plano, no parte del mapa
       ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.strokeRect(ox - 0.5, oy - 0.5, N * z + 1, N * z + 1);
 
       // Colmena: ondas de llamada que se desvanecen al alejarse, y enlaces entre quien llama y quien acude.
@@ -1854,6 +1929,7 @@
     $('dronMis').addEventListener('click', () => { const om = conMision(); if (!om.length) return; if (om.some((u) => u.dronMis)) { W.orden(m, { t: 'dronMision', j: YO, ids: om.map((u) => u.id) }); aviso('Drones de vuelta con su operador'); } else { modo = 'dronMis'; aviso('Elige el punto que vigilará el dron (hasta 45 celdas del operador)'); } });
     $('dronAtk').addEventListener('click', () => { const us = conDrones(); if (us.length) W.orden(m, { t: 'dronAtk', j: YO, ids: us.map((u) => u.id), on: us.some((u) => u.dronAtk === false) }); });
     $('verRed').addEventListener('click', () => { if (conRed) verRed = !verRed; else aviso('Partida clásica: sin red'); });
+    $('verFlujos').addEventListener('click', () => { if (conRed) { verFlujos = !verFlujos; flujoC = null; } else aviso('Partida clásica: sin red'); });
     $('retiro').addEventListener('click', () => { const us = paraRetiro(); if (us.length) W.orden(m, { t: 'retiro', j: YO, ids: us.map((u) => u.id), on: !us.every((u) => u.retira) }); });
     // Segundo clic derecho tras ordenar mover: fija hacia dónde queda mirando la unidad (o el frente de la formación).
     let giroPend = null, giroCerca = false;
@@ -2235,6 +2311,8 @@
       { const ps = portadores(), bl = $('dronLlama'), bd = $('dronDespl'), rec = ps.some((e) => e.drLlama), fue = ps.some((e) => !e.drLlama); bl.hidden = !ps.length; bd.hidden = !ps.length; bl.classList.toggle('listo', ps.length > 0 && !fue); bd.classList.toggle('listo', ps.length > 0 && !rec); }
       { const om = conMision(), bm = $('dronMis'); bm.hidden = !om.length; if (om.length) { const tx = om.some((u) => u.dronMis) ? 'Misión de dron: en curso' : 'Misión de dron'; if (bm.textContent !== tx) bm.textContent = tx; bm.classList.toggle('listo', om.some((u) => u.dronMis)); } }
       { const us = conDrones(), bd = $('dronAtk'); bd.hidden = !us.length; if (us.length) { const t = 'Drones de ataque: ' + (us.every((u) => u.dronAtk !== false) ? 'sí' : us.some((u) => u.dronAtk !== false) ? 'algunos' : 'no'); if (bd.textContent !== t) bd.textContent = t; } }
+      if (conRed) muestraFlujos();
+      { const bf = $('verFlujos'), t = 'ver flujos: ' + (verFlujos ? 'sí' : 'no'); if (bf.textContent !== t) { bf.textContent = t; bf.classList.toggle('on', verFlujos); } bf.hidden = !conRed; }
       { const bv = $('verRed'), t = 'ver la red: ' + (verRed ? 'sí' : 'no'); if (bv.textContent !== t) { bv.textContent = t; bv.classList.toggle('on', verRed); } bv.hidden = !conRed; }
       { const us = paraRetiro(), br = $('retiro'); br.hidden = !us.length;
         if (us.length) { const t = 'Retirada automática: ' + (us.every((u) => u.retira) ? 'sí' : us.some((u) => u.retira) ? 'algunas' : 'no'); if (br.textContent !== t) br.textContent = t; } }
@@ -2619,6 +2697,7 @@
         case 'Delete': case 'Backspace': if (modo === 'patrulla') { rutaP.pop(); break; } vender(); break;
         case 'KeyE': { const ids = unidadesSel().map((u) => u.id); if (ids.length) { W.orden(m, { t: 'explorar', j: YO, ids }); son.orden(); } break; }
         case 'KeyS': { const ids = unidadesSel().map((u) => u.id); if (ids.length) W.orden(m, { t: 'detener', j: YO, ids }); break; }
+        case 'KeyI': if (conRed) { verFlujos = !verFlujos; flujoC = null; aviso(verFlujos ? 'Vista de flujos: verde fluye, naranja no alcanza, rojo cortado' : 'Vista de flujos apagada'); } else aviso('Partida clásica: sin red'); break;
         case 'KeyH': cam.x = m.mapa.bases[YO].x; cam.y = m.mapa.bases[YO].y; break;
         case 'Space': if (J.alerta) { cam.x = J.alerta.x; cam.y = J.alerta.y; } break;
         case 'KeyL': if (conRed) { verRed = !verRed; aviso(verRed ? 'Vista de la red: lo sombreado es tu cobertura; en rojo, las líneas que no llegan a tu red' : 'Vista de la red apagada'); } else aviso('Partida clásica: sin red'); break;
@@ -2665,7 +2744,8 @@
         + fila('· niebla', f(nie) + ' ms', nie > 10) + fila('entidades', m.ents.length + ' · ' + parts.length + ' part.', false);
       R.sim = R.ticks = R.dib = R.cuadros = R.ms = R.niebla = R.pasadas = 0;
     }
-    $('rend').addEventListener('click', () => $('rend').classList.toggle('plegado'));
+    const recuerda = (id) => { const el = $(id); try { const v = localStorage.getItem('rtsw.' + id); if (v !== null) el.classList.toggle('plegado', v === '1'); } catch (_) {} el.addEventListener('click', () => { const p = el.classList.toggle('plegado'); try { localStorage.setItem('rtsw.' + id, p ? '1' : '0'); } catch (_) {} }); }; // los cuadros de abajo: plegados por defecto, y se acuerdan de cómo los dejaste
+    recuerda('rend'); recuerda('contexto');
 
     { const patio = m.ents.find((e) => e.edif && e.j === YO && e.tipo === 'patio'); if (patio) sel.add(patio.id); } // se empieza con el patio seleccionado: su lista a la vista
 

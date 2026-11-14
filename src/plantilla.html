@@ -107,7 +107,7 @@
   #ayuda kbd { font: inherit; color: var(--tinta); }
   #formas { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; }
   #formas .grupo { justify-content: center; }
-  #vender, #trinchera, #retiro, #desplegar, #descargar, #trazar, #conectar, #dronAtk, #verRed, #mejorar { justify-content: center; margin-top: 4px; }
+  #vender, #trinchera, #retiro, #desplegar, #descargar, #trazar, #conectar, #dronAtk, #verRed, #verFlujos, #mejorar { justify-content: center; margin-top: 4px; }
   .chip.debe { border-style: dashed; opacity: .6; }
   /* Táctil: botonera sobre el mapa para lo que con teclado son teclas, y controles más grandes. */
   #tactil { position: fixed; left: 150px; right: 244px; bottom: 8px; z-index: 3; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; align-items: flex-end; pointer-events: none; }
@@ -148,7 +148,9 @@
   #rend td { padding: 0 6px; } #rend td:last-child { text-align: right; color: var(--tinta); font-variant-numeric: tabular-nums; }
   #rend tr.mal td { color: var(--mal); }
   #rend.plegado tr:not(:first-child) { display: none; }
-  #contexto { background: var(--panel); border: 1px solid var(--linea); border-radius: 2px; padding: 4px 8px; max-width: 340px; font-size: 11px; line-height: 1.5; pointer-events: none; opacity: 0.92; }
+  #contexto { background: var(--panel); border: 1px solid var(--linea); border-radius: 2px; padding: 4px 8px; max-width: 340px; font-size: 11px; line-height: 1.5; pointer-events: auto; cursor: pointer; opacity: 0.92; }
+  #contexto::before { content: 'teclas ▾'; display: block; font-size: 10px; }
+  #contexto.plegado { padding: 1px 8px; } #contexto.plegado::before { content: 'teclas ▸'; } #contexto.plegado > div { display: none; } /* plegado por defecto: no tapa el mapa */
   #contexto kbd { font: inherit; color: var(--tinta); }
   #contexto b { color: var(--tinta); font-weight: 600; }
   #vender:hover { background: var(--mal); color: #fff; border-color: var(--mal); }
@@ -264,7 +266,7 @@
   </div>
   <div id="alertas"></div>
   <div id="tuto" hidden><button type="button" id="tutoFin">saltar tutorial</button><b id="tutoPaso"></b><span id="tutoTxt"></span></div>
-  <div id="abajo"><table id="rend" class="tenue" title="Rendimiento del último segundo. Clic para plegar."></table><div id="contexto" class="tenue" hidden></div></div>
+  <div id="abajo"><table id="rend" class="tenue plegado" title="Rendimiento del último segundo. Clic para desplegar o plegar."></table><div id="contexto" class="tenue plegado" title="Teclas para lo que tienes seleccionado. Clic para desplegar o plegar." hidden></div></div>
   <div id="repBar" hidden><b>REPETICIÓN</b><span id="repT"></span><button type="button" data-v="0">❙❙</button><button type="button" data-v="1" class="on">×1</button><button type="button" data-v="2">×2</button><button type="button" data-v="4">×4</button><button type="button" data-v="8">×8</button><button type="button" data-v="16">×16</button><a id="repSalir" href="#">salir</a></div>
   <aside id="barra">
     <h1 id="titulo" title="Recargar">rts<span>.</span>warfare<b id="dios" hidden>GOD</b><b id="sinColmena" hidden>SIN COLMENA</b></h1>
@@ -284,6 +286,7 @@
     </div>
     <canvas id="mini" width="208" height="208"></canvas>
     <button type="button" id="verRed" class="grupo" title="Sombrea tu cobertura: ahí tus unidades tienen suministro y ahí puedes construir. En rojo, las líneas que no llegan a tu red. Tecla L.">ver la red: no</button>
+    <button type="button" id="verFlujos" class="grupo" title="Muestra por dónde corre la energía y el petróleo, cuánto da y pide cada red, y dónde se corta. Verde: fluye. Naranja: la red no da para todos. Rojo: cortado o sin patio. Tecla I.">ver flujos</button>
     <div id="panel">
     <div id="vacio" class="tenue">Selecciona un edificio para ver lo que produce.<br><kbd>B</kbd> patio · <kbd>Q</kbd> cuarteles · <kbd>V</kbd> fábricas · <kbd>X</kbd> aeródromos</div>
     <section id="secCola" hidden><div class="cab"><h2>Cola</h2><button type="button" id="bucle" class="grupo" title="Cada unidad que sale se vuelve a encargar al final de la cola. Se paga al empezarla.">repetir: no</button></div><div id="cola"></div></section>

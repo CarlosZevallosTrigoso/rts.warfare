@@ -2680,6 +2680,17 @@ prueba('clima: sale de la semilla; la lluvia frena y gasta fuera de camino, el v
   }
 });
 
+prueba('flujos: cada edificio sabe lo que da y lo que pide su red', () => {
+  const m = W.crearMundo(5, { logistica: true }); m.jug[0].minerales = 9000;
+  const pt = m.ents.find((e) => e.tipo === 'patio' && e.j === 0);
+  const pon = (t) => { for (let d = 5; d < 16; d++) for (let a = 0; a < 6.3; a += 0.3) { const x = Math.round(pt.cx + Math.cos(a) * d), y = Math.round(pt.cy + Math.sin(a) * d); if (!W.porQueNo(m, 0, t, x, y)) return W.crearEdificio(m, 0, t, x, y); } };
+  const ce = pon('central'), cu = pon('cuartel'); for (let i = 0; i < 40; i++) W.tick(m);
+  const E = W.EDIF; let da = 0, pide = 0; for (const e of m.ents) if (e.edif && e.j === 0 && !e.infra && e.red === pt.red) { const en = E[e.tipo].energia; if (en > 0) da += en; else pide -= en; }
+  assert.ok(ce.conRed && cu.conRed, 'la central y el cuartel no quedaron en la red del patio');
+  assert.strictEqual(pt.redP, da, 'lo que da la red'); assert.strictEqual(pt.redU, pide, 'lo que pide la red');
+  assert.strictEqual(cu.redP, pt.redP); assert.strictEqual(ce.redU, pt.redU); assert.ok(pt.redP >= 100 && pt.redU > 0);
+});
+
 prueba('guardar y cargar: la partida cargada sigue exactamente igual que la original', () => {
   const m = W.crearMundo(2026, { N: 128, logistica: true }), a = W.iaCrear(0), b = W.iaCrear(1, 'normal', 'asalto');
   const paso = (mm, x, y) => { W.iaTick(mm, x); W.iaTick(mm, y); W.tick(mm); };
