@@ -985,7 +985,7 @@
     const sella = (f, cx, cy, r) => { const R = Math.ceil(r), r2 = r * r; for (let dy = -R; dy <= R; dy++) { const y = cy + dy; if (y < 0 || y >= N) continue; for (let dx = -R; dx <= R; dx++) { const x = cx + dx; if (x >= 0 && x < N && dx * dx + dy * dy <= r2) f[y * N + x] = 1; } } };
     for (let i = 0; i < its.length; i++) {
       const e = its[i], g = red.get(raiz(i)), f = m.cob[e.j];
-      e.conRed = g.patio; e.red = its[raiz(i)].id;
+      e.conRed = g.patio; e.red = its[raiz(i)].id; e.redP = Math.round(g.prod); e.redU = Math.round(g.uso); // (redP y redU: lo que da y lo que pide su red; para la vista de flujos)
       if (e.infra) continue; // ni los caminos ni las líneas dan cobertura: la dan los nodos y los edificios conectados
       e.deficit = g.uso > g.prod && !m.jug[e.j].dios; e.sinLuz = e.deficit && EDIF[e.tipo].energia < 0; // su red no da para todos: a media marcha
       if (g.patio) sella(f, Math.floor(e.cx), Math.floor(e.cy), (e.tipo === 'patio' || e.tipo === 'deposito' ? ECON.cobNodo : e.tipo === 'avanzada' ? ECON.cobAvanzada : ECON.cobEdif) + e.tam / 2);
