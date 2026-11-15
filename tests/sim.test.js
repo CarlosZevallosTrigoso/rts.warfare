@@ -1327,7 +1327,7 @@ prueba('trincheras ocupables: cuatro puestos, ocupar, salir, y vacía la toma cu
   assert.ok(dDentro > 0, 'dentro también se recibe daño, pero menos');
 });
 
-prueba('tanda 2: la gatling monta antes de disparar y el hacker apaga vehículos y edificios', () => {
+prueba('tanda 2: la gatling monta antes de disparar y el hacker toma vehículos y apaga edificios', () => {
   const m = W.crearMundo(4242, { N: 128 }), N = m.N, J = m.jug[0];
   m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
   for (let y = 40; y < 90; y++) for (let x = 20; x < 110; x++) { const i = y * N + x; if (!m.ocup[i]) { m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; } }
@@ -1349,10 +1349,13 @@ prueba('tanda 2: la gatling monta antes de disparar y el hacker apaga vehículos
   W.orden(m, { t: 'hackear', j: 0, ids: [hk.id], obj: sol.id }); avanza(3);
   assert.ok(hk.orden === 'nada', 'a la infantería no se la hackea');
   W.orden(m, { t: 'hackear', j: 0, ids: [hk.id], obj: tq.id }); avanza(W.ECON.hackCanal + 8);
-  assert.ok(tq.hack > m.t && J.info === 100 - W.ECON.hackInfo, 'tanque hackeado y cobrado: info ' + J.info);
-  tq.recarga = 0; W.orden(m, { t: 'mover', j: 1, ids: [tq.id], x: 60.5, y: 75.5 }); const tx = tq.x; avanza(100);
-  assert.ok(Math.abs(tq.x - tx) < 0.01 && tq.tDisparo === undefined, 'hackeado ni se mueve ni dispara');
-  avanza(W.ECON.hackVeh); assert.ok(!(tq.hack > m.t) && Math.abs(tq.x - tx) > 1, 'pasado el efecto, vuelve a andar');
+  assert.ok(tq.j === 0 && tq.ctrl > m.t && J.info === 100 - W.ECON.hackCtrlInfo, 'tanque tomado y cobrado: info ' + J.info + ', bando ' + tq.j);
+  assert.strictEqual(m.jug[0].cuenta.tanque, 1, 'el tanque tomado cuenta como mío');
+  const tx = tq.x; W.orden(m, { t: 'mover', j: 1, ids: [tq.id], x: 60.5, y: 75.5 }); avanza(60);
+  assert.ok(Math.abs(tq.x - tx) < 0.01, 'su dueño ya no lo manda');
+  W.orden(m, { t: 'mover', j: 0, ids: [tq.id], x: 52.5, y: 75.5 }); avanza(120);
+  assert.ok(Math.abs(tq.x - tx) > 1, 'lo mando yo: ' + tx + ' → ' + tq.x);
+  avanza(W.ECON.hackCtrl); assert.ok(tq.j === 1 && !tq.ctrl && tq.orden === 'nada' && !m.jug[0].cuenta.tanque, 'pasado el plazo, vuelve con su dueño y sin órdenes');
   // un edificio hackeado deja de producir; sin información no hay hackeo
   const cu = W.crearEdificio(m, 1, 'cuartel', 48, 80); m.jug[1].minerales = 5000;
   W.orden(m, { t: 'entrenar', j: 1, tipo: 'infanteria', ids: [cu.id] }); avanza(3);
@@ -1360,7 +1363,7 @@ prueba('tanda 2: la gatling monta antes de disparar y el hacker apaga vehículos
   assert.ok(cu.hack > m.t, 'cuartel hackeado');
   const p0 = cu.prog; avanza(60); assert.equal(cu.prog, p0, 'hackeado no produce');
   J.info = 0; hk.recarga = 0; W.orden(m, { t: 'hackear', j: 0, ids: [hk.id], obj: tq.id }); avanza(200);
-  assert.ok(!(tq.hack > m.t), 'sin información no hay hackeo');
+  assert.ok(tq.j === 1 && !tq.ctrl, 'sin información no hay hackeo');
 });
 
 prueba('tanda 3: misilera (Scud, Minuteman, Sarmat) e interceptor', () => {
@@ -2725,6 +2728,22 @@ prueba('pelotones: se encargan de una vez, nacen como grupo, y lo que falta se r
   W.orden(m, { t: 'peloton', j: 0, tipo: 'fusileros' }); W.tick(m); W.tick(m);
   W.orden(m, { t: 'cancelarUnidad', j: 0, id: cu.id, i: 2 }); W.tick(m); W.tick(m);
   assert.strictEqual(cu.cola.length, 5); assert.strictEqual(cu.pelq.length, 5);
+});
+
+prueba('emboscada: el infante del jugador parado en el bosque no sale a perseguir; con una orden, sale', () => {
+  const m = W.crearMundo(5, {}), N = m.N, t = m.mapa.terreno; let c0 = -1;
+  for (let y = 30; y < N - 30 && c0 < 0; y++) for (let x = 30; x < N - 30 && c0 < 0; x++) { let bien = t[y * N + x] === 3 && !m.ocup[y * N + x]; for (let d = 1; d <= 9 && bien; d++) if (t[y * N + x + d] !== 0 || m.ocup[y * N + x + d]) bien = false; if (bien) c0 = y * N + x; }
+  assert.ok(c0 >= 0, 'sin bosque con llano al lado');
+  const u = W.crearUnidad(m, 0, 'infanteria', c0), fuera = W.crearUnidad(m, 0, 'infanteria', c0 + 2); for (let i = 0; i < 3; i++) W.tick(m);
+  assert.ok(u.guardia && u.embosc, 'el del bosque no quedó emboscado'); assert.ok(!fuera.guardia, 'el de fuera no debe quedar en guardia');
+  const en = W.crearUnidad(m, 1, 'infanteria', c0 + 8); en.vida = en.vidaMax = 5000; en.guardia = true; const x0 = u.x, f0 = fuera.x;
+  for (let i = 0; i < 300; i++) W.tick(m);
+  assert.ok(Math.abs(u.x - x0) < 0.5, 'el emboscado salió a perseguir: ' + x0 + ' → ' + u.x);
+  assert.ok(fuera.x - f0 > 1, 'el de fuera sí debería acercarse al enemigo: ' + f0 + ' → ' + fuera.x);
+  W.orden(m, { t: 'mover', j: 0, ids: [u.id], x: u.x + 4, y: u.y }); for (let i = 0; i < 200; i++) W.tick(m);
+  assert.ok(u.x - x0 > 2 && !u.embosc, 'con orden debe salir del bosque');
+  const ia = W.crearUnidad(m, 1, 'infanteria', c0 - N); m.jug[1].esIA = true; for (let i = 0; i < 3; i++) W.tick(m); // (c0 - N puede no ser bosque: solo se comprueba que a la IA no se le aplica)
+  assert.ok(!ia.embosc, 'a la IA no se le aplica');
 });
 
 prueba('guardar y cargar: la partida cargada sigue exactamente igual que la original', () => {
