@@ -15,7 +15,7 @@
     ['optica', 'Óptica', 'A simple vista. De día se ve lo que no está bajo cobertura; de noche, solo lo cercano a los tuyos.'],
     ['nocturna', 'Nocturna', 'Intensificador de luz: todo en verde. No distingue bandos; los tuyos llevan una baliza que parpadea.'],
     ['termica', 'Térmica', 'Calor en blanco: cuerpos y motores brillan también bajo los árboles. No distingue bandos.'],
-    ['espectro', 'Espectro', 'Lo que emite por radio: antenas, drones de radio e inhibidores. La fibra y el soldado callado no aparecen.'],
+    ['espectro', 'Espectro', 'Lo que emite por radio: antenas, drones de radio e inhibidores. La fibra y el soldado callado no aparecen. Las líneas amarillas son rumbos: en esa dirección (con algo de error) hay una antena, un repetidor o un inhibidor del rival emitiendo.'],
   ];
 
   // ---------- capas de terreno: se pintan una vez por paleta y luego se reutilizan como imagen ----------
@@ -99,6 +99,7 @@
     for (const e of visibles) if (e.clase === 'dron' && !e.alt && !fuera(e.x, e.y, 2)) D.fig.dron(ctx, P, ox + e.x * z, oy + e.y * z, e.ang, e.tipo, mio(e.j), sD, 0);
     // rutas y aros de lo seleccionado, debajo de las figuras
     const COLYO = { dia: '#1f6f78', noche: '#4fb3c0', nocturna: '#e8fff0', termica: '#fff', espectro: '#39c6d6' }[modo];
+    for (const h of m.hilos) { if (!(h.visto[YO] || todo) || h.pts.length < 2) continue; const mia = h.j === YO; ctx.strokeStyle = mia ? COLYO : '#c2552d'; ctx.globalAlpha = mia ? 0.3 : 0.85; ctx.lineWidth = mia ? 1 : 1.4; if (!mia) ctx.setLineDash([3, 3]); ctx.beginPath(); h.pts.forEach((p, i) => (i ? ctx.lineTo(ox + p[0] * z, oy + p[1] * z) : ctx.moveTo(ox + p[0] * z, oy + p[1] * z))); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1; } // hilos de fibra en el suelo: los míos, tenues; los del rival que he visto, en naranja
     for (const e of mios) { if (e.clase !== 'sol' || !sel.has(e.eq)) continue; const x = ox + e.x * z, y = oy + e.y * z;
       if (e.ruta && e.ri < e.ruta.length) { ctx.strokeStyle = COLYO; ctx.globalAlpha = 0.45; ctx.lineWidth = 1; ctx.setLineDash(e.sigilo ? [2, 5] : [6, 5]); ctx.beginPath(); ctx.moveTo(x, y); for (let i = e.ri; i < e.ruta.length; i++) ctx.lineTo(ox + e.ruta[i][0] * z, oy + e.ruta[i][1] * z); ctx.stroke(); ctx.setLineDash([]); const f = e.ruta[e.ruta.length - 1]; ctx.beginPath(); ctx.arc(ox + f[0] * z, oy + f[1] * z, 2.5, 0, TAU); ctx.fillStyle = COLYO; ctx.fill(); ctx.globalAlpha = 1; }
       ctx.strokeStyle = COLYO; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, sS * 6.5, 0, TAU); ctx.stroke(); }
@@ -147,6 +148,7 @@
   function emisiones(z, ox, oy) { // lo que emite por radio: anillos; el enlace de cada dron con su antena; la burbuja del inhibidor
     const COL = ['#39c6d6', '#ff8a4c'], anillo = (x, y, r, c, n) => { for (let i = 0; i < n; i++) { const k = (tiempo * 0.5 + i / n) % 1; ctx.strokeStyle = c; ctx.globalAlpha = 0.75 * (1 - k); ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(x, y, r * k, 0, TAU); ctx.stroke(); } ctx.globalAlpha = 1; };
     ctx.strokeStyle = 'rgba(57,198,214,0.08)'; ctx.lineWidth = 1; ctx.beginPath(); const p = 5 * z; for (let x = ((ox % p) + p) % p; x < cw; x += p) { ctx.moveTo(x, 0); ctx.lineTo(x, ch); } for (let y = ((oy % p) + p) % p; y < ch; y += p) { ctx.moveTo(0, y); ctx.lineTo(cw, y); } ctx.stroke();
+    for (const r of m.rumbo[YO]) { const x = ox + r.x * z, y = oy + r.y * z, L = 150 * z, E = D.ECON.rumboError; ctx.strokeStyle = '#ffd24a'; ctx.lineWidth = 1.6; ctx.globalAlpha = 0.9; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(r.ang) * L, y + Math.sin(r.ang) * L); ctx.stroke(); ctx.globalAlpha = 0.12; ctx.fillStyle = '#ffd24a'; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(r.ang - E) * L, y + Math.sin(r.ang - E) * L); ctx.lineTo(x + Math.cos(r.ang + E) * L, y + Math.sin(r.ang + E) * L); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1; } // rumbos: la línea y el abanico de su error
     const antenas = [[], []]; for (const e of visibles) if (e.clase === 'edif' && (e.tipo === 'antena' || (e.tipo === 'falsa' && e.j !== YO && !todo))) { if (e.tipo === 'falsa') continue; antenas[e.j].push(e); anillo(ox + e.x * z, oy + e.y * z, 16 * z, COL[mio(e.j)], 4); }
     for (const e of visibles) {
       if (e.clase === 'dron' && e.alt && D.DRON[e.tipo].radio) { const x = ox + e.x * z, y = oy + e.y * z; let a = null; for (const q of antenas[e.j]) if (!a || Math.hypot(q.x - e.x, q.y - e.y) < Math.hypot(a.x - e.x, a.y - e.y)) a = q; anillo(x, y, 2 * z, COL[mio(e.j)], 2); if (a) { ctx.setLineDash([4, 6]); ctx.strokeStyle = COL[mio(e.j)]; ctx.globalAlpha = 0.7; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(ox + a.x * z, oy + a.y * z); ctx.lineTo(x, y); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1; } }
@@ -182,6 +184,8 @@
       else if (d.tipo === 'fpvBoom') { if (d.j === YO || veo(d.x, d.y)) fx.push({ k: 'boom', x: d.x, y: d.y, t0: tiempo, dur: 0.7, r: 0.4 }); }
       else if (d.tipo === 'perdido') { if (d.j === YO) aviso({ enlace: 'Dron perdido: se quedó sin enlace', bateria: 'Dron perdido: sin batería', inhibidor: 'FPV tumbado por un inhibidor enemigo', derribo: 'FPV derribado a tiros', fibra: 'FPV perdido: se acabó el carrete' }[d.que]); else if (veo(d.x, d.y) && (d.que === 'derribo' || d.que === 'inhibidor')) aviso(d.que === 'derribo' ? 'FPV enemigo derribado' : 'Tu inhibidor ha tumbado un FPV'); if (d.j === YO || veo(d.x, d.y)) fx.push({ k: 'anillo', x: d.x, y: d.y, r: 1.2, c: '#c2552d', t0: tiempo, dur: 0.6 }); }
       else if (d.tipo === 'fpvCerca' && d.j === YO) { aviso('¡FPV enemigo entrando!'); fx.push({ k: 'anillo', x: d.x, y: d.y, r: 2.5, c: '#c2552d', t0: tiempo, dur: 0.9 }); }
+      else if (d.tipo === 'rumbo' && d.j === YO) aviso('Emisión del rival captada: mira el rumbo en Espectro (4)');
+      else if (d.tipo === 'hilo' && d.j === YO) { aviso('Hilo de fibra en el suelo: síguelo hasta su taller'); fx.push({ k: 'anillo', x: d.x, y: d.y, r: 2, c: '#c2552d', t0: tiempo, dur: 1.2 }); }
       else if (d.tipo === 'vuelve' && d.j === YO) aviso('El dron de reconocimiento vuelve a recargar');
       else if (d.tipo === 'recortado' && d.j === YO) aviso('Más allá no hay enlace: se queda en el borde');
       else if (d.tipo === 'fabricado' && d.j === YO) aviso('Taller: listo un ' + nomDe(d.clase));
@@ -221,6 +225,7 @@
   function panel() {
     const noche = D.luz(m) < 0.5; $('hora').textContent = D.hora(m) + (noche ? ' · noche' : ' · día'); $('amanece').textContent = mmss(D.faltaAmanecer(m));
     $('pers').textContent = m.jug[YO].personas + ' / ' + D.ECON.tope[YO] + ' · bajas ' + m.jug[YO].bajas;
+    { const nr = m.rumbo[YO].length, nh = m.hilos.filter((h) => h.j !== YO && h.visto[YO]).length, ne = D.emisores(m, YO).length; $('rastros').textContent = nr || nh ? [nr ? nr + (nr === 1 ? ' rumbo' : ' rumbos') : '', nh ? nh + (nh === 1 ? ' hilo' : ' hilos') : ''].filter(Boolean).join(' · ') : 'ninguno'; $('emito').textContent = ne ? 'sí · ' + ne + (ne === 1 ? ' fuente' : ' fuentes') : 'no, en silencio'; }
     // equipos: una línea por equipo; los seleccionados, con sus miembros
     const eqs = equipos(); for (const eq of [...sel]) if (!eqs.has(eq)) sel.delete(eq);
     let h = ''; for (const [eq, us] of eqs) { const on = sel.has(eq), visto = us.some((u) => m.visto[1 - YO].has(u.id));

@@ -164,6 +164,28 @@ prueba('drones: pilotos, enlace, batería, FPV, inhibidor, escopeta, antenas y t
     const antes = dr(m, 1, 'fpvRadio', 'posado').length + dr(m, 1, 'fpvFibra', 'posado').length; avanza(m, E.fabrica[1] * 3); const luego = dr(m, 1, 'fpvRadio', 'posado').length + dr(m, 1, 'fpvFibra', 'posado').length; assert.ok(antes === 3 && luego === E.fpvTope[1], 'el taller no repuso: ' + antes + ' → ' + luego);
   }
 });
+prueba('rastros: el centro está oculto; las antenas que emiten dan rumbo y posar los drones es callarse; el hilo de fibra se ve al pasar cerca', () => {
+  const E = D.ECON;
+  { // el centro: ni el dron encima ni un soldado a 100 m lo descubren; a 30 m, sí. El taller, en cambio, sí se ve desde el aire
+    const m = D.crearMundo(4, {}), c = m.ents.find((e) => e.tipo === 'centro'), ta = m.ents.find((e) => e.j === 1 && e.tipo === 'taller'), r = m.ents.find((e) => e.clase === 'dron' && e.j === 0 && e.tipo === 'recon'), a = sol(m, 0, 'asaltante'); solosSol(m, a);
+    r.x = c.x; r.y = c.y; lleva(a, D.cercaLibre(m, c.x - 10, c.y)); D.detectar(m); assert.ok(!m.conocido[0].has(c.id), 'el centro no debía verse'); assert.ok(m.conocido[0].has(ta.id), 'el taller sí se ve desde el aire');
+    lleva(a, D.cercaLibre(m, c.x - 3, c.y)); D.detectar(m); assert.ok(m.conocido[0].has(c.id), 'a 30 m el centro se descubre');
+  }
+  { // rumbos: con drones de radio del defensor en el aire, cada observador da una línea hacia la antena que emite, con poco error; posados, silencio
+    const m = D.crearMundo(4, {}); solosSol(m); D.rastros(m); const rs = m.rumbo[0], an = m.ents.filter((e) => e.j === 1 && e.tipo === 'antena');
+    assert.ok(rs.filter((q) => an.includes(m.porId.get(q.a))).length >= 2 && new Set(rs.map((q) => q.de)).size === 2, 'debía haber rumbos de los dos observadores a una antena: ' + rs.length);
+    for (const q of rs) { const e = m.porId.get(q.a); assert.ok(an.includes(e) || e.tipo === 'inhibidor', 'el rumbo debe ir a una antena o a un inhibidor'); let d = Math.atan2(e.y - q.y, e.x - q.x) - q.ang; d = Math.atan2(Math.sin(d), Math.cos(d)); assert.ok(Math.abs(d) <= E.rumboError + 1e-9, 'error de rumbo: ' + d); }
+    const a1 = JSON.stringify(rs); D.rastros(m); assert.strictEqual(JSON.stringify(m.rumbo[0]), a1, 'el rumbo no debe bailar');
+    assert.ok(m.rumbo[1].some((q) => m.porId.get(q.a).tipo === 'inhibidor') && m.rumbo[1].every((q) => m.porId.get(q.de).tipo === 'escucha'), 'la escucha del defensor oye al inhibidor');
+    for (const e of m.ents) if (e.clase === 'dron' && e.j === 1) { e.estado = 'posado'; e.alt = 0; } D.rastros(m); assert.ok(!m.rumbo[0].some((q) => an.includes(m.porId.get(q.a))), 'con los drones posados las antenas callan');
+  }
+  { // hilo: el FPV de fibra lo deja desde el taller; el rival no lo ve hasta que pasa cerca
+    const m = D.crearMundo(4, {}), b1 = m.mapa.bases[1], a = sol(m, 0, 'asaltante'); solosSol(m, a); for (const e of m.ents) if (e.clase === 'dron' && e.j === 0) { e.estado = 'posado'; e.alt = 0; }
+    D.orden(m, { t: 'fpv', j: 1, tipo: 'fpvFibra', x: b1.x - 20, y: b1.y + 18 }); avanza(m, 600); const h = m.hilos[0]; assert.ok(m.hilos.length === 1 && h.pts.length > 8 && h.visto[1] && !h.visto[0]);
+    const ta = m.ents.find((e) => e.j === 1 && e.tipo === 'taller'); assert.ok(Math.hypot(h.pts[0][0] - ta.x, h.pts[0][1] - ta.y) < 6, 'el hilo empieza en el taller');
+    const p = h.pts[Math.floor(h.pts.length * 0.7)]; lleva(a, D.cercaLibre(m, p[0], p[1])); avanza(m, 21); assert.ok(h.visto[0] && m.efectos.some((q) => q.tipo === 'hilo' && q.j === 0), 'pisando el hilo debía verlo');
+  }
+});
 prueba('partida entera, máquina contra máquina: termina, es idéntica si se repite, y el tick es barato', () => {
   const juega = (s, esc) => { const m = D.crearMundo(s, { escenario: esc, ia: [true, true] }), t0 = Date.now(); let n = 0; while (!m.fin) { D.tick(m); n++; assert.ok(n <= D.ECON.dia, 'no termina'); } return { fin: m.fin, n, ms: (Date.now() - t0) / n, firma: m.ents.map((e) => e.id + ':' + e.x.toFixed(3) + ',' + e.y.toFixed(3) + ',' + Math.round(e.vida)).join('|'), bajas: [m.jug[0].bajas, m.jug[1].bajas] }; };
   let atacante = 0, total = 0;

@@ -23,4 +23,5 @@ pilotos (ataque) o defender el centro.
   con dirección y vista previa de puestos al ordenar, supresión en dos grados (agachado y clavado), retirada, granada y
   humo. Drones: el de reconocimiento se manda a vigilar un punto y vuelve solo a recargar; los FPV (de radio y de fibra) se
   lanzan contra lo que se ve; cada dron en el aire ocupa a un piloto; el de radio necesita enlace (antenas y observadores) y
-  lo tumba el inhibidor; la escopeta los derriba; el taller repone FPV. El rival es provisional.
+  lo tumba el inhibidor; la escopeta los derriba; el taller repone FPV. El centro está oculto (ningún dron lo ve; a pie, a 50 m) y se encuentra por rastros: rumbos de radio
+  hacia lo que emite el rival (los dan observadores y la estación de escucha) e hilos de fibra. El rival es provisional.

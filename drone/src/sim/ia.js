@@ -16,6 +16,13 @@
       for (const tipo of ['fpvRadio', 'fpvFibra']) { const e = m.ents.find((q) => q.clase === 'dron' && q.j === j && q.tipo === tipo && q.estado === 'posado'); if (e && D.alcanza(m, j, tipo, ob.x, ob.y, e.casa)) { D.orden(m, { t: 'fpv', j, tipo, obj: ob.id }); ia.tFpv = m.t; break; } }
     }
     if (j === 0 && m.t % 400 === 0) { const r = m.ents.find((q) => q.clase === 'dron' && q.j === 0 && q.tipo === 'recon' && q.estado === 'vuelo'), ss = m.ents.filter((q) => q.clase === 'sol' && q.j === 0); if (r && ss.length) { const cx = ss.reduce((s, u) => s + u.x, 0) / ss.length, cy = ss.reduce((s, u) => s + u.y, 0) / ss.length, ux = (U.x0 + U.x1) / 2 - cx, uy = (U.y0 + U.y1) / 2 - cy, L = Math.hypot(ux, uy) || 1; D.orden(m, { t: 'recon', j: 0, id: r.id, x: cx + (ux / L) * 12, y: cy + (uy / L) * 12 }); } }
+    // El atacante sigue los rastros: el taller enemigo si lo conoce; si no, el origen de un hilo de fibra; si no, otro edificio
+    // descubierto; si no, donde se cruzan dos rumbos de radio hacia la misma antena.
+    let pista = null;
+    if (j === 0) { let otro = null; for (const id of m.conocido[0]) { const o = m.porId.get(id); if (!o) continue; if (o.tipo === 'taller') pista = o; else otro = o; }
+      if (!pista) { const h = m.hilos.find((q) => q.j === 1 && q.visto[0]); if (h) pista = { x: h.pts[0][0], y: h.pts[0][1] }; }
+      if (!pista) pista = otro;
+      if (!pista) { const rs = m.rumbo[0]; for (let a = 0; a < rs.length && !pista; a++) for (let b = a + 1; b < rs.length; b++) { const p = rs[a], q = rs[b]; if (p.a !== q.a || p.de === q.de) continue; const d = Math.cos(p.ang) * Math.sin(q.ang) - Math.sin(p.ang) * Math.cos(q.ang); if (Math.abs(d) < 0.15) continue; const k = ((q.x - p.x) * Math.sin(q.ang) - (q.y - p.y) * Math.cos(q.ang)) / d; if (k < 3) continue; pista = { x: Math.max(3, Math.min(m.N - 3, p.x + Math.cos(p.ang) * k)), y: Math.max(3, Math.min(m.N - 3, p.y + Math.sin(p.ang) * k)) }; break; } } }
     for (const k in equipos) {
       const us = equipos[k], eq = Number(k), st = ia.eqs[eq] || (ia.eqs[eq] = { paso: 0, puesto: { x: us[0].x, y: us[0].y }, tOrden: -999 });
       const cx = us.reduce((s, u) => s + u.x, 0) / us.length, cy = us.reduce((s, u) => s + u.y, 0) / us.length, parado = us.every((u) => u.orden === 'nada');
@@ -29,6 +36,7 @@
         const dentro = cx >= U.x0 && cx <= U.x1 && cy >= U.y0 && cy <= U.y1; let x, y;
         if (st.paso === 0) { x = Math.max(U.x0 + 3, Math.min(U.x1 - 3, cx)); y = Math.max(U.y0 + 3, Math.min(U.y1 - 3, cy)); if (dentro) { x = U.x0 + 4 + m.az() * (U.x1 - U.x0 - 8); y = U.y0 + 4 + m.az() * (U.y1 - U.y0 - 8); } } // primero, al borde del pueblo
         else { x = U.x0 + 4 + m.az() * (U.x1 - U.x0 - 8); y = U.y0 + 4 + m.az() * (U.y1 - U.y0 - 8); } // luego, a registrar: un punto al azar del casco
+        if (pista && st.paso > 0) { x = Math.max(2, Math.min(m.N - 2, pista.x + (m.az() - 0.5) * 16)); y = Math.max(2, Math.min(m.N - 2, pista.y + (m.az() - 0.5) * 16)); }
         st.paso++; st.tOrden = m.t; D.orden(m, { t: 'modo', j, eqs: [eq], sigilo: dentro && D.luz(m) > 0.5 }); D.orden(m, { t: 'mover', j, eqs: [eq], x, y });
       } else { // ---- defensor ----
         const b = mapa.bases[1];
