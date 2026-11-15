@@ -797,14 +797,27 @@
     }
     u.ruta = null; u.pend = null; u.v = 0; u.ang = Math.atan2(posY(o) - u.y, posX(o) - u.x);
     if (u.recarga > 0) return; // aún se recupera del anterior
-    if (J.info < ECON.hackInfo && !J.dios) { m.efectos.push({ tipo: 'sinInfo', x1: u.x, y1: u.y, j: u.j, t: m.t }); fin(); return; }
+    const toma = !o.edif && !UNID[o.tipo].despliega && !o.ctrl, precio = toma ? ECON.hackCtrlInfo : ECON.hackInfo; // un vehículo: lo toma; un edificio (o el patio móvil): lo apaga
+    if (J.info < precio && !J.dios) { m.efectos.push({ tipo: 'sinInfo', x1: u.x, y1: u.y, j: u.j, t: m.t }); fin(); return; }
     u.canal = (u.canal || 0) + 1;
     if (u.canal < ECON.hackCanal) return;
-    if (!J.dios) J.info -= ECON.hackInfo;
-    o.hack = m.t + (o.edif ? ECON.hackEdif : ECON.hackVeh); if (!o.edif) { o.v = 0; o.obj = 0; }
-    u.recarga = ECON.hackRecarga;
-    m.efectos.push({ tipo: 'hack', x1: u.x, y1: u.y, x2: posX(o), y2: posY(o), j: u.j, de: o.j, clase: o.tipo, t: m.t });
+    if (!J.dios) J.info -= precio;
+    m.efectos.push({ tipo: 'hack', x1: u.x, y1: u.y, x2: posX(o), y2: posY(o), j: u.j, de: o.j, clase: o.tipo, toma, t: m.t });
+    if (toma) { cambiarBando(m, o, u.j); o.ctrl = m.t + ECON.hackCtrl; u.recarga = ECON.hackCtrlRecarga; }
+    else { o.hack = m.t + (o.edif ? ECON.hackEdif : ECON.hackVeh); if (!o.edif) { o.v = 0; o.obj = 0; } u.recarga = ECON.hackRecarga; }
     fin();
+  }
+  // Un vehículo cambia de bando (el hacker lo toma, y al acabarse el plazo vuelve): suelta lo que estuviera haciendo, baja a sus
+  // pasajeros y deja su pelotón; conserva la vida, la munición y el combustible que tuviera.
+  function cambiarBando(m, o, j) {
+    if (o.pasajeros && o.pasajeros.length) { const l = o.pasajeros; o.pasajeros = []; apear(m, o, l); }
+    if (o.jReal === undefined) { o.jReal = o.j; o.pelReal = o.pel || 0; o.pel = 0; } else { o.pel = o.pelReal || 0; delete o.jReal; delete o.pelReal; }
+    o.j = j; limpiar(o); o.orden = 'nada'; o.obj = 0; o.ruta = null; o.pend = null; o.dest = null; o.v = 0; o.guardia = false; o.retirando = false; o.volver = null; o.sumi = null; o.amb = null; o.hackObj = 0;
+    if (o.tipo === 'cosechadora') { o.est = 'buscar'; o.ref = 0; o.celda = -1; }
+    contar(m);
+  }
+  function tickControl(m) { // lo tomado vuelve con su dueño al acabarse el plazo
+    for (const e of m.ents) if (e.ctrl && m.t >= e.ctrl && e.vida > 0) { const de = e.j; e.ctrl = 0; cambiarBando(m, e, e.jReal); m.efectos.push({ tipo: 'hackFin', x1: e.x, y1: e.y, j: de, de: e.j, clase: e.tipo, t: m.t }); }
   }
   // Tramo destruido o demolido: sus celdas vuelven a ser lo que eran (el bosque se cierra otra vez a los vehículos).
   function quitarTramo(m, e) {
@@ -2880,9 +2893,11 @@
     rejilla(m);
     procesarRutas(m);
     tickProduccion(m, 0); tickProduccion(m, 1);
+    if (m.t % 5 === 3) tickControl(m);
     for (let k = 0, n = m.ents.length; k < n; k++) {
       const e = m.ents[k];
-      if (!e.edif) { if (e.comb === 0 && (e.orden === 'mover' || e.orden === 'amover' || e.patrulla)) { e.orden = 'nada'; e.ruta = null; e.pend = null; e.cola.length = 0; e.patrulla = null; } // sin combustible no hay marcha: se queda de guardia donde está
+      if (!e.edif) { if (e.orden === 'nada' && !e.guardia && !m.jug[e.j].esIA && UNID[e.tipo].cat === 'inf' && (UNID[e.tipo].arma || UNID[e.tipo].cura) && !e.bunk && !e.sube && !e.retirando && m.mapa.terreno[Math.floor(e.y) * m.N + Math.floor(e.x)] === T.BOSQUE) { e.guardia = true; e.embosc = true; } else if (e.embosc && !e.guardia) e.embosc = false; // emboscada: el infante parado en el bosque no sale de él sin orden (solo los del jugador: la IA mueve a los suyos a cada rato)
+        if (e.comb === 0 && (e.orden === 'mover' || e.orden === 'amover' || e.patrulla)) { e.orden = 'nada'; e.ruta = null; e.pend = null; e.cola.length = 0; e.patrulla = null; } // sin combustible no hay marcha: se queda de guardia donde está
         tickUnidad(m, e); if (e.comb !== undefined) e.desg = Math.min(100, (e.desg || 0) + Math.hypot(e.x - e.px, e.y - e.py) * ECON.desgCelda); // el vehículo de combate se desgasta con lo que anda
         if (e.comb !== undefined && e.comb > 0) { e.comb -= Math.hypot(e.x - e.px, e.y - e.py) * (W.clima(m) && m.mapa.terreno[Math.floor(e.y) * m.N + Math.floor(e.x)] < T.CAMINO ? ECON.lluviaGasto : 1); if (e.comb <= 0) { e.comb = 0; m.efectos.push({ tipo: 'sinComb', x1: e.x, y1: e.y, j: e.j, t: m.t }); } } } // lo que anda, lo gasta
       else if (e.hack > m.t) { e.obj = 0; } // edificio hackeado: apagado

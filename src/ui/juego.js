@@ -195,6 +195,8 @@
       if (e) {
         let t = (e.muro ? W.MURO_N[e.muro] : (e.edif ? EDIF : UNID)[e.tipo]).nombre + (e.j === YO ? '' : ' rival') + ' · ' + Math.ceil(e.vida) + '/' + e.vidaMax;
         if (e.tipo === 'cosechadora' && e.j === YO) t += ' · carga ' + e.carga;
+        if (!e.edif && e.ctrl > m.t) t += (e.j === YO ? ' · bajo tu control ' : ' · controlado por el enemigo ') + Math.ceil((e.ctrl - m.t) / 20) + ' s';
+        if (!e.edif && e.embosc && e.guardia && e.j === YO) t += ' · emboscado: no sale del bosque sin orden';
         if (!e.edif && e.pel && e.j === YO && W.PEL[e.pelT]) t += ' · ' + W.PEL[e.pelT].nombre.toLowerCase();
         if (!e.edif && UNID[e.tipo].aire && e.j === YO && conRed && W.clima(m) === 2) t += e.enTierra ? ' · tormenta: no despega' : ' · tormenta: vuelve a su base';
         if (!e.edif && UNID[e.tipo].tiende && e.j === YO && m.logistica !== false) t += e.orden === 'conectar' ? ' · tendiendo línea' : e.auto ? ' · automático' : ' · manual';
@@ -1059,6 +1061,9 @@
           const bx = ox + (Math.floor(e.x) - 1) * z, by = oy + (Math.floor(e.y) - 1) * z;
           ctx.strokeStyle = W.puedeDesplegar(m, e) ? P.bien : P.mal; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.strokeRect(bx, by, z * 3, z * 3); ctx.setLineDash([]);
         }
+        if (e.ctrl > m.t && lod) { // bajo control ajeno: un aro morado que se va vaciando con el tiempo que queda
+          const fr = (e.ctrl - m.t) / W.ECON.hackCtrl; ctx.strokeStyle = '#7d5aa6'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(px, py, r * 1.5 + 4, -Math.PI / 2, -Math.PI / 2 + TAU * fr); ctx.stroke();
+        }
         if (e.hack > m.t && lod) { // hackeado: un rayo quebrado encima
           const gx = px, gy = py - r * 1.6 - 6; ctx.strokeStyle = P.mal; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(gx - 5, gy - 4); ctx.lineTo(gx + 1, gy - 1); ctx.lineTo(gx - 2, gy + 1); ctx.lineTo(gx + 5, gy + 5); ctx.stroke();
         }
@@ -1573,8 +1578,11 @@
         } else if (d.tipo === 'interferido') {
           if (d.j === YO && performance.now() - avisoInterf > 6000) { avisoInterf = performance.now(); aviso('Un vehículo de mando enemigo interfiere tus drones'); }
         } else if (d.tipo === 'hack') {
-          if (d.de === YO) { aviso('¡Te han hackeado: ' + (EDIF[d.clase] || UNID[d.clase]).nombre.toLowerCase() + '!'); son.alerta(); } else if (d.j === YO) aviso('Hackeado: ' + (EDIF[d.clase] || UNID[d.clase]).nombre.toLowerCase());
+          const nomH = (EDIF[d.clase] || UNID[d.clase]).nombre.toLowerCase();
+          if (d.de === YO) { aviso(d.toma ? '¡Te han tomado el control de un ' + nomH + ' durante ' + Math.round(W.ECON.hackCtrl / 20) + ' s!' : '¡Te han hackeado: ' + nomH + '!'); son.alerta(); } else if (d.j === YO) aviso(d.toma ? 'Bajo tu control ' + Math.round(W.ECON.hackCtrl / 20) + ' s: ' + nomH + ' · selecciónalo y dale órdenes' : 'Hackeado: ' + nomH);
           if (visible(d.x2, d.y2)) senales.push({ k: 'onda', x: d.x2, y: d.y2, r: 2.2, t0: performance.now(), dur: 700 });
+        } else if (d.tipo === 'hackFin') {
+          if (d.j === YO) aviso('Se acabó el control: el ' + UNID[d.clase].nombre.toLowerCase() + ' vuelve con el enemigo'); else if (d.de === YO) aviso('Recuperas el control de tu ' + UNID[d.clase].nombre.toLowerCase());
         } else if (d.tipo === 'sinInfo') {
           if (d.j === YO) aviso('Sin información: el hacker no puede (' + W.ECON.hackInfo + ' por hackeo)');
         } else if (d.tipo === 'sinLinea') {
@@ -1890,7 +1898,7 @@
       avanzadaMovil: 'Se despliega lejos como puesto de avanzada: red, hospital y pista sin tender líneas.',
       camara: 'Ve lejos y en redondo, descubre a los escondidos y avisa si entra un enemigo.',
       infanteria: 'Barata y versátil; captura puestos, cava y ocupa trincheras.', granadero: 'Desde el nivel 1: granadas de mano a corta distancia, con explosión. La respuesta barata a los primeros vehículos y a la infantería amontonada.', antitanque: 'Infantería con cohetes: contra vehículos y aviones.', explorador: 'Rápido y ve lejos; explora solo con E.', ingeniero: 'Zapador: pone y retira minas, tiende pontones sobre el agua y vuela caminos y puentes (botones al seleccionarlo). Repara solo vehículos y edificios; cava más rápido.', medico: 'Cura solo a la infantería herida cercana.',
-      francotirador: 'Mata infantería desde muy lejos; se esconde.', gatling: 'Equipo de dos: tarda en montar, y montada tritura infantería y aviones bajos.', hacker: 'Apaga a distancia un vehículo o edificio enemigo unos segundos; cuesta información.', operador: 'Lleva tres drones: vuela uno y los otros dos son repuestos; cuando se le acaban hay que reponerlos junto a una estación de drones, un puesto logístico, un puesto de avanzada o un camión de suministro. El dron vuelve solo a cambiar la batería y a repararse. Parado, despliega un dron de reconocimiento, y puede mandarlo en misión a vigilar un punto a 45 celdas (tecla O): lo que vea lo ve tu artillería. Con las tecnologías de la estación de drones lleva también kamikazes y un bombardero, que atacan en la zona de la misión.', espia: 'Pasa inadvertido aunque se mueva. Junto a un edificio enemigo ves lo que produce el rival y ganas información.', dronEspia: 'Vuela muy lejos y mucho rato desde su central; no ataca.',
+      francotirador: 'Mata infantería desde muy lejos; se esconde.', gatling: 'Equipo de dos: tarda en montar, y montada tritura infantería y aviones bajos.', hacker: 'Toma el control de un vehículo enemigo durante medio minuto (lo manejas como tuyo) o apaga un edificio; cuesta información.', operador: 'Lleva tres drones: vuela uno y los otros dos son repuestos; cuando se le acaban hay que reponerlos junto a una estación de drones, un puesto logístico, un puesto de avanzada o un camión de suministro. El dron vuelve solo a cambiar la batería y a repararse. Parado, despliega un dron de reconocimiento, y puede mandarlo en misión a vigilar un punto a 45 celdas (tecla O): lo que vea lo ve tu artillería. Con las tecnologías de la estación de drones lleva también kamikazes y un bombardero, que atacan en la zona de la misión.', espia: 'Pasa inadvertido aunque se mueva. Junto a un edificio enemigo ves lo que produce el rival y ganas información.', dronEspia: 'Vuela muy lejos y mucho rato desde su central; no ataca.',
       tanque: 'El vehículo de combate básico.', artilleria: 'Dispara muy lejos, en área, a lo que vea cualquiera de los tuyos.', pesado: 'Tanque lento, muy duro y de gran pegada.', blindado: 'Rápido, con ametralladora: contra infantería.', antiaereoMovil: 'Antiaérea sobre ruedas para acompañar al ejército.',
       radioOp: 'Lleva la radio a pie: da cobertura a 15 celdas a su alrededor, para que la tropa que acompaña vea y obedezca sin retraso lejos de tus torres.', vehRadio: 'Radio sobre ruedas: cobertura a 36 celdas. Sin armas; llévalo detrás del ejército.', dronRadio: 'Repetidor volante: cobertura a 30 celdas donde lo mandes patrullar, mientras le dure el combustible; luego vuelve a repostar a la central de inteligencia.',
       transporte: 'Lleva infantería dentro, rápido.', lanzacohetes: 'Salvas de cohetes a mucha distancia, sobre una zona.', mando: 'Los tuyos a su alrededor ven en redondo y giran más rápido; interfiere drones enemigos. Gasta información.', comandoDrones: 'Lleva drones de reconocimiento, bombarderos y kamikazes que atacan solos.',
@@ -1957,7 +1965,7 @@
         if (us.some((u) => UNID[u.tipo].mando)) L.push('<b>mando: los tuyos en su radio ven en redondo y giran más rápido; gasta información</b>');
         if (us.some((u) => UNID[u.tipo].despliega)) L.push('<b>patio móvil: ' + k('D') + ' lo despliega aquí como patio nuevo (no se repliega)</b>');
         if (us.some((u) => UNID[u.tipo].drones)) L.push('<b>drones: los de reconocimiento dan vueltas solos; el operador solo los despliega parado; los de ataque salen solos (clic derecho en un enemigo: preferencia); la estación mejora con su botón y el operador con tecnologías de la estación</b>');
-        if (us.some((u) => UNID[u.tipo].hackea)) L.push('<b>hacker: clic derecho en un vehículo o edificio enemigo lo apaga unos segundos · ' + W.ECON.hackInfo + ' de información</b>');
+        if (us.some((u) => UNID[u.tipo].hackea)) L.push('<b>hacker: clic derecho en un vehículo o edificio enemigo toma el control de un vehículo ' + Math.round(W.ECON.hackCtrl / 20) + ' s (' + W.ECON.hackCtrlInfo + ' de información) o apaga un edificio (' + W.ECON.hackInfo + ')</b>');
         if (us.some((u) => UNID[u.tipo].monta)) L.push('<b>gatling: quieta se monta sola (3 s) y entonces dispara; para moverse desmonta</b>');
         if (us.some((u) => UNID[u.tipo].tiende)) L.push('<b>ingeniero civil: ' + k('J') + ' conectar edificios con una línea de servicio (energía y red)</b>');
         if (us.some((u) => UNID[u.tipo].cura)) L.push('<b>médico: cura solo a la infantería herida que tenga cerca</b>');
