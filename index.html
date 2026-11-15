@@ -80,6 +80,8 @@
   .cas.listo::before { display: none; }
   .cas.listo .c { color: var(--fondo); font-weight: 600; }
   .cas.txt .n { height: 48px; padding: 0 2px; }
+  #pelCab { font-size: 10px; margin: 8px 0 4px; } #bPel .cas.txt .n { height: 34px; } #bPel .cas .m { font-size: 8px; line-height: 9px; color: var(--suave); height: 10px; }
+  #secPel { font-size: 11px; line-height: 1.5; } #secPel h2 { margin: 0 0 4px; font-size: 11px; } #secPel .fm { display: flex; align-items: center; gap: 6px; } #secPel .fm span { flex: 1; } #secPel .fm i { flex: none; width: 54px; height: 4px; background: var(--linea); position: relative; } #secPel .fm i b { position: absolute; left: 0; top: 0; bottom: 0; background: #4d7a38; } #secPel .fm i b.mal { background: var(--mal); } #secPel .cae { color: var(--mal); } #secPel button { margin-top: 6px; width: 100%; justify-content: center; }
   #secCola .cab { display: flex; justify-content: space-between; align-items: center; margin: 0 0 4px; }
   #secCola .cab h2 { margin: 0; }
   #bucle { font-size: 10px; padding: 1px 6px; }
@@ -289,10 +291,11 @@
     <button type="button" id="verFlujos" class="grupo" title="Muestra por dónde corre la energía y el petróleo, cuánto da y pide cada red, y dónde se corta. Verde: fluye. Naranja: la red no da para todos. Rojo: cortado o sin patio. Tecla I.">ver flujos</button>
     <div id="panel">
     <div id="vacio" class="tenue">Selecciona un edificio para ver lo que produce.<br><kbd>B</kbd> patio · <kbd>Q</kbd> cuarteles · <kbd>V</kbd> fábricas · <kbd>X</kbd> aeródromos</div>
+    <section id="secPel" hidden></section>
     <section id="secCola" hidden><div class="cab"><h2>Cola</h2><button type="button" id="bucle" class="grupo" title="Cada unidad que sale se vuelve a encargar al final de la cola. Se paga al empezarla.">repetir: no</button></div><div id="cola"></div></section>
     <div id="pest" hidden><button type="button" data-p="edif">Edificios</button><button type="button" data-p="unid">Unidades</button><button type="button" data-p="tec">Mejoras</button><button type="button" data-p="intel">Intel.</button><button type="button" data-p="mis">Misiles</button></div>
     <section id="secEdif" hidden><div id="bEdif" class="rej"></div><div id="obras" class="tenue"></div></section>
-    <section id="secUnid" hidden><div id="bUnid" class="rej"></div></section>
+    <section id="secUnid" hidden><div id="bUnid" class="rej"></div><div id="pelCab" class="tenue" hidden>Pelotones · se encargan enteros y actúan juntos</div><div id="bPel" class="rej"></div></section>
     <section id="secTec" hidden><div id="bTec" class="rej"></div></section>
     <section id="secIntel" hidden><div id="bIntel" class="rej"></div></section>
     <section id="secMis" hidden><div id="bMis" class="rej"></div><div id="bLanzar"></div><div id="misInfo" class="tenue"></div></section>
@@ -351,12 +354,12 @@
   <button type="button" id="empezar">Empezar</button>
   <button type="button" id="tutorial">Tutorial guiado<small style="display:block;color:var(--suave);font-size:10px">ocho pasos, con el rival dormido hasta el final</small></button>
   <button type="button" id="continuar" hidden>Continuar la partida guardada</button>
-  <div id="version">versión 94</div>
+  <div id="version">versión 95</div>
 </div></div>
 <div id="guia" hidden><div class="caja"><div class="cab"><strong>Guía: para qué sirve cada cosa</strong><button type="button" id="cierraGuia">cerrar</button></div><div id="guiaTxt"></div></div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finVer" href="#" title="Vuelve a ver la partida entera, con todo el mapa a la vista y a la velocidad que quieras.">ver repetición</a><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 94' };
+globalThis.W = { VERSION: 'versión 95' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -618,6 +621,16 @@ globalThis.W = { VERSION: 'versión 94' };
     rutaNodos: 30000, // presupuesto de celdas que se exploran por tick buscando rutas
     misilesMax: 10, mejoraMax: 3, mejoraCosto: 0.6, mejoraBono: 0.5, // mejora de un edificio: hasta nivel 3; cada nivel cuesta el 60 % del edificio por el nivel que tiene y rinde un 50 % más
     inicio: 2500, petInicio: 150, cosecha: 5, descarga: 25, colaMax: 9, separacionColocar: 3, goteoCada: 5, vistaInicial: 22, obrasMax: 8, curaUnidad: 0.01, curaEdificio: 0.0025, curaCosto: 0.15, venta: 0.5, trinchera: 0.45, arco: 0.14, arcoTrinchera: 1.05, visAd: 1.3, visLado: 0.75, visAt: 0.3, cono: 1.05, periferia: 1.83, flanco: 1.25, espalda: 1.5, bosqueVeh: 0.6, bosqueCubre: 0.7, reposta: 12, retiroBajo: 0.3, retiroAlto: 0.9, huida: 300, dia: 9600, diaLuz: 6000, nocheVis: 0.7, caminoVel: 1.6, tramoLargo: 4, enlace: 5, cobNodo: 14, cobEdif: 6, lineaVel: 0.12, lineaCelda: 3, sinSum: 400, sinSumRecarga: 1.5, abastDura: 1500, heliRepone: 300, cobAvanzada: 10, hospitalCura: 2, dronFpv: 40, dronBomba: 15, dronRepone: 200, dronFpvCada: 60, hackInfo: 25, hackVeh: 240, hackEdif: 300, hackRecarga: 200, hackCanal: 40, trazaVel: 0.45, caminoLlano: 4, caminoBosque: 12, caminoAgua: 30, mandoCada: 40, mandoGiro: 1.5, captura: 600, capturaRadio: 2, antenaRadio: 12, depositoCada: 8, tallerRadio: 4, ocultaVe: 2.5, chatarra: 0.25, reparaRadio: 8, reparaVeh: 0.5, curaMedico: 0.35, reparaEdif: 0.8, rangos: [2, 5, 10], rangoDano: 0.1, rangoVida: 0.1, cupoAviones: 5, pasada: 7, orbita: 3.5, fuelCae: 80, cavar: 80, aplasta: 10, bonoProd: 0.5, bonoMax: 2.5 };
+  // Pelotones: paquetes de unidades que se encargan de una vez y actúan juntas. Cada miembro se fabrica donde le toca
+  // (la infantería en el cuartel, los vehículos en la fábrica) y cuesta lo mismo que suelto; lo que cambia es que nacen como un grupo.
+  W.PEL = {
+    fusileros:  { nombre: 'Pelotón de fusileros', que: 'La base de todo: cuatro fusileros, un granadero y un médico que los cura.', de: ['infanteria', 'infanteria', 'infanteria', 'infanteria', 'granadero', 'medico'] },
+    antitanque: { nombre: 'Equipo antitanque', que: 'Dos antitanques y un explorador que les da vista: para emboscar blindados.', de: ['antitanque', 'antitanque', 'explorador'] },
+    mecanizada: { nombre: 'Sección mecanizada', que: 'Un transporte con cuatro fusileros y un antitanque: clic derecho sobre el transporte para subir, U para bajar.', de: ['transporte', 'infanteria', 'infanteria', 'infanteria', 'infanteria', 'antitanque'] },
+    drones:     { nombre: 'Equipo de drones', que: 'Un operador de drones con su radio y dos fusileros de escolta.', de: ['operador', 'radioOp', 'infanteria', 'infanteria'] },
+    zapadores:  { nombre: 'Zapadores', que: 'Dos ingenieros (reparan, minan y desminan) con dos fusileros de escolta.', de: ['ingeniero', 'ingeniero', 'infanteria', 'infanteria'] },
+    asalto:     { nombre: 'Grupo de asalto', que: 'Dos tanques y un blindado con cuatro fusileros que los cubren de cerca.', de: ['tanque', 'tanque', 'blindado', 'infanteria', 'infanteria', 'infanteria', 'infanteria'] },
+  };
 })();
 
 // ===== sim/mapa.js =====
@@ -2089,6 +2102,34 @@ globalThis.W = { VERSION: 'versión 94' };
       u.dpat = ok.length ? { pts: ok, i: 0 } : null;
     }
   }
+  // ---------- pelotones ----------
+  // Un pelotón es una etiqueta (u.pel, u.pelT) que comparten sus miembros. Se encarga de una vez: cada miembro entra en la cola
+  // del edificio que lo fabrica, marcado (fab.pelq, a la par de fab.cola) para que al salir sepa de qué pelotón es.
+  const pelq = (fab) => { if (!fab.pelq) fab.pelq = []; while (fab.pelq.length < fab.cola.length) fab.pelq.push(0); fab.pelq.length = fab.cola.length; return fab.pelq; };
+  W.pelPrecio = (tipos) => { const s = { costo: 0, pet: 0, raros: 0, info: 0, acero: 0, tiempo: 0 }; for (const t of tipos) { const d = UNID[t]; s.costo += d.costo || 0; s.pet += d.pet || 0; s.raros += d.raros || 0; s.info += d.info || 0; s.acero += d.acero || 0; s.tiempo += d.tiempo || 0; } return s; };
+  // Por qué no se puede encargar esa lista de unidades ahora ('' = se puede): requisitos, sitio en las colas y dinero.
+  W.pelNo = function (m, j, tipos) {
+    const J = m.jug[j], pide = {};
+    for (const t of tipos) { const d = UNID[t]; if (!W.disponible(m, j, d)) return 'falta ' + (W.tieneReq(m, j, d.req) ? 'nivel ' + (d.nivel || 1) : d.req.map((r) => EDIF[r].nombre).join(', ')) + ' (' + d.nombre + ')'; const l = W.lugarDe(d); pide[l] = (pide[l] || 0) + 1; }
+    for (const l in pide) { let libre = 0, hay = false; for (const e of m.ents) if (e.edif && e.j === j && e.tipo === l && e.vida > 0 && e.cola) { hay = true; libre += ECON.colaMax - e.cola.length; } if (!hay) return 'falta ' + EDIF[l].nombre; if (libre < pide[l]) return 'las colas de ' + EDIF[l].nombre + ' están llenas'; }
+    return W.puedePagar(J, W.pelPrecio(tipos)) ? '' : 'no alcanza';
+  };
+  // Los vivos de un pelotón (también los que van dentro de un transporte), su plantilla y lo que le falta (descontando lo ya encargado).
+  W.pelDe = function (m, j, pel) {
+    const vivos = []; let tipo = '';
+    for (const e of m.ents) { if (e.edif || e.j !== j) continue; if (e.pel === pel && e.vida > 0) vivos.push(e); if (e.pasajeros) for (const p of e.pasajeros) if (p.pel === pel) vivos.push(p); }
+    const enCola = []; for (const e of m.ents) if (e.edif && e.j === j && e.pelq) for (let i = 0; i < e.pelq.length && i < e.cola.length; i++) if (e.pelq[i] && e.pelq[i].id === pel) { enCola.push(e.cola[i]); tipo = e.pelq[i].tipo; }
+    if (vivos.length) tipo = vivos[0].pelT;
+    const falta = tipo && W.PEL[tipo] ? W.PEL[tipo].de.slice() : [];
+    for (const t of vivos.map((u) => u.tipo).concat(enCola)) { const i = falta.indexOf(t); if (i >= 0) falta.splice(i, 1); }
+    return { vivos, tipo, falta, enCola };
+  };
+  function encolar(m, j, tipo, marca) { // a la cola más corta de su edificio; se paga al encargar
+    const d = UNID[tipo], J = m.jug[j]; let fab = null;
+    for (const e of m.ents) { if (!e.edif || e.j !== j || e.tipo !== W.lugarDe(d) || e.vida <= 0 || !e.cola || e.cola.length >= ECON.colaMax) continue; if (!fab || e.cola.length < fab.cola.length) fab = e; }
+    if (!fab || !W.puedePagar(J, d)) return false;
+    cobrar(J, d); pelq(fab); fab.cola.push(tipo); fab.pago.push(true); fab.pelq.push(marca); J.colas[tipo].n++; return true;
+  }
   function propias(m, cmd) {
     const out = [];
     for (let k = 0; k < cmd.ids.length; k++) { const u = m.porId.get(cmd.ids[k]); if (u && !u.edif && u.j === cmd.j && !UNID[u.tipo].mini) { u.retirando = false; u.volver = null; u.noRetira = true; out.push(u); } } // una orden directa anula la retirada (hasta que se repare)
@@ -2543,7 +2584,18 @@ globalThis.W = { VERSION: 'versión 94' };
           if (!fab || e.cola.length < fab.cola.length) fab = e;
         }
         if (!fab) return;
-        cobrar(J, d); fab.cola.push(cmd.tipo); fab.pago.push(true); J.colas[cmd.tipo].n++;
+        cobrar(J, d); pelq(fab); fab.cola.push(cmd.tipo); fab.pago.push(true); fab.pelq.push(0); J.colas[cmd.tipo].n++;
+        return;
+      }
+      case 'peloton': { // un pelotón entero: todos sus miembros, cada uno a su cola
+        const p = W.PEL[cmd.tipo]; if (!p || W.pelNo(m, cmd.j, p.de)) return;
+        const id = (m.pelSig = (m.pelSig || 0) + 1);
+        for (const t of p.de) encolar(m, cmd.j, t, { id, tipo: cmd.tipo });
+        return;
+      }
+      case 'reponer': { // lo que le falta a un pelotón: se encarga y, al salir, va a reunirse con los suyos
+        const q = W.pelDe(m, cmd.j, cmd.pel); if (!q.vivos.length || !q.falta.length) return;
+        for (const t of q.falta) if (!W.pelNo(m, cmd.j, [t])) encolar(m, cmd.j, t, { id: cmd.pel, tipo: q.tipo });
         return;
       }
       case 'cancelarUnidad': { // con id e i: ese puesto de la cola de ese edificio; si no, el último de ese tipo (en los edificios indicados o en todos)
@@ -2558,7 +2610,7 @@ globalThis.W = { VERSION: 'versión 94' };
           if (!fab) return;
         }
         const tipo = fab.cola[i], pagado = fab.pago[i];
-        fab.cola.splice(i, 1); fab.pago.splice(i, 1); if (i === 0) fab.prog = 0;
+        pelq(fab).splice(i, 1); fab.cola.splice(i, 1); fab.pago.splice(i, 1); if (i === 0) fab.prog = 0;
         J.colas[tipo].n--; if (pagado) devolver(J, UNID[tipo]);
         return;
       }
@@ -3603,12 +3655,15 @@ globalThis.W = { VERSION: 'versión 94' };
       fab.prog += fab.hack > m.t ? 0 : base * (fab.sinLuz ? 0.5 : 1) * (m.logistica !== false && fab.desg >= ECON.desgProd1 ? (fab.desg >= ECON.desgProd2 ? 0.7 : 0.85) : 1); // hackeado: parado; desgastado: más lento
       if (fab.prog > q.prog) q.prog = fab.prog;
       if (fab.prog < UNID[tipo].tiempo) continue;
-      fab.cola.shift(); fab.pago.shift(); fab.prog = 0; q.n--; J.aguaUso += UNID[tipo].agua || 0;
+      const marca = pelq(fab).shift(); fab.cola.shift(); fab.pago.shift(); fab.prog = 0; q.n--; J.aguaUso += UNID[tipo].agua || 0;
       if (m.logistica !== false) fab.desg = Math.min(100, (fab.desg || 0) + ECON.desgProd); // cada unidad que saca lo desgasta un poco
-      if (fab.bucle && (cat !== 'aire' || W.cupoAire(m, j, W.hangarDe(UNID[tipo])).hay + 1 < W.cupoAire(m, j, W.hangarDe(UNID[tipo])).cupo)) { fab.cola.push(tipo); fab.pago.push(false); q.n++; }
+      if (fab.bucle && (cat !== 'aire' || W.cupoAire(m, j, W.hangarDe(UNID[tipo])).hay + 1 < W.cupoAire(m, j, W.hangarDe(UNID[tipo])).cupo)) { fab.cola.push(tipo); fab.pago.push(false); fab.pelq.push(0); q.n++; }
       const u = crearUnidad(m, j, tipo, cat === 'aire' ? Math.floor(fab.cy) * m.N + Math.floor(fab.cx) : W.cercaLibre(m, fab.cx, fab.y + fab.tam + 0.5, cat === 'veh'));
       if (cat === 'aire') { const casa = aerodromoLibre(m, u) || fab; posar(m, u, casa); } // el avión nace posado en un aeródromo con sitio
-      if (fab.reunion) { // va al punto de reunión del edificio
+      let junto = null; // de un pelotón: si ya hay compañeros en el mapa, va a reunirse con ellos
+      if (marca) { u.pel = marca.id; u.pelT = marca.tipo; let sx = 0, sy = 0, n = 0; for (const o of m.ents) if (!o.edif && o.j === j && o.pel === marca.id && o !== u && o.vida > 0 && !UNID[o.tipo].aire) { sx += o.x; sy += o.y; n++; } if (n && cat !== 'aire') junto = { x: sx / n, y: sy / n }; }
+      if (junto) { const c = W.cercaLibre(m, junto.x, junto.y, cat === 'veh'); asignar(m, u, { t: 'mover', x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 }); }
+      else if (fab.reunion) { // va al punto de reunión del edificio
         if (tipo === 'cosechadora') u.pref = { x: fab.reunion.x, y: fab.reunion.y };
         else if (cat === 'aire') u.patrulla = { pts: [{ x: fab.reunion.x, y: fab.reunion.y }], i: 0 }; // el punto de reunión de un aeródromo es un punto de patrulla
         else { const c = W.cercaLibre(m, fab.reunion.x, fab.reunion.y, cat === 'veh'); asignar(m, u, { t: 'mover', x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 }); }
@@ -4237,7 +4292,8 @@ globalThis.W = { VERSION: 'versión 94' };
       else if ((c.medico || 0) + J.colas.medico.n < 1 && (c.infanteria || 0) >= 6) inf = 'medico'; // uno, para la tropa que vuelve herida
       else if (J.nivel >= 2 && (c.francotirador || 0) < 3 && (c.francotirador || 0) * 5 < (c.infanteria || 0)) inf = 'francotirador';
       const topeInf = E.infMax && (c.infanteria || 0) + (c.antitanque || 0) >= E.infMax && (inf === 'infanteria' || inf === 'antitanque');
-      if (c.cuartel && !topeInf && !(ahorra && soldados.length >= 6) && J.colas.infanteria.n + J.colas.granadero.n + J.colas.antitanque.n + J.colas.explorador.n + J.colas.ingeniero.n + J.colas.francotirador.n < 2 && dinero >= UNID[inf].costo + guardaAire && W.puedePagar(J, UNID[inf])) { W.orden(m, { t: 'entrenar', j, tipo: inf }); dinero -= UNID[inf].costo; }
+      if (c.cuartel && !topeInf && !ahorra && inf === 'infanteria' && m.t > 9000 && !(J.colas.infanteria.n + J.colas.granadero.n + J.colas.medico.n) && dinero >= 1500 + guardaAire && !W.pelNo(m, j, W.PEL.fusileros.de)) { W.orden(m, { t: 'peloton', j, tipo: 'fusileros' }); dinero -= W.pelPrecio(W.PEL.fusileros.de).costo; } // con dinero de sobra, un pelotón de fusileros entero (con su granadero y su médico)
+      else if (c.cuartel && !topeInf && !(ahorra && soldados.length >= 6) && J.colas.infanteria.n + J.colas.granadero.n + J.colas.antitanque.n + J.colas.explorador.n + J.colas.ingeniero.n + J.colas.francotirador.n < 2 && dinero >= UNID[inf].costo + guardaAire && W.puedePagar(J, UNID[inf])) { W.orden(m, { t: 'entrenar', j, tipo: inf }); dinero -= UNID[inf].costo; }
     }
 
     // Tecnología: la primera pendiente de la lista que se pueda empezar y pagar sin dejar la caja vacía.
@@ -5509,6 +5565,7 @@ globalThis.W = { VERSION: 'versión 94' };
       if (e) {
         let t = (e.muro ? W.MURO_N[e.muro] : (e.edif ? EDIF : UNID)[e.tipo]).nombre + (e.j === YO ? '' : ' rival') + ' · ' + Math.ceil(e.vida) + '/' + e.vidaMax;
         if (e.tipo === 'cosechadora' && e.j === YO) t += ' · carga ' + e.carga;
+        if (!e.edif && e.pel && e.j === YO && W.PEL[e.pelT]) t += ' · ' + W.PEL[e.pelT].nombre.toLowerCase();
         if (!e.edif && UNID[e.tipo].aire && e.j === YO && conRed && W.clima(m) === 2) t += e.enTierra ? ' · tormenta: no despega' : ' · tormenta: vuelve a su base';
         if (!e.edif && UNID[e.tipo].tiende && e.j === YO && m.logistica !== false) t += e.orden === 'conectar' ? ' · tendiendo línea' : e.auto ? ' · automático' : ' · manual';
         if (!e.edif && UNID[e.tipo].espia && e.j === YO) t += e.infiltrado ? ' · infiltrado: informando' : ' · acércalo a un edificio enemigo';
@@ -7220,6 +7277,7 @@ globalThis.W = { VERSION: 'versión 94' };
       h += '<h3>Drones (los saca su portador)</h3>' + fila('dronRec', 'De reconocimiento', '40', 'Da vueltas alrededor del portador y ve.') + fila('dronFpv', 'Kamikaze', '40 por salida', 'Un solo uso, contra vehículos y edificios armados.') + fila('dronBomba', 'Bombardero', '15 por salida', 'Suelta una granada sobre la infantería y vuelve a recargar.');
       h += '<h3>Misiles (misilera)</h3>'; for (const k in W.MISILES) h += fila('', W.MISILES[k].nombre, precio(W.MISILES[k]), W.MISILES[k].que + ' Nivel ' + W.MISILES[k].nivel + '.');
       h += '<h3>Infraestructura</h3>' + fila('', 'Camino militar', '4 a 30 por celda', 'Lo traza la excavadora. Solo tus vehículos corren por él.') + fila('', 'Línea de servicio', '3 por celda', 'La tiende el ingeniero civil entre dos edificios: lleva energía y mete el edificio en tu red.') + fila('', 'Trinchera', 'gratis', 'La cava la infantería (Z). Cuatro puestos a cubierto; clic derecho para ocuparla.');
+      h += '<h3>Pelotones</h3>' + Object.keys(W.PEL).map((k) => fila('', W.PEL[k].nombre, precio(W.pelPrecio(W.PEL[k].de)), W.PEL[k].que)).join('') + fila('', 'Cómo se usan', '—', 'Se encargan en el cuartel. Tocar a un miembro selecciona el pelotón entero (con Alt, solo a ese). Avanzan al paso del más lento. Si caen miembros, «reponer bajas» los fabrica y van solos a reunirse.');
       if (conRed) h += '<h3>Clima</h3>' + fila('', 'Lluvia', '—', 'Fuera de camino los vehículos van un 25 % más lentos (la infantería, un 10 %) y gastan la mitad más de combustible. En los vados se va a media velocidad: un puente o un camino lo evitan.') + fila('', 'Tormenta', '—', 'Lo de la lluvia y, además, las unidades ven un 30 % menos y aviones y drones se quedan en tierra (los que vuelan vuelven a su base). El panel avisa un minuto antes.');
       $('guiaTxt').innerHTML = h;
     }
@@ -7476,6 +7534,33 @@ globalThis.W = { VERSION: 'versión 94' };
     }
     for (const tipo in EDIF) if (tipo !== 'patio' && !EDIF[tipo].infra && !EDIF[tipo].oculto) boton($('bEdif'), tipo, EDIF[tipo], true);
     for (const tipo in UNID) boton($('bUnid'), tipo, UNID[tipo], false);
+    // Pelotones: una casilla por plantilla, en el cuartel. Se encarga entero; cada miembro va a la cola del edificio que lo fabrica.
+    const botonesPel = [];
+    for (const tipo in W.PEL) {
+      const p = W.PEL[tipo], b = document.createElement('button'), cuenta = {};
+      for (const t of p.de) cuenta[t] = (cuenta[t] || 0) + 1;
+      const lista = Object.keys(cuenta).map((t) => cuenta[t] + ' ' + UNID[t].nombre.toLowerCase()).join(', ');
+      b.className = 'cas txt'; b.type = 'button'; b.innerHTML = '<span class="n"></span><span class="m"></span><span class="c"></span>';
+      b.querySelector('.n').textContent = p.nombre; b.querySelector('.m').textContent = p.de.length + ' unidades';
+      b.addEventListener('click', () => { son.activar(); const no = W.pelNo(m, YO, p.de); if (no) { aviso(p.nombre + ': ' + no); return; } W.orden(m, { t: 'peloton', j: YO, tipo }); aviso(p.nombre + ' encargado: ' + lista); });
+      $('bPel').appendChild(b); botonesPel.push({ b, tipo, p, lista, c: b.querySelector('.c') });
+    }
+    $('secPel').addEventListener('click', (ev) => { const b = ev.target.closest('button[data-pel]'); if (!b) return; son.activar(); W.orden(m, { t: 'reponer', j: YO, pel: Number(b.dataset.pel) }); aviso('Bajas encargadas: irán solas a reunirse con el pelotón'); });
+    let pelFirma = '';
+    function fichaPeloton() { // si todo lo seleccionado es un mismo pelotón: quién queda, cómo está y qué falta
+      const us = unidadesSel(); let pel = us.length ? us[0].pel || 0 : 0; for (const u of us) if ((u.pel || 0) !== pel) { pel = 0; break; }
+      const sec = $('secPel'); if (!pel) { if (!sec.hidden) { sec.hidden = true; pelFirma = ''; } return; }
+      const q = W.pelDe(m, YO, pel), p = W.PEL[q.tipo]; if (!p) { sec.hidden = true; return; }
+      const cuesta = W.pelPrecio(q.falta), no = q.falta.length ? W.pelNo(m, YO, q.falta) : '';
+      const firma = pel + '|' + q.vivos.map((u) => u.id + ':' + Math.round((u.vida / u.vidaMax) * 20)).join(',') + '|' + q.falta.join(',') + '|' + q.enCola.join(',') + '|' + no;
+      if (firma === pelFirma && !sec.hidden) return; pelFirma = firma; sec.hidden = false;
+      let h = '<h2>' + p.nombre + ' · ' + q.vivos.length + ' de ' + p.de.length + '</h2>';
+      for (const u of q.vivos) { const f = u.vida / u.vidaMax; h += '<div class="fm"><span>' + UNID[u.tipo].nombre + (u.dentro ? ' (a bordo)' : '') + '</span><i><b' + (f < 0.35 ? ' class="mal"' : '') + ' style="width:' + Math.round(f * 100) + '%"></b></i></div>'; }
+      if (q.enCola.length) h += '<div class="tenue">en camino: ' + q.enCola.map((t) => UNID[t].nombre.toLowerCase()).join(', ') + '</div>';
+      if (q.falta.length) h += '<div class="cae">faltan: ' + q.falta.map((t) => UNID[t].nombre.toLowerCase()).join(', ') + '</div><button type="button" class="grupo" data-pel="' + pel + '"' + (no ? ' disabled title="' + no + '"' : ' title="Se fabrican y van solos a reunirse con el pelotón"') + '>reponer bajas · ' + precioCorto(cuesta) + (no ? ' · ' + no : '') + '</button>';
+      sec.innerHTML = h;
+    }
+    const conPeloton = () => { const ps = new Set(); for (const id of sel) { const u = m.porId.get(id); if (u && !u.edif && u.pel) ps.add(u.pel); } if (ps.size) for (const u of m.ents) if (!u.edif && u.j === YO && u.pel && ps.has(u.pel) && !u.bunk) sel.add(u.id); }; // tocar a uno es tocar al pelotón (con Alt, solo a ese)
 
     // ---------- alertas: lo que no rinde en toda la base, con un clic para ir a verlo ----------
     const ALERTA = {
@@ -7590,6 +7675,9 @@ globalThis.W = { VERSION: 'versión 94' };
         if (o.c.classList.contains('lg') !== txt.length > 11) o.c.classList.toggle('lg', txt.length > 11);
         o.b.style.setProperty('--p', (p * 100).toFixed(1) + '%');
       }
+      { const ver = tipos.has('cuartel'); if ($('pelCab').hidden === ver) { $('pelCab').hidden = !ver; $('bPel').hidden = !ver; }
+        if (ver) for (const o of botonesPel) { const no = W.pelNo(m, YO, o.p.de), clase = 'cas txt' + (!no ? '' : no === 'no alcanza' ? ' caro' : ' no'), txt = precioCorto(W.pelPrecio(o.p.de)), tit = o.p.nombre + ' · ' + o.lista + '. ' + o.p.que + (no ? ' Ahora no: ' + no + '.' : ''); if (o.b.className !== clase) o.b.className = clase; if (o.c.textContent !== txt) o.c.textContent = txt; if (o.b.title !== tit) o.b.title = tit; } }
+      fichaPeloton();
       listarGrupos(); actualizarTec(); actualizarTactil();
       { // pestañas: una sola rejilla a la vista, la que toca según lo seleccionado (o la que elija el jugador)
         const disp = { edif: tipos.has('patio'), unid: hayUnid, tec: hayTecG, intel: tipos.has('estacion') || tipos.has('laboratorio'), mis: tipos.has('misilera') }, firma = [...tipos].sort().join(',');
@@ -7837,7 +7925,7 @@ globalThis.W = { VERSION: 'versión 94' };
       if (!ev.shiftKey) sel.clear();
       if (clic) {
         const e = entEn(aMundoX(raton.x), aMundoY(raton.y));
-        if (e && e.j === YO && !(UNID[e.tipo] && UNID[e.tipo].mini && e.rol !== 'rec')) { if (ev.shiftKey && sel.has(e.id)) sel.delete(e.id); else sel.add(e.id); } // de los drones pequeños solo se selecciona el de reconocimiento (para darle patrulla)
+        if (e && e.j === YO && !(UNID[e.tipo] && UNID[e.tipo].mini && e.rol !== 'rec')) { if (ev.shiftKey && sel.has(e.id)) sel.delete(e.id); else { sel.add(e.id); if (!ev.altKey) conPeloton(); } } // de los drones pequeños solo se selecciona el de reconocimiento (para darle patrulla)
         const ahora = performance.now();
         if (e && e.j === YO && !e.edif && ultClic.id === e.id && ahora - ultClic.t < 380) { // doble clic: todas las de su tipo que estén en pantalla
           const c = lienzo.getBoundingClientRect(), ax = aMundoX(0), bx = aMundoX(c.width), ay = aMundoY(0), by = aMundoY(c.height);
@@ -7849,6 +7937,7 @@ globalThis.W = { VERSION: 'versión 94' };
       const ax = aMundoX(Math.min(raton.x, raton.x0)), bx = aMundoX(Math.max(raton.x, raton.x0));
       const ay = aMundoY(Math.min(raton.y, raton.y0)), by = aMundoY(Math.max(raton.y, raton.y0));
       for (const e of m.ents) if (!e.edif && e.j === YO && !UNID[e.tipo].mini && !e.bunk && e.x >= ax && e.x <= bx && e.y >= ay && e.y <= by) sel.add(e.id);
+      if (!ev.altKey) conPeloton();
       if (!sel.size) for (const e of m.ents) if (!e.edif && e.j === YO && UNID[e.tipo].mini && e.rol === 'rec' && e.x >= ax && e.x <= bx && e.y >= ay && e.y <= by) sel.add(e.id); // caja solo con drones de reconocimiento: se seleccionan ellos
       // La caja prioriza tropa: suelta edificios y, si hay combatientes, también cosechadoras.
       const cosas = [...sel].map((id) => m.porId.get(id)).filter(Boolean);

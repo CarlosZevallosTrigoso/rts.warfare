@@ -80,6 +80,8 @@
   .cas.listo::before { display: none; }
   .cas.listo .c { color: var(--fondo); font-weight: 600; }
   .cas.txt .n { height: 48px; padding: 0 2px; }
+  #pelCab { font-size: 10px; margin: 8px 0 4px; } #bPel .cas.txt .n { height: 34px; } #bPel .cas .m { font-size: 8px; line-height: 9px; color: var(--suave); height: 10px; }
+  #secPel { font-size: 11px; line-height: 1.5; } #secPel h2 { margin: 0 0 4px; font-size: 11px; } #secPel .fm { display: flex; align-items: center; gap: 6px; } #secPel .fm span { flex: 1; } #secPel .fm i { flex: none; width: 54px; height: 4px; background: var(--linea); position: relative; } #secPel .fm i b { position: absolute; left: 0; top: 0; bottom: 0; background: #4d7a38; } #secPel .fm i b.mal { background: var(--mal); } #secPel .cae { color: var(--mal); } #secPel button { margin-top: 6px; width: 100%; justify-content: center; }
   #secCola .cab { display: flex; justify-content: space-between; align-items: center; margin: 0 0 4px; }
   #secCola .cab h2 { margin: 0; }
   #bucle { font-size: 10px; padding: 1px 6px; }
@@ -289,10 +291,11 @@
     <button type="button" id="verFlujos" class="grupo" title="Muestra por dónde corre la energía y el petróleo, cuánto da y pide cada red, y dónde se corta. Verde: fluye. Naranja: la red no da para todos. Rojo: cortado o sin patio. Tecla I.">ver flujos</button>
     <div id="panel">
     <div id="vacio" class="tenue">Selecciona un edificio para ver lo que produce.<br><kbd>B</kbd> patio · <kbd>Q</kbd> cuarteles · <kbd>V</kbd> fábricas · <kbd>X</kbd> aeródromos</div>
+    <section id="secPel" hidden></section>
     <section id="secCola" hidden><div class="cab"><h2>Cola</h2><button type="button" id="bucle" class="grupo" title="Cada unidad que sale se vuelve a encargar al final de la cola. Se paga al empezarla.">repetir: no</button></div><div id="cola"></div></section>
     <div id="pest" hidden><button type="button" data-p="edif">Edificios</button><button type="button" data-p="unid">Unidades</button><button type="button" data-p="tec">Mejoras</button><button type="button" data-p="intel">Intel.</button><button type="button" data-p="mis">Misiles</button></div>
     <section id="secEdif" hidden><div id="bEdif" class="rej"></div><div id="obras" class="tenue"></div></section>
-    <section id="secUnid" hidden><div id="bUnid" class="rej"></div></section>
+    <section id="secUnid" hidden><div id="bUnid" class="rej"></div><div id="pelCab" class="tenue" hidden>Pelotones · se encargan enteros y actúan juntos</div><div id="bPel" class="rej"></div></section>
     <section id="secTec" hidden><div id="bTec" class="rej"></div></section>
     <section id="secIntel" hidden><div id="bIntel" class="rej"></div></section>
     <section id="secMis" hidden><div id="bMis" class="rej"></div><div id="bLanzar"></div><div id="misInfo" class="tenue"></div></section>
