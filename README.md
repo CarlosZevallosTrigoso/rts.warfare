@@ -20,7 +20,7 @@ pilotos (ataque) o defender el centro.
 - Estado: se juegan los dos papeles contra la máquina. La partida simula 24 horas (un minuto por hora), de las 22:00 a las
   22:00 del día siguiente, cuando llegan los refuerzos aéreos de la defensa. Misión del atacante: entrar, destruir y huir
   (encontrar el centro, volarlo a mano y sacar a los supervivientes por la zona de extracción). Posiciones al azar: el
-  atacante sale de cualquier borde; el centro, el taller, el barracón y las antenas del defensor caen separados por el casco
-  urbano, y hay patios señuelo. Escuadrones numerados por bando (teclas 1–6). Infantería al estilo Company of Heroes
+  atacante sale de cualquier borde; el centro va enterrado bajo un edificio cualquiera, del pueblo o del campo, sin huella
+  en el plano (hay que registrar edificios), con el taller, el barracón y las antenas repartidos alrededor. Escuadrones numerados por bando (teclas 1–6). Infantería al estilo Company of Heroes
   (cobertura con dirección, supresión, retirada, granada, humo); drones (reconocimiento, FPV de radio y de fibra, pilotos,
   batería, enlace, inhibidor); rastros (rumbos de radio, hilos de fibra); día y noche con cuatro visiones (teclas 7 8 9 0).

@@ -95,10 +95,11 @@
     const asalto = eqs.filter((q) => !q.st.apoyo && q.carga), punta = asalto[0] || eqs[0]; if (!punta) return;
     // El punto de reunión: a 160 m de la pista, del lado por donde se viene.
     if (!ia.reunion || (!ia.entra && Math.hypot(ia.G.x - G.x, ia.G.y - G.y) > 12 && m.t - (ia.tReu || 0) > 600)) { ia.tReu = m.t; const d = Math.hypot(b.x - G.x, b.y - G.y) || 1, k = Math.min(1, (G.r + 12) / d); ia.reunion = { x: G.x + (b.x - G.x) * k, y: G.y + (b.y - G.y) * k, lado: Math.atan2(b.y - G.y, b.x - G.x) + Math.PI / 2 }; ia.G = G; }
-    // Dónde mirar: el centro está en un patio despejado, y en el plano se ven varios (el de verdad y los señuelos). Se da por mirado el que alguien ha pisado sin encontrar nada.
-    const P = m.mapa.patios.map((p) => ({ x: (p.x0 + p.x1 + 1) / 2, y: (p.y0 + p.y1 + 1) / 2 })); if (!ia.mirados) ia.mirados = new Set();
-    P.forEach((p, i) => { if (!ia.mirados.has(i) && propios.some((u) => Math.hypot(u.x - p.x, u.y - p.y) < 4)) ia.mirados.add(i); });
-    const pend = P.map((p, i) => i).filter((i) => !ia.mirados.has(i)).sort((a, c) => Math.hypot(P[a].x - G.x, P[a].y - G.y) - Math.hypot(P[c].x - G.x, P[c].y - G.y));
+    // Dónde mirar: el centro está bajo algún edificio de 40 m de lado o más, y en el plano todos son iguales. Hay que registrarlos:
+    // se da por registrado aquel en el que alguien ha entrado (o se ha pegado a su pared) sin encontrar nada. Primero, los más cercanos a la pista.
+    if (!ia.P) { ia.P = m.mapa.ruinas.filter((r) => r.w >= 4 && r.h >= 4).map((r) => ({ x: r.x + Math.floor(r.w / 2) + 0.5, y: r.y + Math.floor(r.h / 2) + 0.5 })); ia.mirados = new Set(); }
+    const P = ia.P; P.forEach((p, i) => { if (!ia.mirados.has(i) && propios.some((u) => Math.hypot(u.x - p.x, u.y - p.y) < D.ECON.verCentro - 0.2)) ia.mirados.add(i); });
+    const pend = P.map((p, i) => i).filter((i) => !ia.mirados.has(i)), tomados = new Set();
     const R = ia.reunion, aCubierto = (q) => { if (q.st.cubierto) return; q.st.cubierto = true; D.orden(m, { t: 'mover', j: 0, eqs: [q.eq], x: q.x, y: q.y }); q.st.tOrden = m.t; q.st.meta = null; }; // «mover» al sitio donde ya está: cada uno busca el puesto más cubierto de cara al enemigo
     if (!ia.entra) { const n = asalto.filter((q) => q.st.listo).length; if (n && !ia.tListos) ia.tListos = m.t; if (centro || (asalto.length && n === asalto.length) || (ia.tListos && m.t - ia.tListos > 1200)) ia.entra = true; } // entran cuando están todos, o un minuto después de llegar el primero
     asalto.forEach((q, i) => { const st = q.st;
@@ -117,7 +118,8 @@
       // una antena descubierta a mano (sea de verdad o falsa): se vuela, que sin antenas no hay drones de radio
       let an = null, da = 10; for (const id of m.conocido[0]) { const o = m.porId.get(id); if (o && (o.tipo === 'antena' || o.tipo === 'falsa')) { const d = dist(q, o); if (d < da) { da = d; an = o; } } }
       if (an) { st.volando = true; if (q.parado || m.t - st.tOrden > 300) { D.orden(m, { t: 'volar', j: 0, eqs: [q.eq], obj: an.id }); st.tOrden = m.t; st.meta = null; } return; } st.volando = false;
-      if (pend.length) { const p = P[pend[i % pend.length]]; if (ir(q, p.x, p.y, 0)) D.orden(m, { t: 'modo', j: 0, eqs: [q.eq], sigilo: D.luz(m) > 0.5 && !q.n && Math.hypot(q.x - p.x, q.y - p.y) < 22 }); return; } // a mirar el patio pendiente que le toca: los más cercanos a la pista, primero
+      if (pend.length) { if (st.casa === undefined || ia.mirados.has(st.casa) || m.t - (st.tCasa || 0) > 1500) { let mejor = -1, mv = 1e9; for (const k of pend) { if (tomados.has(k) || k === st.casa) continue; const v = Math.hypot(P[k].x - G.x, P[k].y - G.y) + 0.6 * Math.hypot(P[k].x - q.x, P[k].y - q.y); if (v < mv) { mv = v; mejor = k; } } if (mejor < 0) mejor = pend[0]; st.casa = mejor; st.tCasa = m.t; } // cada escuadrón, a un edificio distinto: cerca de la pista y no muy lejos de él; si en un minuto largo no ha podido registrarlo, a otro
+        tomados.add(st.casa); const p = P[st.casa]; if (ir(q, p.x, p.y, 0)) D.orden(m, { t: 'modo', j: 0, eqs: [q.eq], sigilo: D.luz(m) > 0.5 && !q.n && Math.hypot(q.x - p.x, q.y - p.y) < 22 }); return; }
       if (q.parado || m.t - st.tOrden > 700) { const a = st.paso * 2.4 + i * 2.1, d = G.r * (0.35 + 0.65 * ((st.paso * 0.618) % 1)); st.paso++; if (ir(q, G.x + Math.cos(a) * d, G.y + Math.sin(a) * d, 0)) D.orden(m, { t: 'modo', j: 0, eqs: [q.eq], sigilo: D.luz(m) > 0.5 && !q.n }); }
     });
     // El apoyo (tirador y observador): detrás de la punta, a cubierto; da enlace y rumbo, y el tirador hace el resto.

@@ -19,17 +19,18 @@ prueba('en 80 sectores de cada escenario: se llega a pie de una base a la otra, 
     for (const p of [at.barracon, at.taller, df.centro, df.taller, df.barracon, ...at.antenas, ...df.antenas, df.falsa, df.escucha]) assert.ok(mp.paso[p.y * N + p.x], id + ': edificio sobre muro o agua en ' + p.x + ',' + p.y);
     for (const an of df.antenas) assert.ok(Math.hypot(an.x - df.x, an.y - df.y) >= 8, id + ': antena pegada al centro');
     assert.ok(mp.tubos.length >= 1, id + ': sin pasos bajo tierra'); for (const t of mp.tubos) for (const b of [t.a, t.b]) assert.ok(mp.paso[Math.floor(b.y) * N + Math.floor(b.x)], id + ': boca tapada');
-    const U = mp.urbano; assert.ok(df.x >= U.x0 && df.x <= U.x1 && df.y >= U.y0 && df.y <= U.y1, id + ': el centro no está en el casco urbano');
+    { const casa = mp.ruinas.filter((r) => df.x > r.x && df.x < r.x + r.w - 1 && df.y > r.y && df.y < r.y + r.h - 1); assert.ok(casa.length === 1 && casa[0].w >= 4 && casa[0].h >= 4 && mp.terreno[df.y * N + df.x] === D.T.RUINA, id + ': el centro debe ir dentro de un edificio de 4×4 o más'); }
     assert.ok(mp.ruinas.length >= (esc === 'urbano' ? 40 : 10), id + ': pocos edificios (' + mp.ruinas.length + ')');
     if (esc === 'mixto') { let agua = 0; for (const t of mp.terreno) if (t === T.AGUA) agua++; assert.ok(agua > 60, id + ': sin arroyo'); }
   }
 });
-prueba('las posiciones cambian: en 40 sectores el atacante sale de los cuatro lados, el centro cae por todo el mapa y siempre lejos', () => {
-  const lados = new Set(), cuad = new Set();
+prueba('las posiciones cambian: en 40 sectores el atacante sale de los cuatro lados y el centro cae por todo el mapa, dentro y fuera del pueblo, siempre lejos y sin huella', () => {
+  const lados = new Set(), cuad = new Set(); let campo = 0, nm = 0;
   for (const esc of ['mixto', 'urbano']) for (let s = 1; s <= 20; s++) { const mp = D.generarMapa(s, esc), [a, d] = mp.bases, N = mp.N;
-    assert.ok(Math.hypot(a.x - d.x, a.y - d.y) >= 55, 'bases demasiado cerca en ' + esc + ' ' + s); assert.ok(d.x >= mp.urbano.x0 && d.x <= mp.urbano.x1 && d.y >= mp.urbano.y0 && d.y <= mp.urbano.y1, 'el centro debe estar en el casco urbano');
+    assert.ok(Math.hypot(a.x - d.x, a.y - d.y) >= 50, 'bases demasiado cerca en ' + esc + ' ' + s); if (esc === 'mixto') { nm++; if (!(d.x >= mp.urbano.x0 && d.x <= mp.urbano.x1 && d.y >= mp.urbano.y0 && d.y <= mp.urbano.y1)) campo++; }
+    assert.ok(!mp.muretes.some((q) => q.tipo === 'sacos'), 'ya no debe haber sacos que delaten nada');
     lados.add([a.x, N - a.x, a.y, N - a.y].indexOf(Math.min(a.x, N - a.x, a.y, N - a.y))); cuad.add((d.x < N / 2 ? 0 : 1) + (d.y < N / 2 ? 0 : 2)); }
-  assert.strictEqual(lados.size, 4, 'el atacante debía salir de los cuatro lados'); assert.strictEqual(cuad.size, 4, 'el centro debía caer en los cuatro cuadrantes');
+  assert.strictEqual(lados.size, 4, 'el atacante debía salir de los cuatro lados'); assert.strictEqual(cuad.size, 4, 'el centro debía caer en los cuatro cuadrantes'); assert.ok(campo >= nm * 0.2 && campo <= nm * 0.7, 'en mixto, el centro debe caer a veces fuera del pueblo: ' + campo + ' de ' + nm);
 });
 prueba('los dos papeles: el atacante lleva más gente y menos pilotos; el defensor, al revés; nadie pasa del tope', () => {
   for (const esc of ['mixto', 'urbano']) for (const s of [1, 2, 3, 4, 5]) {
@@ -50,6 +51,7 @@ const solos = (m, ...quedan) => { for (const e of m.ents) if (e.clase === 'sol' 
 const solosSol = (m, ...quedan) => { for (const e of m.ents) if (e.clase === 'sol' && !quedan.includes(e)) { e.x = e.j ? m.N - 2.5 - (e.id % 5) : 2.5 + (e.id % 5); e.y = e.j ? m.N - 2.5 : 2.5; e.fuego = false; e.recarga = 1e9; } D.detectar(m); }; // lo mismo, sin tocar los drones
 const al = (m, p, d) => { const L = Math.hypot(48 - p.x, 48 - p.y) || 1; return { x: p.x + ((48 - p.x) / L) * d, y: p.y + ((48 - p.y) / L) * d }; }; // un punto a d celdas de p, hacia el centro del mapa
 const claro = (m, q) => { for (let d = 0; d < 14; d++) for (let k = 0; k < 16; k++) { const x = Math.floor(q.x + Math.cos(k * 0.39) * d), y = Math.floor(q.y + Math.sin(k * 0.39) * d), c = y * m.N + x; if (x > 2 && y > 2 && x < m.N - 3 && y < m.N - 3 && m.paso[c] && m.mapa.terreno[c] <= 2) return { x: x + 0.5, y: y + 0.5 }; } throw new Error('sin claro'); }; // la celda al descubierto más cercana
+const pegado = (m, o) => { let b = null, md = 1e9; for (let y = Math.floor(o.y) - 5; y <= o.y + 5; y++) for (let x = Math.floor(o.x) - 5; x <= o.x + 5; x++) if (x > 0 && y > 0 && x < m.N && y < m.N && m.paso[y * m.N + x]) { const d = Math.hypot(x + 0.5 - o.x, y + 0.5 - o.y); if (d < md) { md = d; b = { x: x + 0.5, y: y + 0.5 }; } } return b; }; // la celda pisable más cercana a un edificio
 const avanza = (m, n) => { for (let i = 0; i < n; i++) D.tick(m); };
 
 prueba('el reloj: de 22:00 a 22:00; empieza de noche, amanece a las 06:00 y anochece a las 18:00 sin saltos; si nadie hace nada, llegan los refuerzos y gana el defensor', () => {
@@ -112,7 +114,7 @@ prueba('supresión, retirada, granada y humo', () => {
     const x0 = b.x; b.eq = 99; D.orden(m, { t: 'mover', j: 1, eqs: [99], x: p.x - 8, y: p.y }); avanza(m, 60); assert.ok(Math.abs(b.x - x0) < 0.2, 'clavado no se mueve');
     // retirada: sale aunque esté clavado, corre más que andando, no dispara y acaba junto a su barracón
     D.orden(m, { t: 'retirada', j: 1, eqs: [99] }); avanza(m, 40); assert.ok(b.orden === 'retirada' && Math.abs(b.x - x0) > 0.5, 'la retirada no arranca'); const tiros = m.efectos.filter((e) => e.tipo === 'tiro' && e.j === 1).length;
-    b.fuego = true; avanza(m, 100); assert.strictEqual(m.efectos.filter((e) => e.tipo === 'tiro' && e.j === 1).length, tiros, 'en retirada no se dispara');
+    b.fuego = true; let enRet = tiros; for (let i = 0; i < 100; i++) { D.tick(m); if (b.orden !== 'retirada') break; enRet = m.efectos.filter((e) => e.tipo === 'tiro' && e.j === 1).length; } assert.strictEqual(enRet, tiros, 'en retirada no se dispara');
     for (const u of a) u.fuego = false; let n = 0; while (b.orden === 'retirada' && n < 8000) { D.tick(m); n++; } const bar = m.ents.find((e) => e.tipo === 'barracon' && e.j === 1); assert.ok(Math.hypot(b.x - bar.x, b.y - bar.y) < 5 && b.supr === 0, 'no llegó a su barracón'); }
   // granada: hiere en su radio y no más allá, hay que estar a tiro, y el equipo queda recargando
   { const { m, a, b, p } = escena(5); lleva(b, p); b.fuego = false; const otro = sol(m, 1, 'escopetero'); lleva(otro, { x: p.x, y: p.y + 4 }); otro.recarga = 1e9; a[0].eq = 98; a[0].recarga = 1e9; b.recarga = 1e9; lleva(a[0], { x: p.x + 8, y: p.y }); D.detectar(m); // (ninguno dispara: solo se prueba la granada)
@@ -121,14 +123,14 @@ prueba('supresión, retirada, granada y humo', () => {
     assert.ok(b.vida < b.vidaMax - 30 && b.supr >= E.suprAgachado, 'la granada no hirió: ' + b.vida); assert.strictEqual(otro.vida, otro.vidaMax, 'a 4 celdas no debe alcanzar'); assert.strictEqual(a[0].vida, a[0].vidaMax, 'el que la lanza, a 4 celdas, sale ileso');
     const v = b.vida; D.orden(m, { t: 'granada', j: 0, eqs: [98], x: p.x, y: p.y }); avanza(m, 60); assert.ok(b.vida === v && m.efectos.some((e) => e.tipo === 'noPuede' && e.que === 'recarga'), 'no se lanzan dos seguidas'); }
   // humo: entre dos que se ven, la nube corta la vista y el fuego; cuando se disipa, vuelven a verse
-  { const { m, a, b, p } = escena(6); lleva(b, p); b.fuego = false; a[0].eq = 97; a[0].fuego = false; lleva(a[0], { x: p.x + 10, y: p.y }); b.movio = true; D.detectar(m); assert.ok(m.visto[0].has(b.id), 'antes del humo se ven');
+  { const { m, a, b, p } = escena(7); lleva(b, p); b.fuego = false; a[0].eq = 97; a[0].fuego = false; lleva(a[0], { x: p.x + 10, y: p.y }); b.movio = true; D.detectar(m); assert.ok(m.visto[0].has(b.id), 'antes del humo se ven');
     D.orden(m, { t: 'humo', j: 0, eqs: [97], x: p.x + 5, y: p.y }); avanza(m, E.granadaVuelo + 6); assert.strictEqual(m.humos.length, 1); b.movio = true; D.detectar(m); assert.ok(!m.visto[0].has(b.id) && !m.visto[1].has(a[0].id), 'con humo en medio no se ven');
     avanza(m, E.humoDura + 10); assert.strictEqual(m.humos.length, 0); b.movio = true; a[0].movio = true; D.detectar(m); assert.ok(m.visto[0].has(b.id), 'disipado el humo, se ven otra vez'); }
 });
 prueba('la carga y la huida: un asaltante pegado al centro lo vuela en cinco segundos; luego hay que llegar a la zona de extracción para ganar; el que no lleva carga no puede; sin descubrirlo, tampoco', () => {
   const m = D.crearMundo(5, { t: DIA }), E = D.ECON, c = m.ents.find((e) => e.tipo === 'centro'), a = sol(m, 0, 'asaltante'); solos(m, a);
   D.orden(m, { t: 'volar', j: 0, eqs: [a.eq], obj: c.id }); avanza(m, 3); assert.strictEqual(a.orden, 'nada', 'no se puede volar lo que no se ha descubierto');
-  lleva(a, D.cercaLibre(m, c.x + 2, c.y + 2)); D.detectar(m); assert.ok(m.conocido[0].has(c.id), 'a dos pasos, el centro queda descubierto');
+  lleva(a, pegado(m, c)); D.detectar(m); assert.ok(m.conocido[0].has(c.id), 'a dos pasos, el centro queda descubierto');
   D.orden(m, { t: 'volar', j: 0, eqs: [a.eq], obj: c.id }); avanza(m, E.cargaTicks + 200);
   assert.ok(!m.fin && m.caido > 0 && !m.porId.has(c.id), 'volado el centro, la partida sigue: falta salir');
   for (const e of m.ents) if (e.clase === 'sol' && e.j === 0 && e !== a) e.vida = 0; avanza(m, 20); assert.ok(!m.fin, 'aún no ha llegado a la zona');
@@ -136,7 +138,7 @@ prueba('la carga y la huida: un asaltante pegado al centro lo vuela en cinco seg
   assert.deepStrictEqual(m.fin && { gana: m.fin.gana, motivo: m.fin.motivo, salen: m.fin.salen }, { gana: 0, motivo: 'extraccion', salen: 1 }); assert.ok(Math.hypot(a.x - m.extraccion.x, a.y - m.extraccion.y) <= m.extraccion.r);
   { const m5 = D.crearMundo(5, { t: DIA }); m5.caido = m5.t; for (const e of m5.ents) if (e.clase === 'sol' && e.j === 0) e.vida = 0; avanza(m5, 12); assert.deepStrictEqual(m5.fin && m5.fin.motivo, 'sin extraccion'); }
   { const m6 = D.crearMundo(5, {}), ns = [0, 1].map((j) => [...new Set(m6.ents.filter((e) => e.clase === 'sol' && e.j === j).map((e) => e.num))].join()); assert.deepStrictEqual(ns, ['1,2,3,4', '1,2'], 'los escuadrones se numeran por bando'); }
-  const m2 = D.crearMundo(5, { t: DIA }), o = sol(m2, 0, 'observador'), c2 = m2.ents.find((e) => e.tipo === 'centro'); solos(m2, o); lleva(o, D.cercaLibre(m2, c2.x + 2, c2.y + 2)); D.detectar(m2); for (const e of m2.ents) if (e.clase === 'sol' && e !== o && e.eq === o.eq) e.eq = 99; D.orden(m2, { t: 'volar', j: 0, eqs: [o.eq], obj: c2.id }); avanza(m2, 400);
+  const m2 = D.crearMundo(5, { t: DIA }), o = sol(m2, 0, 'observador'), c2 = m2.ents.find((e) => e.tipo === 'centro'); solos(m2, o); lleva(o, pegado(m2, c2)); D.detectar(m2); for (const e of m2.ents) if (e.clase === 'sol' && e !== o && e.eq === o.eq) e.eq = 99; D.orden(m2, { t: 'volar', j: 0, eqs: [o.eq], obj: c2.id }); avanza(m2, 400);
   assert.ok(m2.porId.has(c2.id) && !m2.fin, 'un observador no lleva carga');
   for (const [dx, dy] of [[4, 3], [-4, 3], [3, -4], [-3, -4]]) { const m4 = D.crearMundo(5, { t: DIA }), an = m4.ents.find((e) => e.j === 1 && e.tipo === 'antena'), z = sol(m4, 0, 'zapador'); solos(m4, z); lleva(z, D.cercaLibre(m4, an.x + dx, an.y + dy)); m4.conocido[0].add(an.id); D.orden(m4, { t: 'volar', j: 0, eqs: [z.eq], obj: an.id }); avanza(m4, E.cargaTicks + 300); assert.ok(!m4.porId.has(an.id), 'una antena se vuela a mano, venga uno de donde venga'); }
   const m3 = D.crearMundo(5, { t: DIA }); for (const e of m3.ents) if (e.clase === 'sol' && e.j === 0 && D.SOL[e.tipo].carga) e.vida = 0; avanza(m3, 2); assert.deepStrictEqual(m3.fin && m3.fin.motivo, 'sin asalto');
@@ -149,7 +151,7 @@ prueba('drones: pilotos, enlace, batería, FPV, inhibidor, escopeta, antenas y t
   { // reconocimiento: va adonde se le manda, se queda en el borde del enlace, vuelve solo a recargar y sale otra vez
     const m = D.crearMundo(4, { t: DIA }); solosSol(m); const r = dr(m, 0, 'recon')[0], a = m.ents.find((e) => e.j === 0 && e.tipo === 'antena'), b = m.mapa.bases[1];
     const q0 = al(m, a, 14); D.orden(m, { t: 'recon', j: 0, id: r.id, x: q0.x, y: q0.y }); avanza(m, 500); assert.ok(Math.hypot(r.x - q0.x, r.y - q0.y) < E.reconRadio + 1, 'no llegó');
-    D.orden(m, { t: 'recon', j: 0, id: r.id, x: b.x, y: b.y }); avanza(m, 2); assert.ok(Math.abs(Math.hypot(r.orbita.x - a.x, r.orbita.y - a.y) - (E.enlace - E.reconRadio - 1)) < 0.01, 'no se recortó al enlace');
+    D.orden(m, { t: 'recon', j: 0, id: r.id, x: a.x < 48 ? 95 : 1, y: a.y < 48 ? 95 : 1 }); avanza(m, 2); // a la esquina más lejana: fuera del enlace seguro assert.ok(Math.abs(Math.hypot(r.orbita.x - a.x, r.orbita.y - a.y) - (E.enlace - E.reconRadio - 1)) < 0.01, 'no se recortó al enlace');
     let volvio = false, cargo = false; for (let i = 0; i < 5200 && !(cargo && r.estado === 'vuelo'); i++) { D.tick(m); if (r.estado === 'vuelve') volvio = true; if (r.estado === 'carga') cargo = true; }
     assert.ok(volvio && cargo && r.estado === 'vuelo' && r.vida > 0 && r.bat > r.batMax * 0.9, 'no hizo el ciclo de batería: ' + r.estado);
     D.orden(m, { t: 'reconCasa', j: 0, id: r.id }); avanza(m, 1500); assert.strictEqual(r.estado, 'posado');
@@ -160,7 +162,7 @@ prueba('drones: pilotos, enlace, batería, FPV, inhibidor, escopeta, antenas y t
     o.vida = 0; avanza(m, E.enlaceCorte + 5); assert.ok(r.vida <= 0 && ef(m, 'perdido').some((q) => q.que === 'enlace'), 'sin repetidor debía caer');
   }
   { // FPV: solo contra lo que se ve; ocupa piloto; llega, revienta y hiere; el de radio cae en la burbuja del inhibidor y el de fibra no
-    const m = D.crearMundo(4, { t: DIA }), b1 = m.mapa.bases[1], t = sol(m, 0, 'tirador'), i0 = sol(m, 0, 'inhibidor'); solosSol(m, t, i0); const p = claro(m, al(m, b1, 20)); lleva(t, p); lleva(i0, { x: 3.5, y: 3.5 });
+    const m = D.crearMundo(4, { t: DIA }), b1 = m.mapa.bases[1], t = sol(m, 0, 'tirador'), i0 = sol(m, 0, 'inhibidor'); solosSol(m, t, i0); const p = claro(m, al(m, b1, 20)); lleva(t, p); lleva(i0, D.cercaLibre(m, m.mapa.bases[0].x + 3, m.mapa.bases[0].y + 3));
     D.orden(m, { t: 'fpv', j: 1, tipo: 'fpvRadio', obj: t.id }); avanza(m, 1); assert.ok(ef(m, 'noPuede').some((q) => q.que === 'noVisto')); m.efectos.length = 0;
     m.visto[1].add(t.id); const libres = D.pilotosLibres(m, 1); D.orden(m, { t: 'fpv', j: 1, tipo: 'fpvRadio', obj: t.id }); avanza(m, 1); m.visto[1].add(t.id); assert.strictEqual(D.pilotosLibres(m, 1), libres - 1);
     let boom = false; for (let i = 0; i < 400 && !boom; i++) { m.visto[1].add(t.id); D.tick(m); boom = ef(m, 'fpvBoom').length > 0; } assert.ok(boom && t.vida < 60, 'el FPV no hizo daño: ' + t.vida); assert.strictEqual(D.pilotosLibres(m, 1), libres);
@@ -185,7 +187,7 @@ prueba('rastros: el centro está oculto; las antenas que emiten dan rumbo y posa
   { // el centro: ni el dron encima ni un soldado a 100 m lo descubren; a 30 m, sí. El taller, en cambio, sí se ve desde el aire
     const m = D.crearMundo(4, { t: DIA }), c = m.ents.find((e) => e.tipo === 'centro'), ta = m.ents.find((e) => e.j === 1 && e.tipo === 'taller'), r = m.ents.find((e) => e.clase === 'dron' && e.j === 0 && e.tipo === 'recon'), a = sol(m, 0, 'asaltante'); solosSol(m, a);
     r.x = c.x; r.y = c.y; { const q4 = al(m, c, 10); lleva(a, D.cercaLibre(m, q4.x, q4.y)); } D.detectar(m); assert.ok(!m.conocido[0].has(c.id), 'el centro no debía verse'); r.x = ta.x; r.y = ta.y; D.detectar(m); assert.ok(m.conocido[0].has(ta.id), 'el taller sí se ve desde el aire'); assert.ok(Math.hypot(ta.x - c.x, ta.y - c.y) >= 7, 'el taller no debe estar pegado al centro');
-    lleva(a, D.cercaLibre(m, c.x - 3, c.y)); r.x = 1; r.y = 1; D.detectar(m); assert.ok(m.conocido[0].has(c.id), 'a 30 m el centro se descubre');
+    lleva(a, pegado(m, c)); r.x = 1; r.y = 1; D.detectar(m); assert.ok(m.conocido[0].has(c.id), 'registrando el edificio, el centro se descubre');
   }
   { // rumbos: con drones de radio del defensor en el aire, cada observador da una línea hacia la antena que emite, con poco error; posados, silencio
     const m = D.crearMundo(4, { t: DIA }); solosSol(m); D.rastros(m); const rs = m.rumbo[0], an = m.ents.filter((e) => e.j === 1 && e.tipo === 'antena');
@@ -219,6 +221,10 @@ prueba('tiroteo de escuadrón: dura más de un minuto, clava a la gente y no gan
     k++; dur += t; if (!B.some((u) => u.vida > 0)) ga++; else if (!A.some((u) => u.vida > 0)) gb++; }
   assert.ok(k >= 12, 'pocas escenas: ' + k); assert.ok(dur / k > 1200, 'el tiroteo debe durar más de un minuto: ' + dur / k / 20 + ' s'); assert.ok(clav / n > 0.2, 'debe haber gente clavada: ' + clav / n);
   assert.ok(Math.min(ga, gb) >= k * 0.2, 'no puede ganar casi siempre el mismo lado: ' + ga + ' / ' + gb);
+});
+prueba('la interfaz se puede cargar: sus fuentes no tienen errores de sintaxis', () => {
+  const fs = require('fs'), path = require('path'), dir = path.join(__dirname, '..', 'src', 'ui');
+  for (const f of fs.readdirSync(dir)) if (f.endsWith('.js')) { try { new Function(fs.readFileSync(path.join(dir, f), 'utf8')); } catch (e) { assert.fail(f + ': ' + e.message); } }
 });
 prueba('partida entera, máquina contra máquina: termina, es idéntica si se repite, y el tick es barato', () => {
   const juega = (s, esc) => { const m = D.crearMundo(s, { escenario: esc, ia: [true, true] }), t0 = Date.now(); let n = 0; while (!m.fin) { D.tick(m); n++; assert.ok(n <= D.ECON.dia, 'no termina'); } return { fin: m.fin, n, ms: (Date.now() - t0) / n, firma: m.ents.map((e) => e.id + ':' + e.x.toFixed(3) + ',' + e.y.toFixed(3) + ',' + Math.round(e.vida)).join('|'), bajas: [m.jug[0].bajas, m.jug[1].bajas] }; };

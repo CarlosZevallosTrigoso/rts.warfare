@@ -20,7 +20,8 @@
 
     // El sector se dibuja con el atacante abajo a la izquierda (en cualquier punto de esos dos bordes) y el casco urbano en el
     // cuadrante opuesto (o casi todo, en 'urbano'); al final se le da la vuelta al azar (ocho orientaciones), así que el
-    // atacante puede salir de cualquier borde. El centro del defensor cae en una manzana cualquiera lejos del atacante.
+    // atacante puede salir de cualquier borde. El centro del defensor no deja huella en el plano: va bajo un edificio
+    // cualquiera, del pueblo o del campo, lejos del atacante.
     const ataque = az() < 0.5 ? { x: Math.round(entre(10, 36)), y: Math.round(entre(N - 15, N - 10)) } : { x: Math.round(entre(10, 15)), y: Math.round(entre(N - 38, N - 10)) };
     const U = escenario === 'urbano' ? { x0: 5, y0: 4, x1: N - 4, y1: N - 5 } : { x0: Math.round(N * entre(0.44, 0.5)), y0: 4, x1: N - 4, y1: Math.round(N * entre(0.52, 0.58)) };
 
@@ -55,15 +56,6 @@
     };
     const manzanas = [];
     for (let j = 0; j + 1 < cy.length; j++) for (let i = 0; i + 1 < cx.length; i++) manzanas.push({ x0: cx[i] + 2, y0: cy[j] + 2, x1: cx[i + 1] - 2, y1: cy[j + 1] - 2 });
-    // La manzana del defensor: una cualquiera de las que dan la talla y quedan a más de 580 m del atacante. Se deja como patio
-    // para el centro. (Si ninguna cumple, la más alejada de entre las interiores.)
-    let mia = null, md = -1; for (const b of manzanas) { const mx = (b.x0 + b.x1) / 2, my = (b.y0 + b.y1) / 2, q = az(); if (b.x1 - b.x0 >= 6 && b.y1 - b.y0 >= 5 && Math.hypot(mx - ataque.x, my - ataque.y) >= 58 && q > md) { md = q; mia = b; } }
-    if (!mia) for (const b of manzanas) { const mx = (b.x0 + b.x1) / 2, my = (b.y0 + b.y1) / 2, borde = Math.min(mx - U.x0, U.x1 - mx, my - U.y0, U.y1 - my), d = Math.hypot(mx - ataque.x, my - ataque.y) + (borde > 9 ? 12 : 0) + (Math.max(b.x1 - b.x0, b.y1 - b.y0) >= 10 ? 14 : 0) + entre(0, 6); if (b.x1 - b.x0 >= 6 && b.y1 - b.y0 >= 5 && d > md) { md = d; mia = b; } }
-    if (!mia) for (const b of manzanas) if (!mia || (b.x1 - b.x0) * (b.y1 - b.y0) > (mia.x1 - mia.x0) * (mia.y1 - mia.y0)) mia = b; // (si ninguna da la talla, la mayor)
-    mia.reservada = true;
-    // Patios señuelo: otras manzanas que también se dejan vacías y con sacos, para que el patio del centro no se distinga a simple vista.
-    const patios = [mia]; { const cand = manzanas.filter((b) => !b.reservada && b.x1 - b.x0 >= 6 && b.y1 - b.y0 >= 5 && Math.hypot((b.x0 + b.x1) / 2 - ataque.x, (b.y0 + b.y1) / 2 - ataque.y) >= 30).map((b) => ({ b, q: az() })).sort((a, c) => a.q - c.q); for (const { b } of cand.slice(0, escenario === 'urbano' ? 5 : 3)) { b.reservada = true; patios.push(b); } }
-    patios.sort((a, c) => a.x0 - c.x0 || a.y0 - c.y0);
     for (const b of manzanas) {
       if (b.reservada) continue; const w = b.x1 - b.x0 + 1, h = b.y1 - b.y0 + 1, q = az();
       if (q < 0.1) { for (let k = 0; k < w * h * 0.12; k++) arbol(entre(b.x0, b.x1 + 1), entre(b.y0, b.y1 + 1), entre(0.75, 1.3)); b.tipo = 'parque'; continue; } // plaza arbolada
@@ -72,29 +64,35 @@
       for (let k = 0; k < 2; k++) if (az() < 0.5) arbol(entre(b.x0, b.x1 + 1), entre(b.y0, b.y1 + 1), entre(0.7, 1.1)); // algún árbol de patio
     }
     // Granjas sueltas en el campo (escenario mixto).
-    if (escenario === 'mixto') for (const [gx, gy] of [[entre(N * 0.12, N * 0.36), entre(N * 0.1, N * 0.28)], [entre(N * 0.3, N * 0.5), entre(N * 0.72, N * 0.88)]]) { casa(gx, gy, entre(4, 6), entre(4, 6)); casa(gx + entre(6, 8), gy + entre(-2, 3), entre(3, 5), entre(3, 5)); }
+    if (escenario === 'mixto') for (const [gx, gy] of [[entre(N * 0.12, N * 0.36), entre(N * 0.1, N * 0.28)], [entre(N * 0.3, N * 0.5), entre(N * 0.72, N * 0.88)], [entre(N * 0.6, N * 0.84), entre(N * 0.64, N * 0.86)], [entre(N * 0.06, N * 0.2), entre(N * 0.34, N * 0.5)]]) { casa(gx, gy, entre(4, 7), entre(4, 7)); casa(gx + entre(6, 8), gy + entre(-2, 3), entre(3, 5), entre(3, 5)); if (az() < 0.5) casa(gx + entre(-2, 3), gy + entre(7, 9), entre(4, 5), entre(4, 5)); }
 
-    // 4. El defensor: en su manzana, el centro; a los lados, taller y barracón. Las antenas, en otros patios.
-    const defensa = { x: Math.round((mia.x0 + mia.x1) / 2), y: Math.round((mia.y0 + mia.y1) / 2) }, ancha = mia.x1 - mia.x0 >= mia.y1 - mia.y0;
+    // 4. El defensor. El centro va enterrado bajo un edificio cualquiera de 40 m de lado o más, a más de 550 m del atacante:
+    // cuatro de cada diez veces (si hay), una casa suelta del campo; si no, cualquiera, del pueblo o de fuera. En el plano ese
+    // edificio es igual que los demás. Taller, barracón y antenas, repartidos alrededor.
+    const dAt = (r) => Math.hypot(r.x + r.w / 2 - ataque.x, r.y + r.h / 2 - ataque.y), caben = ruinas.filter((r) => r.w >= 4 && r.h >= 4), enCampo = (r) => r.x + r.w <= U.x0 || r.x > U.x1 || r.y + r.h <= U.y0 || r.y > U.y1;
+    let cand = caben.filter((r) => dAt(r) >= 57); if (!cand.length) cand = caben.filter((r) => dAt(r) >= 40); if (!cand.length) cand = [caben.slice().sort((a, c) => dAt(c) - dAt(a))[0] || ruinas.slice().sort((a, c) => dAt(c) - dAt(a))[0]];
+    const fuera = cand.filter(enCampo), sorteo = (l) => l[Math.floor(az() * l.length)];
+    const casaCentro = sorteo(fuera.length && az() < 0.4 ? fuera : cand), mia = { x0: casaCentro.x, y0: casaCentro.y, x1: casaCentro.x + casaCentro.w - 1, y1: casaCentro.y + casaCentro.h - 1 };
+    const defensa = { x: casaCentro.x + Math.floor(casaCentro.w / 2), y: casaCentro.y + Math.floor(casaCentro.h / 2) }, ancha = mia.x1 - mia.x0 >= mia.y1 - mia.y0, pueblo = { x: (U.x0 + U.x1) / 2, y: (U.y0 + U.y1) / 2 };
     const bases = [ataque, defensa];
-    ataque.frente = Math.atan2(defensa.y - ataque.y, defensa.x - ataque.x); defensa.frente = ataque.frente + Math.PI;
+    ataque.frente = Math.atan2(pueblo.y - ataque.y, pueblo.x - ataque.x); defensa.frente = Math.atan2(ataque.y - defensa.y, ataque.x - defensa.x); // el atacante sale mirando al pueblo, no al centro: su despliegue no delata nada
     defensa.centro = { x: defensa.x, y: defensa.y };
-    const patio = (dmin, dmax, evita) => { for (let k = 0; k < 400; k++) { const x = Math.round(entre(U.x0 + 2, U.x1 - 2)), y = Math.round(entre(U.y0 + 2, U.y1 - 2)), d = Math.hypot(x - defensa.x, y - defensa.y); if (d >= dmin && d <= dmax && libre(x, y) && terreno[y * N + x] === T.SUELO && !(x >= mia.x0 - 1 && x <= mia.x1 + 1 && y >= mia.y0 - 1 && y <= mia.y1 + 1) && evita.every((e) => Math.hypot(e.x - x, e.y - y) > 9)) return { x, y }; } return null; };
+    const patio = (dmin, dmax, evita) => { for (let k = 0; k < 600; k++) { const x = Math.round(defensa.x + entre(-dmax, dmax)), y = Math.round(defensa.y + entre(-dmax, dmax)), d = Math.hypot(x - defensa.x, y - defensa.y); if (d >= dmin && d <= dmax && libre(x, y) && terreno[y * N + x] !== T.CRATER && Math.hypot(x - ataque.x, y - ataque.y) > 30 && !(x >= mia.x0 - 1 && x <= mia.x1 + 1 && y >= mia.y0 - 1 && y <= mia.y1 + 1) && evita.every((e) => Math.hypot(e.x - x, e.y - y) > 9)) return { x, y }; } return null; };
     // El taller no está pegado al centro: a 90–160 m, en otra manzana, donde no pise calle ni agua (los edificios que estorben se quitan luego).
-    const sitio = (dmin, dmax, lejosDe) => { for (let k = 0; k < 600; k++) { const x = Math.round(entre(U.x0 + 5, U.x1 - 5)), y = Math.round(entre(U.y0 + 5, U.y1 - 5)), d = Math.hypot(x - defensa.x, y - defensa.y); if (d < dmin || d > dmax || x < 6 || y < 6 || x > N - 7 || y > N - 7 || Math.hypot(x - ataque.x, y - ataque.y) < 40 || (lejosDe && Math.hypot(x - lejosDe.x, y - lejosDe.y) < 9) || (x >= mia.x0 - 4 && x <= mia.x1 + 4 && y >= mia.y0 - 4 && y <= mia.y1 + 4)) continue; let bien = true; for (let j = -3; j <= 3 && bien; j++) for (let i = -3; i <= 3; i++) { const t = terreno[(y + j) * N + x + i]; if (t === T.CAMINO || t === T.AGUA) { bien = false; break; } } if (bien) return { x, y }; } return null; };
+    const sitio = (dmin, dmax, lejosDe) => { for (let k = 0; k < 800; k++) { const x = Math.round(defensa.x + entre(-dmax, dmax)), y = Math.round(defensa.y + entre(-dmax, dmax)), d = Math.hypot(x - defensa.x, y - defensa.y); if (d < dmin || d > dmax || x < 6 || y < 6 || x > N - 7 || y > N - 7 || Math.hypot(x - ataque.x, y - ataque.y) < 40 || (lejosDe && Math.hypot(x - lejosDe.x, y - lejosDe.y) < 9) || (x >= mia.x0 - 4 && x <= mia.x1 + 4 && y >= mia.y0 - 4 && y <= mia.y1 + 4)) continue; let bien = true; for (let j = -3; j <= 3 && bien; j++) for (let i = -3; i <= 3; i++) { const t = terreno[(y + j) * N + x + i]; if (t === T.CAMINO || t === T.AGUA) { bien = false; break; } } if (bien) return { x, y }; } return null; };
     defensa.taller = sitio(9, 16) || sitio(7, 24) || (ancha ? { x: defensa.x + 4, y: defensa.y } : { x: defensa.x, y: defensa.y + 4 });
     defensa.barracon = sitio(7, 14, defensa.taller) || sitio(6, 22, defensa.taller) || (ancha ? { x: defensa.x - 4, y: defensa.y } : { x: defensa.x, y: defensa.y - 4 }); // el barracón tampoco delata al centro
     defensa.antenas = []; for (let k = 0; k < 2; k++) { const p = patio(11, 26, defensa.antenas.concat([defensa.taller])); if (p) defensa.antenas.push(p); }
     defensa.falsa = patio(8, 24, defensa.antenas) || patio(6, 30, []); defensa.escucha = patio(6, 16, defensa.antenas.concat(defensa.falsa ? [defensa.falsa] : [])) || patio(4, 24, []);
-    if (!defensa.antenas.length) defensa.antenas.push({ x: mia.x0, y: mia.y0 });
+    for (let d = 6; d < 40 && !defensa.antenas.length; d++) for (let q = 0; q < 12; q++) { const x = Math.round(defensa.x + Math.cos(q * 0.52) * d), y = Math.round(defensa.y + Math.sin(q * 0.52) * d); if (libre(x, y)) { defensa.antenas.push({ x, y }); break; } }
 
     // 5. Trincheras: una del defensor en el borde del pueblo que mira al atacante, y otra abandonada en tierra de nadie.
     const trincheras = [], firme = (t) => t !== T.AGUA && t !== T.MURO && t !== T.RUINA && t !== T.CAMINO, zanja = (x0, y0, a, L) => { const pts = [], c = Math.cos(a), s = Math.sin(a); for (let i = 0; i <= L / 2.4; i++) { const d = i * 2.4, lado = i % 2 ? 1.1 : -1.1; pts.push([x0 + c * d - s * lado, y0 + s * d + c * lado]); } trincheras.push(pts); trazo(pts, 0.45, T.TRINCHERA, firme); };
-    if (escenario === 'mixto') { const a = defensa.frente, d = Math.min(Math.hypot(defensa.x - U.x0, 0) + 4, 30), px = defensa.x + Math.cos(a) * d, py = defensa.y + Math.sin(a) * d; zanja(px - Math.cos(a + Math.PI / 2) * 9, py - Math.sin(a + Math.PI / 2) * 9, a + Math.PI / 2, 18); }
+    if (escenario === 'mixto') { const a = Math.atan2(ataque.y - pueblo.y, ataque.x - pueblo.x), d = Math.min((U.x1 - U.x0) / 2 + 4, 30), px = pueblo.x + Math.cos(a) * d, py = pueblo.y + Math.sin(a) * d; zanja(px - Math.cos(a + Math.PI / 2) * 9, py - Math.sin(a + Math.PI / 2) * 9, a + Math.PI / 2, 18); }
     zanja(ataque.x + Math.cos(ataque.frente) * entre(26, 34) + entre(-6, 6), ataque.y + Math.sin(ataque.frente) * entre(26, 34) + entre(-6, 6), ataque.frente + Math.PI / 2 + entre(-0.4, 0.4), 13);
 
     // 6. Cráteres: por todas partes, más espesos entre los dos bandos.
-    const crateres = [], mx = (ataque.x + defensa.x) / 2, my = (ataque.y + defensa.y) / 2;
+    const crateres = [], mx = (ataque.x + pueblo.x) / 2, my = (ataque.y + pueblo.y) / 2;
     for (let i = 0; i < 44; i++) { const lejos = i > 26, x = lejos ? entre(4, N - 4) : mx + entre(-26, 26), y = lejos ? entre(4, N - 4) : my + entre(-26, 26), r = entre(0.6, 1.5); if (!dentro(Math.floor(x), Math.floor(y)) || !blando(terreno[Math.floor(y) * N + Math.floor(x)])) continue; crateres.push({ x, y, r }); disco(x, y, r * 0.8, T.CRATER, blando); }
 
     // 7. El camino de fuera: del punto de partida del atacante a la esquina más cercana de la retícula. Manda sobre lo
@@ -112,7 +110,7 @@
     // 9. Pasos bajo tierra: dos tuberías o alcantarillas. Cada una une una boca del lado del atacante con otra dentro del pueblo.
     const tubos = [];
     for (let k = 0; k < 2; k++) {
-      const f = k ? entre(0.62, 0.74) : entre(0.4, 0.52), lado = (k ? 1 : -1) * entre(8, 16), bx = ataque.x + (defensa.x - ataque.x) * f - Math.sin(ataque.frente) * lado, by = ataque.y + (defensa.y - ataque.y) * f + Math.cos(ataque.frente) * lado, L = entre(16, 24);
+      const f = k ? entre(0.62, 0.74) : entre(0.4, 0.52), lado = (k ? 1 : -1) * entre(8, 16), bx = ataque.x + (pueblo.x - ataque.x) * f - Math.sin(ataque.frente) * lado, by = ataque.y + (pueblo.y - ataque.y) * f + Math.cos(ataque.frente) * lado, L = entre(16, 24);
       let a = null, b = null; for (let d = 0; d < 9 && !a; d++) for (let q = 0; q < 8 && !a; q++) { const x = bx - Math.cos(ataque.frente) * L / 2 + Math.cos(q) * d, y = by - Math.sin(ataque.frente) * L / 2 + Math.sin(q) * d; if (libre(x, y)) a = { x: Math.floor(x) + 0.5, y: Math.floor(y) + 0.5 }; }
       for (let d = 0; d < 9 && !b; d++) for (let q = 0; q < 8 && !b; q++) { const x = bx + Math.cos(ataque.frente) * L / 2 + Math.cos(q) * d, y = by + Math.sin(ataque.frente) * L / 2 + Math.sin(q) * d; if (libre(x, y)) b = { x: Math.floor(x) + 0.5, y: Math.floor(y) + 0.5 }; }
       if (a && b && Math.hypot(a.x - b.x, a.y - b.y) > 8) tubos.push({ a, b });
@@ -125,23 +123,20 @@
       let an = null; for (let d = 12; d > 6 && !an; d--) for (const s of [-1, 1]) { const x = Math.round(b.x + Math.cos(lado) * d * s - Math.cos(a) * 3), y = Math.round(b.y + Math.sin(lado) * d * s - Math.sin(a) * 3); if (!an && libre(x, y)) an = { x, y }; }
       b.antenas = [an || { x: Math.round(b.x - Math.cos(a) * 5), y: Math.round(b.y - Math.sin(a) * 5) }]; }
     for (const b of bases) for (const an of b.antenas) disco(an.x + 0.5, an.y + 0.5, 1.4, T.SUELO, (t) => t === T.BOSQUE || t === T.CRATER);
-    // El patio del defensor queda despejado (salvo la calle).
-    for (const p of patios) for (let y = p.y0; y <= p.y1; y++) for (let x = p.x0; x <= p.x1; x++) if (terreno[y * N + x] !== T.CAMINO && terreno[y * N + x] !== T.AGUA) terreno[y * N + x] = T.SUELO;
-    for (const p of [defensa.taller, defensa.barracon]) { const g = p === defensa.taller ? 4 : 3; disco(p.x + 0.5, p.y + 0.5, g + 0.2, T.SUELO, (t) => t !== T.CAMINO && t !== T.AGUA); for (let i = ruinas.length - 1; i >= 0; i--) { const r = ruinas[i]; if (p.x + g > r.x && p.x - g < r.x + r.w && p.y + g > r.y && p.y - g < r.y + r.h) { for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) terreno[y * N + x] = T.SUELO; ruinas.splice(i, 1); } } } // si el taller o el barracón se salen del patio, se les hace sitio
+    for (const p of [defensa.taller, defensa.barracon]) { const g = p === defensa.taller ? 4 : 3; disco(p.x + 0.5, p.y + 0.5, g + 0.2, T.SUELO, (t) => t !== T.CAMINO && t !== T.AGUA); for (let i = ruinas.length - 1; i >= 0; i--) { const r = ruinas[i]; if (r !== casaCentro && p.x + g > r.x && p.x - g < r.x + r.w && p.y + g > r.y && p.y - g < r.y + r.h) { for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) terreno[y * N + x] = T.SUELO; ruinas.splice(i, 1); } } } // si el taller o el barracón se salen del patio, se les hace sitio
 
     // 11. Obstáculos bajos: lo que da cobertura a quien se pone detrás. En el pueblo, escombros y coches calcinados en las aceras;
     // en el campo, tramos de murete de piedra. No se pisan, pero no cortan la vista. Nunca sobre camino ni calle.
     let muretes = []; const bocas = new Set(); for (const t of tubos) for (const b of [t.a, t.b]) bocas.add(Math.floor(b.y) * N + Math.floor(b.x));
     const murete = (x, y, tipo, ang) => { x = Math.floor(x); y = Math.floor(y); if (!dentro(x, y) || x < 2 || y < 2 || x > N - 3 || y > N - 3) return; const c = y * N + x, t = terreno[c]; if ((t !== T.SUELO && t !== T.CAMPO && t !== T.HIERBA) || bocas.has(c)) return; for (const b of bases) if (Math.hypot(x - b.x, y - b.y) < 3) return; for (const p of [defensa.taller, defensa.barracon, ataque.taller]) if (Math.hypot(x - p.x, y - p.y) < 2.6) return; for (const p of [...defensa.antenas, ...ataque.antenas, defensa.falsa, defensa.escucha]) if (p && Math.abs(x - p.x) < 2 && Math.abs(y - p.y) < 2) return; terreno[c] = T.MURETE; muretes.push({ x, y, tipo, ang: ang || 0 }); };
     for (const b of manzanas) { if (b.reservada) continue; for (let k = 0; k < 5; k++) { const lado = Math.floor(az() * 4), x = lado === 0 ? b.x0 - 1 : lado === 1 ? b.x1 + 1 : Math.round(entre(b.x0, b.x1)), y = lado === 2 ? b.y0 - 1 : lado === 3 ? b.y1 + 1 : Math.round(entre(b.y0, b.y1)); murete(x, y, az() < 0.4 ? 'coche' : 'escombro', lado < 2 ? Math.PI / 2 : 0); } }
-    for (const p of patios) { for (const [x, y] of [[p.x0, p.y0], [p.x1, p.y0], [p.x0, p.y1], [p.x1, p.y1], [Math.round((p.x0 + p.x1) / 2), p.y0], [Math.round((p.x0 + p.x1) / 2), p.y1]]) murete(x, y, 'sacos', 0); } // el patio del defensor, con sacos en las esquinas
     for (let i = 0; i < 12; i++) { const x0 = entre(6, N - 6), y0 = entre(6, N - 6), a = Math.floor(az() * 4) * (Math.PI / 4), L = Math.round(entre(3, 7)); if (x0 >= U.x0 - 1 && x0 <= U.x1 + 1 && y0 >= U.y0 - 1 && y0 <= U.y1 + 1) continue; for (let d = 0; d < L; d++) murete(x0 + Math.cos(a) * d, y0 + Math.sin(a) * d, 'piedra', a); }
     muretes = muretes.filter((q) => terreno[q.y * N + q.x] === T.MURETE);
     arboles = arboles.filter((a) => terreno[Math.floor(a.y) * N + Math.floor(a.x)] === T.BOSQUE);
     { const con = new Uint8Array(N * N); for (const a of arboles) { const r = Math.max(0.6, a.r * 0.8); for (let y = Math.floor(a.y - r); y <= a.y + r; y++) for (let x = Math.floor(a.x - r); x <= a.x + r; x++) if (dentro(x, y) && Math.hypot(x + 0.5 - a.x, y + 0.5 - a.y) <= r) con[y * N + x] = 1; } for (let c = 0; c < N * N; c++) if (terreno[c] === T.BOSQUE && !con[c]) terreno[c] = c % N >= U.x0 && c % N <= U.x1 && ((c / N) | 0) >= U.y0 && ((c / N) | 0) <= U.y1 ? T.SUELO : T.HIERBA; }
 
     const paso = new Uint8Array(N * N); for (let c = 0; c < N * N; c++) paso[c] = terreno[c] !== T.AGUA && terreno[c] !== T.MURO && terreno[c] !== T.MURETE ? 1 : 0;
-    return voltea({ N, semilla, escenario, terreno, paso, bases, urbano: U, patio: mia, patios, muretes, campos, hierbas, arboles, arroyo, calles, ruinas, trincheras, crateres, camino, vados, tubos }, Math.floor(az() * 8));
+    return voltea({ N, semilla, escenario, terreno, paso, bases, urbano: U, muretes, campos, hierbas, arboles, arroyo, calles, ruinas, trincheras, crateres, camino, vados, tubos }, Math.floor(az() * 8));
   };
   // Le da la vuelta al sector entero (rejilla y dibujo): k de 0 a 7 — bit 1, espejo en x; bit 2, espejo en y; bit 4, cambia x por y.
   function voltea(mp, k) {
@@ -154,7 +149,7 @@
     const terreno = new Uint8Array(N * N), paso = new Uint8Array(N * N); for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { const [X, Y] = C(x, y); terreno[Y * N + X] = mp.terreno[y * N + x]; paso[Y * N + X] = mp.paso[y * N + x]; }
     mp.terreno = terreno; mp.paso = paso;
     for (const b of mp.bases) { pc(b); b.frente = A(b.frente); pc(b.barracon); pc(b.taller); pc(b.falsa); pc(b.escucha); for (const a of b.antenas) pc(a); if (b.centro) pc(b.centro); }
-    for (const r of [mp.urbano, ...mp.patios]) [r.x0, r.y0, r.x1, r.y1] = caja(r.x0, r.y0, r.x1, r.y1);
+    for (const r of [mp.urbano]) [r.x0, r.y0, r.x1, r.y1] = caja(r.x0, r.y0, r.x1, r.y1);
     for (const q of mp.muretes) { pc(q); q.ang = A(q.ang); }
     for (const f of mp.campos) { f.pts = lista(f.pts); f.ang = A(f.ang); }
     for (const h of mp.hierbas) { pp(h); h.ang = A(h.ang); }

@@ -54,7 +54,7 @@
     // El defensor: el centro con seis pilotos, dos antenas y una falsa, la estación de escucha, y una guardia de dos equipos.
     { const b = mapa.bases[1], f = b.frente;
       edif(1, 'centro', b.centro); edif(1, 'taller', b.taller); edif(1, 'barracon', b.barracon); for (const a of b.antenas) edif(1, 'antena', a); edif(1, 'falsa', b.falsa); edif(1, 'escucha', b.escucha);
-      equipo(1, ['asaltante', 'asaltante', 'escopetero', 'sanitario'], b.x + Math.cos(f) * 5, b.y + Math.sin(f) * 5, f);
+      equipo(1, ['asaltante', 'asaltante', 'escopetero', 'sanitario'], b.barracon.x + Math.cos(f) * 2.5, b.barracon.y + Math.sin(f) * 2.5, f); // un escuadrón, en el barracón; el otro, con el centro
       equipo(1, ['asaltante', 'escopetero', 'tirador', 'inhibidor'], b.x - Math.cos(f) * 4, b.y - Math.sin(f) * 4, f);
       pilotos(1, 6); m.jug[1].taller = b.taller; orbita(1, 'recon', b.x + Math.cos(f) * 12, b.y + Math.sin(f) * 12, 11, b.taller, 6); orbita(1, 'recon', b.x + Math.cos(f) * 30, b.y + Math.sin(f) * 30, 13, b.taller, 7);
       ['fpvRadio', 'fpvRadio', 'fpvFibra', 'bombardero', 'interceptor'].forEach((t, i) => posado(1, t, b.taller, i, f)); }
@@ -161,7 +161,7 @@
         if (o.j === j || o.clase === 'dron') continue;
         if (o.clase === 'edif') { if (m.conocido[j].has(o.id)) continue;
           const oculto = o.tipo === 'centro'; let visto = false; if (!oculto) for (const d of altos) if (Math.hypot(d.x - o.x, d.y - o.y) <= ECON.dronVeEdif) { visto = true; break; } // el centro está enterrado: desde el aire no se ve
-          if (!visto) for (const s of ojos) { const dd = Math.hypot(s.x - o.x, s.y - o.y); if (dd <= (oculto ? Math.max(3.5, ECON.verCentro * luzF) : ECON.verEdif * luzF) && D.seVe(m.mapa, s.x, s.y, o.x, o.y)) { visto = true; break; } }
+          if (!visto) for (const s of ojos) { const dd = Math.hypot(s.x - o.x, s.y - o.y); if (oculto ? dd <= ECON.verCentro : dd <= ECON.verEdif * luzF && D.seVe(m.mapa, s.x, s.y, o.x, o.y)) { visto = true; break; } }
           if (visto) { m.conocido[j].add(o.id); m.efectos.push({ tipo: 'hallado', j, id: o.id, clase: o.tipo, x: o.x, y: o.y, t: m.t }); } continue; }
         const t = terr[Math.floor(o.y) * N + Math.floor(o.x)], techo = t === T.RUINA || t === T.MURO, arbol = t === T.BOSQUE; let visto = false;
         const humo = m.humos.length && enHumo(m, o.x, o.y);

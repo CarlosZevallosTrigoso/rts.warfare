@@ -49,7 +49,7 @@
     ugv:         { nombre: 'Robot terrestre', que: 'Suministro y heridos por tierra.', alt: 0, radio: true },
   };
   D.EDIF = {
-    centro:   { nombre: 'Centro de operaciones', que: 'El objetivo. Enterrado: ningún dron lo ve, hay que dar con él a pie; solo cae con una carga puesta a mano.', tam: 3, proto: true },
+    centro:   { nombre: 'Centro de operaciones', que: 'El objetivo. Enterrado bajo un edificio cualquiera: ningún dron lo ve, hay que registrar el edificio; solo cae con una carga puesta a mano.', tam: 3, proto: true },
     taller:   { nombre: 'Taller de drones', que: 'Fabrica y recarga drones.', tam: 3, proto: true },
     antena:   { nombre: 'Antena', que: 'Da alcance de radio a los drones. Emite y delata.', tam: 1, emite: true, proto: true },
     barracon: { nombre: 'Barracón', que: 'De aquí salen las fuerzas especiales.', tam: 3, proto: true },
@@ -75,7 +75,7 @@
     enlace: 60, enlaceObs: 22, enlaceCorte: 40, fibraAlc: 80, inhibeRadio: 6, reconRadio: 4, recarga: 6, // sin enlace 2 s, el dron cae; el de reconocimiento vuelve solo a recargar (30 s) y sale otra vez
     fpvRadio: 1.4, fpvDano: 80, fpvSupr: 80, fpvTecho: 0.3, // el FPV revienta al llegar; el de radio apenas hace daño bajo techo, el de fibra entra
     dronTiroAlc: 5, escopetaDron: 0.28, fusilDron: 0.07, dronOye: 9, // a 50 m el equipo le dispara: la escopeta acierta uno de cada tres tiros; el fusil, casi nunca
-    verCentro: 5, rumboError: 0.14, hiloVe: 2.5, hiloVeDron: 5, // el centro está enterrado: no lo ve ningún dron y a pie hay que estar a 50 m; el rumbo de radio falla hasta 8°; el hilo de fibra se ve a 25 m (50 m desde un dron)
+    verCentro: 3.5, rumboError: 0.14, hiloVe: 2.5, hiloVeDron: 5, // el centro está enterrado bajo un edificio: no lo ve ningún dron y hay que registrar el edificio (un soldado a 35 m de su centro, dentro o pegado a la pared); el rumbo de radio falla hasta 8°; el hilo de fibra se ve a 25 m (50 m desde un dron)
     fabrica: [1800, 1200], fpvTope: [2, 4], // el taller saca un FPV cada 90 s (atacante) o 60 s (defensor), hasta tener tantos posados
   };
   // Los dos papeles. El bando 0 ataca (caza pilotos: muchos equipos, pocos drones); el bando 1 defiende (el centro de drones: muchos pilotos y medios, una guardia corta).
