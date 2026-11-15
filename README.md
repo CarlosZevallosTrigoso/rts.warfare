@@ -8,3 +8,14 @@ RTS minimalista para navegador. Primer juego de la saga *warfare*.
 
 `src/sim/` no toca el DOM: mapa, rutas, economía, combate e IA se prueban en Node.
 Las unidades, edificios y armas son tablas en `src/sim/datos.js`.
+
+## drone.warfare
+
+Juego hermano, en la carpeta `drone/`: el mismo conflicto visto con lupa. Un centro de operaciones de drones y los equipos de
+fuerzas especiales que van a destruirlo, en un sector de casi un kilómetro cuadrado, urbano o mixto. Se elige papel: cazar
+pilotos (ataque) o defender el centro.
+
+- Jugar: `drone/index.html` (en línea, `…/rts.warfare/drone/`).
+- Construir: `node drone/build.js`. Pruebas: `node drone/tests/sim.test.js`.
+- Estado: esqueleto. Se ve el sector, las dos bases y las cuatro visiones (óptica con día y noche, nocturna, térmica y espectro);
+  aún no hay órdenes, detección ni combate.

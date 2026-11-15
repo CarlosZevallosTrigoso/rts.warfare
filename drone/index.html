@@ -1,0 +1,758 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>drone.warfare</title>
+<style>
+  :root { --tinta: #20242a; --suave: #69707a; --linea: #d5d8dc; --yo: #1f6f78; --rival: #c2552d; --papel: #fff; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; overflow: hidden; background: var(--papel); color: var(--tinta); font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  #marco { display: grid; grid-template-columns: 1fr 236px; height: 100%; }
+  #vista { position: relative; overflow: hidden; background: #e6e4da; }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+  #panel { border-left: 1px solid var(--tinta); padding: 12px; overflow-y: auto; background: #f7f7f5; }
+  h1 { font-size: 14px; margin: 0 0 2px; } h1 i { font-style: normal; color: var(--rival); }
+  .tenue { color: var(--suave); } .v { font-size: 10px; }
+  .fila { display: flex; justify-content: space-between; gap: 8px; } .fila b { font-weight: 600; text-align: right; }
+  h2 { font-size: 10px; text-transform: uppercase; letter-spacing: .12em; color: var(--suave); font-weight: normal; margin: 14px 0 6px; border-top: 1px solid var(--linea); padding-top: 9px; }
+  button { font: inherit; color: var(--tinta); background: #fff; border: 1px solid var(--tinta); padding: 5px 8px; cursor: pointer; width: 100%; text-align: left; margin-bottom: 4px; display: flex; justify-content: space-between; }
+  button.on { background: var(--tinta); color: #fff; } button kbd { opacity: .6; font: inherit; }
+  #bajo { min-height: 5.6em; } #bajo b { display: block; }
+  #aviso { position: absolute; left: 50%; top: 46px; transform: translateX(-50%); background: #fff; border: 1px solid var(--tinta); padding: 4px 10px; pointer-events: none; opacity: 0; transition: opacity .25s; white-space: nowrap; }
+  #aviso.ver { opacity: 1; }
+  #rend { position: absolute; left: 8px; bottom: 8px; background: rgba(255,255,255,.85); border: 1px solid var(--linea); padding: 1px 7px; font-size: 10px; color: var(--suave); cursor: pointer; }
+  #menu { position: absolute; inset: 0; background: rgba(255,255,255,.93); display: flex; align-items: center; justify-content: center; padding: 16px; overflow-y: auto; z-index: 5; } #menu[hidden] { display: none; }
+  #menuCaja { max-width: 560px; width: 100%; } #menuCaja h1 { font-size: 20px; } #menuCaja p { margin: 4px 0 14px; }
+  #menuRoles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; } button.rol { display: block; padding: 12px; margin: 0; } button.rol b { display: block; font-size: 14px; margin-bottom: 4px; } button.rol span { color: var(--suave); } button.rol:hover { background: var(--tinta); color: #fff; } button.rol:hover span { color: #ddd; }
+  @media (max-width: 560px) { #menuRoles { grid-template-columns: 1fr; } }
+  @media (max-width: 760px) { #marco { grid-template-columns: 1fr; grid-template-rows: 1fr auto; } #panel { border-left: 0; border-top: 1px solid var(--tinta); max-height: 38vh; } }
+</style>
+</head>
+<body>
+<div id="marco">
+  <div id="vista"><canvas id="lienzo"></canvas><div id="aviso"></div>
+    <div id="menu" hidden><div id="menuCaja"><h1>drone<i>.</i>warfare</h1><p class="tenue">Un centro de operaciones de drones y los equipos que van a destruirlo. Elige de qué lado estás.</p><div id="menuRoles"></div><h2>Escenario</h2><div id="menuEsc"></div><button type="button" id="menuCierra" hidden><span>volver</span></button></div></div><div id="rend" title="Rendimiento del último segundo"></div></div>
+  <aside id="panel">
+    <h1>drone<i>.</i>warfare</h1>
+    <div class="tenue v">versión d1 · esqueleto: aún sin órdenes ni combate</div>
+    <h2>Tu papel</h2>
+    <div><b id="rol"></b></div><div class="tenue" id="rolQue"></div>
+    <button type="button" id="cambia" style="margin-top:6px"><span>cambiar de papel o escenario</span></button>
+    <h2>Sector</h2>
+    <div class="fila"><span>semilla</span><b><a id="semilla" href="#" title="Clic: otro sector"></a></b></div>
+    <div class="fila"><span>hora</span><b id="hora"></b></div>
+    <div class="fila"><span>personas</span><b id="pers"></b></div>
+    <button type="button" id="saltaHora"><span>pasar a la noche</span><kbd>N</kbd></button>
+    <h2>Visión</h2>
+    <div id="visiones"></div>
+    <div class="tenue" id="notaVision"></div>
+    <h2>Bajo el cursor</h2>
+    <div id="bajo" class="tenue"></div>
+    <h2>Manejo</h2>
+    <div class="tenue">WASD o flechas: mover la cámara<br>rueda: acercar y alejar<br>arrastrar: desplazar<br>1–4: visión · N: día/noche · H: tu base</div>
+  </aside>
+</div>
+<script>
+// ===== sim/datos.js =====
+// drone.warfare — datos: terreno, soldados, drones, edificios y constantes.
+(function () {
+  const D = globalThis.D || (globalThis.D = {});
+  D.N = 96; // el sector: 96 × 96 celdas de 10 m (casi un kilómetro cuadrado)
+  D.T = { SUELO: 0, CAMPO: 1, HIERBA: 2, BOSQUE: 3, CAMINO: 4, AGUA: 5, VADO: 6, PUENTE: 7, MURO: 8, RUINA: 9, TRINCHERA: 10, CRATER: 11 };
+  D.TERRENO = ['Suelo', 'Campo arado', 'Hierba', 'Arboleda', 'Camino', 'Arroyo', 'Vado', 'Puente', 'Muro', 'Ruina', 'Trinchera', 'Cráter'];
+  // Cuánto tapa cada terreno a quien está quieto dentro (0 = nada, 1 = del todo). Lo usará la detección (entrega 2).
+  D.COBERTURA = [0, 0, 0.1, 0.7, 0, 0, 0, 0.2, 0, 0.8, 0.6, 0.35];
+  D.prng = function (semilla) { let a = semilla >>> 0; return function () { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
+
+  // Fuerzas especiales. (Las cifras de combate llegan con la entrega 2; aquí está lo que hace falta para verlos.)
+  D.SOL = {
+    asaltante:  { nombre: 'Asaltante', que: 'Fusil. Llega y coloca la carga que destruye el centro enemigo.', proto: true },
+    escopetero: { nombre: 'Escopetero', que: 'Última defensa del equipo contra el FPV que entra.', proto: true },
+    zapador:    { nombre: 'Zapador', que: 'Cargas, minas, túneles; corta y sigue el hilo de fibra.' },
+    inhibidor:  { nombre: 'Operador de inhibidor', que: 'Burbuja que tumba los FPV de radio de los dos bandos. Emite.' },
+    observador: { nombre: 'Observador', que: 'Marca blancos para tus drones.' },
+    tirador:    { nombre: 'Tirador', que: 'Largo alcance contra pilotos y antenas; se oculta mejor.' },
+    sanitario:  { nombre: 'Sanitario', que: 'Estabiliza heridos para evacuarlos.' },
+    piloto:     { nombre: 'Piloto', que: 'Vuela un dron a la vez desde el centro de operaciones.', proto: true },
+  };
+  D.DRON = {
+    recon:       { nombre: 'Dron de reconocimiento', que: 'Los ojos: encuentra equipos, antenas e hilo de fibra.', alt: 3.2, radio: true, proto: true },
+    fpvRadio:    { nombre: 'FPV de radio', que: 'Golpe barato de un solo uso. Lo tumba el inhibidor.', alt: 1.4, radio: true, proto: true },
+    fpvFibra:    { nombre: 'FPV de fibra', que: 'Inmune al inhibidor y entra en edificios; deja hilo.', alt: 1.2, radio: false, proto: true },
+    bombardero:  { nombre: 'Bombardero', que: 'Granadas sobre gente parada.', alt: 2.2, radio: true },
+    interceptor: { nombre: 'Interceptor', que: 'Derriba drones.', alt: 3.2, radio: true },
+    repetidor:   { nombre: 'Repetidor', que: 'Alarga el enlace de radio.', alt: 3.8, radio: true },
+    carga:       { nombre: 'Dron de carga', que: 'Lleva munición y baterías al equipo.', alt: 2, radio: true },
+    ugv:         { nombre: 'Robot terrestre', que: 'Suministro y heridos por tierra.', alt: 0, radio: true },
+  };
+  D.EDIF = {
+    centro:   { nombre: 'Centro de operaciones', que: 'El objetivo. Enterrado: solo cae con una carga puesta a mano.', tam: 3, proto: true },
+    taller:   { nombre: 'Taller de drones', que: 'Fabrica y recarga drones.', tam: 3, proto: true },
+    antena:   { nombre: 'Antena', que: 'Da alcance de radio a los drones. Emite y delata.', tam: 1, emite: true, proto: true },
+    barracon: { nombre: 'Barracón', que: 'De aquí salen las fuerzas especiales.', tam: 3, proto: true },
+    falsa:    { nombre: 'Antena falsa', que: 'Señuelo: parece una antena y está fría.', tam: 1 },
+    escucha:  { nombre: 'Estación de escucha', que: 'Da el rumbo hacia lo que emite el enemigo.', tam: 2 },
+    red:      { nombre: 'Red antidron', que: 'Detiene FPV sobre un tramo.', tam: 2 },
+    pozo:     { nombre: 'Posición enterrada', que: 'Oculta y protege a un equipo.', tam: 1 },
+    suministro: { nombre: 'Punto de suministro', que: 'Munición y baterías a mano.', tam: 2 },
+    boca:     { nombre: 'Boca de tubería', que: 'Entrada a un paso bajo tierra: ningún dron ve dentro.', tam: 1 },
+  };
+  D.ECON = { dia: 9600, diaLuz: 5760, crepusculo: 480, tope: [30, 20] }; // un día dura 8 min (4:48 de luz); el anochecer dura 24 s; tope de personas: 30 el atacante, 20 el defensor
+  // Los dos papeles. El bando 0 ataca (caza pilotos: muchos equipos, pocos drones); el bando 1 defiende (el centro de drones: muchos pilotos y medios, una guardia corta).
+  D.ROL = [
+    { clave: 'ataque', nombre: 'Cazar pilotos', que: 'Mandas varios equipos de fuerzas especiales y pocos drones. Tienes que encontrar el centro de operaciones enemigo, llegar a pie y volarlo.' },
+    { clave: 'defensa', nombre: 'Defender el centro', que: 'Mandas el centro de drones: más pilotos, antenas, redes y un equipo de guardia. Tienes que encontrar a los equipos que vienen y pararlos antes de que lleguen.' },
+  ];
+  D.ESCENARIO = { mixto: 'Mixto: campo abierto, un arroyo y, al fondo, el pueblo', urbano: 'Urbano: calles, manzanas y bloques de pisos' };
+})();
+
+// ===== sim/mapa.js =====
+// drone.warfare — el sector: se genera como dibujo (campos, lindes, calles, edificios, camino, arroyo…) y luego se pasa
+// a rejilla. El dibujo queda guardado para pintarlo con detalle; la rejilla es lo que usa la simulación.
+// Dos escenarios: 'mixto' (campo abierto que acaba en un pueblo, con un arroyo en medio) y 'urbano' (casi todo ciudad).
+// El atacante (bando 0) parte del campo o del borde; el defensor (bando 1) tiene su centro dentro del casco urbano.
+(function () {
+  const D = globalThis.D || (globalThis.D = {});
+  const T = D.T, TAU = Math.PI * 2;
+
+  D.generarMapa = function (semilla, escenario) {
+    escenario = escenario === 'urbano' ? 'urbano' : 'mixto';
+    const N = D.N, az = D.prng(semilla ^ (escenario === 'urbano' ? 0x7A11 : 0)), terreno = new Uint8Array(N * N);
+    const entre = (a, b) => a + az() * (b - a), dentro = (x, y) => x >= 0 && y >= 0 && x < N && y < N;
+    const pon = (x, y, t) => { x = Math.floor(x); y = Math.floor(y); if (dentro(x, y)) terreno[y * N + x] = t; };
+    const disco = (cx, cy, r, t, solo) => { for (let y = Math.floor(cy - r); y <= cy + r; y++) for (let x = Math.floor(cx - r); x <= cx + r; x++) if (dentro(x, y) && Math.hypot(x + 0.5 - cx, y + 0.5 - cy) <= r && (!solo || solo(terreno[y * N + x]))) terreno[y * N + x] = t; };
+    const trazo = (pts, r, t, solo) => { for (let i = 0; i + 1 < pts.length; i++) { const [ax, ay] = pts[i], [bx, by] = pts[i + 1], L = Math.hypot(bx - ax, by - ay), n = Math.max(1, Math.ceil(L * 2)); for (let k = 0; k <= n; k++) disco(ax + ((bx - ax) * k) / n, ay + ((by - ay) * k) / n, r, t, solo); } };
+    const enPoli = (p, x, y) => { let d = false; for (let i = 0, j = p.length - 1; i < p.length; j = i++) if (p[i][1] > y !== p[j][1] > y && x < ((p[j][0] - p[i][0]) * (y - p[i][1])) / (p[j][1] - p[i][1]) + p[i][0]) d = !d; return d; };
+    const curva = (pasos, desvio) => { const o = [pasos[0]]; for (let i = 0; i + 1 < pasos.length; i++) { const [ax, ay] = pasos[i], [bx, by] = pasos[i + 1]; for (let k = 1; k <= 4; k++) { const f = k / 4, s = k < 4 ? Math.sin(f * Math.PI) : 0; o.push([ax + (bx - ax) * f + (az() - 0.5) * desvio * s, ay + (by - ay) * f + (az() - 0.5) * desvio * s]); } } return o; };
+    const blando = (t) => t === T.SUELO || t === T.CAMPO || t === T.HIERBA || t === T.CRATER;
+    const libre = (x, y) => { x = Math.floor(x); y = Math.floor(y); return dentro(x, y) && x >= 3 && y >= 3 && x <= N - 4 && y <= N - 4 && blando(terreno[y * N + x]); };
+
+    // El atacante sale de la esquina de abajo a la izquierda. El casco urbano ocupa el cuadrante opuesto (o casi todo, en 'urbano').
+    const ataque = { x: Math.round(entre(10, 17)), y: Math.round(entre(N - 17, N - 10)) };
+    const U = escenario === 'urbano' ? { x0: 5, y0: 4, x1: N - 4, y1: N - 5 } : { x0: Math.round(N * entre(0.44, 0.5)), y0: 4, x1: N - 4, y1: Math.round(N * entre(0.52, 0.58)) };
+
+    // 1. Campo: parcelas aradas, manchas de hierba, lindes de árboles y bosquetes.
+    const campos = [], hierbas = []; let arboles = [];
+    for (let i = 0; i < 6; i++) { const cx = entre(8, N - 8), cy = entre(8, N - 8), w = entre(12, 24), h = entre(10, 20), a = entre(0, Math.PI), c = Math.cos(a), s = Math.sin(a); campos.push({ pts: [[-w, -h], [w, -h * entre(0.7, 1)], [w * entre(0.7, 1), h], [-w, h]].map(([px, py]) => [cx + px * c - py * s, cy + px * s + py * c]), ang: entre(0, Math.PI) }); }
+    for (let i = 0; i < 7; i++) hierbas.push({ x: entre(4, N - 4), y: entre(4, N - 4), rx: entre(6, 15), ry: entre(4, 10), ang: entre(0, Math.PI) });
+    for (const h of hierbas) { const c = Math.cos(-h.ang), s = Math.sin(-h.ang); for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { const dx = x + 0.5 - h.x, dy = y + 0.5 - h.y, u = (dx * c - dy * s) / h.rx, v = (dx * s + dy * c) / h.ry; if (u * u + v * v <= 1) terreno[y * N + x] = T.HIERBA; } }
+    for (const f of campos) for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (enPoli(f.pts, x + 0.5, y + 0.5)) terreno[y * N + x] = T.CAMPO;
+    const arbol = (x, y, r) => { if (x > 1 && y > 1 && x < N - 1 && y < N - 1) { arboles.push({ x, y, r }); disco(x, y, Math.max(0.6, r * 0.8), T.BOSQUE, (t) => t !== T.CAMINO && t !== T.MURO && t !== T.RUINA && t !== T.AGUA); } };
+    for (let i = 0; i < 9; i++) { const x0 = entre(6, N - 6), y0 = entre(6, N - 6), a = entre(0, TAU), L = entre(16, 40); for (let d = 0; d < L; d += entre(0.7, 1.1)) arbol(x0 + Math.cos(a) * d + entre(-0.9, 0.9), y0 + Math.sin(a) * d + entre(-0.9, 0.9), entre(0.75, 1.35)); }
+    for (let i = 0; i < 5; i++) { const x0 = entre(10, N - 10), y0 = entre(10, N - 10), R = entre(4, 8); for (let k = 0; k < R * R * 0.9; k++) { const a = entre(0, TAU), d = Math.sqrt(az()) * R; arbol(x0 + Math.cos(a) * d, y0 + Math.sin(a) * d * 0.8, entre(0.75, 1.4)); } }
+
+    // 2. El arroyo (solo en el escenario mixto): cruza el sector entre el campo del atacante y el pueblo.
+    const arroyo = escenario === 'mixto' ? curva([[-1, entre(N * 0.3, N * 0.42)], [N * 0.3, entre(N * 0.46, N * 0.56)], [N * 0.6, entre(N * 0.62, N * 0.72)], [N + 1, entre(N * 0.7, N * 0.8)]], 8) : [];
+    if (arroyo.length) trazo(arroyo, 1.25, T.AGUA);
+
+    // 3. El casco urbano: se despeja, se trazan calles en retícula y cada manzana se llena de edificios, patios y escombro.
+    for (let y = U.y0; y <= U.y1; y++) for (let x = U.x0; x <= U.x1; x++) if (terreno[y * N + x] !== T.AGUA) terreno[y * N + x] = T.SUELO;
+    const cortes = (a, b) => { const o = [a]; let p = a; while (p + 16 < b) { p += Math.round(entre(9, 12)); o.push(p); } o.push(b); return o; };
+    const cx = cortes(U.x0, U.x1), cy = cortes(U.y0, U.y1), calles = [];
+    for (const x of cx) calles.push([[x + 0.5, U.y0 + 0.5], [x + 0.5, U.y1 + 0.5]]); for (const y of cy) calles.push([[U.x0 + 0.5, y + 0.5], [U.x1 + 0.5, y + 0.5]]);
+    for (const c of calles) trazo(c, 0.8, T.CAMINO, (t) => t !== T.AGUA);
+    const ruinas = [], casa = (x, y, w, h, alto) => {
+      x = Math.round(x); y = Math.round(y); w = Math.round(w); h = Math.round(h); if (w < 3 || h < 3 || x < 2 || y < 2 || x + w > N - 2 || y + h > N - 2) return false;
+      if (Math.hypot(x + w / 2 - ataque.x, y + h / 2 - ataque.y) < 11) return false;
+      for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) { const t = terreno[(y + j) * N + x + i]; if (t === T.CAMINO || t === T.AGUA || t === T.MURO || t === T.RUINA) return false; }
+      const huecos = []; for (let k = 0; k < (w + h > 12 ? 4 : 3); k++) { const lado = Math.floor(az() * 4); huecos.push(lado < 2 ? [x + 1 + Math.floor(az() * (w - 2)), lado ? y + h - 1 : y] : [lado === 2 ? x : x + w - 1, y + 1 + Math.floor(az() * (h - 2))]); }
+      for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) pon(x + i, y + j, i === 0 || j === 0 || i === w - 1 || j === h - 1 ? T.MURO : T.RUINA);
+      for (const [hx, hy] of huecos) pon(hx, hy, T.RUINA);
+      ruinas.push({ x, y, w, h, huecos, alto: !!alto, part: az() < 0.6 ? entre(0.35, 0.65) : 0 }); return true;
+    };
+    const manzanas = [];
+    for (let j = 0; j + 1 < cy.length; j++) for (let i = 0; i + 1 < cx.length; i++) manzanas.push({ x0: cx[i] + 2, y0: cy[j] + 2, x1: cx[i + 1] - 2, y1: cy[j + 1] - 2 });
+    // La manzana del defensor: la más alejada del atacante de entre las interiores. Se deja como patio para el centro.
+    let mia = null, md = -1; for (const b of manzanas) { const mx = (b.x0 + b.x1) / 2, my = (b.y0 + b.y1) / 2, borde = Math.min(mx - U.x0, U.x1 - mx, my - U.y0, U.y1 - my), d = Math.hypot(mx - ataque.x, my - ataque.y) + (borde > 9 ? 12 : 0) + (Math.max(b.x1 - b.x0, b.y1 - b.y0) >= 10 ? 14 : 0) + entre(0, 6); if (b.x1 - b.x0 >= 6 && b.y1 - b.y0 >= 5 && d > md) { md = d; mia = b; } }
+    if (!mia) for (const b of manzanas) if (!mia || (b.x1 - b.x0) * (b.y1 - b.y0) > (mia.x1 - mia.x0) * (mia.y1 - mia.y0)) mia = b; // (si ninguna da la talla, la mayor)
+    mia.reservada = true;
+    for (const b of manzanas) {
+      if (b.reservada) continue; const w = b.x1 - b.x0 + 1, h = b.y1 - b.y0 + 1, q = az();
+      if (q < 0.1) { for (let k = 0; k < w * h * 0.12; k++) arbol(entre(b.x0, b.x1 + 1), entre(b.y0, b.y1 + 1), entre(0.75, 1.3)); b.tipo = 'parque'; continue; } // plaza arbolada
+      if (q < 0.28 && w >= 6 && h >= 5) { casa(b.x0, b.y0, w, h, true); b.tipo = 'bloque'; continue; } // un bloque grande que ocupa la manzana
+      for (let k = 0; k < 5; k++) { const cw = Math.round(entre(3, Math.min(6, w))), chh = Math.round(entre(3, Math.min(6, h))); casa(b.x0 + Math.floor(az() * Math.max(1, w - cw + 1)), b.y0 + Math.floor(az() * Math.max(1, h - chh + 1)), cw, chh, az() < 0.25); }
+      for (let k = 0; k < 2; k++) if (az() < 0.5) arbol(entre(b.x0, b.x1 + 1), entre(b.y0, b.y1 + 1), entre(0.7, 1.1)); // algún árbol de patio
+    }
+    // Granjas sueltas en el campo (escenario mixto).
+    if (escenario === 'mixto') for (const [gx, gy] of [[entre(N * 0.12, N * 0.36), entre(N * 0.1, N * 0.28)], [entre(N * 0.3, N * 0.5), entre(N * 0.72, N * 0.88)]]) { casa(gx, gy, entre(4, 6), entre(4, 6)); casa(gx + entre(6, 8), gy + entre(-2, 3), entre(3, 5), entre(3, 5)); }
+
+    // 4. El defensor: en su manzana, el centro; a los lados, taller y barracón. Las antenas, en otros patios.
+    const defensa = { x: Math.round((mia.x0 + mia.x1) / 2), y: Math.round((mia.y0 + mia.y1) / 2) }, ancha = mia.x1 - mia.x0 >= mia.y1 - mia.y0;
+    const bases = [ataque, defensa];
+    ataque.frente = Math.atan2(defensa.y - ataque.y, defensa.x - ataque.x); defensa.frente = ataque.frente + Math.PI;
+    defensa.centro = { x: defensa.x, y: defensa.y }; defensa.taller = ancha ? { x: defensa.x + 4, y: defensa.y } : { x: defensa.x, y: defensa.y + 4 }; defensa.barracon = ancha ? { x: defensa.x - 4, y: defensa.y } : { x: defensa.x, y: defensa.y - 4 };
+    const patio = (dmin, dmax, evita) => { for (let k = 0; k < 400; k++) { const x = Math.round(entre(U.x0 + 2, U.x1 - 2)), y = Math.round(entre(U.y0 + 2, U.y1 - 2)), d = Math.hypot(x - defensa.x, y - defensa.y); if (d >= dmin && d <= dmax && libre(x, y) && terreno[y * N + x] === T.SUELO && !(x >= mia.x0 - 1 && x <= mia.x1 + 1 && y >= mia.y0 - 1 && y <= mia.y1 + 1) && evita.every((e) => Math.hypot(e.x - x, e.y - y) > 9)) return { x, y }; } return null; };
+    defensa.antenas = []; for (let k = 0; k < 2; k++) { const p = patio(9, 22, defensa.antenas); if (p) defensa.antenas.push(p); }
+    defensa.falsa = patio(8, 24, defensa.antenas) || patio(6, 30, []); defensa.escucha = patio(6, 16, defensa.antenas.concat(defensa.falsa ? [defensa.falsa] : [])) || patio(4, 24, []);
+    if (!defensa.antenas.length) defensa.antenas.push({ x: mia.x0, y: mia.y0 });
+
+    // 5. Trincheras: una del defensor en el borde del pueblo que mira al atacante, y otra abandonada en tierra de nadie.
+    const trincheras = [], firme = (t) => t !== T.AGUA && t !== T.MURO && t !== T.RUINA && t !== T.CAMINO, zanja = (x0, y0, a, L) => { const pts = [], c = Math.cos(a), s = Math.sin(a); for (let i = 0; i <= L / 2.4; i++) { const d = i * 2.4, lado = i % 2 ? 1.1 : -1.1; pts.push([x0 + c * d - s * lado, y0 + s * d + c * lado]); } trincheras.push(pts); trazo(pts, 0.45, T.TRINCHERA, firme); };
+    if (escenario === 'mixto') { const a = defensa.frente, d = Math.min(Math.hypot(defensa.x - U.x0, 0) + 4, 30), px = defensa.x + Math.cos(a) * d, py = defensa.y + Math.sin(a) * d; zanja(px - Math.cos(a + Math.PI / 2) * 9, py - Math.sin(a + Math.PI / 2) * 9, a + Math.PI / 2, 18); }
+    zanja(ataque.x + Math.cos(ataque.frente) * entre(26, 34) + entre(-6, 6), ataque.y + Math.sin(ataque.frente) * entre(26, 34) + entre(-6, 6), ataque.frente + Math.PI / 2 + entre(-0.4, 0.4), 13);
+
+    // 6. Cráteres: por todas partes, más espesos entre los dos bandos.
+    const crateres = [], mx = (ataque.x + defensa.x) / 2, my = (ataque.y + defensa.y) / 2;
+    for (let i = 0; i < 44; i++) { const lejos = i > 26, x = lejos ? entre(4, N - 4) : mx + entre(-26, 26), y = lejos ? entre(4, N - 4) : my + entre(-26, 26), r = entre(0.6, 1.5); if (!dentro(Math.floor(x), Math.floor(y)) || !blando(terreno[Math.floor(y) * N + Math.floor(x)])) continue; crateres.push({ x, y, r }); disco(x, y, r * 0.8, T.CRATER, blando); }
+
+    // 7. El camino de fuera: del punto de partida del atacante a la esquina más cercana de la retícula. Manda sobre lo
+    // demás: donde cruza el agua hay puente.
+    let nudo = [cx[0], cy[cy.length - 1]], nd = 1e9; for (const x of cx) for (const y of cy) { const d = Math.hypot(x - ataque.x, y - ataque.y); if (d < nd) { nd = d; nudo = [x, y]; } }
+    const camino = curva([[ataque.x + 3, ataque.y - 3], [(ataque.x + nudo[0]) / 2 + entre(-6, 6), (ataque.y + nudo[1]) / 2 + entre(-6, 6)], [nudo[0] + 0.5, nudo[1] + 0.5]], 9);
+    for (let i = 0; i + 1 < camino.length; i++) { const [ax, ay] = camino[i], [bx, by] = camino[i + 1], n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) * 2)); for (let k = 0; k <= n; k++) { const px = ax + ((bx - ax) * k) / n, py = ay + ((by - ay) * k) / n; for (let y = Math.floor(py - 0.9); y <= py + 0.9; y++) for (let x = Math.floor(px - 0.9); x <= px + 0.9; x++) if (dentro(x, y) && Math.hypot(x + 0.5 - px, y + 0.5 - py) <= 0.95) { const t = terreno[y * N + x]; if (t !== T.MURO && t !== T.RUINA) terreno[y * N + x] = t === T.AGUA || t === T.PUENTE ? T.PUENTE : T.CAMINO; } } }
+    // Las calles que cruzan el arroyo también llevan puente.
+    for (const c of calles) for (let k = 0; k <= 200; k++) { const x = c[0][0] + ((c[1][0] - c[0][0]) * k) / 200, y = c[0][1] + ((c[1][1] - c[0][1]) * k) / 200; for (const [dx, dy] of [[0, 0], [0.6, 0], [-0.6, 0], [0, 0.6], [0, -0.6]]) { const X = Math.floor(x + dx), Y = Math.floor(y + dy); if (dentro(X, Y) && terreno[Y * N + X] === T.AGUA) terreno[Y * N + X] = T.PUENTE; } }
+
+    // 8. Dos vados en el arroyo.
+    const vados = [];
+    if (arroyo.length) for (const f of [entre(0.1, 0.25), entre(0.4, 0.55)]) { const i = Math.min(arroyo.length - 2, Math.floor(f * (arroyo.length - 1))), x = (arroyo[i][0] + arroyo[i + 1][0]) / 2, y = (arroyo[i][1] + arroyo[i + 1][1]) / 2; if (!dentro(Math.floor(x), Math.floor(y))) continue; vados.push({ x, y }); disco(x, y, 2.3, T.VADO, (t) => t === T.AGUA); }
+
+    // 9. Pasos bajo tierra: dos tuberías o alcantarillas. Cada una une una boca del lado del atacante con otra dentro del pueblo.
+    const tubos = [];
+    for (let k = 0; k < 2; k++) {
+      const f = k ? entre(0.62, 0.74) : entre(0.4, 0.52), lado = (k ? 1 : -1) * entre(8, 16), bx = ataque.x + (defensa.x - ataque.x) * f - Math.sin(ataque.frente) * lado, by = ataque.y + (defensa.y - ataque.y) * f + Math.cos(ataque.frente) * lado, L = entre(16, 24);
+      let a = null, b = null; for (let d = 0; d < 9 && !a; d++) for (let q = 0; q < 8 && !a; q++) { const x = bx - Math.cos(ataque.frente) * L / 2 + Math.cos(q) * d, y = by - Math.sin(ataque.frente) * L / 2 + Math.sin(q) * d; if (libre(x, y)) a = { x: Math.floor(x) + 0.5, y: Math.floor(y) + 0.5 }; }
+      for (let d = 0; d < 9 && !b; d++) for (let q = 0; q < 8 && !b; q++) { const x = bx + Math.cos(ataque.frente) * L / 2 + Math.cos(q) * d, y = by + Math.sin(ataque.frente) * L / 2 + Math.sin(q) * d; if (libre(x, y)) b = { x: Math.floor(x) + 0.5, y: Math.floor(y) + 0.5 }; }
+      if (a && b && Math.hypot(a.x - b.x, a.y - b.y) > 8) tubos.push({ a, b });
+    }
+
+    // 10. El punto de partida del atacante: un claro con barracón, un taller pequeño y, apartada, su antena.
+    { const b = ataque, a = b.frente, lado = a + Math.PI / 2;
+      disco(b.x + 0.5, b.y + 0.5, 6.5, T.SUELO, (t) => t !== T.CAMINO && t !== T.PUENTE);
+      b.barracon = { x: b.x, y: b.y }; b.taller = { x: Math.round(b.x + Math.cos(lado) * 4.5), y: Math.round(b.y + Math.sin(lado) * 4.5) };
+      let an = null; for (let d = 12; d > 6 && !an; d--) for (const s of [-1, 1]) { const x = Math.round(b.x + Math.cos(lado) * d * s - Math.cos(a) * 3), y = Math.round(b.y + Math.sin(lado) * d * s - Math.sin(a) * 3); if (!an && libre(x, y)) an = { x, y }; }
+      b.antenas = [an || { x: Math.round(b.x - Math.cos(a) * 5), y: Math.round(b.y - Math.sin(a) * 5) }]; }
+    for (const b of bases) for (const an of b.antenas) disco(an.x + 0.5, an.y + 0.5, 1.4, T.SUELO, (t) => t === T.BOSQUE || t === T.CRATER);
+    // El patio del defensor queda despejado (salvo la calle).
+    for (let y = mia.y0; y <= mia.y1; y++) for (let x = mia.x0; x <= mia.x1; x++) if (terreno[y * N + x] !== T.CAMINO) terreno[y * N + x] = T.SUELO;
+    for (const p of [defensa.taller, defensa.barracon]) { disco(p.x + 0.5, p.y + 0.5, 2.4, T.SUELO, (t) => t !== T.CAMINO && t !== T.AGUA); for (let i = ruinas.length - 1; i >= 0; i--) { const r = ruinas[i]; if (p.x + 3 > r.x && p.x - 3 < r.x + r.w && p.y + 3 > r.y && p.y - 3 < r.y + r.h) { for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) terreno[y * N + x] = T.SUELO; ruinas.splice(i, 1); } } } // si el taller o el barracón se salen del patio, se les hace sitio
+
+    arboles = arboles.filter((a) => terreno[Math.floor(a.y) * N + Math.floor(a.x)] === T.BOSQUE);
+    { const con = new Uint8Array(N * N); for (const a of arboles) { const r = Math.max(0.6, a.r * 0.8); for (let y = Math.floor(a.y - r); y <= a.y + r; y++) for (let x = Math.floor(a.x - r); x <= a.x + r; x++) if (dentro(x, y) && Math.hypot(x + 0.5 - a.x, y + 0.5 - a.y) <= r) con[y * N + x] = 1; } for (let c = 0; c < N * N; c++) if (terreno[c] === T.BOSQUE && !con[c]) terreno[c] = c % N >= U.x0 && c % N <= U.x1 && ((c / N) | 0) >= U.y0 && ((c / N) | 0) <= U.y1 ? T.SUELO : T.HIERBA; }
+
+    const paso = new Uint8Array(N * N); for (let c = 0; c < N * N; c++) paso[c] = terreno[c] !== T.AGUA && terreno[c] !== T.MURO ? 1 : 0;
+    return { N, semilla, escenario, terreno, paso, bases, urbano: U, patio: mia, campos, hierbas, arboles, arroyo, calles, ruinas, trincheras, crateres, camino, vados, tubos };
+  };
+
+  // ¿Se puede ir a pie de una celda a otra? (relleno por vecinos; para las pruebas y para comprobar el mapa)
+  D.conectado = function (mapa, ax, ay, bx, by) {
+    const N = mapa.N, visto = new Uint8Array(N * N), cola = [ay * N + ax]; visto[cola[0]] = 1;
+    for (let i = 0; i < cola.length; i++) { const c = cola[i]; if (c === by * N + bx) return true; const x = c % N, y = (c / N) | 0; for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const X = x + dx, Y = y + dy; if (X < 0 || Y < 0 || X >= N || Y >= N) continue; const k = Y * N + X; if (!visto[k] && mapa.paso[k]) { visto[k] = 1; cola.push(k); } } }
+    return false;
+  };
+})();
+
+// ===== sim/ruta.js =====
+// drone.warfare — A* (copiado de rts.warfare) sobre la rejilla (8 direcciones, sin cortar esquinas).
+(function () {
+  const W = globalThis.D || (globalThis.D = {}); // (dentro de este archivo se sigue llamando W)
+
+  W.crearRuta = function (N) {
+    const NN = N * N;
+    const g = new Float32Array(NN), padre = new Int32Array(NN), visto = new Uint32Array(NN), cerrado = new Uint32Array(NN);
+    // El montículo va en tablas de tamaño fijo que crecen si hace falta: sin basura que recoger en cada búsqueda.
+    let hI = new Int32Array(4096), hF = new Float64Array(4096), hn = 0;
+    let gen = 0;
+    function mete(i, f) {
+      if (hn === hI.length) { const a = new Int32Array(hn * 2), b = new Float64Array(hn * 2); a.set(hI); b.set(hF); hI = a; hF = b; }
+      let k = hn++;
+      while (k > 0) { const p = (k - 1) >> 1; if (hF[p] <= f) break; hI[k] = hI[p]; hF[k] = hF[p]; k = p; }
+      hI[k] = i; hF[k] = f;
+    }
+    function saca() {
+      const top = hI[0]; hn--;
+      const li = hI[hn], lf = hF[hn], n = hn;
+      if (n > 0) {
+        let k = 0;
+        for (;;) {
+          let c = 2 * k + 1; if (c >= n) break;
+          if (c + 1 < n && hF[c + 1] < hF[c]) c++;
+          if (hF[c] >= lf) break;
+          hI[k] = hI[c]; hF[k] = hF[c]; k = c;
+        }
+        hI[k] = li; hF[k] = lf;
+      }
+      return top;
+    }
+    const DX = [1, -1, 0, 0, 1, 1, -1, -1], DY = [0, 0, 1, -1, 1, -1, 1, -1];
+    // Comprobación barata antes de buscar: ¿está el destino (o la salida) encerrado en un recinto pequeño al que no pertenece el otro extremo?
+    // Se inunda desde las celdas de destino, y luego desde la salida, hasta TOPE celdas: si la inundación se agota sin tocar el otro extremo, no hay ruta
+    // (y se sabe en unas cientos de celdas, no explorando el mapa entero). Si no se agota, no se sabe: decide la búsqueda de verdad.
+    const TOPE = 500, marca = new Uint32Array(NN), colaI = new Int32Array(TOPE + 8); let gm = 0;
+    function sinSalida(paso, abre, x0, y0, mx, my, r2) {
+      const ini = y0 * N + x0, libre = (i) => paso[i] || (abre && abre[i]);
+      const R = Math.ceil(Math.sqrt(r2)), gx = Math.floor(mx), gy = Math.floor(my);
+      // 1) desde el destino
+      gm++; let a = 0, b = 0, tocaIni = false;
+      for (let y = Math.max(0, gy - R); y <= Math.min(N - 1, gy + R) && b < TOPE; y++) for (let x = Math.max(0, gx - R); x <= Math.min(N - 1, gx + R) && b < TOPE; x++) {
+        const ex = x + 0.5 - mx, ey = y + 0.5 - my, i = y * N + x;
+        if (ex * ex + ey * ey > r2) continue;
+        if (i === ini) return false; // ya está en el destino
+        if (libre(i)) { marca[i] = gm; colaI[b++] = i; }
+      }
+      if (!b) return true; // no hay ninguna celda de destino transitable
+      while (a < b && b < TOPE) {
+        const c = colaI[a++], cx = c % N;
+        if (cx > 0) { const n = c - 1; if (n === ini) { tocaIni = true; break; } if (marca[n] !== gm && libre(n)) { marca[n] = gm; colaI[b++] = n; } }
+        if (cx < N - 1) { const n = c + 1; if (n === ini) { tocaIni = true; break; } if (marca[n] !== gm && libre(n)) { marca[n] = gm; colaI[b++] = n; } }
+        if (c >= N) { const n = c - N; if (n === ini) { tocaIni = true; break; } if (marca[n] !== gm && libre(n)) { marca[n] = gm; colaI[b++] = n; } }
+        if (c < NN - N) { const n = c + N; if (n === ini) { tocaIni = true; break; } if (marca[n] !== gm && libre(n)) { marca[n] = gm; colaI[b++] = n; } }
+      }
+      if (tocaIni) return false;
+      if (a >= b) return true; // el recinto del destino se agotó sin llegar a la salida
+      // 2) desde la salida (la celda de salida vale aunque no sea transitable: la unidad ya está en ella)
+      gm++; a = 0; b = 0; marca[ini] = gm; colaI[b++] = ini;
+      while (a < b && b < TOPE) {
+        const c = colaI[a++], cx = c % N, cy = (c / N) | 0, ex = cx + 0.5 - mx, ey = cy + 0.5 - my;
+        if (ex * ex + ey * ey <= r2) return false;
+        if (cx > 0 && marca[c - 1] !== gm && libre(c - 1)) { marca[c - 1] = gm; colaI[b++] = c - 1; }
+        if (cx < N - 1 && marca[c + 1] !== gm && libre(c + 1)) { marca[c + 1] = gm; colaI[b++] = c + 1; }
+        if (c >= N && marca[c - N] !== gm && libre(c - N)) { marca[c - N] = gm; colaI[b++] = c - N; }
+        if (c < NN - N && marca[c + N] !== gm && libre(c + N)) { marca[c + N] = gm; colaI[b++] = c + N; }
+      }
+      return a >= b; // la salida está encerrada y el destino no está dentro
+    }
+
+    // Devuelve la lista de celdas desde (x0,y0) hasta la primera cuyo centro
+    // quede a `radio` o menos de (mx,my); [] si ya está ahí; null si no hay paso.
+    // kh: factor de la estimación (1 normal; 0,62 cuando hay caminos, para que el cálculo los encuentre y los prefiera).
+    // via: las celdas de camino propias (solo esas abaratan la ruta: el camino ajeno se cruza, pero no se busca).
+    // abre: celdas que para esta unidad también son transitables (sus puertas; o todos los muros, cuando busca por dónde abrirse paso).
+    // caro: celdas que cuestan mucho más (los muros que tendría que derribar).
+    // max: tope de celdas exploradas (0 = sin tope); pasado el tope, la búsqueda se rinde (null). buscar.nodos: cuántas exploró la última.
+    const buscar = function (paso, terreno, x0, y0, mx, my, radio, kh, via, abre, caro, max) {
+      kh = kh || 1;
+      gen++; hn = 0; let nn = 0;
+      const r2 = Math.max(radio, 0.75) ** 2, ini = y0 * N + x0;
+      if (sinSalida(paso, abre, x0, y0, mx, my, r2)) { buscar.nodos = 60; return null; }
+      const h = (x, y) => { const dx = Math.abs(x + 0.5 - mx), dy = Math.abs(y + 0.5 - my); return (Math.max(dx, dy) + 0.4142 * Math.min(dx, dy)) * kh; };
+      g[ini] = 0; padre[ini] = -1; visto[ini] = gen; mete(ini, h(x0, y0));
+      while (hn) {
+        const c = saca();
+        if (cerrado[c] === gen) continue;
+        cerrado[c] = gen;
+        if (max && ++nn > max) { buscar.nodos = nn; return null; }
+        if (!max) nn++;
+        const cx = c % N, cy = (c / N) | 0, ex = cx + 0.5 - mx, ey = cy + 0.5 - my;
+        if (ex * ex + ey * ey <= r2) {
+          const out = [];
+          for (let k = c; k !== ini; k = padre[k]) out.push(k);
+          buscar.nodos = nn; return out.reverse();
+        }
+        for (let d = 0; d < 8; d++) {
+          const nx = cx + DX[d], ny = cy + DY[d];
+          if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
+          const n = ny * N + nx;
+          if ((!paso[n] && !(abre && abre[n])) || cerrado[n] === gen) continue;
+          if (d >= 4) { const a = cy * N + nx, b = ny * N + cx; if ((!paso[a] && !(abre && abre[a])) || (!paso[b] && !(abre && abre[b]))) continue; }
+          const ng = g[c] + (d >= 4 ? 1.4142 : 1) * (caro && caro[n] ? 9 : via && via[n] ? 0.62 : terreno[n] === 3 ? 1.7 : terreno[n] === 2 ? 3 : 1); // camino y puente, baratos; el agua solo la cruza la excavadora tendiendo un puente, y le sale cara
+          if (visto[n] !== gen || ng < g[n]) { visto[n] = gen; g[n] = ng; padre[n] = c; mete(n, ng + h(nx, ny)); }
+        }
+      }
+      buscar.nodos = nn; return null;
+    };
+    buscar.nodos = 0;
+    return buscar;
+  };
+})();
+
+// ===== sim/mundo.js =====
+// drone.warfare — el mundo y su tick. Entrega 1: el sector, las dos bases con su guarnición de muestra y el reloj
+// (día y noche); los drones de reconocimiento dan vueltas. Aún no hay órdenes, detección ni combate.
+(function () {
+  const D = globalThis.D || (globalThis.D = {});
+  const ECON = D.ECON, TAU = Math.PI * 2;
+
+  D.esNoche = (m) => m.t % ECON.dia >= ECON.diaLuz;
+  // Cuánta luz hay, de 0 (noche cerrada) a 1 (día): baja durante el anochecer y sube al amanecer.
+  D.luz = function (m) {
+    const h = m.t % ECON.dia, c = ECON.crepusculo;
+    if (h < c * 0.5) return 0.5 + (h / (c * 0.5)) * 0.5; // termina de amanecer
+    if (h < ECON.diaLuz - c) return 1;
+    if (h < ECON.diaLuz) return (ECON.diaLuz - h) / c; // anochece
+    if (h < ECON.dia - c * 0.5) return 0;
+    return ((h - (ECON.dia - c * 0.5)) / (c * 0.5)) * 0.5; // empieza a clarear
+  };
+  D.hora = function (m) { const f = ((m.t % ECON.dia) / ECON.dia) * 24, h = Math.floor(f + 6) % 24, mi = Math.floor((f % 1) * 60); return String(h).padStart(2, '0') + ':' + String(mi).padStart(2, '0'); }; // el día empieza a las 06:00
+
+  function crear(m, clase, j, tipo, x, y, extra) { const e = Object.assign({ id: m.sigId++, clase, j, tipo, x, y, ang: 0, vida: 1 }, extra); m.ents.push(e); m.porId.set(e.id, e); return e; }
+  // op.escenario: 'mixto' | 'urbano'. op.noche: empezar de noche.
+  D.crearMundo = function (semilla, op) {
+    op = op || {};
+    const mapa = D.generarMapa(semilla, op.escenario), N = mapa.N, az = D.prng(semilla ^ 0x51ED);
+    const m = { semilla, t: op.noche ? ECON.diaLuz : ECON.crepusculo * 0.5, // se empieza con el sol ya arriba (o al caer la noche)
+       N, mapa, ents: [], porId: new Map(), sigId: 1, jug: [{ personas: 0, pilotos: 0 }, { personas: 0, pilotos: 0 }] };
+    const libre = (x, y) => { x = Math.floor(x); y = Math.floor(y); return x >= 0 && y >= 0 && x < N && y < N && mapa.paso[y * N + x] === 1; };
+    const cerca = (x, y) => { for (let r = 0; r < 9; r++) for (let k = 0; k < 16; k++) { const a = (k / 16) * TAU + r, X = x + Math.cos(a) * r, Y = y + Math.sin(a) * r; if (libre(X, Y)) return { x: Math.floor(X) + 0.5, y: Math.floor(Y) + 0.5 }; } return { x: x + 0.5, y: y + 0.5 }; };
+    let eq = 1;
+    const equipo = (j, roles, x, y, ang) => { roles.forEach((r, i) => { const d = (i - (roles.length - 1) / 2) * 1.3, p = cerca(x + Math.cos(ang + 1.57) * d + (az() - 0.5) * 0.5, y + Math.sin(ang + 1.57) * d + (az() - 0.5) * 0.5); crear(m, 'sol', j, r, p.x, p.y, { ang: ang + (az() - 0.5) * 0.5, eq }); m.jug[j].personas++; }); eq++; };
+    const edif = (j, t, p) => p && crear(m, 'edif', j, t, p.x + 0.5, p.y + 0.5);
+    const pilotos = (j, n) => { m.jug[j].pilotos = n; m.jug[j].personas += n; }; // están dentro: cuentan, pero no se ven
+    const posado = (j, t, p, i, ang) => crear(m, 'dron', j, t, p.x + 2.4 + (i % 3) * 1.5, p.y + 0.5 + (Math.floor(i / 3) - 0.5) * 1.6, { alt: 0, ang }); // en fila junto a la plataforma
+    const orbita = (j, t, x, y, r) => crear(m, 'dron', j, t, x, y, { alt: D.DRON[t].alt, orbita: { x, y, r, fase: az() * TAU } });
+
+    // El atacante: cuatro equipos de fuerzas especiales y solo dos pilotos.
+    { const b = mapa.bases[0], f = b.frente, lado = f + Math.PI / 2;
+      edif(0, 'barracon', b.barracon); edif(0, 'taller', b.taller); edif(0, 'antena', b.antenas[0]);
+      equipo(0, ['asaltante', 'asaltante', 'escopetero', 'zapador'], b.x + Math.cos(f) * 5 + Math.cos(lado) * 4, b.y + Math.sin(f) * 5 + Math.sin(lado) * 4, f);
+      equipo(0, ['asaltante', 'asaltante', 'escopetero', 'observador'], b.x + Math.cos(f) * 5 - Math.cos(lado) * 4, b.y + Math.sin(f) * 5 - Math.sin(lado) * 4, f);
+      equipo(0, ['asaltante', 'escopetero', 'inhibidor', 'sanitario'], b.x + Math.cos(f) * 9, b.y + Math.sin(f) * 9, f);
+      equipo(0, ['tirador', 'observador'], b.x + Math.cos(f) * 13 + Math.cos(lado) * 6, b.y + Math.sin(f) * 13 + Math.sin(lado) * 6, f);
+      pilotos(0, 2); orbita(0, 'recon', b.x + Math.cos(f) * 16, b.y + Math.sin(f) * 16, 9); posado(0, 'fpvRadio', b.taller, 0, f); posado(0, 'fpvFibra', b.taller, 1, f); }
+    // El defensor: el centro con seis pilotos, dos antenas y una falsa, la estación de escucha, y una guardia de dos equipos.
+    { const b = mapa.bases[1], f = b.frente;
+      edif(1, 'centro', b.centro); edif(1, 'taller', b.taller); edif(1, 'barracon', b.barracon); for (const a of b.antenas) edif(1, 'antena', a); edif(1, 'falsa', b.falsa); edif(1, 'escucha', b.escucha);
+      equipo(1, ['asaltante', 'asaltante', 'escopetero', 'sanitario'], b.x + Math.cos(f) * 5, b.y + Math.sin(f) * 5, f);
+      equipo(1, ['asaltante', 'escopetero', 'tirador', 'inhibidor'], b.x - Math.cos(f) * 4, b.y - Math.sin(f) * 4, f);
+      pilotos(1, 6); orbita(1, 'recon', b.x + Math.cos(f) * 12, b.y + Math.sin(f) * 12, 11); orbita(1, 'recon', b.x + Math.cos(f) * 30, b.y + Math.sin(f) * 30, 13);
+      ['fpvRadio', 'fpvRadio', 'fpvFibra', 'bombardero', 'interceptor'].forEach((t, i) => posado(1, t, b.taller, i, f)); }
+    D.tick(m); m.t--; // coloca lo que se mueve en su sitio desde el primer cuadro
+    return m;
+  };
+
+  D.tick = function (m) {
+    m.t++;
+    for (const e of m.ents) if (e.orbita) { const o = e.orbita, a = o.fase + m.t * 0.004; e.x = o.x + Math.cos(a) * o.r; e.y = o.y + Math.sin(a) * o.r * 0.7; e.ang = Math.atan2(Math.cos(a) * 0.7, -Math.sin(a)); }
+  };
+})();
+
+// ===== ui/figuras.js =====
+// drone.warfare — las figuras: soldados, drones y edificios vistos desde arriba, y la paleta de cada visión.
+// Todo se pinta con un «pintor» P: sabe en qué visión estamos y da el color que toca (P.col, P.tinta, P.bando).
+(function () {
+  const D = globalThis.D || (globalThis.D = {});
+  const TAU = Math.PI * 2;
+  // ---------- color: una paleta de día y una regla para derivar las demás ----------
+  const DIA = { suelo: '#e6e4da', campo: '#dcd8c4', surco: '#cbc5ab', hierba: '#d3dbc3', arbol: '#7f9a6b', arbol2: '#6a8758', camino: '#cdc6b6', agua: '#b4c7d2', ruina: '#b9b4aa', ruinaS: '#8b867c', trinchera: '#75695a', crater: '#bbb5a4', tierra: '#a8977a', red: '#55606a', lona: '#93a07c', metal: '#8d949c', caja: '#b49a6a', calle: '#bcb9b1', acera: '#e0ded6', bloque: '#aeb0b0', tejado: '#9a9c9c' };
+  const CALOR = { suelo: 0.2, campo: 0.22, surco: 0.18, hierba: 0.18, arbol: 0.28, arbol2: 0.24, camino: 0.27, agua: 0.04, ruina: 0.36, ruinaS: 0.2, trinchera: 0.13, crater: 0.2, tierra: 0.25, red: 0.14, lona: 0.3, metal: 0.16, caja: 0.2, calle: 0.3, acera: 0.26, bloque: 0.42, tejado: 0.36 };
+  const rgb = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+  const mezcla = (a, b, k) => 'rgb(' + a.map((v, i) => Math.round(v + (b[i] - v) * k)).join(',') + ')';
+  const lum = (c) => (0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2]) / 255;
+  const cache = {};
+  function colDe(modo, k) {
+    const id = modo + k; if (cache[id]) return cache[id];
+    const c = rgb(DIA[k]), L = lum(c); let r;
+    if (modo === 'dia') r = DIA[k];
+    else if (modo === 'noche') r = mezcla(c.map((v) => v * 0.5 + L * 255 * 0.5), [18, 24, 38], 0.72);
+    else if (modo === 'nocturna') { const g = Math.pow(L, 1.5); r = 'rgb(' + Math.round(20 + g * 60) + ',' + Math.round(48 + g * 190) + ',' + Math.round(28 + g * 70) + ')'; }
+    else if (modo === 'termica') { const g = Math.round(22 + CALOR[k] * 150); r = 'rgb(' + g + ',' + g + ',' + (g + 4) + ')'; }
+    else r = mezcla([11, 17, 24], [34, 52, 68], L * 0.55);
+    return (cache[id] = r);
+  }
+  const TINTA = { dia: '#20242a', noche: '#0b0e14', nocturna: '#072a12', termica: '#0c0c0e', espectro: '#3a4c5c' };
+  const BANDO = { dia: ['#1f6f78', '#c2552d'], noche: ['#1c3f46', '#5a3324'], nocturna: ['#b9f7c3', '#b9f7c3'], termica: ['#ffffff', '#ffffff'], espectro: ['#39c6d6', '#ff8a4c'] };
+  // modo: 'dia' | 'noche' | 'nocturna' | 'termica' | 'espectro'. t: segundos, para lo que se anima.
+  D.pintor = function (modo, t) {
+    return { modo, t, col: (k) => colDe(modo, k), tinta: TINTA[modo], bando: (b) => (b === 0 || b === 1 ? BANDO[modo][b] : TINTA[modo]), sombras: modo === 'dia', fantasma: modo === 'espectro',
+      brillo: (ctx, on) => { ctx.shadowColor = '#fff'; ctx.shadowBlur = on && modo === 'termica' ? 9 : 0; } };
+  };
+  D.DIA = DIA;
+
+  // ---------- figuras ----------
+  function soldado(ctx, P, x, y, ang, rol, b, s, o) {
+    const modo = P.modo, t = P.t;
+    o = o || {}; ctx.save(); ctx.translate(x, y);
+    if (P.sombras) { ctx.fillStyle = 'rgba(30,34,40,0.22)'; ctx.beginPath(); ctx.ellipse(3.2 * s, 4.2 * s, 4.6 * s, 2.4 * s, 0.6, 0, TAU); ctx.fill(); }
+    ctx.rotate(ang); ctx.globalAlpha = P.fantasma && rol !== 'inhibidor' && rol !== 'observador' ? 0.22 : o.oculto ? 0.55 : 1;
+    const c = P.bando(b), ti = P.tinta, paso = o.anda ? Math.sin(t * 9 + x) * 1.6 * s : 0;
+    ctx.strokeStyle = ti; ctx.lineWidth = Math.max(1, 1.1 * s); ctx.lineCap = 'round';
+    if (o.anda) { ctx.beginPath(); ctx.moveTo(-1.5 * s, -1.6 * s); ctx.lineTo(-1.5 * s + paso, -1.6 * s); ctx.moveTo(-1.5 * s, 1.6 * s); ctx.lineTo(-1.5 * s - paso, 1.6 * s); ctx.stroke(); }
+    P.brillo(ctx, true);
+    // mochila o carga a la espalda, según el rol
+    ctx.fillStyle = modo === 'termica' ? '#9a9a9a' : P.col('metal');
+    if (rol === 'zapador') { ctx.fillRect(-5.6 * s, -2.2 * s, 2.8 * s, 4.4 * s); ctx.strokeRect(-5.6 * s, -2.2 * s, 2.8 * s, 4.4 * s); ctx.beginPath(); ctx.moveTo(-5.2 * s, 3.4 * s); ctx.lineTo(-1 * s, 4.6 * s); ctx.stroke(); }
+    if (rol === 'inhibidor') { ctx.fillRect(-6 * s, -2.6 * s, 3.2 * s, 5.2 * s); ctx.strokeRect(-6 * s, -2.6 * s, 3.2 * s, 5.2 * s); ctx.beginPath(); ctx.moveTo(-5 * s, -2.6 * s); ctx.lineTo(-7.5 * s, -6.5 * s); ctx.moveTo(-5 * s, 2.6 * s); ctx.lineTo(-7.5 * s, 6.5 * s); ctx.stroke(); }
+    if (rol === 'sanitario') { ctx.fillStyle = modo === 'dia' ? '#fff' : ctx.fillStyle; ctx.fillRect(-5.4 * s, -2.2 * s, 2.8 * s, 4.4 * s); ctx.strokeRect(-5.4 * s, -2.2 * s, 2.8 * s, 4.4 * s); ctx.strokeStyle = modo === 'dia' ? '#b3261e' : ti; ctx.beginPath(); ctx.moveTo(-4 * s, -1.2 * s); ctx.lineTo(-4 * s, 1.2 * s); ctx.moveTo(-5 * s, 0); ctx.lineTo(-3 * s, 0); ctx.stroke(); ctx.strokeStyle = ti; }
+    // hombros y casco
+    ctx.fillStyle = c; if (rol === 'tirador') ctx.setLineDash([1.5 * s, 1.2 * s]); // el tirador lleva traje de camuflaje: contorno roto
+    ctx.beginPath(); ctx.ellipse(-0.6 * s, 0, 2.5 * s, 4.3 * s, 0, 0, TAU); ctx.fill(); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = modo === 'dia' ? (b ? '#8f3e21' : '#16525a') : c; ctx.beginPath(); ctx.arc(0.6 * s, 0, 2.3 * s, 0, TAU); ctx.fill(); ctx.stroke();
+    P.brillo(ctx, false);
+    // arma en las manos
+    ctx.lineWidth = Math.max(1.2, 1.5 * s); ctx.beginPath();
+    if (rol === 'asaltante') { ctx.moveTo(1.5 * s, 2.2 * s); ctx.lineTo(8.2 * s, 1.4 * s); }
+    else if (rol === 'escopetero') { ctx.lineWidth = Math.max(1.6, 2.2 * s); ctx.moveTo(1.5 * s, 2.2 * s); ctx.lineTo(6.4 * s, 1.6 * s); }
+    else if (rol === 'tirador') { ctx.lineWidth = Math.max(1, 1.1 * s); ctx.moveTo(1.5 * s, 2 * s); ctx.lineTo(12 * s, 1 * s); }
+    else if (rol === 'zapador' || rol === 'inhibidor') { ctx.moveTo(1.5 * s, 2.2 * s); ctx.lineTo(6.6 * s, 1.6 * s); }
+    else if (rol === 'observador') { ctx.stroke(); ctx.beginPath(); ctx.fillStyle = modo === 'dia' ? '#e9edf0' : c; ctx.rect(3.2 * s, -1.8 * s, 2.6 * s, 3.6 * s); ctx.fill(); }
+    ctx.stroke();
+    if (rol === 'escopetero') { ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(6.4 * s, 1.6 * s, 1.5 * s, 0, TAU); ctx.stroke(); }
+    ctx.globalAlpha = 1;
+    if (modo === 'nocturna' && !b && Math.sin(t * 7 + x) > 0.2) { ctx.fillStyle = '#fff'; ctx.shadowColor = '#fff'; ctx.shadowBlur = 8; ctx.beginPath(); ctx.arc(0.6 * s, 0, 1.1 * s, 0, TAU); ctx.fill(); ctx.shadowBlur = 0; } // baliza infrarroja propia
+    ctx.restore();
+  }
+  function rotor(ctx, P, x, y, r, gira) { const t = P.t; ctx.globalAlpha *= 0.55; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.stroke(); ctx.globalAlpha /= 0.55; if (gira) { const a = t * 40 + x; ctx.beginPath(); ctx.moveTo(x - Math.cos(a) * r, y - Math.sin(a) * r); ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r); ctx.stroke(); } }
+  function dron(ctx, P, x, y, ang, tipo, b, s, alt) {
+    const modo = P.modo;
+    const emite = tipo === 'fpvRadio' || tipo === 'repetidor' || tipo === 'recon' || tipo === 'bombardero' || tipo === 'interceptor' || tipo === 'carga' || tipo === 'ugv';
+    ctx.save(); const posado = !alt;
+    if (P.sombras && tipo !== 'ugv') { ctx.fillStyle = 'rgba(30,34,40,0.2)'; ctx.beginPath(); ctx.ellipse(x + alt * 0.4, y + alt * 0.55, 5 * s, 2.6 * s, 0, 0, TAU); ctx.fill(); }
+    ctx.translate(x, y); ctx.rotate(ang); ctx.globalAlpha = P.fantasma && !emite ? 0.22 : 1;
+    const c = P.bando(b), ti = P.tinta; ctx.strokeStyle = ti; ctx.fillStyle = c; ctx.lineWidth = Math.max(1, 1.1 * s); ctx.lineCap = 'round';
+    P.brillo(ctx, !posado);
+    if (tipo === 'recon') { // ala fija: fuselaje, ala y cola en V
+      ctx.beginPath(); ctx.moveTo(-6 * s, 0); ctx.lineTo(6 * s, 0); ctx.lineWidth = Math.max(2, 2.4 * s); ctx.stroke(); ctx.lineWidth = Math.max(1, 1.1 * s);
+      ctx.beginPath(); ctx.moveTo(1 * s, -9 * s); ctx.lineTo(3 * s, -9 * s); ctx.lineTo(3 * s, 9 * s); ctx.lineTo(1 * s, 9 * s); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-6 * s, 0); ctx.lineTo(-8 * s, -3 * s); ctx.moveTo(-6 * s, 0); ctx.lineTo(-8 * s, 3 * s); ctx.stroke();
+      ctx.fillStyle = modo === 'dia' ? '#20242a' : c; ctx.beginPath(); ctx.arc(5 * s, 0, 1.5 * s, 0, TAU); ctx.fill();
+    } else if (tipo === 'ugv') { // robot terrestre: caja con dos orugas
+      ctx.fillStyle = ti; ctx.fillRect(-6 * s, -5 * s, 12 * s, 2.2 * s); ctx.fillRect(-6 * s, 2.8 * s, 12 * s, 2.2 * s);
+      ctx.fillStyle = c; ctx.fillRect(-5 * s, -3 * s, 10 * s, 6 * s); ctx.strokeRect(-5 * s, -3 * s, 10 * s, 6 * s);
+      ctx.fillStyle = modo === 'termica' ? '#777' : P.col('caja'); ctx.fillRect(-3.5 * s, -2 * s, 5 * s, 4 * s); ctx.strokeRect(-3.5 * s, -2 * s, 5 * s, 4 * s);
+    } else {
+      const n = tipo === 'bombardero' ? 6 : 4, R = (tipo === 'bombardero' ? 7.5 : tipo === 'interceptor' ? 3.6 : tipo === 'carga' ? 6.5 : 5) * s, rr = (tipo === 'interceptor' ? 1.8 : 2.6) * s;
+      ctx.beginPath(); for (let i = 0; i < n; i++) { const a = (i + 0.5) * (TAU / n); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a) * R, Math.sin(a) * R); } ctx.stroke(); // brazos
+      for (let i = 0; i < n; i++) { const a = (i + 0.5) * (TAU / n); rotor(ctx, P, Math.cos(a) * R, Math.sin(a) * R, rr, !posado); }
+      if (tipo === 'interceptor') { ctx.beginPath(); ctx.ellipse(0, 0, 5.2 * s, 1.9 * s, 0, 0, TAU); ctx.fill(); ctx.stroke(); } // cuerpo de bala
+      else { ctx.beginPath(); ctx.rect(-2.6 * s, -1.9 * s, 5.2 * s, 3.8 * s); ctx.fill(); ctx.stroke(); }
+      if (tipo === 'fpvRadio' || tipo === 'fpvFibra') { ctx.beginPath(); ctx.moveTo(2.6 * s, 0); ctx.lineTo(6.2 * s, 0); ctx.stroke(); ctx.fillStyle = ti; ctx.beginPath(); ctx.arc(6.2 * s, 0, 1.2 * s, 0, TAU); ctx.fill(); } // la carga, por delante
+      if (tipo === 'fpvRadio') { ctx.beginPath(); ctx.moveTo(-2.6 * s, -1 * s); ctx.lineTo(-5.4 * s, -3.4 * s); ctx.stroke(); } // antena
+      if (tipo === 'fpvFibra') { ctx.fillStyle = modo === 'dia' ? '#f3f1ea' : c; ctx.beginPath(); ctx.arc(-3.6 * s, 0, 2 * s, 0, TAU); ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.arc(-3.6 * s, 0, 0.8 * s, 0, TAU); ctx.stroke(); } // la bobina
+      if (tipo === 'bombardero') { ctx.fillStyle = ti; for (const k of [-1.6, 1.6]) { ctx.beginPath(); ctx.arc(0, k * s, 1.1 * s, 0, TAU); ctx.fill(); } }
+      if (tipo === 'repetidor') { ctx.setLineDash([2 * s, 1.5 * s]); ctx.beginPath(); ctx.arc(0, 0, 8.6 * s, 0, TAU); ctx.stroke(); ctx.setLineDash([]); }
+      if (tipo === 'carga') { ctx.fillStyle = modo === 'termica' ? '#666' : P.col('caja'); ctx.fillRect(-2.2 * s, -2.2 * s, 4.4 * s, 4.4 * s); ctx.strokeRect(-2.2 * s, -2.2 * s, 4.4 * s, 4.4 * s); ctx.beginPath(); ctx.moveTo(-2.2 * s, 0); ctx.lineTo(2.2 * s, 0); ctx.stroke(); }
+    }
+    P.brillo(ctx, false); ctx.restore();
+  }
+  const sacos = (ctx, P, x, y, w, h, s) => { ctx.fillStyle = P.col('tierra'); ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; const n = Math.max(3, Math.round((w + h) / (5 * s))); for (let i = 0; i < n; i++) { const a = (i / n) * TAU; ctx.beginPath(); ctx.ellipse(x + Math.cos(a) * w, y + Math.sin(a) * h, 2.6 * s, 1.7 * s, a + 1.57, 0, TAU); ctx.fill(); ctx.stroke(); } };
+  const sombraE = (ctx, P, x, y, w, h) => { if (P.sombras) { ctx.fillStyle = 'rgba(30,34,40,0.18)'; ctx.fillRect(x + 4, y + 5, w, h); } };
+  function edificio(ctx, P, x, y, tipo, b, s, o) {
+    const modo = P.modo;
+    o = o || {}; ctx.save(); ctx.translate(x, y); const c = P.bando(b), ti = P.tinta; ctx.strokeStyle = ti; ctx.lineWidth = Math.max(1, 1.2 * s); ctx.lineJoin = 'round';
+    const frio = modo === 'termica'; ctx.globalAlpha = P.fantasma && tipo !== 'antena' && tipo !== 'escucha' ? 0.25 : 1;
+    if (tipo === 'centro') { // búnker enterrado: sacos, losa cubierta de tierra y una escotilla
+      sombraE(ctx, P, -16 * s, -12 * s, 32 * s, 24 * s); sacos(ctx, P, 0, 0, 17 * s, 13 * s, s);
+      ctx.fillStyle = P.col('tierra'); ctx.beginPath(); ctx.rect(-13 * s, -9 * s, 26 * s, 18 * s); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = P.col('hierba'); ctx.fillRect(-11 * s, -7 * s, 22 * s, 14 * s);
+      ctx.fillStyle = frio ? '#8c8c8c' : c; ctx.beginPath(); ctx.rect(-4 * s, -3.5 * s, 8 * s, 7 * s); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-4 * s, -3.5 * s); ctx.lineTo(4 * s, 3.5 * s); ctx.moveTo(4 * s, -3.5 * s); ctx.lineTo(-4 * s, 3.5 * s); ctx.stroke();
+    } else if (tipo === 'taller') { // lona de camuflaje con plataforma de despegue
+      sombraE(ctx, P, -15 * s, -10 * s, 30 * s, 20 * s); P.brillo(ctx, true);
+      ctx.fillStyle = frio ? '#b5b5b5' : P.col('lona'); ctx.beginPath(); ctx.rect(-15 * s, -10 * s, 20 * s, 20 * s); ctx.fill(); ctx.stroke(); P.brillo(ctx, false);
+      ctx.beginPath(); for (let i = -12; i < 5; i += 4) { ctx.moveTo(i * s, -10 * s); ctx.lineTo((i + 3) * s, 10 * s); } ctx.globalAlpha *= 0.4; ctx.stroke(); ctx.globalAlpha /= 0.4;
+      ctx.fillStyle = P.col('camino'); ctx.beginPath(); ctx.arc(11 * s, 0, 6 * s, 0, TAU); ctx.fill(); ctx.stroke();
+      ctx.strokeStyle = c; ctx.lineWidth = Math.max(1.4, 1.8 * s); ctx.beginPath(); ctx.moveTo(8.5 * s, -2.5 * s); ctx.lineTo(8.5 * s, 2.5 * s); ctx.moveTo(13.5 * s, -2.5 * s); ctx.lineTo(13.5 * s, 2.5 * s); ctx.moveTo(8.5 * s, 0); ctx.lineTo(13.5 * s, 0); ctx.stroke();
+    } else if (tipo === 'antena' || tipo === 'falsa') { // mástil con vientos; la falsa, para su dueño, va punteada
+      if (P.sombras) { ctx.strokeStyle = 'rgba(30,34,40,0.25)'; ctx.lineWidth = 2 * s; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(13 * s, 17 * s); ctx.stroke(); ctx.strokeStyle = ti; ctx.lineWidth = Math.max(1, 1.2 * s); }
+      if (tipo === 'falsa') ctx.setLineDash([2.5 * s, 2 * s]);
+      ctx.beginPath(); for (let i = 0; i < 3; i++) { const a = -1.57 + i * (TAU / 3); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a) * 11 * s, Math.sin(a) * 11 * s); } ctx.globalAlpha *= 0.55; ctx.stroke(); ctx.globalAlpha /= 0.55;
+      P.brillo(ctx, tipo === 'antena'); ctx.fillStyle = frio ? (tipo === 'antena' ? '#f0f0f0' : '#3c3c3c') : c; ctx.beginPath(); ctx.rect(-3 * s, -3 * s, 6 * s, 6 * s); ctx.fill(); ctx.stroke(); P.brillo(ctx, false);
+      ctx.beginPath(); ctx.arc(0, 0, 1.2 * s, 0, TAU); ctx.fillStyle = ti; ctx.fill(); ctx.setLineDash([]);
+    } else if (tipo === 'barracon') { // refugio de troncos medio enterrado
+      sombraE(ctx, P, -13 * s, -8 * s, 26 * s, 16 * s); ctx.fillStyle = P.col('tierra'); ctx.beginPath(); ctx.rect(-13 * s, -8 * s, 26 * s, 16 * s); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); for (let i = -10; i <= 10; i += 3.3) { ctx.moveTo(i * s, -8 * s); ctx.lineTo(i * s, 8 * s); } ctx.globalAlpha *= 0.5; ctx.stroke(); ctx.globalAlpha /= 0.5;
+      ctx.fillStyle = frio ? '#7d7d7d' : c; ctx.beginPath(); ctx.rect(-3 * s, 4 * s, 6 * s, 4 * s); ctx.fill(); ctx.stroke();
+    } else if (tipo === 'escucha') { // estación de escucha: tres antenas en abanico sobre una caja
+      sombraE(ctx, P, -8 * s, -6 * s, 16 * s, 12 * s); ctx.fillStyle = P.col('metal'); ctx.beginPath(); ctx.rect(-8 * s, -6 * s, 16 * s, 12 * s); ctx.fill(); ctx.stroke();
+      ctx.strokeStyle = c; ctx.lineWidth = Math.max(1.3, 1.6 * s); for (const a of [-0.7, 0, 0.7]) { ctx.beginPath(); ctx.arc(0, 2 * s, 9 * s, -1.57 + a - 0.25, -1.57 + a + 0.25); ctx.stroke(); }
+      ctx.fillStyle = c; ctx.beginPath(); ctx.arc(0, 2 * s, 1.8 * s, 0, TAU); ctx.fill();
+    } else if (tipo === 'red') { // red antidron sobre un tramo: malla y postes
+      const w = (o.w || 34) * s, h = 12 * s; ctx.globalAlpha *= 0.85; ctx.strokeStyle = P.col('red'); ctx.lineWidth = 0.8;
+      ctx.beginPath(); for (let i = -w / 2; i <= w / 2; i += 3.5 * s) { ctx.moveTo(i, -h / 2); ctx.lineTo(i + h * 0.5, h / 2); ctx.moveTo(i, h / 2); ctx.lineTo(i + h * 0.5, -h / 2); } ctx.stroke();
+      ctx.strokeStyle = ti; ctx.lineWidth = Math.max(1, 1.1 * s); ctx.strokeRect(-w / 2, -h / 2, w + h * 0.5, h);
+      ctx.fillStyle = ti; for (const [px, py] of [[-w / 2, -h / 2], [-w / 2, h / 2], [w / 2 + h * 0.5, -h / 2], [w / 2 + h * 0.5, h / 2]]) { ctx.beginPath(); ctx.arc(px, py, 1.4 * s, 0, TAU); ctx.fill(); }
+    } else if (tipo === 'pozo') { // posición enterrada: hoyo con parapeto
+      sacos(ctx, P, 0, 0, 7 * s, 5.5 * s, s * 0.8); ctx.fillStyle = P.col('trinchera'); ctx.beginPath(); ctx.ellipse(0, 0, 5 * s, 3.6 * s, 0, 0, TAU); ctx.fill(); ctx.stroke();
+    } else if (tipo === 'suministro') { // cajas apiladas bajo una red
+      sombraE(ctx, P, -9 * s, -6 * s, 18 * s, 12 * s); ctx.fillStyle = P.col('caja');
+      for (const [bx, by, bw, bh] of [[-9, -6, 8, 6], [0, -6, 9, 5], [-7, 1, 7, 5], [1, 0, 8, 6]]) { ctx.beginPath(); ctx.rect(bx * s, by * s, bw * s, bh * s); ctx.fill(); ctx.stroke(); }
+      ctx.strokeStyle = c; ctx.lineWidth = Math.max(1.4, 1.8 * s); ctx.beginPath(); ctx.moveTo(-3 * s, -3 * s); ctx.lineTo(3 * s, 3 * s); ctx.moveTo(3 * s, -3 * s); ctx.lineTo(-3 * s, 3 * s); ctx.globalAlpha *= 0; ctx.stroke(); ctx.globalAlpha = 1;
+    } else if (tipo === 'boca') { // boca de túnel: agujero negro y la tierra sacada al lado (lo que la delata)
+      ctx.fillStyle = P.col('tierra'); ctx.beginPath(); ctx.ellipse(6 * s, 3 * s, 8 * s, 4.5 * s, 0.4, 0, TAU); ctx.fill(); ctx.globalAlpha *= 0.5; ctx.stroke(); ctx.globalAlpha /= 0.5;
+      ctx.fillStyle = modo === 'termica' ? '#5a5a5a' : '#15171b'; ctx.beginPath(); ctx.ellipse(-2 * s, 0, 5 * s, 3.8 * s, 0, 0, TAU); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-6 * s, 0); ctx.lineTo(2 * s, 0); ctx.moveTo(-5 * s, -2 * s); ctx.lineTo(1 * s, -2 * s); ctx.globalAlpha *= 0.5; ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  D.fig = { soldado, dron, edificio, sombraE };
+})();
+
+// ===== ui/juego.js =====
+// drone.warfare — la vista: cámara, las cuatro visiones (con día y noche), el marco de transmisión y el panel.
+(function () {
+  const D = globalThis.D, T = D.T, TAU = Math.PI * 2, PX = 14; // PX: píxeles por celda en las capas de terreno ya pintadas
+  const $ = (id) => document.getElementById(id);
+  const lienzo = $('lienzo'), ctx = lienzo.getContext('2d');
+  const par = new URLSearchParams(location.search);
+  const semilla = Number(par.get('s')) || Math.floor(Math.random() * 99999) + 1;
+  const escenario = par.get('esc') === 'urbano' ? 'urbano' : 'mixto', YO = par.get('rol') === 'defensa' ? 1 : 0, elegido = par.has('rol'); // el bando 0 ataca; el 1 defiende
+  const m = (D.mundo = D.crearMundo(semilla, { noche: par.get('noche') === '1', escenario })), N = m.N, mapa = m.mapa, mio = (j) => (j === YO ? 0 : j === 1 - YO ? 1 : null);
+  const cam = (D.cam = { x: mapa.bases[YO].x + Math.cos(mapa.bases[YO].frente) * 7, y: mapa.bases[YO].y + Math.sin(mapa.bases[YO].frente) * 7, z: 15 });
+  let cw = 0, ch = 0, dpr = 1, vision = 'optica', raton = { x: -1, y: -1, dentro: false };
+  const VISIONES = [
+    ['optica', 'Óptica', 'A simple vista. De día se ve lo que no está bajo cobertura; de noche, solo lo cercano a los tuyos.'],
+    ['nocturna', 'Nocturna', 'Intensificador de luz: todo en verde. No distingue bandos; los tuyos llevan una baliza que parpadea.'],
+    ['termica', 'Térmica', 'Calor en blanco: cuerpos y motores brillan también bajo los árboles. No distingue bandos.'],
+    ['espectro', 'Espectro', 'Lo que emite por radio: antenas, drones de radio e inhibidores. La fibra y el soldado callado no aparecen.'],
+  ];
+
+  // ---------- capas de terreno: se pintan una vez por paleta y luego se reutilizan como imagen ----------
+  const capas = {};
+  function capa(modo) {
+    if (capas[modo]) return capas[modo];
+    const P = D.pintor(modo, 0), suelo = document.createElement('canvas'), copas = document.createElement('canvas'); suelo.width = suelo.height = copas.width = copas.height = N * PX;
+    const c = suelo.getContext('2d'), X = (v) => v * PX, linea = (pts) => { c.beginPath(); pts.forEach(([x, y], i) => (i ? c.lineTo(X(x), X(y)) : c.moveTo(X(x), X(y)))); };
+    c.fillStyle = P.col('suelo'); c.fillRect(0, 0, N * PX, N * PX);
+    const U = mapa.urbano;
+    for (const h of mapa.hierbas) { c.fillStyle = P.col('hierba'); c.beginPath(); c.ellipse(X(h.x), X(h.y), X(h.rx), X(h.ry), h.ang, 0, TAU); c.fill(); }
+    for (const f of mapa.campos) { // campo arado: el polígono y, dentro, los surcos
+      c.fillStyle = P.col('campo'); linea(f.pts); c.closePath(); c.fill(); c.save(); c.clip();
+      c.strokeStyle = P.col('surco'); c.lineWidth = 1; c.beginPath(); const co = Math.cos(f.ang), si = Math.sin(f.ang), cx = f.pts[0][0], cy = f.pts[0][1];
+      for (let d = -70; d < 70; d += 0.5) { c.moveTo(X(cx + co * -70 - si * d), X(cy + si * -70 + co * d)); c.lineTo(X(cx + co * 70 - si * d), X(cy + si * 70 + co * d)); } c.stroke(); c.restore();
+    }
+    c.fillStyle = P.col('acera'); c.fillRect(X(U.x0), X(U.y0), X(U.x1 - U.x0 + 1), X(U.y1 - U.y0 + 1)); // el casco urbano: suelo de acera
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    c.strokeStyle = P.col('agua'); c.lineWidth = X(2.6); linea(mapa.arroyo); c.stroke();
+    for (const v of mapa.vados) { c.fillStyle = P.col('camino'); c.globalAlpha = 0.55; c.beginPath(); c.arc(X(v.x), X(v.y), X(2.2), 0, TAU); c.fill(); c.globalAlpha = 1; c.fillStyle = P.col('ruina'); for (let i = 0; i < 9; i++) { const a = i * 2.4, d = 0.5 + (i % 3) * 0.55; c.beginPath(); c.arc(X(v.x + Math.cos(a) * d), X(v.y + Math.sin(a) * d), 2 + (i % 2), 0, TAU); c.fill(); } }
+    for (const q of mapa.crateres) { c.fillStyle = P.col('crater'); c.beginPath(); c.ellipse(X(q.x), X(q.y), X(q.r), X(q.r * 0.75), 0, 0, TAU); c.fill(); c.fillStyle = P.col('trinchera'); c.globalAlpha = 0.45; c.beginPath(); c.ellipse(X(q.x) + 1, X(q.y) + 1, X(q.r * 0.5), X(q.r * 0.36), 0, 0, TAU); c.fill(); c.globalAlpha = 1; }
+    c.lineCap = 'butt'; for (const q of mapa.calles) { c.strokeStyle = P.col('calle'); c.lineWidth = X(1.7); linea(q); c.stroke(); } // calles: asfalto y una línea central gastada
+    c.strokeStyle = P.col('acera'); c.lineWidth = 1; c.setLineDash([7, 9]); for (const q of mapa.calles) { linea(q); c.stroke(); } c.setLineDash([]); c.lineCap = 'round';
+    { c.fillStyle = P.col('caja'); c.strokeStyle = P.tinta; c.lineWidth = 1; for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (mapa.terreno[y * N + x] === T.PUENTE && !(x >= U.x0 && x <= U.x1 && y >= U.y0 && y <= U.y1 && false)) { c.fillRect(X(x), X(y), PX, PX); } }
+    // camino con roderas; donde cruza el arroyo, un puente de tablas
+    c.strokeStyle = P.col('camino'); c.lineWidth = X(1.9); linea(mapa.camino); c.stroke();
+    c.strokeStyle = P.col('surco'); c.lineWidth = 1; c.setLineDash([9, 7]); for (const d of [-0.32, 0.32]) { c.save(); c.translate(X(d * 0.7), X(d * 0.7)); linea(mapa.camino); c.stroke(); c.restore(); } c.setLineDash([]);
+    { const pu = []; for (let i = 0; i + 1 < mapa.camino.length; i++) { const [ax, ay] = mapa.camino[i], [bx, by] = mapa.camino[i + 1]; for (let k = 0; k <= 12; k++) { const x = ax + ((bx - ax) * k) / 12, y = ay + ((by - ay) * k) / 12; if (x >= 0 && y >= 0 && x < N && y < N && mapa.terreno[Math.floor(y) * N + Math.floor(x)] === T.PUENTE) pu.push([x, y]); } }
+      if (pu.length > 1) { c.lineCap = 'butt'; c.strokeStyle = P.tinta; c.lineWidth = X(2.5); linea(pu); c.stroke(); c.strokeStyle = P.col('caja'); c.lineWidth = X(2.2); linea(pu); c.stroke(); c.strokeStyle = P.tinta; c.globalAlpha = 0.45; c.setLineDash([1, 4]); linea(pu); c.stroke(); c.setLineDash([]); c.globalAlpha = 1; c.lineCap = 'round'; } }
+    c.lineJoin = 'miter'; for (const t of mapa.trincheras) { c.strokeStyle = P.col('tierra'); c.lineWidth = X(0.95); linea(t); c.stroke(); c.strokeStyle = P.col('trinchera'); c.lineWidth = X(0.42); linea(t); c.stroke(); }
+    for (const r of mapa.ruinas) { // muros rotos, suelo de escombro, un tabique y cascotes alrededor
+      D.fig.sombraE(c, P, X(r.x), X(r.y), X(r.w), X(r.h)); if (r.alto) D.fig.sombraE(c, P, X(r.x) + 4, X(r.y) + 5, X(r.w), X(r.h)); // el bloque de pisos da más sombra
+      if (r.alto) { // bloque de pisos entero: se ve el tejado, no el interior; algún boquete de impacto
+        c.fillStyle = P.col('bloque'); c.fillRect(X(r.x), X(r.y), X(r.w), X(r.h)); c.fillStyle = P.col('tejado'); c.fillRect(X(r.x) + 4, X(r.y) + 4, X(r.w) - 8, X(r.h) - 8);
+        c.strokeStyle = P.col('bloque'); c.lineWidth = 1; c.beginPath(); for (let i = 2; i < r.w; i += 2) { c.moveTo(X(r.x + i), X(r.y) + 4); c.lineTo(X(r.x + i), X(r.y + r.h) - 4); } c.stroke();
+        c.fillStyle = P.col('ruinaS'); c.beginPath(); c.ellipse(X(r.x + r.w * (r.part || 0.5)), X(r.y + r.h * 0.5), X(0.8), X(0.6), 0.5, 0, TAU); c.fill();
+        c.strokeStyle = P.tinta; c.lineWidth = 1.6; c.strokeRect(X(r.x) + 0.5, X(r.y) + 0.5, X(r.w), X(r.h)); c.fillStyle = P.col('acera'); for (const [hx, hy] of r.huecos) c.fillRect(X(hx) + 3, X(hy) + 3, PX - 6, PX - 6); continue;
+      }
+      c.fillStyle = P.col('ruina'); c.fillRect(X(r.x), X(r.y), X(r.w), X(r.h)); c.fillStyle = P.col('ruinaS'); c.fillRect(X(r.x + 1), X(r.y + 1), X(r.w - 2), X(r.h - 2));
+      for (const [hx, hy] of r.huecos) c.fillRect(X(hx), X(hy), PX, PX);
+      if (r.part) { c.fillStyle = P.col('ruina'); c.fillRect(X(r.x + r.w * r.part), X(r.y + 1), 4, X(r.h - 2) * 0.7); }
+      c.strokeStyle = P.tinta; c.lineWidth = 1.2; c.setLineDash([14, 5, 4, 6]); c.strokeRect(X(r.x) + 0.5, X(r.y) + 0.5, X(r.w), X(r.h)); c.setLineDash([]);
+      c.fillStyle = P.col('ruina'); for (let i = 0; i < 6; i++) c.fillRect(X(r.x) - 5 + ((i * 37) % (X(r.w) + 8)), X(r.y + r.h) + 2 + ((i * 13) % 7), 4, 3);
+    }
+    for (const t of mapa.tubos) for (const b of [t.a, t.b]) D.fig.edificio(c, P, X(b.x), X(b.y), 'boca', null, PX * 0.085);
+    if (P.sombras) { c.fillStyle = 'rgba(30,34,40,0.16)'; for (const a of mapa.arboles) { c.beginPath(); c.arc(X(a.x) + 5, X(a.y) + 7, X(a.r), 0, TAU); c.fill(); } }
+    const k = copas.getContext('2d'); for (const a of mapa.arboles) { k.fillStyle = P.col('arbol'); k.beginPath(); k.arc(X(a.x), X(a.y), X(a.r), 0, TAU); k.fill(); } for (const a of mapa.arboles) { k.fillStyle = P.col('arbol2'); k.beginPath(); k.arc(X(a.x + a.r * 0.25), X(a.y + a.r * 0.25), X(a.r * 0.6), 0, TAU); k.fill(); }
+    return (capas[modo] = { suelo, copas });
+  }
+
+  // ---------- dibujo ----------
+  const oscuro = document.createElement('canvas');
+  function grano(n, color, a) { ctx.fillStyle = color; ctx.globalAlpha = a; for (let i = 0; i < n; i++) ctx.fillRect(Math.random() * cw, Math.random() * ch, 1.4, 1.4); ctx.globalAlpha = 1; }
+  function vineta(color) { const g = ctx.createRadialGradient(cw / 2, ch / 2, ch * 0.42, cw / 2, ch / 2, Math.max(cw, ch) * 0.75); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, color); ctx.fillStyle = g; ctx.fillRect(0, 0, cw, ch); }
+  let tiempo = 0, tDib = 0, nDib = 0, cuadros = 0, tSeg = 0;
+  function dibujar() {
+    const t0 = performance.now(), z = cam.z, ox = Math.round(cw / 2 - cam.x * z), oy = Math.round(ch / 2 - cam.y * z), luz = D.luz(m);
+    const modo = vision === 'optica' ? (luz >= 0.5 ? 'dia' : 'noche') : vision, P = D.pintor(modo, tiempo), L = capa(modo), lado = N * z;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.globalAlpha = 1; ctx.shadowBlur = 0; ctx.fillStyle = P.col('suelo'); ctx.fillRect(0, 0, cw, ch);
+    ctx.imageSmoothingEnabled = z < PX; ctx.drawImage(L.suelo, ox, oy, lado, lado);
+    if (vision === 'optica' && luz > 0 && luz < 1) { ctx.globalAlpha = modo === 'dia' ? 1 - luz : luz; ctx.drawImage(capa(modo === 'dia' ? 'noche' : 'dia').suelo, ox, oy, lado, lado); ctx.globalAlpha = 1; } // anochece y amanece: las dos capas fundidas
+    const fuera = (x, y, r) => ox + (x + r) * z < 0 || oy + (y + r) * z < 0 || ox + (x - r) * z > cw || oy + (y - r) * z > ch;
+    const sE = z * 0.092, sS = Math.max(0.8, z * 0.075), sD = Math.max(0.85, z * 0.082);
+    for (const e of m.ents) if (e.clase === 'edif' && !fuera(e.x, e.y, 3)) D.fig.edificio(ctx, P, ox + e.x * z, oy + e.y * z, e.tipo, mio(e.j), sE * (e.tipo === 'centro' ? 1.15 : 1));
+    for (const e of m.ents) if (e.clase === 'dron' && !e.alt && !fuera(e.x, e.y, 2)) D.fig.dron(ctx, P, ox + e.x * z, oy + e.y * z, e.ang, e.tipo, mio(e.j), sD, 0);
+    for (const e of m.ents) if (e.clase === 'sol' && !fuera(e.x, e.y, 2)) D.fig.soldado(ctx, P, ox + e.x * z, oy + e.y * z, e.ang, e.tipo, mio(e.j), sS, {});
+    ctx.globalAlpha = modo === 'termica' ? 0.45 : modo === 'espectro' ? 0.5 : 0.93; ctx.drawImage(L.copas, ox, oy, lado, lado); ctx.globalAlpha = 1; // las copas tapan lo de debajo (a la térmica, menos)
+    for (const e of m.ents) if (e.clase === 'dron' && e.alt && !fuera(e.x, e.y, 3)) D.fig.dron(ctx, P, ox + e.x * z, oy + e.y * z, e.ang, e.tipo, mio(e.j), sD, e.alt * z * 0.6);
+    if (vision === 'optica' && luz < 1) { // la noche: oscuridad con claros alrededor de lo tuyo
+      if (oscuro.width !== lienzo.width || oscuro.height !== lienzo.height) { oscuro.width = lienzo.width; oscuro.height = lienzo.height; }
+      const o = oscuro.getContext('2d'); o.setTransform(dpr, 0, 0, dpr, 0, 0); o.globalCompositeOperation = 'source-over'; o.clearRect(0, 0, cw, ch); o.fillStyle = 'rgba(6,9,16,' + (0.86 * (1 - luz)).toFixed(3) + ')'; o.fillRect(0, 0, cw, ch); o.globalCompositeOperation = 'destination-out';
+      for (const e of m.ents) { if (e.j !== YO || e.clase === 'dron') continue; const r = (e.clase === 'edif' ? 8 : 6) * z, x = ox + e.x * z, y = oy + e.y * z; if (x < -r || y < -r || x > cw + r || y > ch + r) continue; const g = o.createRadialGradient(x, y, r * 0.25, x, y, r); g.addColorStop(0, 'rgba(0,0,0,0.95)'); g.addColorStop(1, 'rgba(0,0,0,0)'); o.fillStyle = g; o.beginPath(); o.arc(x, y, r, 0, TAU); o.fill(); }
+      ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(oscuro, 0, 0); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    if (modo === 'nocturna') { grano(Math.round((cw * ch) / 420), '#d8ffe0', 0.1); vineta('rgba(0,12,4,0.75)'); }
+    if (modo === 'termica') { grano(Math.round((cw * ch) / 1100), '#fff', 0.05); vineta('rgba(0,0,0,0.6)'); }
+    if (modo === 'espectro') emisiones(z, ox, oy);
+    marco(modo, z, ox, oy);
+    tDib += performance.now() - t0; nDib++;
+  }
+  function emisiones(z, ox, oy) { // lo que emite por radio: anillos; el enlace de cada dron con su antena; la burbuja del inhibidor
+    const COL = ['#39c6d6', '#ff8a4c'], anillo = (x, y, r, c, n) => { for (let i = 0; i < n; i++) { const k = (tiempo * 0.5 + i / n) % 1; ctx.strokeStyle = c; ctx.globalAlpha = 0.75 * (1 - k); ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(x, y, r * k, 0, TAU); ctx.stroke(); } ctx.globalAlpha = 1; };
+    ctx.strokeStyle = 'rgba(57,198,214,0.08)'; ctx.lineWidth = 1; ctx.beginPath(); const p = 5 * z; for (let x = ((ox % p) + p) % p; x < cw; x += p) { ctx.moveTo(x, 0); ctx.lineTo(x, ch); } for (let y = ((oy % p) + p) % p; y < ch; y += p) { ctx.moveTo(0, y); ctx.lineTo(cw, y); } ctx.stroke();
+    const antenas = [[], []]; for (const e of m.ents) if (e.clase === 'edif' && e.tipo === 'antena') { antenas[e.j].push(e); anillo(ox + e.x * z, oy + e.y * z, 16 * z, COL[mio(e.j)], 4); }
+    for (const e of m.ents) {
+      if (e.clase === 'dron' && e.alt && D.DRON[e.tipo].radio) { const x = ox + e.x * z, y = oy + e.y * z; let a = null; for (const q of antenas[e.j]) if (!a || Math.hypot(q.x - e.x, q.y - e.y) < Math.hypot(a.x - e.x, a.y - e.y)) a = q; anillo(x, y, 2 * z, COL[mio(e.j)], 2); if (a) { ctx.setLineDash([4, 6]); ctx.strokeStyle = COL[mio(e.j)]; ctx.globalAlpha = 0.7; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(ox + a.x * z, oy + a.y * z); ctx.lineTo(x, y); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1; } }
+      if (e.clase === 'sol' && e.tipo === 'inhibidor') { const x = ox + e.x * z, y = oy + e.y * z, r = 6 * z; ctx.save(); ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.clip(); ctx.strokeStyle = COL[mio(e.j)]; ctx.globalAlpha = 0.3; ctx.lineWidth = 1; ctx.beginPath(); for (let i = -r * 2; i < r * 2; i += 9) { ctx.moveTo(x + i, y - r); ctx.lineTo(x + i - r, y + r); } ctx.stroke(); ctx.restore(); ctx.globalAlpha = 1; ctx.strokeStyle = COL[mio(e.j)]; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.stroke(); }
+    }
+  }
+  function marco(modo, z, ox, oy) { // el marco de la transmisión
+    const c = { dia: '#20242a', noche: '#8f9bb0', nocturna: '#c9ffd2', termica: '#fff', espectro: '#39c6d6' }[modo]; ctx.strokeStyle = c; ctx.fillStyle = c; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.9;
+    for (const [x, y, dx, dy] of [[14, 14, 1, 1], [cw - 14, 14, -1, 1], [14, ch - 14, 1, -1], [cw - 14, ch - 14, -1, -1]]) { ctx.beginPath(); ctx.moveTo(x + dx * 26, y); ctx.lineTo(x, y); ctx.lineTo(x, y + dy * 26); ctx.stroke(); }
+    ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(cw / 2 - 16, ch / 2); ctx.lineTo(cw / 2 - 5, ch / 2); ctx.moveTo(cw / 2 + 5, ch / 2); ctx.lineTo(cw / 2 + 16, ch / 2); ctx.moveTo(cw / 2, ch / 2 - 16); ctx.lineTo(cw / 2, ch / 2 - 5); ctx.moveTo(cw / 2, ch / 2 + 5); ctx.lineTo(cw / 2, ch / 2 + 16); ctx.stroke();
+    ctx.font = '11px ui-monospace, Menlo, Consolas, monospace'; ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+    const nom = VISIONES.find((v) => v[0] === vision)[1].toUpperCase() + (vision === 'optica' ? (modo === 'dia' ? ' · DÍA' : ' · NOCHE') : '');
+    ctx.fillText(D.ROL[YO].clave.toUpperCase() + ' · CÁM 1 · ' + nom, 24, 32); ctx.fillText('ALT ' + Math.round(1800 / z) + ' m   SECTOR ' + m.semilla, 24, ch - 24);
+    ctx.textAlign = 'right'; ctx.fillText(D.hora(m) + '   ' + String(Math.floor(cam.x * 10)).padStart(3, '0') + ' E  ' + String(Math.floor(cam.y * 10)).padStart(3, '0') + ' S', cw - 24, 32);
+    const barra = 5 * z; ctx.beginPath(); ctx.moveTo(cw - 24 - barra, ch - 28); ctx.lineTo(cw - 24, ch - 28); ctx.moveTo(cw - 24 - barra, ch - 32); ctx.lineTo(cw - 24 - barra, ch - 24); ctx.moveTo(cw - 24, ch - 32); ctx.lineTo(cw - 24, ch - 24); ctx.stroke(); ctx.fillText('50 m', cw - 24, ch - 36);
+    if (Math.sin(tiempo * 4) > 0) { ctx.fillStyle = modo === 'dia' ? '#c2552d' : c; ctx.beginPath(); ctx.arc(cw / 2 - 30, 28, 4, 0, TAU); ctx.fill(); } ctx.fillStyle = c; ctx.textAlign = 'left'; ctx.fillText('REC', cw / 2 - 20, 32);
+    ctx.globalAlpha = 1;
+  }
+
+  // ---------- panel ----------
+  let tAviso = 0;
+  function aviso(txt) { const a = $('aviso'); a.textContent = txt; a.classList.add('ver'); tAviso = performance.now() + 2200; }
+  function ponVision(v) { vision = v; for (const b of document.querySelectorAll('#visiones button')) b.classList.toggle('on', b.dataset.v === v); $('notaVision').textContent = VISIONES.find((x) => x[0] === v)[2]; }
+  VISIONES.forEach(([v, n], i) => { const b = document.createElement('button'); b.type = 'button'; b.dataset.v = v; b.innerHTML = '<span>' + n + '</span><kbd>' + (i + 1) + '</kbd>'; b.addEventListener('click', () => ponVision(v)); $('visiones').appendChild(b); });
+  const ir = (rol, esc, s) => { location.search = '?rol=' + rol + '&esc=' + esc + '&s=' + s; };
+  $('semilla').textContent = m.semilla + ' · ' + escenario; $('semilla').addEventListener('click', (ev) => { ev.preventDefault(); ir(D.ROL[YO].clave, escenario, Math.floor(Math.random() * 99999) + 1); });
+  $('rol').textContent = D.ROL[YO].nombre; $('rolQue').textContent = D.ROL[YO].que; $('cambia').addEventListener('click', () => { $('menu').hidden = false; });
+  { // el menú de inicio: primero se elige el papel
+    let esc = escenario; const caja = $('menuRoles'), cajaE = $('menuEsc');
+    D.ROL.forEach((r) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'rol'; b.innerHTML = '<b>' + r.nombre + '</b><span>' + r.que + '</span>'; b.addEventListener('click', () => ir(r.clave, esc, elegido ? m.semilla : Math.floor(Math.random() * 99999) + 1)); caja.appendChild(b); });
+    for (const k in D.ESCENARIO) { const b = document.createElement('button'); b.type = 'button'; b.dataset.e = k; b.textContent = D.ESCENARIO[k]; b.classList.toggle('on', k === esc); b.addEventListener('click', () => { esc = k; for (const q of cajaE.children) q.classList.toggle('on', q.dataset.e === k); }); cajaE.appendChild(b); }
+    $('menu').hidden = elegido; $('menuCierra').hidden = !elegido; $('menuCierra').addEventListener('click', () => { $('menu').hidden = true; });
+  }
+  function saltaHora() { const E = D.ECON, h = m.t % E.dia; m.t += h < E.diaLuz - E.crepusculo ? E.diaLuz - E.crepusculo - h : E.dia - h; aviso(h < E.diaLuz - E.crepusculo ? 'Anochece' : 'Amanece'); }
+  $('saltaHora').addEventListener('click', saltaHora);
+  function panel() {
+    const noche = D.luz(m) < 0.5; $('hora').textContent = D.hora(m) + (noche ? ' · noche' : ' · día'); $('pers').textContent = m.jug[YO].personas + ' / ' + D.ECON.tope[YO] + ' · pilotos ' + m.jug[YO].pilotos;
+    $('saltaHora').firstChild.textContent = noche ? 'pasar al día' : 'pasar a la noche';
+    let h = 'Pasa el cursor por el sector.';
+    if (raton.dentro) {
+      const x = cam.x + (raton.x - cw / 2) / cam.z, y = cam.y + (raton.y - ch / 2) / cam.z; let mejor = null, md = 1.1;
+      for (const e of m.ents) { const d = Math.hypot(e.x - x, e.y - y) / (e.clase === 'edif' ? 1.6 : 1); if (d < md) { md = d; mejor = e; } }
+      for (const t of mapa.tubos) for (const b of [t.a, t.b]) if (Math.hypot(b.x - x, b.y - y) < md) { md = Math.hypot(b.x - x, b.y - y); mejor = { clase: 'edif', tipo: 'boca', j: -1 }; }
+      if (mejor) { const d = (mejor.clase === 'sol' ? D.SOL : mejor.clase === 'dron' ? D.DRON : D.EDIF)[mejor.tipo]; h = '<b style="color:' + (mejor.j === YO ? 'var(--yo)' : mejor.j === 1 - YO ? 'var(--rival)' : 'var(--tinta)') + '">' + d.nombre + (mejor.j === YO ? ' · tuyo' : mejor.j === 1 - YO ? ' · rival' : '') + '</b>' + d.que + (mejor.eq ? '<br>equipo ' + mejor.eq : '') + (d.proto ? '' : '<br><i>llega en la segunda tanda</i>'); }
+      else if (x >= 0 && y >= 0 && x < N && y < N) { const t = mapa.terreno[Math.floor(y) * N + Math.floor(x)], cb = D.COBERTURA[t]; h = '<b style="color:var(--tinta)">' + D.TERRENO[t] + '</b>' + (mapa.paso[Math.floor(y) * N + Math.floor(x)] ? 'se pasa a pie' : 'no se pasa') + ' · cobertura ' + Math.round(cb * 100) + ' %'; }
+    }
+    if ($('bajo').innerHTML !== h) $('bajo').innerHTML = h;
+  }
+
+  // ---------- entrada ----------
+  const teclas = new Set();
+  function medir() { dpr = Math.min(2, window.devicePixelRatio || 1); const r = lienzo.getBoundingClientRect(); cw = Math.max(1, r.width); ch = Math.max(1, r.height); lienzo.width = Math.round(cw * dpr); lienzo.height = Math.round(ch * dpr); }
+  const limita = () => { cam.z = Math.max(5, Math.min(44, cam.z)); cam.x = Math.max(0, Math.min(N, cam.x)); cam.y = Math.max(0, Math.min(N, cam.y)); };
+  addEventListener('resize', medir);
+  addEventListener('keydown', (ev) => {
+    if (ev.metaKey || ev.ctrlKey) return; teclas.add(ev.code);
+    if (ev.code === 'Digit1' || ev.code === 'Digit2' || ev.code === 'Digit3' || ev.code === 'Digit4') ponVision(VISIONES[Number(ev.code.slice(5)) - 1][0]);
+    else if (ev.code === 'KeyN') saltaHora(); else if (ev.code === 'KeyH') { cam.x = mapa.bases[YO].x; cam.y = mapa.bases[YO].y; }
+    if (ev.code.startsWith('Arrow') || ev.code === 'Space') ev.preventDefault();
+  });
+  addEventListener('keyup', (ev) => teclas.delete(ev.code)); addEventListener('blur', () => teclas.clear());
+  let arrastre = null;
+  lienzo.addEventListener('pointerdown', (ev) => { arrastre = { x: ev.clientX, y: ev.clientY, cx: cam.x, cy: cam.y }; lienzo.setPointerCapture(ev.pointerId); });
+  lienzo.addEventListener('pointermove', (ev) => { const r = lienzo.getBoundingClientRect(); raton.x = ev.clientX - r.left; raton.y = ev.clientY - r.top; raton.dentro = true; if (arrastre) { cam.x = arrastre.cx - (ev.clientX - arrastre.x) / cam.z; cam.y = arrastre.cy - (ev.clientY - arrastre.y) / cam.z; limita(); } });
+  lienzo.addEventListener('pointerup', () => { arrastre = null; }); lienzo.addEventListener('pointercancel', () => { arrastre = null; }); lienzo.addEventListener('pointerleave', () => { raton.dentro = false; });
+  lienzo.addEventListener('contextmenu', (ev) => ev.preventDefault());
+  lienzo.addEventListener('wheel', (ev) => { ev.preventDefault(); const r = lienzo.getBoundingClientRect(), px = ev.clientX - r.left - cw / 2, py = ev.clientY - r.top - ch / 2, wx = cam.x + px / cam.z, wy = cam.y + py / cam.z; cam.z *= Math.exp(-ev.deltaY * 0.0012); limita(); cam.x = wx - px / cam.z; cam.y = wy - py / cam.z; limita(); }, { passive: false });
+
+  // ---------- bucle ----------
+  let antes = performance.now(), deuda = 0, tSim = 0, nSim = 0;
+  function cuadro(ahora) {
+    const dt = Math.min(100, ahora - antes); antes = ahora; tiempo += dt / 1000;
+    const v = (dt / 1000) * 26 * (14 / cam.z + 0.4);
+    if (teclas.has('KeyW') || teclas.has('ArrowUp')) cam.y -= v; if (teclas.has('KeyS') || teclas.has('ArrowDown')) cam.y += v; if (teclas.has('KeyA') || teclas.has('ArrowLeft')) cam.x -= v; if (teclas.has('KeyD') || teclas.has('ArrowRight')) cam.x += v; limita();
+    deuda += dt; let n = 0; while (deuda >= 50 && n < 4) { const t0 = performance.now(); D.tick(m); tSim += performance.now() - t0; nSim++; deuda -= 50; n++; } if (deuda > 200) deuda = 0;
+    dibujar(); cuadros++;
+    if (ahora - tSeg >= 1000) { $('rend').textContent = cuadros + ' cuadros/s · dibujo ' + (tDib / Math.max(1, nDib)).toFixed(2).replace('.', ',') + ' ms · simulación ' + (tSim / Math.max(1, nSim)).toFixed(3).replace('.', ',') + ' ms/tick'; cuadros = 0; tDib = 0; nDib = 0; tSim = 0; nSim = 0; tSeg = ahora; panel(); }
+    else if (cuadros % 6 === 0) panel();
+    if (tAviso && ahora > tAviso) { $('aviso').classList.remove('ver'); tAviso = 0; }
+    requestAnimationFrame(cuadro);
+  }
+  medir(); ponVision('optica'); panel(); requestAnimationFrame(cuadro);
+})();
+
+</script>
+</body>
+</html>
