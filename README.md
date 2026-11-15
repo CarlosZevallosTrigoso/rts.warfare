@@ -17,12 +17,10 @@ pilotos (ataque) o defender el centro.
 
 - Jugar: `drone/index.html` (en línea, `…/rts.warfare/drone/`).
 - Construir: `node drone/build.js`. Pruebas: `node drone/tests/sim.test.js`.
-- Estado: se juega la parte de infantería. Equipos de fuerzas especiales que se seleccionan y se mueven (con sigilo y fuego
-  contenido), detección por cobertura, luz y línea de visión, combate entre soldados, la carga que vuela edificios y el final
-  (el atacante gana si vuela el centro; el defensor, si amanece). Tacto de Company of Heroes: obstáculos bajos, cobertura
-  con dirección y vista previa de puestos al ordenar, supresión en dos grados (agachado y clavado), retirada, granada y
-  humo. Drones: el de reconocimiento se manda a vigilar un punto y vuelve solo a recargar; los FPV (de radio y de fibra) se
-  lanzan contra lo que se ve; cada dron en el aire ocupa a un piloto; el de radio necesita enlace (antenas y observadores) y
-  lo tumba el inhibidor; la escopeta los derriba; el taller repone FPV. El centro está oculto (ningún dron lo ve; a pie, a 50 m) y se encuentra por rastros: rumbos de radio
-  hacia lo que emite el rival (los dan observadores y la estación de escucha) e hilos de fibra. La máquina lleva cualquiera de los dos papeles con lo que su bando sabe (guardia y reacción, FPV con
-  prioridades, reunión antes de entrar, registro por sectores, humo para cubrir la carga).
+- Estado: se juegan los dos papeles contra la máquina. La partida simula 24 horas (un minuto por hora), de las 22:00 a las
+  22:00 del día siguiente, cuando llegan los refuerzos aéreos de la defensa. Misión del atacante: entrar, destruir y huir
+  (encontrar el centro, volarlo a mano y sacar a los supervivientes por la zona de extracción). Posiciones al azar: el
+  atacante sale de cualquier borde; el centro, el taller, el barracón y las antenas del defensor caen separados por el casco
+  urbano, y hay patios señuelo. Escuadrones numerados por bando (teclas 1–6). Infantería al estilo Company of Heroes
+  (cobertura con dirección, supresión, retirada, granada, humo); drones (reconocimiento, FPV de radio y de fibra, pilotos,
+  batería, enlace, inhibidor); rastros (rumbos de radio, hilos de fibra); día y noche con cuatro visiones (teclas 7 8 9 0).

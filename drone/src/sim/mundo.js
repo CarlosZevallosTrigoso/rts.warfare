@@ -4,21 +4,21 @@
   const D = globalThis.D || (globalThis.D = {});
   const ECON = D.ECON, T = D.T, TAU = Math.PI * 2;
 
-  D.esNoche = (m) => m.t % ECON.dia >= ECON.diaLuz;
+  const DESF = (((ECON.hora0 - 6 + 24) % 24) * ECON.dia) / 24, fase = (m) => (m.t + DESF) % ECON.dia; // la partida empieza a las 22:00; la fase cuenta desde las 06:00
+  D.esNoche = (m) => fase(m) >= ECON.diaLuz;
   // Cuánta luz hay, de 0 (noche cerrada) a 1 (día): baja durante el anochecer y sube al amanecer.
   D.luz = function (m) {
-    const h = m.t % ECON.dia, c = ECON.crepusculo;
-    if (h < c * 0.5) return 0.5 + (h / (c * 0.5)) * 0.5; // termina de amanecer
+    const h = fase(m), c = ECON.crepusculo;
     if (h < ECON.diaLuz - c) return 1;
     if (h < ECON.diaLuz) return (ECON.diaLuz - h) / c; // anochece
-    if (h < ECON.dia - c * 0.5) return 0;
-    return ((h - (ECON.dia - c * 0.5)) / (c * 0.5)) * 0.5; // empieza a clarear
+    if (h < ECON.dia - c) return 0;
+    return (h - (ECON.dia - c)) / c; // amanece: a las 06:00 ya es de día
   };
-  D.hora = function (m) { const f = ((m.t % ECON.dia) / ECON.dia) * 24, h = Math.floor(f + 6) % 24, mi = Math.floor((f % 1) * 60); return String(h).padStart(2, '0') + ':' + String(mi).padStart(2, '0'); }; // el día empieza a las 06:00
-  D.faltaAmanecer = (m) => Math.max(0, ECON.dia - m.t); // ticks que quedan de partida
+  D.hora = function (m) { const f = (fase(m) / ECON.dia) * 24, h = Math.floor(f + 6) % 24, mi = Math.floor((f % 1) * 60); return String(h).padStart(2, '0') + ':' + String(mi).padStart(2, '0'); }; // el día empieza a las 06:00
+  D.faltaRefuerzos = (m) => Math.max(0, ECON.dia - m.t); // ticks que quedan de partida: a las 22:00 llegan los refuerzos del defensor
 
   // Un dron posado en su hueco junto al taller (i: el hueco). Estados: posado · vuelo · vuelve (a recargar) · carga.
-  D.dronNuevo = function (m, j, t, p, i, ang) { const d = D.DRON[t], x = p.x + 2.4 + (i % 3) * 1.5, y = p.y + 0.5 + (Math.floor(i / 3) - 0.5) * 1.6; return crear(m, 'dron', j, t, x, y, { alt: 0, ang, estado: 'posado', hueco: i, bat: d.bat || 0, batMax: d.bat || 0, casa: { x, y }, sinEnlace: 0, obj: 0, dest: null, orbita: null }); };
+  D.dronNuevo = function (m, j, t, p, i, ang) { const d = D.DRON[t], x = p.x + 0.5 + ((i % 3) - 1) * 1.5, y = p.y + 0.5 + [-1.8, 1.8, -3.2][Math.floor(i / 3) % 3]; return crear(m, 'dron', j, t, x, y, { alt: 0, ang, estado: 'posado', hueco: i, bat: d.bat || 0, batMax: d.bat || 0, casa: { x, y }, sinEnlace: 0, obj: 0, dest: null, orbita: null }); };
   function crear(m, clase, j, tipo, x, y, extra) { const e = Object.assign({ id: m.sigId++, clase, j, tipo, x, y, ang: 0, vida: 1 }, extra); m.ents.push(e); m.porId.set(e.id, e); return e; }
   const libre = (m, x, y) => { x = Math.floor(x); y = Math.floor(y); return x >= 0 && y >= 0 && x < m.N && y < m.N && m.paso[y * m.N + x] === 1; };
   // La celda pisable más cercana a un punto (en espiral), que no sea ninguna de las ya dadas.
@@ -32,12 +32,12 @@
     op = op || {};
     const mapa = D.generarMapa(semilla, op.escenario), N = mapa.N, az = D.prng(semilla ^ 0x51ED);
     const m = { semilla, t: op.t === undefined ? ECON.inicio : op.t, N, mapa, paso: mapa.paso.slice(), ents: [], porId: new Map(), sigId: 1, az,
-      jug: [{ personas: 0, pilotos: 0, bajas: 0, fab: 0, nFab: 0 }, { personas: 0, pilotos: 0, bajas: 0, fab: 0, nFab: 0 }], visto: [new Set(), new Set()], conocido: [new Set(), new Set()], efectos: [], cola: [], fin: null, ia: [null, null], humos: [], proy: [], hilos: [], rumbo: [[], []] };
+      jug: [{ personas: 0, pilotos: 0, bajas: 0, fab: 0, nFab: 0 }, { personas: 0, pilotos: 0, bajas: 0, fab: 0, nFab: 0 }], visto: [new Set(), new Set()], conocido: [new Set(), new Set()], efectos: [], cola: [], fin: null, caido: 0, extraccion: { x: mapa.bases[0].x + 0.5, y: mapa.bases[0].y + 0.5, r: ECON.extraeRadio }, ia: [null, null], humos: [], proy: [], hilos: [], rumbo: [[], []] };
     // Coste de pisar cada celda: a paso normal manda la velocidad; en sigilo se prefiere lo que tapa.
     m.coste = new Float32Array(N * N); m.costeSigilo = new Float32Array(N * N);
     for (let c = 0; c < N * N; c++) { const t = mapa.terreno[c], v = D.PASO[t] || 1; m.coste[c] = 1 / v; m.costeSigilo[c] = Math.max(0.5, (1 / v) * (1.5 - D.COBERTURA[t])); }
-    let eq = 1;
-    const equipo = (j, roles, x, y, ang) => { const us = new Set(); roles.forEach((r, i) => { const d = (i - (roles.length - 1) / 2) * 1.3, p = D.cercaLibre(m, x + Math.cos(ang + 1.57) * d, y + Math.sin(ang + 1.57) * d, us), s = D.SOL[r]; crear(m, 'sol', j, r, p.x, p.y, { ang, eq, vida: s.vida, vidaMax: s.vida, orden: 'nada', ruta: null, ri: 0, sigilo: false, fuego: true, recarga: 0, supr: 0, obj: 0, canal: 0, movio: false, tTiro: -999, firma: 1, mira: ang, cdGranada: 0, cdHumo: 0 }); m.jug[j].personas++; }); eq++; };
+    let eq = 1; const nums = [0, 0]; // los escuadrones se numeran por bando: 1, 2, 3…
+    const equipo = (j, roles, x, y, ang) => { const us = new Set(), num = ++nums[j]; roles.forEach((r, i) => { const d = (i - (roles.length - 1) / 2) * 1.3, p = D.cercaLibre(m, x + Math.cos(ang + 1.57) * d, y + Math.sin(ang + 1.57) * d, us), s = D.SOL[r]; crear(m, 'sol', j, r, p.x, p.y, { ang, eq, num, vida: s.vida, vidaMax: s.vida, orden: 'nada', ruta: null, ri: 0, sigilo: false, fuego: true, recarga: 0, supr: 0, obj: 0, canal: 0, movio: false, tTiro: -999, firma: 1, mira: ang, cdGranada: 0, cdHumo: 0 }); m.jug[j].personas++; }); eq++; };
     const edif = (j, t, p) => { if (!p) return; const e = crear(m, 'edif', j, t, p.x + 0.5, p.y + 0.5, { vida: 1 }), r = D.EDIF[t].tam >= 3 ? 1 : 0; for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) { const X = p.x + dx, Y = p.y + dy; if (X >= 0 && Y >= 0 && X < N && Y < N && (r === 0 || Math.abs(dy) < 1 || t === 'centro')) m.paso[Y * N + X] = 0; } return e; };
     const pilotos = (j, n) => { m.jug[j].pilotos = n; m.jug[j].personas += n; }; // están dentro: cuentan, pero no se ven
     const posado = (j, t, p, i, ang) => D.dronNuevo(m, j, t, p, i, ang);
@@ -90,7 +90,7 @@
       const cx = us.reduce((s, u) => s + u.x, 0) / us.length, cy = us.reduce((s, u) => s + u.y, 0) / us.length, am = D.amenaza(m, cmd.j, cmd.x, cmd.y, cx, cy), ps = D.puestos(m, cmd.x, cmd.y, us.length, am);
       us.forEach((u, i) => { const p = ps[i] || D.cercaLibre(m, cmd.x, cmd.y); u.orden = 'mover'; u.obj = 0; u.canal = 0; u.mira = Math.atan2(am.y - p.y, am.x - p.x); if (!irA(m, u, p.x, p.y)) { const q = D.cercaLibre(m, cmd.x, cmd.y); u.orden = 'mover'; irA(m, u, q.x, q.y); } });
     }
-    else if (cmd.t === 'retirada') { const b = m.ents.find((e) => e.clase === 'edif' && e.j === cmd.j && e.tipo === 'barracon') || m.mapa.bases[cmd.j], usadas = new Set(); for (const u of us) { const p = D.cercaLibre(m, b.x + (u.x > b.x ? 2 : -2), b.y + (u.y > b.y ? 2 : -2), usadas); u.sigilo = false; u.obj = 0; u.canal = 0; u.orden = 'retirada'; if (!irA(m, u, p.x, p.y)) u.orden = 'nada'; else u.orden = 'retirada'; } m.efectos.push({ tipo: 'retirada', j: cmd.j, x: us[0].x, y: us[0].y, t: m.t }); }
+    else if (cmd.t === 'retirada') { const b = cmd.j === 0 ? m.extraccion : m.ents.find((e) => e.clase === 'edif' && e.j === cmd.j && e.tipo === 'barracon') || m.mapa.bases[cmd.j], usadas = new Set(); for (const u of us) { const p = D.cercaLibre(m, b.x + (u.x > b.x ? 2 : -2), b.y + (u.y > b.y ? 2 : -2), usadas); u.sigilo = false; u.obj = 0; u.canal = 0; u.orden = 'retirada'; if (!irA(m, u, p.x, p.y)) u.orden = 'nada'; else u.orden = 'retirada'; } m.efectos.push({ tipo: 'retirada', j: cmd.j, x: us[0].x, y: us[0].y, t: m.t }); }
     else if (cmd.t === 'granada' || cmd.t === 'humo') {
       const g = cmd.t === 'granada', cd = g ? 'cdGranada' : 'cdHumo', alc = g ? ECON.granadaAlc : ECON.humoAlc; if (us[0][cd] > m.t) { m.efectos.push({ tipo: 'noPuede', j: cmd.j, que: 'recarga', t: m.t }); return; }
       let quien = null, md = 1e9; for (const u of us) { if (u.orden === 'retirada' || u.supr >= ECON.suprClavado) continue; const d = Math.hypot(u.x - cmd.x, u.y - cmd.y); if (d < md) { md = d; quien = u; } }
@@ -208,7 +208,7 @@
     if (u.canal < ECON.cargaTicks) return;
     o.vida = 0; m.efectos.push({ tipo: 'volado', x: o.x, y: o.y, j: u.j, de: o.j, clase: o.tipo, t: m.t });
     for (const q of m.ents) if (q.clase === 'sol' && q.obj === o.id) { q.orden = 'nada'; q.obj = 0; q.canal = 0; }
-    if (o.tipo === 'centro') m.fin = { gana: u.j, motivo: 'centro', t: m.t };
+    if (o.tipo === 'centro') { m.caido = m.t; m.efectos.push({ tipo: 'huida', t: m.t }); } // destruido: ahora hay que salir
   }
   // Lo lanzado llega: la granada revienta (hiere y clava a todos los de alrededor, sin mirar bando); el bote suelta su nube.
   function lanzados(m) {
@@ -322,10 +322,14 @@
     // Los caídos y lo volado salen del mundo.
     let hay = false; for (const e of m.ents) if (e.vida <= 0) { hay = true; break; }
     if (hay) { m.ents = m.ents.filter((e) => { if (e.vida > 0) return true; m.porId.delete(e.id); if (e.clase === 'edif') { const r = D.EDIF[e.tipo].tam >= 3 ? 1 : 0, cx = Math.floor(e.x), cy = Math.floor(e.y); for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) { const c = (cy + dy) * m.N + cx + dx; if (m.mapa.paso[c]) m.paso[c] = 1; } } return false; }); }
-    // El final: el atacante gana si vuela el centro; el defensor, si amanece o si al atacante no le queda quien ponga la carga.
+    // El final. Entrar, destruir y huir: el atacante gana cuando, volado el centro, todos los suyos que siguen vivos están en la
+    // zona de extracción. El defensor gana si dan las 22:00 (llegan sus refuerzos), si al atacante no le queda quien ponga la
+    // carga o si, volado el centro, no sale nadie.
     if (!m.fin) {
-      if (m.t >= ECON.dia) m.fin = { gana: 1, motivo: 'amanecer', t: m.t };
-      else if (!m.ents.some((e) => e.clase === 'sol' && e.j === 0 && D.SOL[e.tipo].carga)) m.fin = { gana: 1, motivo: 'sin asalto', t: m.t };
+      if (m.t >= ECON.dia) m.fin = { gana: 1, motivo: m.caido ? 'atrapados' : 'refuerzos', t: m.t };
+      else if (!m.caido) { if (!m.ents.some((e) => e.clase === 'sol' && e.j === 0 && D.SOL[e.tipo].carga)) m.fin = { gana: 1, motivo: 'sin asalto', t: m.t }; }
+      else if (m.t % 10 === 0) { let vivos = 0, fuera = 0; const z = m.extraccion; for (const e of m.ents) if (e.clase === 'sol' && e.j === 0) { vivos++; if (Math.hypot(e.x - z.x, e.y - z.y) > z.r) fuera++; }
+        if (!vivos) m.fin = { gana: 1, motivo: 'sin extraccion', t: m.t }; else if (!fuera) m.fin = { gana: 0, motivo: 'extraccion', salen: vivos, t: m.t }; }
     }
   };
 })();

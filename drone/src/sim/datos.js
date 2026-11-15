@@ -61,7 +61,7 @@
     boca:     { nombre: 'Boca de tubería', que: 'Entrada a un paso bajo tierra: ningún dron ve dentro.', tam: 1 },
   };
   D.ECON = {
-    dia: 28800, diaLuz: 14400, crepusculo: 600, inicio: 9600, tope: [30, 30], // el día dura 24 min: 12 de luz y 12 de noche. La partida empieza 4 min antes de anochecer y acaba al amanecer (16 min). 30 personas por bando
+    dia: 28800, diaLuz: 14400, crepusculo: 600, inicio: 0, hora0: 22, extraeRadio: 5, tope: [30, 30], // la partida simula 24 horas en 24 min (un minuto por hora): de las 22:00 a las 22:00 del día siguiente, cuando llegan los refuerzos aéreos de la defensa. Amanece a las 06:00 y anochece a las 18:00. La zona de extracción: 50 m de radio. 30 personas por bando
     verNoche: 0.45, verEdif: 14, dronVe: 12, dronVeEdif: 10, // de noche el soldado ve el 45 % (lleva visor); a qué distancia se descubre un edificio; lo que ve un dron de reconocimiento
     sigiloVel: 0.5, sigiloFirma: 0.6, quietoCob: 1, andaCob: 0.35, firmaTiro: 1.4, tiroDelata: 40, // en sigilo: media velocidad y menos firma; quieto, la cobertura tapa del todo; andando, un tercio; quien dispara se delata 2 s
     supr: 50, suprVel: 0.5, suprPrec: 0.6, cobTiro: 0.6, andaPrec: 0.5, curaRadio: 2.5, cura: 0.15, // bajo fuego: 2,5 s agachado, lento y con peor puntería; la cobertura quita hasta el 60 % de los impactos; el sanitario
@@ -75,12 +75,12 @@
     fpvRadio: 1.4, fpvDano: 80, fpvSupr: 80, fpvTecho: 0.3, // el FPV revienta al llegar; el de radio apenas hace daño bajo techo, el de fibra entra
     dronTiroAlc: 5, escopetaDron: 0.28, fusilDron: 0.07, dronOye: 9, // a 50 m el equipo le dispara: la escopeta acierta uno de cada tres tiros; el fusil, casi nunca
     verCentro: 5, rumboError: 0.14, hiloVe: 2.5, hiloVeDron: 5, // el centro está enterrado: no lo ve ningún dron y a pie hay que estar a 50 m; el rumbo de radio falla hasta 8°; el hilo de fibra se ve a 25 m (50 m desde un dron)
-    fabrica: [1800, 700], fpvTope: [2, 5], // el taller saca un FPV cada 90 s (atacante) o 35 s (defensor), hasta tener tantos posados
+    fabrica: [1800, 1200], fpvTope: [2, 4], // el taller saca un FPV cada 90 s (atacante) o 60 s (defensor), hasta tener tantos posados
   };
   // Los dos papeles. El bando 0 ataca (caza pilotos: muchos equipos, pocos drones); el bando 1 defiende (el centro de drones: muchos pilotos y medios, una guardia corta).
   D.ROL = [
-    { clave: 'ataque', nombre: 'Cazar pilotos', que: 'Mandas varios equipos de fuerzas especiales y pocos drones. Tienes que encontrar el centro de operaciones enemigo, llegar a pie y volarlo.' },
-    { clave: 'defensa', nombre: 'Defender el centro', que: 'Mandas el centro de drones: más pilotos, antenas, redes y un equipo de guardia. Tienes que encontrar a los equipos que vienen y pararlos antes de que lleguen.' },
+    { clave: 'ataque', nombre: 'Cazar pilotos', que: 'Mandas varios escuadrones de fuerzas especiales y pocos drones. Entrar, destruir y huir: encuentra el centro de operaciones enemigo, vuélalo a mano y saca a tu gente por la zona de extracción antes de las 22:00.' },
+    { clave: 'defensa', nombre: 'Defender el centro', que: 'Mandas el centro de drones: más pilotos, antenas y dos escuadrones de guardia. Aguanta hasta las 22:00, cuando llegan tus refuerzos aéreos; y si te vuelan el centro, que no salga nadie.' },
   ];
   D.ESCENARIO = { mixto: 'Mixto: campo abierto, un arroyo y, al fondo, el pueblo', urbano: 'Urbano: calles, manzanas y bloques de pisos' };
 })();

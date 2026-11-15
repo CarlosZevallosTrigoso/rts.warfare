@@ -6,10 +6,10 @@
   const par = new URLSearchParams(location.search);
   const semilla = Number(par.get('s')) || Math.floor(Math.random() * 99999) + 1;
   const escenario = par.get('esc') === 'urbano' ? 'urbano' : 'mixto', YO = par.get('rol') === 'defensa' ? 1 : 0, elegido = par.has('rol'); // el bando 0 ataca; el 1 defiende
-  const m = (D.mundo = D.crearMundo(semilla, { escenario, ia: [YO !== 0, YO !== 1], t: par.get('noche') === '1' ? D.ECON.diaLuz : undefined })), N = m.N, mapa = m.mapa, mio = (j) => (j === YO ? 0 : j === 1 - YO ? 1 : null);
+  const m = (D.mundo = D.crearMundo(semilla, { escenario, ia: [YO !== 0, YO !== 1], t: par.has('hora') ? (((Number(par.get('hora')) - D.ECON.hora0 + 48) % 24) * D.ECON.dia) / 24 : undefined })), N = m.N, mapa = m.mapa, mio = (j) => (j === YO ? 0 : j === 1 - YO ? 1 : null);
   const cam = (D.cam = { x: mapa.bases[YO].x + Math.cos(mapa.bases[YO].frente) * 7, y: mapa.bases[YO].y + Math.sin(mapa.bases[YO].frente) * 7, z: 15 });
   let cw = 0, ch = 0, dpr = 1, vision = 'optica', raton = { x: -1, y: -1, dentro: false };
-  const todo = par.get('todo') === '1', sel = new Set(), fx = [], marcas = []; // todo: ver también lo que no se ha descubierto (para probar); sel: equipos seleccionados
+  const todo = par.get('todo') === '1', sel = new Set(), fx = [], marcas = []; // todo: ver también lo que no se ha descubierto (para probar); sel: escuadrones seleccionados (por su id interno, eq)
   let caja = null, pausa = false, selDron = 0; // selDron: el dron de reconocimiento elegido
   const VISIONES = [
     ['optica', 'Óptica', 'A simple vista. De día se ve lo que no está bajo cobertura; de noche, solo lo cercano a los tuyos.'],
@@ -99,6 +99,7 @@
     for (const e of visibles) if (e.clase === 'dron' && !e.alt && !fuera(e.x, e.y, 2)) D.fig.dron(ctx, P, ox + e.x * z, oy + e.y * z, e.ang, e.tipo, mio(e.j), sD, 0);
     // rutas y aros de lo seleccionado, debajo de las figuras
     const COLYO = { dia: '#1f6f78', noche: '#4fb3c0', nocturna: '#e8fff0', termica: '#fff', espectro: '#39c6d6' }[modo];
+    if (YO === 0 || todo || m.caido) { const q = m.extraccion, x = ox + q.x * z, y = oy + q.y * z; ctx.strokeStyle = COLYO; ctx.fillStyle = COLYO; ctx.lineWidth = m.caido ? 2.2 : 1.2; ctx.globalAlpha = m.caido ? 0.9 : 0.5; ctx.setLineDash([10, 6]); ctx.beginPath(); ctx.arc(x, y, q.r * z, 0, TAU); ctx.stroke(); ctx.setLineDash([]); ctx.font = '10px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'center'; ctx.fillText('EXTRACCIÓN', x, y - q.r * z - 5); ctx.textAlign = 'left'; ctx.globalAlpha = 1; } // la zona de extracción (el defensor solo la ve cuando ya le han volado el centro)
     for (const h of m.hilos) { if (!(h.visto[YO] || todo) || h.pts.length < 2) continue; const mia = h.j === YO; ctx.strokeStyle = mia ? COLYO : '#c2552d'; ctx.globalAlpha = mia ? 0.3 : 0.85; ctx.lineWidth = mia ? 1 : 1.4; if (!mia) ctx.setLineDash([3, 3]); ctx.beginPath(); h.pts.forEach((p, i) => (i ? ctx.lineTo(ox + p[0] * z, oy + p[1] * z) : ctx.moveTo(ox + p[0] * z, oy + p[1] * z))); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1; } // hilos de fibra en el suelo: los míos, tenues; los del rival que he visto, en naranja
     for (const e of mios) { if (e.clase !== 'sol' || !sel.has(e.eq)) continue; const x = ox + e.x * z, y = oy + e.y * z;
       if (e.ruta && e.ri < e.ruta.length) { ctx.strokeStyle = COLYO; ctx.globalAlpha = 0.45; ctx.lineWidth = 1; ctx.setLineDash(e.sigilo ? [2, 5] : [6, 5]); ctx.beginPath(); ctx.moveTo(x, y); for (let i = e.ri; i < e.ruta.length; i++) ctx.lineTo(ox + e.ruta[i][0] * z, oy + e.ruta[i][1] * z); ctx.stroke(); ctx.setLineDash([]); const f = e.ruta[e.ruta.length - 1]; ctx.beginPath(); ctx.arc(ox + f[0] * z, oy + f[1] * z, 2.5, 0, TAU); ctx.fillStyle = COLYO; ctx.fill(); ctx.globalAlpha = 1; }
@@ -110,7 +111,9 @@
       if (e.j === YO && sel.has(e.eq) && !e.movio) { const v = D.cobFrente(m, e.x, e.y, e.x + Math.cos(e.mira) * 20, e.y + Math.sin(e.mira) * 20); ctx.fillStyle = COB[D.cobNivel(v)]; ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x + sS * 6, y - sS * 6, 3, 0, TAU); ctx.fill(); ctx.stroke(); } // su cobertura de cara a donde mira
       if (e.canal > 0) { ctx.strokeStyle = '#c2552d'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(x, y, sS * 8, -Math.PI / 2, -Math.PI / 2 + TAU * (e.canal / D.ECON.cargaTicks)); ctx.stroke(); } // poniendo la carga
     }
-    ctx.globalAlpha = modo === 'termica' ? 0.45 : modo === 'espectro' ? 0.5 : 0.93; ctx.drawImage(L.copas, ox, oy, lado, lado); ctx.globalAlpha = 1; // las copas tapan lo de debajo (a la térmica, menos)
+    ctx.globalAlpha = modo === 'termica' ? 0.45 : modo === 'espectro' ? 0.5 : 0.93; ctx.drawImage(L.copas, ox, oy, lado, lado); ctx.globalAlpha = 1;
+    { const g = new Map(); for (const e of mios) if (e.clase === 'sol') { let q = g.get(e.eq); if (!q) g.set(e.eq, (q = { x: 0, y: 1e9, n: 0, num: e.num })); q.x += e.x; q.y = Math.min(q.y, e.y); q.n++; } // el número de cada escuadrón mío, encima del grupo
+      ctx.font = 'bold 11px ui-monospace, Menlo, Consolas, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; for (const [eq, q] of g) { const x = ox + (q.x / q.n) * z, y = oy + q.y * z - Math.max(16, z * 1.1), on = sel.has(eq); ctx.fillStyle = on ? COLYO : 'rgba(255,255,255,0.9)'; ctx.strokeStyle = COLYO; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.rect(x - 8, y - 8, 16, 16); ctx.fill(); ctx.stroke(); ctx.fillStyle = on ? '#fff' : COLYO; ctx.fillText(String(q.num), x, y + 0.5); } ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; } // las copas tapan lo de debajo (a la térmica, menos)
     for (const e of visibles) if (e.clase === 'dron' && e.alt && !fuera(e.x, e.y, 3)) D.fig.dron(ctx, P, ox + e.x * z, oy + e.y * z, e.ang, e.tipo, mio(e.j), sD, e.alt * z * 0.6);
     for (const e of visibles) { if (e.clase !== 'dron' || e.j !== YO || e.estado === 'posado' || fuera(e.x, e.y, 3)) continue; const x = ox + e.x * z, y = oy + e.y * z, f = e.bat / e.batMax, w = sD * 12; // mis drones: batería y, si está elegido, su órbita
       ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(x - w / 2, y + sD * 9, w, 2.5); ctx.fillStyle = f < 0.25 ? '#c2552d' : COLYO; ctx.fillRect(x - w / 2, y + sD * 9, w * f, 2.5);
@@ -180,11 +183,12 @@
       else if (d.tipo === 'hallado' && d.j === YO) { aviso(d.clase === 'centro' ? '¡Centro de operaciones localizado! Clic derecho sobre él para volarlo' : 'Descubierto: ' + (d.clase === 'falsa' ? 'antena' : nomDe(d.clase))); fx.push({ k: 'anillo', x: d.x, y: d.y, r: 4, c: '#c2552d', t0: tiempo, dur: 1.4 }); }
       else if (d.tipo === 'cargando') { if (d.j !== YO) aviso('¡Te están poniendo una carga!'); fx.push({ k: 'anillo', x: d.x, y: d.y, r: 3, c: '#c2552d', t0: tiempo, dur: 1 }); }
       else if (d.tipo === 'explosion') { if (veo(d.x, d.y)) fx.push({ k: 'boom', x: d.x, y: d.y, t0: tiempo, dur: 0.7, r: 0.45 }); }
-      else if (d.tipo === 'noPuede' && d.j === YO) aviso({ recarga: 'Ese equipo aún está recargando', lejos: 'Demasiado lejos: acércate más', nadie: 'Nadie del equipo puede lanzar ahora', sinFpv: 'No queda ningún FPV de ese tipo posado', pilotos: 'No hay piloto libre: todos tienen un dron en el aire', noVisto: 'Ese blanco ya no está a la vista', enlace: 'Ahí no llega el enlace de radio', fibra: 'Ahí no llega el carrete de fibra' }[d.que]);
+      else if (d.tipo === 'noPuede' && d.j === YO) aviso({ recarga: 'Ese escuadrón aún está recargando', lejos: 'Demasiado lejos: acércate más', nadie: 'Nadie del escuadrón puede lanzar ahora', sinFpv: 'No queda ningún FPV de ese tipo posado', pilotos: 'No hay piloto libre: todos tienen un dron en el aire', noVisto: 'Ese blanco ya no está a la vista', enlace: 'Ahí no llega el enlace de radio', fibra: 'Ahí no llega el carrete de fibra' }[d.que]);
       else if (d.tipo === 'fpvBoom') { if (d.j === YO || veo(d.x, d.y)) fx.push({ k: 'boom', x: d.x, y: d.y, t0: tiempo, dur: 0.7, r: 0.4 }); }
       else if (d.tipo === 'perdido') { if (d.j === YO) aviso({ enlace: 'Dron perdido: se quedó sin enlace', bateria: 'Dron perdido: sin batería', inhibidor: 'FPV tumbado por un inhibidor enemigo', derribo: 'FPV derribado a tiros', fibra: 'FPV perdido: se acabó el carrete' }[d.que]); else if (veo(d.x, d.y) && (d.que === 'derribo' || d.que === 'inhibidor')) aviso(d.que === 'derribo' ? 'FPV enemigo derribado' : 'Tu inhibidor ha tumbado un FPV'); if (d.j === YO || veo(d.x, d.y)) fx.push({ k: 'anillo', x: d.x, y: d.y, r: 1.2, c: '#c2552d', t0: tiempo, dur: 0.6 }); }
       else if (d.tipo === 'fpvCerca' && d.j === YO) { aviso('¡FPV enemigo entrando!'); fx.push({ k: 'anillo', x: d.x, y: d.y, r: 2.5, c: '#c2552d', t0: tiempo, dur: 0.9 }); }
-      else if (d.tipo === 'rumbo' && d.j === YO) aviso('Emisión del rival captada: mira el rumbo en Espectro (4)');
+      else if (d.tipo === 'rumbo' && d.j === YO) aviso('Emisión del rival captada: mira el rumbo en Espectro (0)');
+      else if (d.tipo === 'huida') aviso(YO === 0 ? '¡Centro destruido! Ahora, todos a la zona de extracción (R)' : 'Han volado el centro: que no salga nadie');
       else if (d.tipo === 'hilo' && d.j === YO) { aviso('Hilo de fibra en el suelo: síguelo hasta su taller'); fx.push({ k: 'anillo', x: d.x, y: d.y, r: 2, c: '#c2552d', t0: tiempo, dur: 1.2 }); }
       else if (d.tipo === 'vuelve' && d.j === YO) aviso('El dron de reconocimiento vuelve a recargar');
       else if (d.tipo === 'recortado' && d.j === YO) aviso('Más allá no hay enlace: se queda en el borde');
@@ -198,10 +202,10 @@
 
   // ---------- panel ----------
   function ponVision(v) { vision = v; for (const b of document.querySelectorAll('#visiones button')) b.classList.toggle('on', b.dataset.v === v); $('notaVision').textContent = VISIONES.find((x) => x[0] === v)[2]; }
-  VISIONES.forEach(([v, n], i) => { const b = document.createElement('button'); b.type = 'button'; b.dataset.v = v; b.innerHTML = '<span>' + n + '</span><kbd>' + (i + 1) + '</kbd>'; b.addEventListener('click', () => ponVision(v)); $('visiones').appendChild(b); });
+  VISIONES.forEach(([v, n], i) => { const b = document.createElement('button'); b.type = 'button'; b.dataset.v = v; b.innerHTML = '<span>' + n + '</span><kbd>' + '7890'[i] + '</kbd>'; b.addEventListener('click', () => ponVision(v)); $('visiones').appendChild(b); });
   const ir = (rol, esc, s) => { location.search = '?rol=' + rol + '&esc=' + esc + '&s=' + s; };
   $('semilla').textContent = m.semilla + ' · ' + escenario; $('semilla').addEventListener('click', (ev) => { ev.preventDefault(); ir(D.ROL[YO].clave, escenario, Math.floor(Math.random() * 99999) + 1); });
-  $('rol').textContent = D.ROL[YO].nombre; $('rolQue').textContent = YO === 0 ? 'Encuentra el centro de operaciones enemigo y vuélalo antes de que amanezca.' : 'Que tu centro siga en pie cuando amanezca.';
+  $('rol').textContent = D.ROL[YO].nombre; $('rolQue').textContent = YO === 0 ? 'Entrar, destruir y huir: encuentra el centro, vuélalo y saca a tu gente por la zona de extracción antes de las 22:00.' : 'Aguanta hasta las 22:00, cuando llegan tus refuerzos aéreos. Si te vuelan el centro, que no salga nadie.';
   $('cambia').addEventListener('click', () => { $('menu').hidden = false; });
   { // el menú de inicio: primero se elige el papel
     let esc = escenario; const cajaR = $('menuRoles'), cajaE = $('menuEsc');
@@ -223,13 +227,13 @@
   $('bFpvR').addEventListener('click', () => apuntaFpv('fpvRadio')); $('bFpvF').addEventListener('click', () => apuntaFpv('fpvFibra')); $('bCasa').addEventListener('click', recoge);
   $('drones').addEventListener('click', (ev) => { const b = ev.target.closest('[data-dron]'); if (!b) return; selDron = Number(b.dataset.dron); sel.clear(); firmaP = ''; const e = m.porId.get(selDron); if (e) { cam.x = e.x; cam.y = e.y; } });
   function panel() {
-    const noche = D.luz(m) < 0.5; $('hora').textContent = D.hora(m) + (noche ? ' · noche' : ' · día'); $('amanece').textContent = mmss(D.faltaAmanecer(m));
+    const noche = D.luz(m) < 0.5; $('hora').textContent = D.hora(m) + (noche ? ' · noche' : ' · día'); $('amanece').textContent = mmss(D.faltaRefuerzos(m));
     $('pers').textContent = m.jug[YO].personas + ' / ' + D.ECON.tope[YO] + ' · bajas ' + m.jug[YO].bajas;
     { const nr = m.rumbo[YO].length, nh = m.hilos.filter((h) => h.j !== YO && h.visto[YO]).length, ne = D.emisores(m, YO).length; $('rastros').textContent = nr || nh ? [nr ? nr + (nr === 1 ? ' rumbo' : ' rumbos') : '', nh ? nh + (nh === 1 ? ' hilo' : ' hilos') : ''].filter(Boolean).join(' · ') : 'ninguno'; $('emito').textContent = ne ? 'sí · ' + ne + (ne === 1 ? ' fuente' : ' fuentes') : 'no, en silencio'; }
     // equipos: una línea por equipo; los seleccionados, con sus miembros
     const eqs = equipos(); for (const eq of [...sel]) if (!eqs.has(eq)) sel.delete(eq);
     let h = ''; for (const [eq, us] of eqs) { const on = sel.has(eq), visto = us.some((u) => m.visto[1 - YO].has(u.id));
-      h += '<div class="eq' + (on ? ' on' : '') + '" data-eq="' + eq + '"><b>Equipo ' + eq + '</b> · ' + us.length + (us[0].sigilo ? ' · sigilo' : '') + (us[0].fuego ? '' : ' · fuego contenido') + (us.some((u) => D.nivelSupr(u) === 2) ? ' · <i>clavado</i>' : us.some((u) => D.nivelSupr(u) === 1) ? ' · <i>bajo fuego</i>' : '') + (us[0].orden === 'retirada' ? ' · en retirada' : '') + (visto ? ' · <i>localizado</i>' : '');
+      h += '<div class="eq' + (on ? ' on' : '') + '" data-eq="' + eq + '"><b>Escuadrón ' + us[0].num + '</b> · ' + us.length + (us[0].sigilo ? ' · sigilo' : '') + (us[0].fuego ? '' : ' · fuego contenido') + (us.some((u) => D.nivelSupr(u) === 2) ? ' · <i>clavado</i>' : us.some((u) => D.nivelSupr(u) === 1) ? ' · <i>bajo fuego</i>' : '') + (us[0].orden === 'retirada' ? ' · en retirada' : '') + (visto ? ' · <i>localizado</i>' : '');
       if (on) for (const u of us) h += '<div class="mi"><span>' + D.SOL[u.tipo].nombre + '</span><span class="tenue">firma ' + Math.round(Math.min(1.4, u.firma) * 100) + ' %</span><i><b style="width:' + Math.round((u.vida / u.vidaMax) * 100) + '%"' + (u.vida / u.vidaMax < 0.35 ? ' class="mal"' : '') + '></b></i></div>';
       h += '</div>'; }
     if (!h) h = '<div class="tenue">No te queda nadie en el campo.</div>';
@@ -245,11 +249,11 @@
       const x = cam.x + (raton.x - cw / 2) / cam.z, y = cam.y + (raton.y - ch / 2) / cam.z; let mejor = null, md = 1.1;
       for (const e of visibles) { const d = Math.hypot(e.x - x, e.y - y) / (e.clase === 'edif' ? 1.6 : 1); if (d < md) { md = d; mejor = e; } }
       for (const t of mapa.tubos) for (const q of [t.a, t.b]) if (Math.hypot(q.x - x, q.y - y) < md) { md = Math.hypot(q.x - x, q.y - y); mejor = { clase: 'edif', tipo: 'boca', j: -1 }; }
-      if (mejor) { const tipo = mejor.j === 1 - YO && mejor.tipo === 'falsa' && !todo ? 'antena' : mejor.tipo, d = (mejor.clase === 'sol' ? D.SOL : mejor.clase === 'dron' ? D.DRON : D.EDIF)[tipo]; b = '<b style="color:' + (mejor.j === YO ? 'var(--yo)' : mejor.j === 1 - YO ? 'var(--rival)' : 'var(--tinta)') + '">' + d.nombre + (mejor.j === YO ? ' · tuyo' : mejor.j === 1 - YO ? ' · rival' : '') + '</b>' + d.que + (mejor.clase === 'sol' ? '<br>' + D.ARMA[d.arma].nombre + (mejor.j === YO ? ' · equipo ' + mejor.eq : '') : ''); }
+      if (mejor) { const tipo = mejor.j === 1 - YO && mejor.tipo === 'falsa' && !todo ? 'antena' : mejor.tipo, d = (mejor.clase === 'sol' ? D.SOL : mejor.clase === 'dron' ? D.DRON : D.EDIF)[tipo]; b = '<b style="color:' + (mejor.j === YO ? 'var(--yo)' : mejor.j === 1 - YO ? 'var(--rival)' : 'var(--tinta)') + '">' + d.nombre + (mejor.j === YO ? ' · tuyo' : mejor.j === 1 - YO ? ' · rival' : '') + '</b>' + d.que + (mejor.clase === 'sol' ? '<br>' + D.ARMA[d.arma].nombre + (mejor.j === YO ? ' · escuadrón ' + mejor.num : '') : ''); }
       else if (x >= 0 && y >= 0 && x < N && y < N) { const t = mapa.terreno[Math.floor(y) * N + Math.floor(x)]; b = '<b style="color:var(--tinta)">' + D.TERRENO[t] + '</b>' + (mapa.paso[Math.floor(y) * N + Math.floor(x)] ? 'se pasa a pie' : 'no se pasa') + ' · cobertura ' + Math.round(D.COBERTURA[t] * 100) + ' %'; }
     }
     if ($('bajo').innerHTML !== b) $('bajo').innerHTML = b;
-    if (m.fin && $('fin').hidden) { const gano = m.fin.gana === YO, por = { centro: 'El centro de operaciones ha volado.', amanecer: 'Ha amanecido y el centro sigue en pie.', 'sin asalto': 'Al atacante no le queda nadie que pueda poner la carga.' }[m.fin.motivo]; $('finT').textContent = gano ? 'Victoria' : 'Derrota'; $('finQ').textContent = por + ' Bajas: ' + m.jug[YO].bajas + ' tuyas, ' + m.jug[1 - YO].bajas + ' del rival.'; $('fin').hidden = false; }
+    if (m.fin && $('fin').hidden) { const gano = m.fin.gana === YO, por = { extraccion: 'El centro ha volado y ' + (m.fin.salen === 1 ? 'ha salido 1 persona' : 'han salido ' + m.fin.salen + ' personas') + ' por la zona de extracción.', refuerzos: 'Son las 22:00: llegan los refuerzos aéreos de la defensa y el centro sigue en pie.', atrapados: 'El centro ha volado, pero a las 22:00 llegan los refuerzos y el atacante sigue dentro.', 'sin extraccion': 'El centro ha volado, pero nadie ha llegado a la zona de extracción.', 'sin asalto': 'Al atacante no le queda nadie que pueda poner la carga.' }[m.fin.motivo]; $('finT').textContent = gano ? 'Victoria' : 'Derrota'; $('finQ').textContent = por + ' Bajas: ' + m.jug[YO].bajas + ' tuyas, ' + m.jug[1 - YO].bajas + ' del rival.'; $('fin').hidden = false; }
   }
 
   // ---------- entrada ----------
@@ -260,7 +264,8 @@
   addEventListener('resize', medir);
   addEventListener('keydown', (ev) => {
     if (ev.metaKey || ev.ctrlKey) return; teclas.add(ev.code);
-    if (/^Digit[1-4]$/.test(ev.code)) ponVision(VISIONES[Number(ev.code.slice(5)) - 1][0]);
+    if (/^Digit[7890]$/.test(ev.code)) ponVision(VISIONES['7890'.indexOf(ev.code.slice(5))][0]);
+    else if (/^Digit[1-6]$/.test(ev.code)) { const n = Number(ev.code.slice(5)), us = mios().filter((e) => e.num === n); if (us.length) { const ya = sel.size === 1 && sel.has(us[0].eq); if (!ev.shiftKey) sel.clear(); sel.add(us[0].eq); selDron = 0; firmaP = ''; if (ya) { cam.x = us[0].x; cam.y = us[0].y; } } } // el número elige el escuadrón; pulsado otra vez, lleva la cámara a él
     else if (ev.code === 'KeyH') { cam.x = mapa.bases[YO].x; cam.y = mapa.bases[YO].y; }
     else if (ev.code === 'KeyR') retirada(); else if (ev.code === 'KeyG') apunta('granada'); else if (ev.code === 'KeyB') apunta('humo');
     else if (ev.code === 'KeyV') apuntaFpv('fpvRadio'); else if (ev.code === 'KeyN') apuntaFpv('fpvFibra'); else if (ev.code === 'KeyZ') recoge();
@@ -283,7 +288,7 @@
     else if (ev.button === 2 && selDron && !m.fin) { const p = aMundo(px, py); D.orden(m, { t: 'recon', j: YO, id: selDron, x: p.x, y: p.y }); fx.push({ k: 'anillo', x: p.x, y: p.y, r: D.ECON.reconRadio, c: '#1f6f78', t0: tiempo, dur: 0.6 }); }
     else if (ev.button === 2 && sel.size && !m.fin) { // la orden: sobre un edificio enemigo descubierto, volarlo; si no, ir allí
       const p = aMundo(px, py); let ob = null, md = 1.8; for (const e of m.ents) if (e.clase === 'edif' && e.j !== YO && m.conocido[YO].has(e.id)) { const d = Math.hypot(e.x - p.x, e.y - p.y); if (d < md) { md = d; ob = e; } }
-      if (ob) { if (seleccionados().some((u) => D.SOL[u.tipo].carga)) { orden({ t: 'volar', obj: ob.id }); fx.push({ k: 'anillo', x: ob.x, y: ob.y, r: 2.5, c: '#c2552d', t0: tiempo, dur: 0.7 }); } else aviso('En ese equipo nadie lleva carga: hace falta un asaltante o un zapador'); }
+      if (ob) { if (seleccionados().some((u) => D.SOL[u.tipo].carga)) { orden({ t: 'volar', obj: ob.id }); fx.push({ k: 'anillo', x: ob.x, y: ob.y, r: 2.5, c: '#c2552d', t0: tiempo, dur: 0.7 }); } else aviso('En ese escuadrón nadie lleva carga: hace falta un asaltante o un zapador'); }
       else if (p.x >= 0 && p.y >= 0 && p.x < N && p.y < N) { if (!m.paso[Math.floor(p.y) * N + Math.floor(p.x)]) aviso('Ahí no se puede pisar: irán a lo más cercano'); orden({ t: 'mover', x: p.x, y: p.y }); fx.push({ k: 'anillo', x: p.x, y: p.y, r: 1.2, c: '#1f6f78', t0: tiempo, dur: 0.5 }); }
     }
   });

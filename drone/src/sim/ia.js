@@ -44,6 +44,10 @@
   // ---------- el defensor ----------
   function defensor(m, ia, eqs, vistos, propios, ir) {
     const b = m.mapa.bases[1], c = m.ents.find((e) => e.clase === 'edif' && e.j === 1 && e.tipo === 'centro') || b;
+    if (m.caido) { // el centro ha volado: que no salgan. Todos a por quien se vea; los FPV, a quien esté más cerca de escapar
+      for (const q of eqs) { if (q.enRetirada) continue; if (q.cerca) { if (q.dc > 8) ir(q, q.cerca.x, q.cerca.y, 100); } else if (ia.ultimo && m.t - ia.ultimo.t < 900) ir(q, ia.ultimo.x, ia.ultimo.y, 200); }
+      if (vistos.length) ia.ultimo = { x: vistos[0].x, y: vistos[0].y, t: m.t };
+      fpvIA(m, ia, vistos, propios, (o) => 200 - dist(o, m.extraccion), 100); return; }
     if (!ia.roles) { ia.roles = true; let g = null; for (const q of eqs) if (!g || dist(q, c) < dist(g, c)) g = q; for (const q of eqs) q.st.guardia = q === g; }
     let am = null, da = 40; for (const o of vistos) { const d = dist(o, c); if (d < da) { da = d; am = o; } }
     if (am) ia.ultimo = { x: am.x, y: am.y, t: m.t };
@@ -72,12 +76,12 @@
   }
 
   // ---------- el atacante ----------
-  // La mejor pista de dónde está el centro: el taller enemigo si lo conoce; si no, el origen de un hilo de fibra; si no, otro
-  // edificio descubierto; si no, donde se cruzan dos rumbos de radio hacia la misma antena; si no, el casco urbano.
+  // La mejor pista de por dónde está el centro: el punto medio de los edificios enemigos descubiertos y del origen de un hilo
+  // de fibra; si no hay, donde apuntan los rumbos de radio; si no, el casco urbano.
   function pistaDe(m) {
-    let otro = null; for (const id of m.conocido[0]) { const o = m.porId.get(id); if (!o) continue; if (o.tipo === 'taller') return { x: o.x, y: o.y, r: 5 }; otro = o; }
-    const h = m.hilos.find((q) => q.j === 1 && q.visto[0]); if (h) return { x: h.pts[0][0], y: h.pts[0][1], r: 6 };
-    if (otro) return { x: otro.x, y: otro.y, r: 14 };
+    let n = 0, sx = 0, sy = 0; for (const id of m.conocido[0]) { const o = m.porId.get(id); if (!o) continue; n++; sx += o.x; sy += o.y; }
+    const h = m.hilos.find((q) => q.j === 1 && q.visto[0]); if (h) { n++; sx += h.pts[0][0]; sy += h.pts[0][1]; }
+    if (n) return { x: sx / n, y: sy / n, r: 16 };
     const rs = m.rumbo[0], U = m.mapa.urbano, ux = (U.x0 + U.x1) / 2, uy = (U.y0 + U.y1) / 2;
     // Dos rumbos que se cruzan con buen ángulo dan un punto; si los dos observadores están juntos, el cruce no vale nada: entonces
     // se toma la dirección media y se supone que la antena está a la altura del casco urbano.
@@ -86,10 +90,15 @@
     return { x: ux, y: uy, r: Math.min(U.x1 - U.x0, U.y1 - U.y0) / 2 };
   }
   function atacante(m, ia, eqs, vistos, propios, ir) {
+    if (m.caido) { for (const q of eqs) if (!q.enRetirada && dist(q, m.extraccion) > m.extraccion.r - 1.5 && m.t - q.st.tOrden >= 80) { D.orden(m, { t: 'retirada', j: 0, eqs: [q.eq] }); q.st.tOrden = m.t; q.st.meta = null; } return; } // hecho: a la zona de extracción
     const b = m.mapa.bases[0], G = pistaDe(m); let centro = null; for (const id of m.conocido[0]) { const o = m.porId.get(id); if (o && o.tipo === 'centro') centro = o; }
     const asalto = eqs.filter((q) => !q.st.apoyo && q.carga), punta = asalto[0] || eqs[0]; if (!punta) return;
     // El punto de reunión: a 160 m de la pista, del lado por donde se viene.
     if (!ia.reunion || (!ia.entra && Math.hypot(ia.G.x - G.x, ia.G.y - G.y) > 12 && m.t - (ia.tReu || 0) > 600)) { ia.tReu = m.t; const d = Math.hypot(b.x - G.x, b.y - G.y) || 1, k = Math.min(1, (G.r + 12) / d); ia.reunion = { x: G.x + (b.x - G.x) * k, y: G.y + (b.y - G.y) * k, lado: Math.atan2(b.y - G.y, b.x - G.x) + Math.PI / 2 }; ia.G = G; }
+    // Dónde mirar: el centro está en un patio despejado, y en el plano se ven varios (el de verdad y los señuelos). Se da por mirado el que alguien ha pisado sin encontrar nada.
+    const P = m.mapa.patios.map((p) => ({ x: (p.x0 + p.x1 + 1) / 2, y: (p.y0 + p.y1 + 1) / 2 })); if (!ia.mirados) ia.mirados = new Set();
+    P.forEach((p, i) => { if (!ia.mirados.has(i) && propios.some((u) => Math.hypot(u.x - p.x, u.y - p.y) < 4)) ia.mirados.add(i); });
+    const pend = P.map((p, i) => i).filter((i) => !ia.mirados.has(i)).sort((a, c) => Math.hypot(P[a].x - G.x, P[a].y - G.y) - Math.hypot(P[c].x - G.x, P[c].y - G.y));
     const R = ia.reunion, aCubierto = (q) => { if (q.st.cubierto) return; q.st.cubierto = true; D.orden(m, { t: 'mover', j: 0, eqs: [q.eq], x: q.x, y: q.y }); q.st.tOrden = m.t; q.st.meta = null; }; // «mover» al sitio donde ya está: cada uno busca el puesto más cubierto de cara al enemigo
     if (!ia.entra) { const n = asalto.filter((q) => q.st.listo).length; if (n && !ia.tListos) ia.tListos = m.t; if (centro || (asalto.length && n === asalto.length) || (ia.tListos && m.t - ia.tListos > 1200)) ia.entra = true; } // entran cuando están todos, o un minuto después de llegar el primero
     asalto.forEach((q, i) => { const st = q.st;
@@ -108,6 +117,7 @@
       // una antena descubierta a mano (sea de verdad o falsa): se vuela, que sin antenas no hay drones de radio
       let an = null, da = 10; for (const id of m.conocido[0]) { const o = m.porId.get(id); if (o && (o.tipo === 'antena' || o.tipo === 'falsa')) { const d = dist(q, o); if (d < da) { da = d; an = o; } } }
       if (an) { st.volando = true; if (q.parado || m.t - st.tOrden > 300) { D.orden(m, { t: 'volar', j: 0, eqs: [q.eq], obj: an.id }); st.tOrden = m.t; st.meta = null; } return; } st.volando = false;
+      if (pend.length) { const p = P[pend[i % pend.length]]; if (ir(q, p.x, p.y, 0)) D.orden(m, { t: 'modo', j: 0, eqs: [q.eq], sigilo: D.luz(m) > 0.5 && !q.n && Math.hypot(q.x - p.x, q.y - p.y) < 22 }); return; } // a mirar el patio pendiente que le toca: los más cercanos a la pista, primero
       if (q.parado || m.t - st.tOrden > 700) { const a = st.paso * 2.4 + i * 2.1, d = G.r * (0.35 + 0.65 * ((st.paso * 0.618) % 1)); st.paso++; if (ir(q, G.x + Math.cos(a) * d, G.y + Math.sin(a) * d, 0)) D.orden(m, { t: 'modo', j: 0, eqs: [q.eq], sigilo: D.luz(m) > 0.5 && !q.n }); }
     });
     // El apoyo (tirador y observador): detrás de la punta, a cubierto; da enlace y rumbo, y el tirador hace el resto.
