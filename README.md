@@ -24,4 +24,5 @@ pilotos (ataque) o defender el centro.
   humo. Drones: el de reconocimiento se manda a vigilar un punto y vuelve solo a recargar; los FPV (de radio y de fibra) se
   lanzan contra lo que se ve; cada dron en el aire ocupa a un piloto; el de radio necesita enlace (antenas y observadores) y
   lo tumba el inhibidor; la escopeta los derriba; el taller repone FPV. El centro está oculto (ningún dron lo ve; a pie, a 50 m) y se encuentra por rastros: rumbos de radio
-  hacia lo que emite el rival (los dan observadores y la estación de escucha) e hilos de fibra. El rival es provisional.
+  hacia lo que emite el rival (los dan observadores y la estación de escucha) e hilos de fibra. La máquina lleva cualquiera de los dos papeles con lo que su bando sabe (guardia y reacción, FPV con
+  prioridades, reunión antes de entrar, registro por sectores, humo para cubrir la carga).

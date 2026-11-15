@@ -73,9 +73,9 @@
     // Drones. Cada dron en el aire ocupa a un piloto. Los de radio necesitan una antena propia a menos de `enlace` o a un observador (repetidor) a menos de `enlaceObs`; el de fibra, lo que da el carrete desde el taller.
     enlace: 60, enlaceObs: 22, enlaceCorte: 40, fibraAlc: 80, inhibeRadio: 6, reconRadio: 4, recarga: 6, // sin enlace 2 s, el dron cae; el de reconocimiento vuelve solo a recargar (30 s) y sale otra vez
     fpvRadio: 1.4, fpvDano: 80, fpvSupr: 80, fpvTecho: 0.3, // el FPV revienta al llegar; el de radio apenas hace daño bajo techo, el de fibra entra
-    dronTiroAlc: 5, escopetaDron: 0.35, fusilDron: 0.07, dronOye: 9, // a 50 m el equipo le dispara: la escopeta acierta uno de cada tres tiros; el fusil, casi nunca
+    dronTiroAlc: 5, escopetaDron: 0.28, fusilDron: 0.07, dronOye: 9, // a 50 m el equipo le dispara: la escopeta acierta uno de cada tres tiros; el fusil, casi nunca
     verCentro: 5, rumboError: 0.14, hiloVe: 2.5, hiloVeDron: 5, // el centro está enterrado: no lo ve ningún dron y a pie hay que estar a 50 m; el rumbo de radio falla hasta 8°; el hilo de fibra se ve a 25 m (50 m desde un dron)
-    fabrica: [1800, 1200], fpvTope: [2, 4], // el taller saca un FPV cada 90 s (atacante) o 60 s (defensor), hasta tener tantos posados
+    fabrica: [1800, 700], fpvTope: [2, 5], // el taller saca un FPV cada 90 s (atacante) o 35 s (defensor), hasta tener tantos posados
   };
   // Los dos papeles. El bando 0 ataca (caza pilotos: muchos equipos, pocos drones); el bando 1 defiende (el centro de drones: muchos pilotos y medios, una guardia corta).
   D.ROL = [

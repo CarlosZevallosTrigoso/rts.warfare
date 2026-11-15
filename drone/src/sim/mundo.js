@@ -77,6 +77,12 @@
   D.orden = function (m, cmd) { m.cola.push(cmd); };
   const delEquipo = (m, j, eqs) => m.ents.filter((e) => e.clase === 'sol' && e.j === j && eqs.includes(e.eq));
   function irA(m, u, x, y) { const r = D.ruta(m.N, m.paso, u.sigilo ? m.costeSigilo : m.coste, u.x, u.y, x, y); u.ruta = r; u.ri = 1; if (!r) u.orden = 'nada'; return !!r; }
+  // La celda pisable y libre desde la que se alcanza a poner la carga en un edificio, la más cercana a quien va.
+  function juntoA(m, o, u, usadas) {
+    const al = ECON.cargaDist + (D.EDIF[o.tipo].tam >= 3 ? 1 : 0) - 0.15, cx = Math.floor(o.x), cy = Math.floor(o.y); let mejor = null, md = 1e9;
+    for (let y = cy - 4; y <= cy + 4; y++) for (let x = cx - 4; x <= cx + 4; x++) { const c = y * m.N + x; if (!libre(m, x, y) || usadas.has(c) || Math.hypot(x + 0.5 - o.x, y + 0.5 - o.y) > al) continue; const d = Math.hypot(x + 0.5 - u.x, y + 0.5 - u.y); if (d < md) { md = d; mejor = { x: x + 0.5, y: y + 0.5, c }; } }
+    if (mejor) { usadas.add(mejor.c); return mejor; } return D.cercaLibre(m, o.x, o.y, usadas);
+  }
   function aplicar(m, cmd) {
     if (m.fin) return; if (cmd.t === 'recon' || cmd.t === 'reconCasa' || cmd.t === 'fpv') { aplicarDron(m, cmd); return; }
     if (!cmd.eqs) return; const us = delEquipo(m, cmd.j, cmd.eqs); if (!us.length) return;
@@ -94,7 +100,7 @@
     }
     else if (cmd.t === 'detener') { for (const u of us) { if (u.orden === 'retirada') continue; u.orden = 'nada'; u.ruta = null; u.obj = 0; u.canal = 0; } }
     else if (cmd.t === 'modo') { for (const u of us) { if (cmd.sigilo !== undefined && u.sigilo !== cmd.sigilo) { u.sigilo = cmd.sigilo; if (u.ruta && u.ri < u.ruta.length) { const f = u.ruta[u.ruta.length - 1]; irA(m, u, f[0], f[1]); } } if (cmd.fuego !== undefined) u.fuego = cmd.fuego; } }
-    else if (cmd.t === 'volar') { const o = m.porId.get(cmd.obj); if (!o || o.clase !== 'edif' || o.j === cmd.j || !m.conocido[cmd.j].has(o.id)) return; const usadas = new Set(); for (const u of us) { const p = D.cercaLibre(m, o.x + (u.x > o.x ? 1.6 : -1.6), o.y + (u.y > o.y ? 1.6 : -1.6), usadas); u.orden = D.SOL[u.tipo].carga ? 'volar' : 'mover'; u.obj = D.SOL[u.tipo].carga ? o.id : 0; u.canal = 0; irA(m, u, p.x, p.y); } }
+    else if (cmd.t === 'volar') { const o = m.porId.get(cmd.obj); if (!o || o.clase !== 'edif' || o.j === cmd.j || !m.conocido[cmd.j].has(o.id)) return; const usadas = new Set(); for (const u of us) { const p = juntoA(m, o, u, usadas); u.orden = D.SOL[u.tipo].carga ? 'volar' : 'mover'; u.obj = D.SOL[u.tipo].carga ? o.id : 0; u.canal = 0; irA(m, u, p.x, p.y); } }
   }
 
   // ---------- cobertura con dirección ----------

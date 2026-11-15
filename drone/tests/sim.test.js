@@ -123,6 +123,7 @@ prueba('la carga: un asaltante pegado al centro lo vuela en cinco segundos y gan
   assert.deepStrictEqual(m.fin && { gana: m.fin.gana, motivo: m.fin.motivo }, { gana: 0, motivo: 'centro' }); assert.ok(!m.porId.has(c.id));
   const m2 = D.crearMundo(5, {}), o = sol(m2, 0, 'observador'), c2 = m2.ents.find((e) => e.tipo === 'centro'); solos(m2, o); lleva(o, D.cercaLibre(m2, c2.x + 2, c2.y + 2)); D.detectar(m2); D.orden(m2, { t: 'volar', j: 0, eqs: [o.eq], obj: c2.id }); avanza(m2, 400);
   assert.ok(m2.porId.has(c2.id) && !m2.fin, 'un observador no lleva carga');
+  for (const [dx, dy] of [[4, 3], [-4, 3], [3, -4], [-3, -4]]) { const m4 = D.crearMundo(5, {}), an = m4.ents.find((e) => e.j === 1 && e.tipo === 'antena'), z = sol(m4, 0, 'zapador'); solos(m4, z); lleva(z, D.cercaLibre(m4, an.x + dx, an.y + dy)); m4.conocido[0].add(an.id); D.orden(m4, { t: 'volar', j: 0, eqs: [z.eq], obj: an.id }); avanza(m4, E.cargaTicks + 300); assert.ok(!m4.porId.has(an.id), 'una antena se vuela a mano, venga uno de donde venga'); }
   const m3 = D.crearMundo(5, {}); for (const e of m3.ents) if (e.clase === 'sol' && e.j === 0 && D.SOL[e.tipo].carga) e.vida = 0; avanza(m3, 2); assert.deepStrictEqual(m3.fin && m3.fin.motivo, 'sin asalto');
 });
 prueba('drones: pilotos, enlace, batería, FPV, inhibidor, escopeta, antenas y taller', () => {
@@ -190,6 +191,6 @@ prueba('partida entera, máquina contra máquina: termina, es idéntica si se re
   const juega = (s, esc) => { const m = D.crearMundo(s, { escenario: esc, ia: [true, true] }), t0 = Date.now(); let n = 0; while (!m.fin) { D.tick(m); n++; assert.ok(n <= D.ECON.dia, 'no termina'); } return { fin: m.fin, n, ms: (Date.now() - t0) / n, firma: m.ents.map((e) => e.id + ':' + e.x.toFixed(3) + ',' + e.y.toFixed(3) + ',' + Math.round(e.vida)).join('|'), bajas: [m.jug[0].bajas, m.jug[1].bajas] }; };
   let atacante = 0, total = 0;
   for (const esc of ['mixto', 'urbano']) for (const s of [1, 2, 3, 4]) { const a = juega(s, esc); assert.ok(a.ms < 0.5, 'tick caro: ' + a.ms); if (a.fin.gana === 0) atacante++; total++; if (s === 1) { const b = juega(s, esc); assert.deepStrictEqual(b.fin, a.fin); assert.strictEqual(b.firma, a.firma, 'la partida no es determinista'); } }
-  console.log('      (el atacante gana ' + atacante + ' de ' + total + ' con el rival provisional)');
+  console.log('      (el atacante gana ' + atacante + ' de ' + total + ' máquina contra máquina)');
 });
 console.log(ok + ' pruebas correctas');
