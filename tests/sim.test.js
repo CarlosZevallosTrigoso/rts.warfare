@@ -2691,6 +2691,42 @@ prueba('flujos: cada edificio sabe lo que da y lo que pide su red', () => {
   assert.strictEqual(cu.redP, pt.redP); assert.strictEqual(ce.redU, pt.redU); assert.ok(pt.redP >= 100 && pt.redU > 0);
 });
 
+prueba('pelotones: se encargan de una vez, nacen como grupo, y lo que falta se repone y va a reunirse con los suyos', () => {
+  const m = W.crearMundo(5, {}); const J = m.jug[0]; J.minerales = 20000; J.petroleo = 500; J.nivel = 3;
+  const pt = m.ents.find((e) => e.tipo === 'patio' && e.j === 0);
+  const pon = (t) => { for (let d = 5; d < 18; d++) for (let a = 0; a < 6.3; a += 0.3) { const x = Math.round(pt.cx + Math.cos(a) * d), y = Math.round(pt.cy + Math.sin(a) * d); if (!W.porQueNo(m, 0, t, x, y)) return W.crearEdificio(m, 0, t, x, y); } };
+  assert.ok(/Cuartel/.test(W.pelNo(m, 0, W.PEL.fusileros.de)), 'sin cuartel no se puede: ' + W.pelNo(m, 0, W.PEL.fusileros.de));
+  pon('central'); const cu = pon('cuartel'); for (let i = 0; i < 5; i++) W.tick(m);
+  assert.ok(/Fábrica/i.test(W.pelNo(m, 0, W.PEL.asalto.de)), 'el grupo de asalto pide fábrica: ' + W.pelNo(m, 0, W.PEL.asalto.de));
+  J.dios = false; pon('bomba'); pon('bomba'); for (let i = 0; i < 5; i++) W.tick(m); // agua para sostener la tropa
+  const antes = J.minerales, precio = W.pelPrecio(W.PEL.fusileros.de);
+  W.orden(m, { t: 'peloton', j: 0, tipo: 'fusileros' }); W.tick(m); W.tick(m);
+  assert.strictEqual(cu.cola.length, 6); assert.strictEqual(cu.pelq.length, 6); assert.ok(cu.pelq.every((q) => q && q.tipo === 'fusileros'));
+  assert.ok(Math.abs(antes - J.minerales - precio.costo) <= 5, 'se paga la suma de los miembros: ' + (antes - J.minerales) + ' / ' + precio.costo); // (± el goteo de esos dos ticks)
+  for (let i = 0; i < 3000 && cu.cola.length; i++) W.tick(m);
+  const mios = () => m.ents.filter((e) => !e.edif && e.j === 0 && e.pel);
+  assert.strictEqual(mios().length, 6, 'salen los seis'); const pel = mios()[0].pel;
+  assert.ok(mios().every((u) => u.pel === pel && u.pelT === 'fusileros'));
+  assert.deepStrictEqual(W.pelDe(m, 0, pel).falta, []);
+  // Se lleva el pelotón lejos, cae el médico, y se repone: el nuevo sale del cuartel y va hacia ellos.
+  const lejos = W.cercaLibre(m, pt.cx + (pt.cx < m.N / 2 ? 22 : -22), pt.cy, false);
+  W.orden(m, { t: 'mover', j: 0, ids: mios().map((u) => u.id), x: (lejos % m.N) + 0.5, y: ((lejos / m.N) | 0) + 0.5 }); for (let i = 0; i < 900; i++) W.tick(m);
+  mios().find((u) => u.tipo === 'medico').vida = 0; for (let i = 0; i < 3; i++) W.tick(m);
+  assert.deepStrictEqual(W.pelDe(m, 0, pel).falta, ['medico']);
+  W.orden(m, { t: 'reponer', j: 0, pel }); W.tick(m); W.tick(m);
+  assert.strictEqual(cu.cola.length, 1, 'cola: ' + cu.cola + ' / ' + JSON.stringify(cu.pelq)); assert.deepStrictEqual(W.pelDe(m, 0, pel).falta, [], 'lo encargado ya no falta');
+  W.orden(m, { t: 'reponer', j: 0, pel }); W.tick(m); W.tick(m); assert.strictEqual(cu.cola.length, 1, 'no se repone dos veces');
+  for (let i = 0; i < 400 && cu.cola.length; i++) W.tick(m);
+  const nuevo = mios().find((u) => u.tipo === 'medico'); assert.ok(nuevo && nuevo.pel === pel, 'el médico nuevo es del mismo pelotón');
+  const cx = mios().filter((u) => u !== nuevo).reduce((a, u) => a + u.x, 0) / 5, d0 = Math.abs(nuevo.x - cx);
+  for (let i = 0; i < 300; i++) W.tick(m);
+  assert.ok(Math.abs(nuevo.x - cx) < d0 - 3, 'el repuesto no va hacia los suyos: ' + d0 + ' → ' + Math.abs(nuevo.x - cx));
+  // Cancelar un miembro de la cola: el pelotón sale con uno menos y las marcas siguen a la par.
+  W.orden(m, { t: 'peloton', j: 0, tipo: 'fusileros' }); W.tick(m); W.tick(m);
+  W.orden(m, { t: 'cancelarUnidad', j: 0, id: cu.id, i: 2 }); W.tick(m); W.tick(m);
+  assert.strictEqual(cu.cola.length, 5); assert.strictEqual(cu.pelq.length, 5);
+});
+
 prueba('guardar y cargar: la partida cargada sigue exactamente igual que la original', () => {
   const m = W.crearMundo(2026, { N: 128, logistica: true }), a = W.iaCrear(0), b = W.iaCrear(1, 'normal', 'asalto');
   const paso = (mm, x, y) => { W.iaTick(mm, x); W.iaTick(mm, y); W.tick(mm); };

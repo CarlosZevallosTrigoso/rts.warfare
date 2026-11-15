@@ -195,6 +195,7 @@
       if (e) {
         let t = (e.muro ? W.MURO_N[e.muro] : (e.edif ? EDIF : UNID)[e.tipo]).nombre + (e.j === YO ? '' : ' rival') + ' · ' + Math.ceil(e.vida) + '/' + e.vidaMax;
         if (e.tipo === 'cosechadora' && e.j === YO) t += ' · carga ' + e.carga;
+        if (!e.edif && e.pel && e.j === YO && W.PEL[e.pelT]) t += ' · ' + W.PEL[e.pelT].nombre.toLowerCase();
         if (!e.edif && UNID[e.tipo].aire && e.j === YO && conRed && W.clima(m) === 2) t += e.enTierra ? ' · tormenta: no despega' : ' · tormenta: vuelve a su base';
         if (!e.edif && UNID[e.tipo].tiende && e.j === YO && m.logistica !== false) t += e.orden === 'conectar' ? ' · tendiendo línea' : e.auto ? ' · automático' : ' · manual';
         if (!e.edif && UNID[e.tipo].espia && e.j === YO) t += e.infiltrado ? ' · infiltrado: informando' : ' · acércalo a un edificio enemigo';
@@ -1906,6 +1907,7 @@
       h += '<h3>Drones (los saca su portador)</h3>' + fila('dronRec', 'De reconocimiento', '40', 'Da vueltas alrededor del portador y ve.') + fila('dronFpv', 'Kamikaze', '40 por salida', 'Un solo uso, contra vehículos y edificios armados.') + fila('dronBomba', 'Bombardero', '15 por salida', 'Suelta una granada sobre la infantería y vuelve a recargar.');
       h += '<h3>Misiles (misilera)</h3>'; for (const k in W.MISILES) h += fila('', W.MISILES[k].nombre, precio(W.MISILES[k]), W.MISILES[k].que + ' Nivel ' + W.MISILES[k].nivel + '.');
       h += '<h3>Infraestructura</h3>' + fila('', 'Camino militar', '4 a 30 por celda', 'Lo traza la excavadora. Solo tus vehículos corren por él.') + fila('', 'Línea de servicio', '3 por celda', 'La tiende el ingeniero civil entre dos edificios: lleva energía y mete el edificio en tu red.') + fila('', 'Trinchera', 'gratis', 'La cava la infantería (Z). Cuatro puestos a cubierto; clic derecho para ocuparla.');
+      h += '<h3>Pelotones</h3>' + Object.keys(W.PEL).map((k) => fila('', W.PEL[k].nombre, precio(W.pelPrecio(W.PEL[k].de)), W.PEL[k].que)).join('') + fila('', 'Cómo se usan', '—', 'Se encargan en el cuartel. Tocar a un miembro selecciona el pelotón entero (con Alt, solo a ese). Avanzan al paso del más lento. Si caen miembros, «reponer bajas» los fabrica y van solos a reunirse.');
       if (conRed) h += '<h3>Clima</h3>' + fila('', 'Lluvia', '—', 'Fuera de camino los vehículos van un 25 % más lentos (la infantería, un 10 %) y gastan la mitad más de combustible. En los vados se va a media velocidad: un puente o un camino lo evitan.') + fila('', 'Tormenta', '—', 'Lo de la lluvia y, además, las unidades ven un 30 % menos y aviones y drones se quedan en tierra (los que vuelan vuelven a su base). El panel avisa un minuto antes.');
       $('guiaTxt').innerHTML = h;
     }
@@ -2162,6 +2164,33 @@
     }
     for (const tipo in EDIF) if (tipo !== 'patio' && !EDIF[tipo].infra && !EDIF[tipo].oculto) boton($('bEdif'), tipo, EDIF[tipo], true);
     for (const tipo in UNID) boton($('bUnid'), tipo, UNID[tipo], false);
+    // Pelotones: una casilla por plantilla, en el cuartel. Se encarga entero; cada miembro va a la cola del edificio que lo fabrica.
+    const botonesPel = [];
+    for (const tipo in W.PEL) {
+      const p = W.PEL[tipo], b = document.createElement('button'), cuenta = {};
+      for (const t of p.de) cuenta[t] = (cuenta[t] || 0) + 1;
+      const lista = Object.keys(cuenta).map((t) => cuenta[t] + ' ' + UNID[t].nombre.toLowerCase()).join(', ');
+      b.className = 'cas txt'; b.type = 'button'; b.innerHTML = '<span class="n"></span><span class="m"></span><span class="c"></span>';
+      b.querySelector('.n').textContent = p.nombre; b.querySelector('.m').textContent = p.de.length + ' unidades';
+      b.addEventListener('click', () => { son.activar(); const no = W.pelNo(m, YO, p.de); if (no) { aviso(p.nombre + ': ' + no); return; } W.orden(m, { t: 'peloton', j: YO, tipo }); aviso(p.nombre + ' encargado: ' + lista); });
+      $('bPel').appendChild(b); botonesPel.push({ b, tipo, p, lista, c: b.querySelector('.c') });
+    }
+    $('secPel').addEventListener('click', (ev) => { const b = ev.target.closest('button[data-pel]'); if (!b) return; son.activar(); W.orden(m, { t: 'reponer', j: YO, pel: Number(b.dataset.pel) }); aviso('Bajas encargadas: irán solas a reunirse con el pelotón'); });
+    let pelFirma = '';
+    function fichaPeloton() { // si todo lo seleccionado es un mismo pelotón: quién queda, cómo está y qué falta
+      const us = unidadesSel(); let pel = us.length ? us[0].pel || 0 : 0; for (const u of us) if ((u.pel || 0) !== pel) { pel = 0; break; }
+      const sec = $('secPel'); if (!pel) { if (!sec.hidden) { sec.hidden = true; pelFirma = ''; } return; }
+      const q = W.pelDe(m, YO, pel), p = W.PEL[q.tipo]; if (!p) { sec.hidden = true; return; }
+      const cuesta = W.pelPrecio(q.falta), no = q.falta.length ? W.pelNo(m, YO, q.falta) : '';
+      const firma = pel + '|' + q.vivos.map((u) => u.id + ':' + Math.round((u.vida / u.vidaMax) * 20)).join(',') + '|' + q.falta.join(',') + '|' + q.enCola.join(',') + '|' + no;
+      if (firma === pelFirma && !sec.hidden) return; pelFirma = firma; sec.hidden = false;
+      let h = '<h2>' + p.nombre + ' · ' + q.vivos.length + ' de ' + p.de.length + '</h2>';
+      for (const u of q.vivos) { const f = u.vida / u.vidaMax; h += '<div class="fm"><span>' + UNID[u.tipo].nombre + (u.dentro ? ' (a bordo)' : '') + '</span><i><b' + (f < 0.35 ? ' class="mal"' : '') + ' style="width:' + Math.round(f * 100) + '%"></b></i></div>'; }
+      if (q.enCola.length) h += '<div class="tenue">en camino: ' + q.enCola.map((t) => UNID[t].nombre.toLowerCase()).join(', ') + '</div>';
+      if (q.falta.length) h += '<div class="cae">faltan: ' + q.falta.map((t) => UNID[t].nombre.toLowerCase()).join(', ') + '</div><button type="button" class="grupo" data-pel="' + pel + '"' + (no ? ' disabled title="' + no + '"' : ' title="Se fabrican y van solos a reunirse con el pelotón"') + '>reponer bajas · ' + precioCorto(cuesta) + (no ? ' · ' + no : '') + '</button>';
+      sec.innerHTML = h;
+    }
+    const conPeloton = () => { const ps = new Set(); for (const id of sel) { const u = m.porId.get(id); if (u && !u.edif && u.pel) ps.add(u.pel); } if (ps.size) for (const u of m.ents) if (!u.edif && u.j === YO && u.pel && ps.has(u.pel) && !u.bunk) sel.add(u.id); }; // tocar a uno es tocar al pelotón (con Alt, solo a ese)
 
     // ---------- alertas: lo que no rinde en toda la base, con un clic para ir a verlo ----------
     const ALERTA = {
@@ -2276,6 +2305,9 @@
         if (o.c.classList.contains('lg') !== txt.length > 11) o.c.classList.toggle('lg', txt.length > 11);
         o.b.style.setProperty('--p', (p * 100).toFixed(1) + '%');
       }
+      { const ver = tipos.has('cuartel'); if ($('pelCab').hidden === ver) { $('pelCab').hidden = !ver; $('bPel').hidden = !ver; }
+        if (ver) for (const o of botonesPel) { const no = W.pelNo(m, YO, o.p.de), clase = 'cas txt' + (!no ? '' : no === 'no alcanza' ? ' caro' : ' no'), txt = precioCorto(W.pelPrecio(o.p.de)), tit = o.p.nombre + ' · ' + o.lista + '. ' + o.p.que + (no ? ' Ahora no: ' + no + '.' : ''); if (o.b.className !== clase) o.b.className = clase; if (o.c.textContent !== txt) o.c.textContent = txt; if (o.b.title !== tit) o.b.title = tit; } }
+      fichaPeloton();
       listarGrupos(); actualizarTec(); actualizarTactil();
       { // pestañas: una sola rejilla a la vista, la que toca según lo seleccionado (o la que elija el jugador)
         const disp = { edif: tipos.has('patio'), unid: hayUnid, tec: hayTecG, intel: tipos.has('estacion') || tipos.has('laboratorio'), mis: tipos.has('misilera') }, firma = [...tipos].sort().join(',');
@@ -2523,7 +2555,7 @@
       if (!ev.shiftKey) sel.clear();
       if (clic) {
         const e = entEn(aMundoX(raton.x), aMundoY(raton.y));
-        if (e && e.j === YO && !(UNID[e.tipo] && UNID[e.tipo].mini && e.rol !== 'rec')) { if (ev.shiftKey && sel.has(e.id)) sel.delete(e.id); else sel.add(e.id); } // de los drones pequeños solo se selecciona el de reconocimiento (para darle patrulla)
+        if (e && e.j === YO && !(UNID[e.tipo] && UNID[e.tipo].mini && e.rol !== 'rec')) { if (ev.shiftKey && sel.has(e.id)) sel.delete(e.id); else { sel.add(e.id); if (!ev.altKey) conPeloton(); } } // de los drones pequeños solo se selecciona el de reconocimiento (para darle patrulla)
         const ahora = performance.now();
         if (e && e.j === YO && !e.edif && ultClic.id === e.id && ahora - ultClic.t < 380) { // doble clic: todas las de su tipo que estén en pantalla
           const c = lienzo.getBoundingClientRect(), ax = aMundoX(0), bx = aMundoX(c.width), ay = aMundoY(0), by = aMundoY(c.height);
@@ -2535,6 +2567,7 @@
       const ax = aMundoX(Math.min(raton.x, raton.x0)), bx = aMundoX(Math.max(raton.x, raton.x0));
       const ay = aMundoY(Math.min(raton.y, raton.y0)), by = aMundoY(Math.max(raton.y, raton.y0));
       for (const e of m.ents) if (!e.edif && e.j === YO && !UNID[e.tipo].mini && !e.bunk && e.x >= ax && e.x <= bx && e.y >= ay && e.y <= by) sel.add(e.id);
+      if (!ev.altKey) conPeloton();
       if (!sel.size) for (const e of m.ents) if (!e.edif && e.j === YO && UNID[e.tipo].mini && e.rol === 'rec' && e.x >= ax && e.x <= bx && e.y >= ay && e.y <= by) sel.add(e.id); // caja solo con drones de reconocimiento: se seleccionan ellos
       // La caja prioriza tropa: suelta edificios y, si hay combatientes, también cosechadoras.
       const cosas = [...sel].map((id) => m.porId.get(id)).filter(Boolean);

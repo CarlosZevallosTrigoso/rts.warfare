@@ -1113,6 +1113,34 @@
       u.dpat = ok.length ? { pts: ok, i: 0 } : null;
     }
   }
+  // ---------- pelotones ----------
+  // Un pelotón es una etiqueta (u.pel, u.pelT) que comparten sus miembros. Se encarga de una vez: cada miembro entra en la cola
+  // del edificio que lo fabrica, marcado (fab.pelq, a la par de fab.cola) para que al salir sepa de qué pelotón es.
+  const pelq = (fab) => { if (!fab.pelq) fab.pelq = []; while (fab.pelq.length < fab.cola.length) fab.pelq.push(0); fab.pelq.length = fab.cola.length; return fab.pelq; };
+  W.pelPrecio = (tipos) => { const s = { costo: 0, pet: 0, raros: 0, info: 0, acero: 0, tiempo: 0 }; for (const t of tipos) { const d = UNID[t]; s.costo += d.costo || 0; s.pet += d.pet || 0; s.raros += d.raros || 0; s.info += d.info || 0; s.acero += d.acero || 0; s.tiempo += d.tiempo || 0; } return s; };
+  // Por qué no se puede encargar esa lista de unidades ahora ('' = se puede): requisitos, sitio en las colas y dinero.
+  W.pelNo = function (m, j, tipos) {
+    const J = m.jug[j], pide = {};
+    for (const t of tipos) { const d = UNID[t]; if (!W.disponible(m, j, d)) return 'falta ' + (W.tieneReq(m, j, d.req) ? 'nivel ' + (d.nivel || 1) : d.req.map((r) => EDIF[r].nombre).join(', ')) + ' (' + d.nombre + ')'; const l = W.lugarDe(d); pide[l] = (pide[l] || 0) + 1; }
+    for (const l in pide) { let libre = 0, hay = false; for (const e of m.ents) if (e.edif && e.j === j && e.tipo === l && e.vida > 0 && e.cola) { hay = true; libre += ECON.colaMax - e.cola.length; } if (!hay) return 'falta ' + EDIF[l].nombre; if (libre < pide[l]) return 'las colas de ' + EDIF[l].nombre + ' están llenas'; }
+    return W.puedePagar(J, W.pelPrecio(tipos)) ? '' : 'no alcanza';
+  };
+  // Los vivos de un pelotón (también los que van dentro de un transporte), su plantilla y lo que le falta (descontando lo ya encargado).
+  W.pelDe = function (m, j, pel) {
+    const vivos = []; let tipo = '';
+    for (const e of m.ents) { if (e.edif || e.j !== j) continue; if (e.pel === pel && e.vida > 0) vivos.push(e); if (e.pasajeros) for (const p of e.pasajeros) if (p.pel === pel) vivos.push(p); }
+    const enCola = []; for (const e of m.ents) if (e.edif && e.j === j && e.pelq) for (let i = 0; i < e.pelq.length && i < e.cola.length; i++) if (e.pelq[i] && e.pelq[i].id === pel) { enCola.push(e.cola[i]); tipo = e.pelq[i].tipo; }
+    if (vivos.length) tipo = vivos[0].pelT;
+    const falta = tipo && W.PEL[tipo] ? W.PEL[tipo].de.slice() : [];
+    for (const t of vivos.map((u) => u.tipo).concat(enCola)) { const i = falta.indexOf(t); if (i >= 0) falta.splice(i, 1); }
+    return { vivos, tipo, falta, enCola };
+  };
+  function encolar(m, j, tipo, marca) { // a la cola más corta de su edificio; se paga al encargar
+    const d = UNID[tipo], J = m.jug[j]; let fab = null;
+    for (const e of m.ents) { if (!e.edif || e.j !== j || e.tipo !== W.lugarDe(d) || e.vida <= 0 || !e.cola || e.cola.length >= ECON.colaMax) continue; if (!fab || e.cola.length < fab.cola.length) fab = e; }
+    if (!fab || !W.puedePagar(J, d)) return false;
+    cobrar(J, d); pelq(fab); fab.cola.push(tipo); fab.pago.push(true); fab.pelq.push(marca); J.colas[tipo].n++; return true;
+  }
   function propias(m, cmd) {
     const out = [];
     for (let k = 0; k < cmd.ids.length; k++) { const u = m.porId.get(cmd.ids[k]); if (u && !u.edif && u.j === cmd.j && !UNID[u.tipo].mini) { u.retirando = false; u.volver = null; u.noRetira = true; out.push(u); } } // una orden directa anula la retirada (hasta que se repare)
@@ -1567,7 +1595,18 @@
           if (!fab || e.cola.length < fab.cola.length) fab = e;
         }
         if (!fab) return;
-        cobrar(J, d); fab.cola.push(cmd.tipo); fab.pago.push(true); J.colas[cmd.tipo].n++;
+        cobrar(J, d); pelq(fab); fab.cola.push(cmd.tipo); fab.pago.push(true); fab.pelq.push(0); J.colas[cmd.tipo].n++;
+        return;
+      }
+      case 'peloton': { // un pelotón entero: todos sus miembros, cada uno a su cola
+        const p = W.PEL[cmd.tipo]; if (!p || W.pelNo(m, cmd.j, p.de)) return;
+        const id = (m.pelSig = (m.pelSig || 0) + 1);
+        for (const t of p.de) encolar(m, cmd.j, t, { id, tipo: cmd.tipo });
+        return;
+      }
+      case 'reponer': { // lo que le falta a un pelotón: se encarga y, al salir, va a reunirse con los suyos
+        const q = W.pelDe(m, cmd.j, cmd.pel); if (!q.vivos.length || !q.falta.length) return;
+        for (const t of q.falta) if (!W.pelNo(m, cmd.j, [t])) encolar(m, cmd.j, t, { id: cmd.pel, tipo: q.tipo });
         return;
       }
       case 'cancelarUnidad': { // con id e i: ese puesto de la cola de ese edificio; si no, el último de ese tipo (en los edificios indicados o en todos)
@@ -1582,7 +1621,7 @@
           if (!fab) return;
         }
         const tipo = fab.cola[i], pagado = fab.pago[i];
-        fab.cola.splice(i, 1); fab.pago.splice(i, 1); if (i === 0) fab.prog = 0;
+        pelq(fab).splice(i, 1); fab.cola.splice(i, 1); fab.pago.splice(i, 1); if (i === 0) fab.prog = 0;
         J.colas[tipo].n--; if (pagado) devolver(J, UNID[tipo]);
         return;
       }
@@ -2627,12 +2666,15 @@
       fab.prog += fab.hack > m.t ? 0 : base * (fab.sinLuz ? 0.5 : 1) * (m.logistica !== false && fab.desg >= ECON.desgProd1 ? (fab.desg >= ECON.desgProd2 ? 0.7 : 0.85) : 1); // hackeado: parado; desgastado: más lento
       if (fab.prog > q.prog) q.prog = fab.prog;
       if (fab.prog < UNID[tipo].tiempo) continue;
-      fab.cola.shift(); fab.pago.shift(); fab.prog = 0; q.n--; J.aguaUso += UNID[tipo].agua || 0;
+      const marca = pelq(fab).shift(); fab.cola.shift(); fab.pago.shift(); fab.prog = 0; q.n--; J.aguaUso += UNID[tipo].agua || 0;
       if (m.logistica !== false) fab.desg = Math.min(100, (fab.desg || 0) + ECON.desgProd); // cada unidad que saca lo desgasta un poco
-      if (fab.bucle && (cat !== 'aire' || W.cupoAire(m, j, W.hangarDe(UNID[tipo])).hay + 1 < W.cupoAire(m, j, W.hangarDe(UNID[tipo])).cupo)) { fab.cola.push(tipo); fab.pago.push(false); q.n++; }
+      if (fab.bucle && (cat !== 'aire' || W.cupoAire(m, j, W.hangarDe(UNID[tipo])).hay + 1 < W.cupoAire(m, j, W.hangarDe(UNID[tipo])).cupo)) { fab.cola.push(tipo); fab.pago.push(false); fab.pelq.push(0); q.n++; }
       const u = crearUnidad(m, j, tipo, cat === 'aire' ? Math.floor(fab.cy) * m.N + Math.floor(fab.cx) : W.cercaLibre(m, fab.cx, fab.y + fab.tam + 0.5, cat === 'veh'));
       if (cat === 'aire') { const casa = aerodromoLibre(m, u) || fab; posar(m, u, casa); } // el avión nace posado en un aeródromo con sitio
-      if (fab.reunion) { // va al punto de reunión del edificio
+      let junto = null; // de un pelotón: si ya hay compañeros en el mapa, va a reunirse con ellos
+      if (marca) { u.pel = marca.id; u.pelT = marca.tipo; let sx = 0, sy = 0, n = 0; for (const o of m.ents) if (!o.edif && o.j === j && o.pel === marca.id && o !== u && o.vida > 0 && !UNID[o.tipo].aire) { sx += o.x; sy += o.y; n++; } if (n && cat !== 'aire') junto = { x: sx / n, y: sy / n }; }
+      if (junto) { const c = W.cercaLibre(m, junto.x, junto.y, cat === 'veh'); asignar(m, u, { t: 'mover', x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 }); }
+      else if (fab.reunion) { // va al punto de reunión del edificio
         if (tipo === 'cosechadora') u.pref = { x: fab.reunion.x, y: fab.reunion.y };
         else if (cat === 'aire') u.patrulla = { pts: [{ x: fab.reunion.x, y: fab.reunion.y }], i: 0 }; // el punto de reunión de un aeródromo es un punto de patrulla
         else { const c = W.cercaLibre(m, fab.reunion.x, fab.reunion.y, cat === 'veh'); asignar(m, u, { t: 'mover', x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 }); }
