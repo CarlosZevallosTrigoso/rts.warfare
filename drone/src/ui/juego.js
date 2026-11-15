@@ -10,6 +10,8 @@
   const cam = (D.cam = { x: mapa.bases[YO].x + Math.cos(mapa.bases[YO].frente) * 7, y: mapa.bases[YO].y + Math.sin(mapa.bases[YO].frente) * 7, z: 15 });
   let cw = 0, ch = 0, dpr = 1, vision = 'optica', raton = { x: -1, y: -1, dentro: false };
   const todo = par.get('todo') === '1', sel = new Set(), fx = [], marcas = []; // todo: ver también lo que no se ha descubierto (para probar); sel: escuadrones seleccionados (por su id interno, eq)
+  let giro = null; // tras ordenar ir (o con T): { eqs, x, y, t0 } — un clic cerca fija hacia dónde se orienta el escuadrón
+  const enGiro = (p) => { if (!giro || tiempo - giro.t0 > 6 || !giro.eqs.every((q) => sel.has(q))) { giro = null; return false; } const d = Math.hypot(p.x - giro.x, p.y - giro.y); return d > 0.8 && d < 9; };
   let caja = null, pausa = false, selDron = 0; // selDron: el dron de reconocimiento elegido
   const VISIONES = [
     ['optica', 'Óptica', 'A simple vista. De día se ve lo que no está bajo cobertura; de noche, solo lo cercano a los tuyos.'],
@@ -130,6 +132,9 @@
     if (raton.dentro && sel.size && !caja && !m.fin) { // la vista previa: dónde quedaría cada uno y lo cubierto que estaría (o, si se va a lanzar algo, hasta dónde llega)
       const p = { x: cam.x + (raton.x - cw / 2) / z, y: cam.y + (raton.y - ch / 2) / z }, us = mios.filter((e) => e.clase === 'sol' && sel.has(e.eq));
       if (esFpv(lanza)) { /* la zona del FPV ya está pintada */ } else if (lanza && us.length) { const alc = lanza === 'granada' ? D.ECON.granadaAlc : D.ECON.humoAlc; let md = 1e9; for (const u of us) md = Math.min(md, Math.hypot(u.x - p.x, u.y - p.y)); const bien = md <= alc; ctx.strokeStyle = bien ? COLYO : '#c2552d'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.arc(raton.x, raton.y, (lanza === 'granada' ? D.ECON.granadaRadio : D.ECON.humoRadio) * z, 0, TAU); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 0.35; for (const u of us) { ctx.beginPath(); ctx.arc(ox + u.x * z, oy + u.y * z, alc * z, 0, TAU); ctx.stroke(); } ctx.globalAlpha = 1; }
+      else if (us.length && enGiro(p)) { const porEq = new Map(), gx = ox + giro.x * z, gy = oy + giro.y * z, am = D.haciaDonde(giro.x, giro.y, p.x, p.y), a = Math.atan2(p.y - giro.y, p.x - giro.x); for (const u of us) { if (!porEq.has(u.eq)) porEq.set(u.eq, []); porEq.get(u.eq).push(u); } // orientar: la flecha sale de donde van y sigue al cursor; los puntos, sus puestos mirando allí
+        for (const g of porEq.values()) for (const q of D.puestos(m, giro.x, giro.y, g.length, am)) { const x = ox + q.x * z, y = oy + q.y * z; ctx.fillStyle = COB[D.cobNivel(q.cob)]; ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, Math.max(3.5, z * 0.22), 0, TAU); ctx.fill(); ctx.stroke(); }
+        ctx.strokeStyle = COLYO; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(gx, gy); ctx.lineTo(raton.x, raton.y); ctx.lineTo(raton.x - Math.cos(a - 0.4) * 9, raton.y - Math.sin(a - 0.4) * 9); ctx.moveTo(raton.x, raton.y); ctx.lineTo(raton.x - Math.cos(a + 0.4) * 9, raton.y - Math.sin(a + 0.4) * 9); ctx.stroke(); ctx.fillStyle = P.tinta; ctx.font = '10px ui-monospace, Menlo, Consolas, monospace'; ctx.fillText('clic: mirar hacia aquí', raton.x + 14, raton.y - 8); }
       else if (us.length && p.x >= 0 && p.y >= 0 && p.x < N && p.y < N) { const porEq = new Map(); for (const u of us) { if (!porEq.has(u.eq)) porEq.set(u.eq, []); porEq.get(u.eq).push(u); }
         for (const g of porEq.values()) { const cx = g.reduce((s, u) => s + u.x, 0) / g.length, cy = g.reduce((s, u) => s + u.y, 0) / g.length, am = D.amenaza(m, YO, p.x, p.y, cx, cy), ps = D.puestos(m, p.x, p.y, g.length, am);
           for (const q of ps) { const x = ox + q.x * z, y = oy + q.y * z; ctx.fillStyle = COB[D.cobNivel(q.cob)]; ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, Math.max(3.5, z * 0.22), 0, TAU); ctx.fill(); ctx.stroke(); }
@@ -218,7 +223,8 @@
   const seleccionados = () => mios().filter((e) => sel.has(e.eq));
   function alterna(que) { const us = seleccionados(); if (!us.length) return; const v = !us.every((u) => u[que]); orden({ t: 'modo', [que]: v }); aviso(que === 'sigilo' ? (v ? 'Sigilo: despacio y por lo tapado' : 'Paso normal') : v ? 'Fuego libre' : 'Fuego contenido: solo de cerca o si les dan'); }
   const retirada = () => { if (sel.size) { orden({ t: 'retirada' }); aviso('Retirada: corren al barracón'); } }, apunta = (k) => { if (!sel.size) return; lanza = lanza === k ? null : k; aviso(lanza ? (k === 'granada' ? 'Granada: clic donde la quieres' : 'Humo: clic donde lo quieres') + ' · Esc cancela' : 'Cancelado'); };
-  $('bRetira').addEventListener('click', retirada); $('bGranada').addEventListener('click', () => apunta('granada')); $('bHumo').addEventListener('click', () => apunta('humo'));
+  const orienta = () => { const us = seleccionados(); if (!us.length) return; giro = { eqs: [...sel], x: us.reduce((s, u) => s + u.x, 0) / us.length, y: us.reduce((s, u) => s + u.y, 0) / us.length, t0: tiempo }; lanza = null; aviso('Orientar: clic hacia donde deben mirar y cubrirse · Esc cancela'); };
+  $('bOrienta').addEventListener('click', orienta); $('bRetira').addEventListener('click', retirada); $('bGranada').addEventListener('click', () => apunta('granada')); $('bHumo').addEventListener('click', () => apunta('humo'));
   $('bSigilo').addEventListener('click', () => alterna('sigilo')); $('bFuego').addEventListener('click', () => alterna('fuego')); $('bAlto').addEventListener('click', () => orden({ t: 'detener' }));
   $('equipos').addEventListener('click', (ev) => { const b = ev.target.closest('[data-eq]'); if (!b) return; selDron = 0; const eq = Number(b.dataset.eq); if (!ev.shiftKey) sel.clear(); sel.add(eq); const us = mios().filter((e) => e.eq === eq); if (us.length && !ev.shiftKey) { cam.x = us[0].x; cam.y = us[0].y; } firmaP = ''; });
   $('otra').addEventListener('click', () => ir(D.ROL[YO].clave, escenario, Math.floor(Math.random() * 99999) + 1)); $('otraRol').addEventListener('click', () => ir(D.ROL[1 - YO].clave, escenario, m.semilla));
@@ -267,10 +273,10 @@
     if (/^Digit[7890]$/.test(ev.code)) ponVision(VISIONES['7890'.indexOf(ev.code.slice(5))][0]);
     else if (/^Digit[1-6]$/.test(ev.code)) { const n = Number(ev.code.slice(5)), us = mios().filter((e) => e.num === n); if (us.length) { const ya = sel.size === 1 && sel.has(us[0].eq); if (!ev.shiftKey) sel.clear(); sel.add(us[0].eq); selDron = 0; firmaP = ''; if (ya) { cam.x = us[0].x; cam.y = us[0].y; } } } // el número elige el escuadrón; pulsado otra vez, lleva la cámara a él
     else if (ev.code === 'KeyH') { cam.x = mapa.bases[YO].x; cam.y = mapa.bases[YO].y; }
-    else if (ev.code === 'KeyR') retirada(); else if (ev.code === 'KeyG') apunta('granada'); else if (ev.code === 'KeyB') apunta('humo');
+    else if (ev.code === 'KeyT') orienta(); else if (ev.code === 'KeyR') retirada(); else if (ev.code === 'KeyG') apunta('granada'); else if (ev.code === 'KeyB') apunta('humo');
     else if (ev.code === 'KeyV') apuntaFpv('fpvRadio'); else if (ev.code === 'KeyN') apuntaFpv('fpvFibra'); else if (ev.code === 'KeyZ') recoge();
     else if (ev.code === 'KeyC') alterna('sigilo'); else if (ev.code === 'KeyF') alterna('fuego'); else if (ev.code === 'KeyX') orden({ t: 'detener' });
-    else if (ev.code === 'Escape') { if (lanza) lanza = null; else { sel.clear(); selDron = 0; firmaP = ''; } } else if (ev.code === 'KeyP') { pausa = !pausa; aviso(pausa ? 'Pausa' : 'Sigue'); }
+    else if (ev.code === 'Escape') { if (lanza) lanza = null; else if (giro) giro = null; else { sel.clear(); selDron = 0; firmaP = ''; } } else if (ev.code === 'KeyP') { pausa = !pausa; aviso(pausa ? 'Pausa' : 'Sigue'); }
     else if (ev.code === 'Tab') { ev.preventDefault(); const ids = [...equipos().keys()]; selDron = 0; if (ids.length) { const i = ids.indexOf([...sel][0]); sel.clear(); const eq = ids[(i + 1) % ids.length]; sel.add(eq); const u = mios().find((e) => e.eq === eq); cam.x = u.x; cam.y = u.y; firmaP = ''; } }
     if (ev.code.startsWith('Arrow') || ev.code === 'Space') ev.preventDefault();
   });
@@ -279,6 +285,7 @@
   lienzo.addEventListener('pointerdown', (ev) => {
     const r = lienzo.getBoundingClientRect(), px = ev.clientX - r.left, py = ev.clientY - r.top; lienzo.setPointerCapture(ev.pointerId);
     if (ev.button === 1 || (ev.button === 0 && teclas.has('Space'))) arrastre = { x: ev.clientX, y: ev.clientY, cx: cam.x, cy: cam.y }; // desplazar: botón central o Espacio + arrastrar
+    else if ((ev.button === 0 || ev.button === 2) && !lanza && sel.size && !m.fin && enGiro(aMundo(px, py))) { const p = aMundo(px, py); D.orden(m, { t: 'mover', j: YO, eqs: giro.eqs, x: giro.x, y: giro.y, hacia: { x: p.x, y: p.y } }); aviso('Orientados hacia allí'); giro = null; } // el segundo clic, cerca: orientar
     else if (ev.button === 0 && esFpv(lanza)) { // el FPV: contra el enemigo a la vista o el edificio descubierto que esté bajo el clic; si no hay, al punto
       const p = aMundo(px, py); let ob = null, md = 1.6; for (const e of m.ents) { if (e.j === YO || e.clase === 'dron' || !(e.clase === 'sol' ? m.visto[YO].has(e.id) : m.conocido[YO].has(e.id))) continue; const d = Math.hypot(e.x - p.x, e.y - p.y); if (d < md) { md = d; ob = e; } }
       D.orden(m, ob ? { t: 'fpv', j: YO, tipo: lanza, obj: ob.id } : { t: 'fpv', j: YO, tipo: lanza, x: p.x, y: p.y }); fx.push({ k: 'anillo', x: ob ? ob.x : p.x, y: ob ? ob.y : p.y, r: 1.6, c: '#c2552d', t0: tiempo, dur: 0.6 }); lanza = null; }
@@ -289,7 +296,7 @@
     else if (ev.button === 2 && sel.size && !m.fin) { // la orden: sobre un edificio enemigo descubierto, volarlo; si no, ir allí
       const p = aMundo(px, py); let ob = null, md = 1.8; for (const e of m.ents) if (e.clase === 'edif' && e.j !== YO && m.conocido[YO].has(e.id)) { const d = Math.hypot(e.x - p.x, e.y - p.y); if (d < md) { md = d; ob = e; } }
       if (ob) { if (seleccionados().some((u) => D.SOL[u.tipo].carga)) { orden({ t: 'volar', obj: ob.id }); fx.push({ k: 'anillo', x: ob.x, y: ob.y, r: 2.5, c: '#c2552d', t0: tiempo, dur: 0.7 }); } else aviso('En ese escuadrón nadie lleva carga: hace falta un asaltante o un zapador'); }
-      else if (p.x >= 0 && p.y >= 0 && p.x < N && p.y < N) { if (!m.paso[Math.floor(p.y) * N + Math.floor(p.x)]) aviso('Ahí no se puede pisar: irán a lo más cercano'); orden({ t: 'mover', x: p.x, y: p.y }); fx.push({ k: 'anillo', x: p.x, y: p.y, r: 1.2, c: '#1f6f78', t0: tiempo, dur: 0.5 }); }
+      else if (p.x >= 0 && p.y >= 0 && p.x < N && p.y < N) { if (!m.paso[Math.floor(p.y) * N + Math.floor(p.x)]) aviso('Ahí no se puede pisar: irán a lo más cercano'); orden({ t: 'mover', x: p.x, y: p.y }); giro = { eqs: [...sel], x: p.x, y: p.y, t0: tiempo }; fx.push({ k: 'anillo', x: p.x, y: p.y, r: 1.2, c: '#1f6f78', t0: tiempo, dur: 0.5 }); }
     }
   });
   lienzo.addEventListener('pointermove', (ev) => { const r = lienzo.getBoundingClientRect(); raton.x = ev.clientX - r.left; raton.y = ev.clientY - r.top; raton.dentro = true; if (arrastre) { cam.x = arrastre.cx - (ev.clientX - arrastre.x) / cam.z; cam.y = arrastre.cy - (ev.clientY - arrastre.y) / cam.z; limita(); } if (caja) { caja.x1 = raton.x; caja.y1 = raton.y; } });

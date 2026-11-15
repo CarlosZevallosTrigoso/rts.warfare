@@ -70,6 +70,7 @@
   //   { t: 'detener', j, eqs }
   //   { t: 'modo', j, eqs, sigilo?, fuego? }   sigilo: lento y tapado · fuego: libre (true) o contenido (false)
   //   { t: 'retirada', j, eqs }        correr al barracón: no disparan y cuesta más darles
+  //   { t: 'mover', j, eqs, x, y, hacia: {x, y} }   lo mismo, pero orientados hacia ese punto: se cubren de ese lado y miran allí
   //   { t: 'granada' | 'humo', j, eqs, x, y }   la lanza el miembro más cercano al punto, si está a tiro y el equipo no está recargando
   //   { t: 'recon', j, id, x, y }      el dron de reconocimiento va a dar vueltas sobre ese punto (si está posado, despega)
   //   { t: 'reconCasa', j, id }        vuelve al taller a recargar y se queda posado
@@ -87,8 +88,8 @@
     if (m.fin) return; if (cmd.t === 'recon' || cmd.t === 'reconCasa' || cmd.t === 'fpv') { aplicarDron(m, cmd); return; }
     if (!cmd.eqs) return; const us = delEquipo(m, cmd.j, cmd.eqs); if (!us.length) return;
     if (cmd.t === 'mover') { // cada uno, a su puesto: los mejores sitios cubiertos alrededor del punto, de cara a la amenaza
-      const cx = us.reduce((s, u) => s + u.x, 0) / us.length, cy = us.reduce((s, u) => s + u.y, 0) / us.length, am = D.amenaza(m, cmd.j, cmd.x, cmd.y, cx, cy), ps = D.puestos(m, cmd.x, cmd.y, us.length, am);
-      us.forEach((u, i) => { const p = ps[i] || D.cercaLibre(m, cmd.x, cmd.y); u.orden = 'mover'; u.obj = 0; u.canal = 0; u.mira = Math.atan2(am.y - p.y, am.x - p.x); if (!irA(m, u, p.x, p.y)) { const q = D.cercaLibre(m, cmd.x, cmd.y); u.orden = 'mover'; irA(m, u, q.x, q.y); } });
+      const cx = us.reduce((s, u) => s + u.x, 0) / us.length, cy = us.reduce((s, u) => s + u.y, 0) / us.length, am = cmd.hacia ? D.haciaDonde(cmd.x, cmd.y, cmd.hacia.x, cmd.hacia.y) : D.amenaza(m, cmd.j, cmd.x, cmd.y, cx, cy), ps = D.puestos(m, cmd.x, cmd.y, us.length, am); // con «hacia», el jugador dice de qué lado quiere cubrirse
+      us.forEach((u, i) => { const p = ps[i] || D.cercaLibre(m, cmd.x, cmd.y); u.orden = 'mover'; u.obj = 0; u.canal = 0; u.mira = Math.atan2(am.y - p.y, am.x - p.x); if (!irA(m, u, p.x, p.y)) { const q = D.cercaLibre(m, cmd.x, cmd.y); u.orden = 'mover'; irA(m, u, q.x, q.y); } if (u.orden === 'nada') u.ang = u.mira; }); // quien ya está en su puesto solo se gira
     }
     else if (cmd.t === 'retirada') { const b = cmd.j === 0 ? m.extraccion : m.ents.find((e) => e.clase === 'edif' && e.j === cmd.j && e.tipo === 'barracon') || m.mapa.bases[cmd.j], usadas = new Set(); for (const u of us) { const p = D.cercaLibre(m, b.x + (u.x > b.x ? 2 : -2), b.y + (u.y > b.y ? 2 : -2), usadas); u.sigilo = false; u.obj = 0; u.canal = 0; u.orden = 'retirada'; if (!irA(m, u, p.x, p.y)) u.orden = 'nada'; else u.orden = 'retirada'; } m.efectos.push({ tipo: 'retirada', j: cmd.j, x: us[0].x, y: us[0].y, t: m.t }); }
     else if (cmd.t === 'granada' || cmd.t === 'humo') {
@@ -116,6 +117,7 @@
   };
   // De dónde se espera el peligro al ir a (x, y): del enemigo a la vista más cercano; si no hay, de frente según se avanza;
   // y si apenas se mueve uno, de donde está el otro bando.
+  D.haciaDonde = function (x, y, hx, hy) { const L = Math.hypot(hx - x, hy - y) || 1; return { x: x + ((hx - x) / L) * 30, y: y + ((hy - y) / L) * 30, visto: false, puesto: true }; }; // la «amenaza» que señala el jugador: lejos, en esa dirección
   D.amenaza = function (m, j, x, y, ox, oy) {
     let ob = null, md = 30; for (const id of m.visto[j]) { const o = m.porId.get(id); if (!o) continue; const d = Math.hypot(o.x - x, o.y - y); if (d < md) { md = d; ob = o; } }
     if (ob) return { x: ob.x, y: ob.y, visto: true };

@@ -202,6 +202,15 @@ prueba('rastros: el centro está oculto; las antenas que emiten dan rumbo y posa
     const p = h.pts[Math.floor(h.pts.length * 0.7)]; lleva(a, D.cercaLibre(m, p[0], p[1])); avanza(m, 21); assert.ok(h.visto[0] && m.efectos.some((q) => q.tipo === 'hilo' && q.j === 0), 'pisando el hilo debía verlo');
   }
 });
+prueba('orientar: con «hacia», el escuadrón mira adonde se le dice y se cubre de ese lado', () => {
+  let mejor = 0, n = 0;
+  for (let s = 1; s <= 12; s++) { const m = D.crearMundo(s, { t: DIA }), us = m.ents.filter((e) => e.clase === 'sol' && e.j === 0 && e.num === 1), mu = m.mapa.muretes[Math.floor(m.mapa.muretes.length / 2)]; if (!mu) continue; solos(m, ...us);
+    const c = D.cercaLibre(m, mu.x + 0.5, mu.y + 0.5), set = new Set(); for (const u of us) lleva(u, D.cercaLibre(m, c.x, c.y, set));
+    for (const [hx, hy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const h = { x: c.x + hx * 8, y: c.y + hy * 8 }; D.orden(m, { t: 'mover', j: 0, eqs: [us[0].eq], x: c.x, y: c.y, hacia: h }); avanza(m, 1600);
+      for (const u of us) { let d = Math.atan2(hy, hx) - u.ang; d = Math.abs(Math.atan2(Math.sin(d), Math.cos(d))); assert.ok(d < 0.5, 'no mira hacia donde se le dijo: ' + d); }
+      const am = D.haciaDonde(c.x, c.y, h.x, h.y), cob = us.reduce((q, u) => q + D.cobFrente(m, u.x, u.y, am.x, am.y), 0), otra = us.reduce((q, u) => q + D.cobFrente(m, u.x, u.y, 2 * c.x - am.x, 2 * c.y - am.y), 0); n++; if (cob >= otra) mejor++; } }
+  assert.ok(n >= 20 && mejor >= n * 0.75, 'debía quedar mejor cubierto del lado hacia el que se orienta: ' + mejor + ' de ' + n);
+});
 prueba('tiroteo de escuadrón: dura más de un minuto, clava a la gente y no gana siempre el que va primero en la lista', () => {
   let ga = 0, gb = 0, dur = 0, clav = 0, n = 0, k = 0;
   for (let s = 1; s <= 24; s++) { const m = D.crearMundo(s, { t: DIA }), A = m.ents.filter((e) => e.clase === 'sol' && e.j === 0 && e.num === 1), B = m.ents.filter((e) => e.clase === 'sol' && e.j === 1 && e.num === 1); let p; try { p = celda(m, D.T.SUELO, (x, y) => llano(m, x, y, 14) && llano(m, x, y - 2, 14) && llano(m, x, y + 2, 14)); } catch (e) { continue; }
