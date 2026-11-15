@@ -13,6 +13,7 @@
       const us = equipos[k], eq = Number(k), st = ia.eqs[eq] || (ia.eqs[eq] = { paso: 0, puesto: { x: us[0].x, y: us[0].y }, tOrden: -999 });
       const cx = us.reduce((s, u) => s + u.x, 0) / us.length, cy = us.reduce((s, u) => s + u.y, 0) / us.length, parado = us.every((u) => u.orden === 'nada');
       let cerca = null, dc = 1e9; for (const o of vistos) { const d = Math.hypot(o.x - cx, o.y - cy); if (d < dc) { dc = d; cerca = o; } }
+      if (cerca && dc <= D.ECON.granadaAlc - 0.5 && dc > 2 && us[0].cdGranada <= m.t) D.orden(m, { t: 'granada', j, eqs: [eq], x: cerca.x, y: cerca.y }); // a tiro de granada, granada
       if (j === 0) { // ---- atacante ----
         let centro = null; for (const id of m.conocido[0]) { const o = m.porId.get(id); if (o && o.tipo === 'centro') centro = o; }
         if (cerca && dc < 11) { if (!parado && !centro) D.orden(m, { t: 'detener', j, eqs: [eq] }); if (!centro) continue; } // contacto: se planta y pelea (si ya sabe dónde está el centro, sigue)

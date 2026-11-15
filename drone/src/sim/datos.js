@@ -2,10 +2,14 @@
 (function () {
   const D = globalThis.D || (globalThis.D = {});
   D.N = 96; // el sector: 96 × 96 celdas de 10 m (casi un kilómetro cuadrado)
-  D.T = { SUELO: 0, CAMPO: 1, HIERBA: 2, BOSQUE: 3, CAMINO: 4, AGUA: 5, VADO: 6, PUENTE: 7, MURO: 8, RUINA: 9, TRINCHERA: 10, CRATER: 11 };
-  D.TERRENO = ['Suelo', 'Campo arado', 'Hierba', 'Arboleda', 'Camino', 'Arroyo', 'Vado', 'Puente', 'Muro', 'Ruina', 'Trinchera', 'Cráter'];
+  D.T = { SUELO: 0, CAMPO: 1, HIERBA: 2, BOSQUE: 3, CAMINO: 4, AGUA: 5, VADO: 6, PUENTE: 7, MURO: 8, RUINA: 9, TRINCHERA: 10, CRATER: 11, MURETE: 12 };
+  D.TERRENO = ['Suelo', 'Campo arado', 'Hierba', 'Arboleda', 'Camino', 'Arroyo', 'Vado', 'Puente', 'Muro', 'Ruina', 'Trinchera', 'Cráter', 'Obstáculo bajo'];
   // Cuánto tapa cada terreno a quien está quieto dentro (0 = nada, 1 = del todo). Lo usará la detección (entrega 2).
-  D.COBERTURA = [0, 0, 0.1, 0.7, 0, 0, 0, 0.2, 0, 0.8, 0.6, 0.35];
+  D.COBERTURA = [0, 0, 0.1, 0.7, 0, 0, 0, 0.2, 0, 0.8, 0.6, 0.35, 0];
+  // Cobertura con dirección, al estilo de Company of Heroes: lo que tienes pegado entre tú y quien te dispara. El obstáculo bajo
+  // (murete, escombro, coche calcinado) y la esquina de un muro cubren mucho; el borde de una arboleda, algo. No se pisan, pero se ve y se dispara por encima.
+  D.COB_LADO = { 8: 0.8, 12: 0.75, 3: 0.4 }; D.COB_PESADA = 0.6; D.COB_LIGERA = 0.25; D.COB_EXPUESTO = -0.25; // en camino, calle o puente, sin nada delante: cobertura negativa
+  D.cobNivel = (v) => (v >= D.COB_PESADA ? 'pesada' : v >= D.COB_LIGERA ? 'ligera' : v < 0 ? 'expuesto' : 'ninguna');
   D.prng = function (semilla) { let a = semilla >>> 0; return function () { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
 
   // Fuerzas especiales.
@@ -24,15 +28,16 @@
   for (const k in D.SOL) Object.assign(D.SOL[k], { vida: 100, vel: 0.026, ver: 20, firma: 1, arma: 'pistola' });
   Object.assign(D.SOL.asaltante, { arma: 'fusil', carga: true }); Object.assign(D.SOL.escopetero, { arma: 'escopeta' }); Object.assign(D.SOL.zapador, { arma: 'fusil', carga: true });
   Object.assign(D.SOL.inhibidor, { arma: 'fusil' }); Object.assign(D.SOL.observador, { ver: 25 }); Object.assign(D.SOL.tirador, { arma: 'rifle', ver: 27, firma: 0.6 }); Object.assign(D.SOL.sanitario, { cura: true });
-  // Armas: alcance (celdas), ticks entre disparos, daño y puntería de partida.
+  // Armas: alcance (celdas), ticks entre disparos, daño, puntería de partida y cuánto aprieta contra el suelo cada tiro (supr).
+  // Un fusil solo apenas suprime; tres sobre el mismo blanco lo clavan en unos segundos.
   D.ARMA = {
-    fusil:    { nombre: 'fusil', alc: 14, cad: 14, dano: 17, prec: 0.5 },
-    escopeta: { nombre: 'escopeta', alc: 5, cad: 18, dano: 36, prec: 0.7 },
-    rifle:    { nombre: 'rifle de precisión', alc: 26, cad: 70, dano: 85, prec: 0.8 },
-    pistola:  { nombre: 'pistola', alc: 6, cad: 16, dano: 9, prec: 0.4 },
+    fusil:    { nombre: 'fusil', alc: 14, cad: 14, dano: 17, prec: 0.5, supr: 9 },
+    escopeta: { nombre: 'escopeta', alc: 5, cad: 18, dano: 36, prec: 0.7, supr: 13 },
+    rifle:    { nombre: 'rifle de precisión', alc: 26, cad: 70, dano: 85, prec: 0.8, supr: 40 },
+    pistola:  { nombre: 'pistola', alc: 6, cad: 16, dano: 9, prec: 0.4, supr: 4 },
   };
   // Cuánto frena cada terreno a quien va a pie (1 = paso normal).
-  D.PASO = [1, 0.9, 0.95, 0.8, 1.1, 0, 0.5, 1.1, 0, 0.7, 0.8, 0.8];
+  D.PASO = [1, 0.9, 0.95, 0.8, 1.1, 0, 0.5, 1.1, 0, 0.7, 0.8, 0.8, 0];
   D.DRON = {
     recon:       { nombre: 'Dron de reconocimiento', que: 'Los ojos: encuentra equipos, antenas e hilo de fibra.', alt: 3.2, radio: true, proto: true },
     fpvRadio:    { nombre: 'FPV de radio', que: 'Golpe barato de un solo uso. Lo tumba el inhibidor.', alt: 1.4, radio: true, proto: true },
@@ -61,6 +66,10 @@
     sigiloVel: 0.5, sigiloFirma: 0.6, quietoCob: 1, andaCob: 0.35, firmaTiro: 1.4, tiroDelata: 40, // en sigilo: media velocidad y menos firma; quieto, la cobertura tapa del todo; andando, un tercio; quien dispara se delata 2 s
     supr: 50, suprVel: 0.5, suprPrec: 0.6, cobTiro: 0.6, andaPrec: 0.5, curaRadio: 2.5, cura: 0.15, // bajo fuego: 2,5 s agachado, lento y con peor puntería; la cobertura quita hasta el 60 % de los impactos; el sanitario
     cargaTicks: 100, cargaDist: 2.2, // colocar la carga: 5 s pegado al edificio
+    suprVecino: 0.5, suprBaja: 0.55, suprAgachado: 35, suprClavado: 75, clavadoPrec: 0.3, // supresión: cada tiro que te tiran la sube (menos si estás cubierto) y baja sola; agachado: lento y peor puntería; clavado: ni se mueve
+    retiradaVel: 1.35, retiradaBlanco: 0.6, // retirada: corren al barracón, no disparan y cuesta más darles
+    granadaAlc: 5, granadaVuelo: 20, granadaRadio: 1.6, granadaDano: 70, granadaSupr: 70, granadaCd: 400, // granada: 50 m, 1 s de vuelo, 20 s de recarga por equipo
+    humoAlc: 6, humoRadio: 2.6, humoDura: 500, humoCd: 600, // bote de humo: nube de 25 s que corta la vista (no a la térmica)
   };
   // Los dos papeles. El bando 0 ataca (caza pilotos: muchos equipos, pocos drones); el bando 1 defiende (el centro de drones: muchos pilotos y medios, una guardia corta).
   D.ROL = [

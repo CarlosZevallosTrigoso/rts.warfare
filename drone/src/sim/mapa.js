@@ -118,11 +118,19 @@
     for (let y = mia.y0; y <= mia.y1; y++) for (let x = mia.x0; x <= mia.x1; x++) if (terreno[y * N + x] !== T.CAMINO) terreno[y * N + x] = T.SUELO;
     for (const p of [defensa.taller, defensa.barracon]) { disco(p.x + 0.5, p.y + 0.5, 2.4, T.SUELO, (t) => t !== T.CAMINO && t !== T.AGUA); for (let i = ruinas.length - 1; i >= 0; i--) { const r = ruinas[i]; if (p.x + 3 > r.x && p.x - 3 < r.x + r.w && p.y + 3 > r.y && p.y - 3 < r.y + r.h) { for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) terreno[y * N + x] = T.SUELO; ruinas.splice(i, 1); } } } // si el taller o el barracón se salen del patio, se les hace sitio
 
+    // 11. Obstáculos bajos: lo que da cobertura a quien se pone detrás. En el pueblo, escombros y coches calcinados en las aceras;
+    // en el campo, tramos de murete de piedra. No se pisan, pero no cortan la vista. Nunca sobre camino ni calle.
+    let muretes = []; const bocas = new Set(); for (const t of tubos) for (const b of [t.a, t.b]) bocas.add(Math.floor(b.y) * N + Math.floor(b.x));
+    const murete = (x, y, tipo, ang) => { x = Math.floor(x); y = Math.floor(y); if (!dentro(x, y) || x < 2 || y < 2 || x > N - 3 || y > N - 3) return; const c = y * N + x, t = terreno[c]; if ((t !== T.SUELO && t !== T.CAMPO && t !== T.HIERBA) || bocas.has(c)) return; for (const b of bases) if (Math.hypot(x - b.x, y - b.y) < 3) return; for (const p of [defensa.taller, defensa.barracon, ataque.taller]) if (Math.hypot(x - p.x, y - p.y) < 2.6) return; for (const p of [...defensa.antenas, ...ataque.antenas, defensa.falsa, defensa.escucha]) if (p && Math.abs(x - p.x) < 2 && Math.abs(y - p.y) < 2) return; terreno[c] = T.MURETE; muretes.push({ x, y, tipo, ang: ang || 0 }); };
+    for (const b of manzanas) { if (b.reservada) continue; for (let k = 0; k < 5; k++) { const lado = Math.floor(az() * 4), x = lado === 0 ? b.x0 - 1 : lado === 1 ? b.x1 + 1 : Math.round(entre(b.x0, b.x1)), y = lado === 2 ? b.y0 - 1 : lado === 3 ? b.y1 + 1 : Math.round(entre(b.y0, b.y1)); murete(x, y, az() < 0.4 ? 'coche' : 'escombro', lado < 2 ? Math.PI / 2 : 0); } }
+    { const p = mia; for (const [x, y] of [[p.x0, p.y0], [p.x1, p.y0], [p.x0, p.y1], [p.x1, p.y1], [Math.round((p.x0 + p.x1) / 2), p.y0], [Math.round((p.x0 + p.x1) / 2), p.y1]]) murete(x, y, 'sacos', 0); } // el patio del defensor, con sacos en las esquinas
+    for (let i = 0; i < 12; i++) { const x0 = entre(6, N - 6), y0 = entre(6, N - 6), a = Math.floor(az() * 4) * (Math.PI / 4), L = Math.round(entre(3, 7)); if (x0 >= U.x0 - 1 && x0 <= U.x1 + 1 && y0 >= U.y0 - 1 && y0 <= U.y1 + 1) continue; for (let d = 0; d < L; d++) murete(x0 + Math.cos(a) * d, y0 + Math.sin(a) * d, 'piedra', a); }
+    muretes = muretes.filter((q) => terreno[q.y * N + q.x] === T.MURETE);
     arboles = arboles.filter((a) => terreno[Math.floor(a.y) * N + Math.floor(a.x)] === T.BOSQUE);
     { const con = new Uint8Array(N * N); for (const a of arboles) { const r = Math.max(0.6, a.r * 0.8); for (let y = Math.floor(a.y - r); y <= a.y + r; y++) for (let x = Math.floor(a.x - r); x <= a.x + r; x++) if (dentro(x, y) && Math.hypot(x + 0.5 - a.x, y + 0.5 - a.y) <= r) con[y * N + x] = 1; } for (let c = 0; c < N * N; c++) if (terreno[c] === T.BOSQUE && !con[c]) terreno[c] = c % N >= U.x0 && c % N <= U.x1 && ((c / N) | 0) >= U.y0 && ((c / N) | 0) <= U.y1 ? T.SUELO : T.HIERBA; }
 
-    const paso = new Uint8Array(N * N); for (let c = 0; c < N * N; c++) paso[c] = terreno[c] !== T.AGUA && terreno[c] !== T.MURO ? 1 : 0;
-    return { N, semilla, escenario, terreno, paso, bases, urbano: U, patio: mia, campos, hierbas, arboles, arroyo, calles, ruinas, trincheras, crateres, camino, vados, tubos };
+    const paso = new Uint8Array(N * N); for (let c = 0; c < N * N; c++) paso[c] = terreno[c] !== T.AGUA && terreno[c] !== T.MURO && terreno[c] !== T.MURETE ? 1 : 0;
+    return { N, semilla, escenario, terreno, paso, bases, urbano: U, patio: mia, muretes, campos, hierbas, arboles, arroyo, calles, ruinas, trincheras, crateres, camino, vados, tubos };
   };
 
   // ¿Se puede ir a pie de una celda a otra? (relleno por vecinos; para las pruebas y para comprobar el mapa)

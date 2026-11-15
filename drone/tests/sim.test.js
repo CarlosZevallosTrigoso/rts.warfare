@@ -74,6 +74,46 @@ prueba('combate: dos fusileros al descubierto se disparan hasta que uno cae; a c
   avanza(m, 200); assert.ok(a.vida === a.vidaMax && b.vida === b.vidaMax && m.efectos.every((e) => e.tipo !== 'tiro'), 'con fuego contenido, a 10 celdas nadie dispara');
   a.fuego = true; avanza(m, 100); assert.ok(m.efectos.some((e) => e.tipo === 'tiro'), 'con fuego libre, sí'); assert.ok(b.supr > 0 || b.vida <= 0, 'el que recibe se agacha');
 });
+prueba('cobertura con dirección: detrás de un obstáculo bajo cubre de lo que viene de ese lado y no del otro; el camino expone; los puestos buscan lo cubierto', () => {
+  const m = D.crearMundo(3, {}), T = D.T, N = m.N, t = m.mapa.terreno; let q = null;
+  for (const o of m.mapa.muretes) if (o.x > 12 && o.x < N - 12 && t[o.y * N + o.x - 1] === T.SUELO && m.paso[o.y * N + o.x - 1] && t[o.y * N + o.x - 2] !== T.MURETE && [1, 2, 3].every((d) => m.paso[o.y * N + o.x + d] && t[o.y * N + o.x + d] !== T.BOSQUE)) { q = o; break; }
+  assert.ok(q, 'sin obstáculo bajo con sitio al oeste');
+  const px = q.x - 0.5, py = q.y + 0.5; // el que se cubre está pegado al oeste del obstáculo
+  assert.strictEqual(D.cobNivel(D.cobFrente(m, px, py, px + 10, py)), 'pesada', 'del este (con el obstáculo en medio) debe cubrir mucho');
+  assert.ok(D.cobFrente(m, px, py, px - 10, py) < D.COB_LIGERA, 'del oeste (por la espalda) no cubre');
+  assert.ok(D.cobFrente(m, px, py, px + 1.2, py) < D.COB_LIGERA, 'a quemarropa no cuenta');
+  assert.ok(D.seVe(m.mapa, px, py, px + 4, py), 'el obstáculo bajo no corta la vista');
+  const c = (() => { for (let y = 20; y < N - 20; y++) for (let x = 20; x < N - 20; x++) if (t[y * N + x] === T.CAMINO && t[y * N + x + 1] === T.CAMINO) return { x: x + 0.5, y: y + 0.5 }; })();
+  assert.strictEqual(D.cobNivel(D.cobFrente(m, c.x, c.y, c.x + 12, c.y)), 'expuesto', 'en mitad del camino se está expuesto');
+  const ps = D.puestos(m, px - 1, py, 4, { x: px + 12, y: py }); assert.strictEqual(ps.length, 4); assert.strictEqual(new Set(ps.map((p) => p.x + ',' + p.y)).size, 4, 'puestos repetidos');
+  assert.ok(ps[0].cob >= D.COB_PESADA, 'el mejor puesto debe ser el cubierto: ' + JSON.stringify(ps[0])); for (const p of ps) assert.ok(m.paso[Math.floor(p.y) * N + Math.floor(p.x)], 'puesto donde no se pisa');
+  // la orden de mover deja a cada uno en los puestos que anuncia la vista previa, y mirando a la amenaza
+  const us = m.ents.filter((e) => e.clase === 'sol' && e.j === 0 && e.eq === 1), b = m.mapa.bases[0], x = b.x + Math.cos(b.frente) * 14, y = b.y + Math.sin(b.frente) * 14, cx = us.reduce((s, u) => s + u.x, 0) / 4, cy = us.reduce((s, u) => s + u.y, 0) / 4;
+  const previstos = D.puestos(m, x, y, 4, D.amenaza(m, 0, x, y, cx, cy)).map((p) => p.x + ',' + p.y).sort(); D.orden(m, { t: 'mover', j: 0, eqs: [1], x, y }); avanza(m, 1500);
+  assert.deepStrictEqual(us.map((u) => u.x + ',' + u.y).sort(), previstos, 'no acabaron donde decía la vista previa');
+});
+prueba('supresión, retirada, granada y humo', () => {
+  const E = D.ECON, T = D.T, escena = (s) => { const m = D.crearMundo(s, {}), a = m.ents.filter((e) => e.clase === 'sol' && e.j === 0 && e.tipo === 'asaltante').slice(0, 3), b = sol(m, 1, 'asaltante'); solos(m, ...a, b); const p = celda(m, T.SUELO, (x, y) => llano(m, x, y, 12) && llano(m, x, y + 1, 12) && llano(m, x, y - 1, 12)); return { m, a, b, p }; };
+  // tres fusiles sobre uno lo clavan; uno solo, no. El clavado no se mueve.
+  { const { m, a, b, p } = escena(4); lleva(b, p); b.vida = b.vidaMax = 1e6; b.fuego = false; lleva(a[0], { x: p.x + 9, y: p.y }); for (const u of a) u.vida = u.vidaMax = 1e6; D.detectar(m);
+    let pico = 0; for (let i = 0; i < 300; i++) { D.tick(m); pico = Math.max(pico, b.supr); } assert.ok(pico > 0 && pico < E.suprClavado, 'un solo fusil no debe clavar: ' + pico);
+    lleva(a[1], { x: p.x + 9, y: p.y + 1 }); lleva(a[2], { x: p.x + 9, y: p.y - 1 }); for (const u of a) u.recarga = 0; avanza(m, 300); assert.strictEqual(D.nivelSupr(b), 2, 'tres fusiles deben clavarlo: ' + b.supr);
+    const x0 = b.x; b.eq = 99; D.orden(m, { t: 'mover', j: 1, eqs: [99], x: p.x - 8, y: p.y }); avanza(m, 60); assert.ok(Math.abs(b.x - x0) < 0.2, 'clavado no se mueve');
+    // retirada: sale aunque esté clavado, corre más que andando, no dispara y acaba junto a su barracón
+    D.orden(m, { t: 'retirada', j: 1, eqs: [99] }); avanza(m, 40); assert.ok(b.orden === 'retirada' && Math.abs(b.x - x0) > 0.5, 'la retirada no arranca'); const tiros = m.efectos.filter((e) => e.tipo === 'tiro' && e.j === 1).length;
+    b.fuego = true; avanza(m, 100); assert.strictEqual(m.efectos.filter((e) => e.tipo === 'tiro' && e.j === 1).length, tiros, 'en retirada no se dispara');
+    for (const u of a) u.fuego = false; let n = 0; while (b.orden === 'retirada' && n < 8000) { D.tick(m); n++; } const bar = m.ents.find((e) => e.tipo === 'barracon' && e.j === 1); assert.ok(Math.hypot(b.x - bar.x, b.y - bar.y) < 5 && b.supr === 0, 'no llegó a su barracón'); }
+  // granada: hiere en su radio y no más allá, hay que estar a tiro, y el equipo queda recargando
+  { const { m, a, b, p } = escena(5); lleva(b, p); b.fuego = false; const otro = sol(m, 1, 'escopetero'); lleva(otro, { x: p.x, y: p.y + 4 }); otro.recarga = 1e9; a[0].eq = 98; a[0].recarga = 1e9; b.recarga = 1e9; lleva(a[0], { x: p.x + 8, y: p.y }); D.detectar(m); // (ninguno dispara: solo se prueba la granada)
+    D.orden(m, { t: 'granada', j: 0, eqs: [98], x: p.x, y: p.y }); avanza(m, 40); assert.ok(b.vida === b.vidaMax && m.efectos.some((e) => e.tipo === 'noPuede' && e.que === 'lejos'), 'a 8 celdas no llega');
+    lleva(a[0], { x: p.x + 4, y: p.y }); D.orden(m, { t: 'granada', j: 0, eqs: [98], x: p.x, y: p.y }); avanza(m, E.granadaVuelo + 3);
+    assert.ok(b.vida < b.vidaMax - 30 && b.supr >= E.suprAgachado, 'la granada no hirió: ' + b.vida); assert.strictEqual(otro.vida, otro.vidaMax, 'a 4 celdas no debe alcanzar'); assert.strictEqual(a[0].vida, a[0].vidaMax, 'el que la lanza, a 4 celdas, sale ileso');
+    const v = b.vida; D.orden(m, { t: 'granada', j: 0, eqs: [98], x: p.x, y: p.y }); avanza(m, 60); assert.ok(b.vida === v && m.efectos.some((e) => e.tipo === 'noPuede' && e.que === 'recarga'), 'no se lanzan dos seguidas'); }
+  // humo: entre dos que se ven, la nube corta la vista y el fuego; cuando se disipa, vuelven a verse
+  { const { m, a, b, p } = escena(6); lleva(b, p); b.fuego = false; a[0].eq = 97; a[0].fuego = false; lleva(a[0], { x: p.x + 10, y: p.y }); b.movio = true; D.detectar(m); assert.ok(m.visto[0].has(b.id), 'antes del humo se ven');
+    D.orden(m, { t: 'humo', j: 0, eqs: [97], x: p.x + 5, y: p.y }); avanza(m, E.granadaVuelo + 6); assert.strictEqual(m.humos.length, 1); b.movio = true; D.detectar(m); assert.ok(!m.visto[0].has(b.id) && !m.visto[1].has(a[0].id), 'con humo en medio no se ven');
+    avanza(m, E.humoDura + 10); assert.strictEqual(m.humos.length, 0); b.movio = true; a[0].movio = true; D.detectar(m); assert.ok(m.visto[0].has(b.id), 'disipado el humo, se ven otra vez'); }
+});
 prueba('la carga: un asaltante pegado al centro lo vuela en cinco segundos y gana; el que no lleva carga no puede; sin descubrirlo, tampoco', () => {
   const m = D.crearMundo(5, {}), E = D.ECON, c = m.ents.find((e) => e.tipo === 'centro'), a = sol(m, 0, 'asaltante'); solos(m, a);
   D.orden(m, { t: 'volar', j: 0, eqs: [a.eq], obj: c.id }); avanza(m, 3); assert.strictEqual(a.orden, 'nada', 'no se puede volar lo que no se ha descubierto');

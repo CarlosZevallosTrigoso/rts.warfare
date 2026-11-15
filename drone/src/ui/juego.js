@@ -60,6 +60,13 @@
       c.strokeStyle = P.tinta; c.lineWidth = 1.2; c.setLineDash([14, 5, 4, 6]); c.strokeRect(X(r.x) + 0.5, X(r.y) + 0.5, X(r.w), X(r.h)); c.setLineDash([]);
       c.fillStyle = P.col('ruina'); for (let i = 0; i < 6; i++) c.fillRect(X(r.x) - 5 + ((i * 37) % (X(r.w) + 8)), X(r.y + r.h) + 2 + ((i * 13) % 7), 4, 3);
     }
+    for (const q of mapa.muretes) { // obstáculos bajos: escombro, coche calcinado, sacos, murete de piedra
+      const x = X(q.x), y = X(q.y); c.strokeStyle = P.tinta; c.lineWidth = 1.1;
+      if (q.tipo === 'coche') { c.save(); c.translate(x + PX / 2, y + PX / 2); c.rotate(q.ang); c.fillStyle = P.col('metal'); c.beginPath(); c.rect(-PX * 0.46, -PX * 0.27, PX * 0.92, PX * 0.54); c.fill(); c.stroke(); c.fillStyle = P.col('trinchera'); c.fillRect(-PX * 0.2, -PX * 0.2, PX * 0.34, PX * 0.4); c.restore(); }
+      else if (q.tipo === 'piedra') { c.fillStyle = P.col('ruina'); c.fillRect(x, y + PX * 0.22, PX, PX * 0.56); c.strokeRect(x + 0.5, y + PX * 0.22 + 0.5, PX - 1, PX * 0.56 - 1); c.fillStyle = P.col('ruinaS'); c.fillRect(x + 3, y + PX * 0.38, 3, 3); c.fillRect(x + 8, y + PX * 0.45, 3, 3); }
+      else if (q.tipo === 'sacos') { c.fillStyle = P.col('tierra'); for (const [dx, dy] of [[0.25, 0.3], [0.62, 0.3], [0.44, 0.62], [0.78, 0.66], [0.2, 0.68]]) { c.beginPath(); c.ellipse(x + PX * dx, y + PX * dy, PX * 0.2, PX * 0.13, 0, 0, TAU); c.fill(); c.stroke(); } }
+      else { c.fillStyle = P.col('ruina'); c.beginPath(); c.moveTo(x + PX * 0.1, y + PX * 0.7); c.lineTo(x + PX * 0.3, y + PX * 0.2); c.lineTo(x + PX * 0.62, y + PX * 0.12); c.lineTo(x + PX * 0.92, y + PX * 0.55); c.lineTo(x + PX * 0.7, y + PX * 0.9); c.lineTo(x + PX * 0.28, y + PX * 0.92); c.closePath(); c.fill(); c.stroke(); c.fillStyle = P.col('ruinaS'); c.fillRect(x + PX * 0.4, y + PX * 0.4, 3, 3); }
+    }
     for (const t of mapa.tubos) for (const b of [t.a, t.b]) D.fig.edificio(c, P, X(b.x), X(b.y), 'boca', null, PX * 0.085);
     if (P.sombras) { c.fillStyle = 'rgba(30,34,40,0.16)'; for (const a of mapa.arboles) { c.beginPath(); c.arc(X(a.x) + 5, X(a.y) + 7, X(a.r), 0, TAU); c.fill(); } }
     const k = copas.getContext('2d'); for (const a of mapa.arboles) { k.fillStyle = P.col('arbol'); k.beginPath(); k.arc(X(a.x), X(a.y), X(a.r), 0, TAU); k.fill(); } for (const a of mapa.arboles) { k.fillStyle = P.col('arbol2'); k.beginPath(); k.arc(X(a.x + a.r * 0.25), X(a.y + a.r * 0.25), X(a.r * 0.6), 0, TAU); k.fill(); }
@@ -70,7 +77,8 @@
   const oscuro = document.createElement('canvas');
   function grano(n, color, a) { ctx.fillStyle = color; ctx.globalAlpha = a; for (let i = 0; i < n; i++) ctx.fillRect(Math.random() * cw, Math.random() * ch, 1.4, 1.4); ctx.globalAlpha = 1; }
   function vineta(color) { const g = ctx.createRadialGradient(cw / 2, ch / 2, ch * 0.42, cw / 2, ch / 2, Math.max(cw, ch) * 0.75); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, color); ctx.fillStyle = g; ctx.fillRect(0, 0, cw, ch); }
-  let tiempo = 0, tDib = 0, nDib = 0, cuadros = 0, tSeg = 0; const visibles = [];
+  let tiempo = 0, tDib = 0, nDib = 0, cuadros = 0, tSeg = 0; const visibles = [], COB = { pesada: '#3f8f3a', ligera: '#d6a21e', ninguna: '#9aa0a6', expuesto: '#c2552d' };
+  let lanza = null; // 'granada' | 'humo': esperando a que se elija dónde
   function dibujar() {
     const t0 = performance.now(), z = cam.z, ox = Math.round(cw / 2 - cam.x * z), oy = Math.round(ch / 2 - cam.y * z), luz = D.luz(m);
     const modo = vision === 'optica' ? (luz >= 0.5 ? 'dia' : 'noche') : vision, P = D.pintor(modo, tiempo), L = capa(modo), lado = N * z;
@@ -94,7 +102,8 @@
     for (const e of visibles) { if (e.clase !== 'sol' || fuera(e.x, e.y, 2)) continue; const x = ox + e.x * z, y = oy + e.y * z;
       D.fig.soldado(ctx, P, x, y, e.ang, e.tipo, mio(e.j), sS, { anda: e.movio, oculto: e.j === YO && e.firma < 0.35 });
       if (e.vida < e.vidaMax || (e.j === YO && sel.has(e.eq))) { const w = sS * 11, f = e.vida / e.vidaMax; ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(x - w / 2, y - sS * 9, w, 2.5); ctx.fillStyle = f < 0.35 ? '#c2552d' : modo === 'dia' ? '#4d7a38' : '#9be08a'; ctx.fillRect(x - w / 2, y - sS * 9, w * f, 2.5); }
-      if (e.supr > 0) { ctx.strokeStyle = COLYO; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(x - 4, y + sS * 7); ctx.lineTo(x, y + sS * 7 + 3); ctx.lineTo(x + 4, y + sS * 7); ctx.stroke(); } // agachado bajo el fuego
+      { const ns = D.nivelSupr(e); if (ns || e.orden === 'retirada') { ctx.strokeStyle = ns === 2 ? '#c2552d' : COLYO; ctx.lineWidth = ns === 2 ? 1.8 : 1.2; ctx.beginPath(); const yy = y + sS * 7; if (e.orden === 'retirada') { ctx.moveTo(x - 5, yy + 2); ctx.lineTo(x + 5, yy + 2); ctx.moveTo(x - 5, yy + 2); ctx.lineTo(x - 2, yy - 1); ctx.moveTo(x - 5, yy + 2); ctx.lineTo(x - 2, yy + 5); } else { ctx.moveTo(x - 4, yy); ctx.lineTo(x, yy + 3); ctx.lineTo(x + 4, yy); if (ns === 2) { ctx.moveTo(x - 4, yy + 4); ctx.lineTo(x, yy + 7); ctx.lineTo(x + 4, yy + 4); } } ctx.stroke(); } } // agachado: un galón; clavado: dos, en naranja; en retirada: una flecha
+      if (e.j === YO && sel.has(e.eq) && !e.movio) { const v = D.cobFrente(m, e.x, e.y, e.x + Math.cos(e.mira) * 20, e.y + Math.sin(e.mira) * 20); ctx.fillStyle = COB[D.cobNivel(v)]; ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x + sS * 6, y - sS * 6, 3, 0, TAU); ctx.fill(); ctx.stroke(); } // su cobertura de cara a donde mira
       if (e.canal > 0) { ctx.strokeStyle = '#c2552d'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(x, y, sS * 8, -Math.PI / 2, -Math.PI / 2 + TAU * (e.canal / D.ECON.cargaTicks)); ctx.stroke(); } // poniendo la carga
     }
     ctx.globalAlpha = modo === 'termica' ? 0.45 : modo === 'espectro' ? 0.5 : 0.93; ctx.drawImage(L.copas, ox, oy, lado, lado); ctx.globalAlpha = 1; // las copas tapan lo de debajo (a la térmica, menos)
@@ -103,8 +112,18 @@
     for (let i = fx.length - 1; i >= 0; i--) { const q = fx[i], k = (tiempo - q.t0) / q.dur; if (k >= 1) { fx.splice(i, 1); continue; }
       if (q.k === 'tiro') { const x1 = ox + q.x1 * z, y1 = oy + q.y1 * z, x2 = ox + q.x2 * z, y2 = oy + q.y2 * z, a = Math.min(1, k * 1.6), b = Math.max(0, a - 0.35); ctx.strokeStyle = modo === 'dia' ? '#b8862b' : '#ffe9a8'; ctx.globalAlpha = 0.9 * (1 - k); ctx.lineWidth = q.gordo ? 1.8 : 1.1; ctx.beginPath(); ctx.moveTo(x1 + (x2 - x1) * b, y1 + (y2 - y1) * b); ctx.lineTo(x1 + (x2 - x1) * a, y1 + (y2 - y1) * a); ctx.stroke(); if (k < 0.25) { ctx.fillStyle = '#ffe9a8'; ctx.beginPath(); ctx.arc(x1, y1, 2.5, 0, TAU); ctx.fill(); } if (k > 0.6) { ctx.fillStyle = q.da ? '#c2552d' : P.tinta; ctx.globalAlpha = (1 - k) * 2; ctx.beginPath(); ctx.arc(x2, y2, q.da ? 2.5 : 1.5, 0, TAU); ctx.fill(); } }
       else if (q.k === 'anillo') { ctx.strokeStyle = q.c; ctx.globalAlpha = 1 - k; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(ox + q.x * z, oy + q.y * z, q.r * z * (0.2 + 0.8 * k), 0, TAU); ctx.stroke(); }
-      else if (q.k === 'boom') { const x = ox + q.x * z, y = oy + q.y * z; ctx.globalAlpha = 1 - k; ctx.fillStyle = k < 0.15 ? '#fff3c4' : 'rgba(90,86,78,0.7)'; ctx.beginPath(); ctx.arc(x, y, z * (0.8 + k * 3.2), 0, TAU); ctx.fill(); ctx.strokeStyle = P.tinta; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, z * (1 + k * 5), 0, TAU); ctx.stroke(); }
+      else if (q.k === 'boom') { const x = ox + q.x * z, y = oy + q.y * z; ctx.globalAlpha = 1 - k; ctx.fillStyle = k < 0.15 ? '#fff3c4' : 'rgba(90,86,78,0.7)'; ctx.beginPath(); ctx.arc(x, y, z * (0.8 + k * 3.2) * (q.r || 1), 0, TAU); ctx.fill(); ctx.strokeStyle = P.tinta; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, z * (1 + k * 5) * (q.r || 1), 0, TAU); ctx.stroke(); }
       ctx.globalAlpha = 1; }
+    for (const h of m.humos) { const x = ox + h.x * z, y = oy + h.y * z, k = Math.min(1, (h.hasta - m.t) / 100); ctx.globalAlpha = (modo === 'termica' ? 0.18 : 0.8) * k; ctx.fillStyle = modo === 'dia' ? '#d9dadb' : modo === 'nocturna' ? '#5fae6c' : modo === 'termica' ? '#555' : '#3a4654'; for (let i = 0; i < 7; i++) { const a = i * 0.9 + tiempo * 0.15, d = i ? h.r * 0.45 : 0; ctx.beginPath(); ctx.arc(x + Math.cos(a) * d * z, y + Math.sin(a) * d * z, h.r * z * 0.62, 0, TAU); ctx.fill(); } ctx.globalAlpha = 1; } // humo: tapa a la vista, no a la térmica
+    for (const p of m.proy) { if (p.j !== YO && !todo && !cercaDeMios({ x: p.x2, y: p.y2 }, 14)) continue; const k = Math.min(1, (m.t - p.t0) / (p.t1 - p.t0)), x = ox + (p.x1 + (p.x2 - p.x1) * k) * z, y = oy + (p.y1 + (p.y2 - p.y1) * k) * z - Math.sin(k * Math.PI) * z * 1.2; ctx.fillStyle = P.tinta; ctx.beginPath(); ctx.arc(x, y, 2.5, 0, TAU); ctx.fill(); }
+    if (raton.dentro && sel.size && !caja && !m.fin) { // la vista previa: dónde quedaría cada uno y lo cubierto que estaría (o, si se va a lanzar algo, hasta dónde llega)
+      const p = { x: cam.x + (raton.x - cw / 2) / z, y: cam.y + (raton.y - ch / 2) / z }, us = mios.filter((e) => e.clase === 'sol' && sel.has(e.eq));
+      if (lanza && us.length) { const alc = lanza === 'granada' ? D.ECON.granadaAlc : D.ECON.humoAlc; let md = 1e9; for (const u of us) md = Math.min(md, Math.hypot(u.x - p.x, u.y - p.y)); const bien = md <= alc; ctx.strokeStyle = bien ? COLYO : '#c2552d'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.arc(raton.x, raton.y, (lanza === 'granada' ? D.ECON.granadaRadio : D.ECON.humoRadio) * z, 0, TAU); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 0.35; for (const u of us) { ctx.beginPath(); ctx.arc(ox + u.x * z, oy + u.y * z, alc * z, 0, TAU); ctx.stroke(); } ctx.globalAlpha = 1; }
+      else if (us.length && p.x >= 0 && p.y >= 0 && p.x < N && p.y < N) { const porEq = new Map(); for (const u of us) { if (!porEq.has(u.eq)) porEq.set(u.eq, []); porEq.get(u.eq).push(u); }
+        for (const g of porEq.values()) { const cx = g.reduce((s, u) => s + u.x, 0) / g.length, cy = g.reduce((s, u) => s + u.y, 0) / g.length, am = D.amenaza(m, YO, p.x, p.y, cx, cy), ps = D.puestos(m, p.x, p.y, g.length, am);
+          for (const q of ps) { const x = ox + q.x * z, y = oy + q.y * z; ctx.fillStyle = COB[D.cobNivel(q.cob)]; ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, Math.max(3.5, z * 0.22), 0, TAU); ctx.fill(); ctx.stroke(); }
+          const a = Math.atan2(am.y - p.y, am.x - p.x); ctx.strokeStyle = am.visto ? '#c2552d' : COLYO; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(raton.x + Math.cos(a) * z * 1.2, raton.y + Math.sin(a) * z * 1.2); ctx.lineTo(raton.x + Math.cos(a) * z * 2.4, raton.y + Math.sin(a) * z * 2.4); ctx.lineTo(raton.x + Math.cos(a - 0.35) * z * 1.9, raton.y + Math.sin(a - 0.35) * z * 1.9); ctx.moveTo(raton.x + Math.cos(a) * z * 2.4, raton.y + Math.sin(a) * z * 2.4); ctx.lineTo(raton.x + Math.cos(a + 0.35) * z * 1.9, raton.y + Math.sin(a + 0.35) * z * 1.9); ctx.stroke(); } } // la flecha: de dónde se espera el peligro (naranja si hay enemigo a la vista)
+    }
     if (caja) { ctx.strokeStyle = COLYO; ctx.lineWidth = 1; ctx.setLineDash([4, 3]); ctx.strokeRect(Math.min(caja.x0, caja.x1), Math.min(caja.y0, caja.y1), Math.abs(caja.x1 - caja.x0), Math.abs(caja.y1 - caja.y0)); ctx.setLineDash([]); }
     if (vision === 'optica' && luz < 1) { // la noche: oscuridad con claros alrededor de lo tuyo
       if (oscuro.width !== lienzo.width || oscuro.height !== lienzo.height) { oscuro.width = lienzo.width; oscuro.height = lienzo.height; }
@@ -151,6 +170,8 @@
       else if (d.tipo === 'baja') { if (d.j === YO) aviso('Baja: ' + nomDe(d.clase)); if (d.j === YO || veo(d.x, d.y)) marcas.push({ x: d.x, y: d.y, t0: tiempo, dur: 40 }); }
       else if (d.tipo === 'hallado' && d.j === YO) { aviso(d.clase === 'centro' ? '¡Centro de operaciones localizado! Clic derecho sobre él para volarlo' : 'Descubierto: ' + (d.clase === 'falsa' ? 'antena' : nomDe(d.clase))); fx.push({ k: 'anillo', x: d.x, y: d.y, r: 4, c: '#c2552d', t0: tiempo, dur: 1.4 }); }
       else if (d.tipo === 'cargando') { if (d.j !== YO) aviso('¡Te están poniendo una carga!'); fx.push({ k: 'anillo', x: d.x, y: d.y, r: 3, c: '#c2552d', t0: tiempo, dur: 1 }); }
+      else if (d.tipo === 'explosion') { if (veo(d.x, d.y)) fx.push({ k: 'boom', x: d.x, y: d.y, t0: tiempo, dur: 0.7, r: 0.45 }); }
+      else if (d.tipo === 'noPuede' && d.j === YO) aviso({ recarga: 'Ese equipo aún está recargando', lejos: 'Demasiado lejos: acércate más', nadie: 'Nadie del equipo puede lanzar ahora' }[d.que]);
       else if (d.tipo === 'volado') { fx.push({ k: 'boom', x: d.x, y: d.y, t0: tiempo, dur: 1.6 }); aviso((d.de === YO ? 'Has perdido: ' : 'Volado: ') + nomDe(d.clase)); }
     }
     m.efectos.length = 0; if (marcas.length > 60) marcas.splice(0, marcas.length - 60);
@@ -175,6 +196,8 @@
   const orden = (o) => { if (sel.size) D.orden(m, Object.assign({ j: YO, eqs: [...sel] }, o)); };
   const seleccionados = () => mios().filter((e) => sel.has(e.eq));
   function alterna(que) { const us = seleccionados(); if (!us.length) return; const v = !us.every((u) => u[que]); orden({ t: 'modo', [que]: v }); aviso(que === 'sigilo' ? (v ? 'Sigilo: despacio y por lo tapado' : 'Paso normal') : v ? 'Fuego libre' : 'Fuego contenido: solo de cerca o si les dan'); }
+  const retirada = () => { if (sel.size) { orden({ t: 'retirada' }); aviso('Retirada: corren al barracón'); } }, apunta = (k) => { if (!sel.size) return; lanza = lanza === k ? null : k; aviso(lanza ? (k === 'granada' ? 'Granada: clic donde la quieres' : 'Humo: clic donde lo quieres') + ' · Esc cancela' : 'Cancelado'); };
+  $('bRetira').addEventListener('click', retirada); $('bGranada').addEventListener('click', () => apunta('granada')); $('bHumo').addEventListener('click', () => apunta('humo'));
   $('bSigilo').addEventListener('click', () => alterna('sigilo')); $('bFuego').addEventListener('click', () => alterna('fuego')); $('bAlto').addEventListener('click', () => orden({ t: 'detener' }));
   $('equipos').addEventListener('click', (ev) => { const b = ev.target.closest('[data-eq]'); if (!b) return; const eq = Number(b.dataset.eq); if (!ev.shiftKey) sel.clear(); sel.add(eq); const us = mios().filter((e) => e.eq === eq); if (us.length && !ev.shiftKey) { cam.x = us[0].x; cam.y = us[0].y; } firmaP = ''; });
   $('otra').addEventListener('click', () => ir(D.ROL[YO].clave, escenario, Math.floor(Math.random() * 99999) + 1)); $('otraRol').addEventListener('click', () => ir(D.ROL[1 - YO].clave, escenario, m.semilla));
@@ -185,12 +208,13 @@
     // equipos: una línea por equipo; los seleccionados, con sus miembros
     const eqs = equipos(); for (const eq of [...sel]) if (!eqs.has(eq)) sel.delete(eq);
     let h = ''; for (const [eq, us] of eqs) { const on = sel.has(eq), visto = us.some((u) => m.visto[1 - YO].has(u.id));
-      h += '<div class="eq' + (on ? ' on' : '') + '" data-eq="' + eq + '"><b>Equipo ' + eq + '</b> · ' + us.length + (us[0].sigilo ? ' · sigilo' : '') + (us[0].fuego ? '' : ' · fuego contenido') + (us.some((u) => u.supr > 0) ? ' · <i>bajo fuego</i>' : '') + (visto ? ' · <i>localizado</i>' : '');
+      h += '<div class="eq' + (on ? ' on' : '') + '" data-eq="' + eq + '"><b>Equipo ' + eq + '</b> · ' + us.length + (us[0].sigilo ? ' · sigilo' : '') + (us[0].fuego ? '' : ' · fuego contenido') + (us.some((u) => D.nivelSupr(u) === 2) ? ' · <i>clavado</i>' : us.some((u) => D.nivelSupr(u) === 1) ? ' · <i>bajo fuego</i>' : '') + (us[0].orden === 'retirada' ? ' · en retirada' : '') + (visto ? ' · <i>localizado</i>' : '');
       if (on) for (const u of us) h += '<div class="mi"><span>' + D.SOL[u.tipo].nombre + '</span><span class="tenue">firma ' + Math.round(Math.min(1.4, u.firma) * 100) + ' %</span><i><b style="width:' + Math.round((u.vida / u.vidaMax) * 100) + '%"' + (u.vida / u.vidaMax < 0.35 ? ' class="mal"' : '') + '></b></i></div>';
       h += '</div>'; }
     if (!h) h = '<div class="tenue">No te queda nadie en el campo.</div>';
     if (h !== firmaP) { firmaP = h; $('equipos').innerHTML = h; }
-    const us = seleccionados(); $('ordenes').hidden = !us.length; if (us.length) { $('bSigilo').classList.toggle('on', us.every((u) => u.sigilo)); $('bFuego').classList.toggle('on', !us.every((u) => u.fuego)); }
+    const us = seleccionados(); $('ordenes').hidden = !us.length; if (us.length) { $('bSigilo').classList.toggle('on', us.every((u) => u.sigilo)); $('bFuego').classList.toggle('on', !us.every((u) => u.fuego)); $('bGranada').classList.toggle('on', lanza === 'granada'); $('bHumo').classList.toggle('on', lanza === 'humo');
+      const cd = (k) => { const t = Math.min(...us.map((u) => u[k])) - m.t; return t > 0 ? Math.ceil(t / 20) + ' s' : 'lista'; }; $('cdGranada').textContent = cd('cdGranada'); $('cdHumo').textContent = cd('cdHumo').replace('lista', 'listo'); } else lanza = null;
     let b = 'Pasa el cursor por el sector.';
     if (raton.dentro) {
       const x = cam.x + (raton.x - cw / 2) / cam.z, y = cam.y + (raton.y - ch / 2) / cam.z; let mejor = null, md = 1.1;
@@ -213,8 +237,9 @@
     if (ev.metaKey || ev.ctrlKey) return; teclas.add(ev.code);
     if (/^Digit[1-4]$/.test(ev.code)) ponVision(VISIONES[Number(ev.code.slice(5)) - 1][0]);
     else if (ev.code === 'KeyH') { cam.x = mapa.bases[YO].x; cam.y = mapa.bases[YO].y; }
+    else if (ev.code === 'KeyR') retirada(); else if (ev.code === 'KeyG') apunta('granada'); else if (ev.code === 'KeyB') apunta('humo');
     else if (ev.code === 'KeyC') alterna('sigilo'); else if (ev.code === 'KeyF') alterna('fuego'); else if (ev.code === 'KeyX') orden({ t: 'detener' });
-    else if (ev.code === 'Escape') { sel.clear(); firmaP = ''; } else if (ev.code === 'KeyP') { pausa = !pausa; aviso(pausa ? 'Pausa' : 'Sigue'); }
+    else if (ev.code === 'Escape') { if (lanza) lanza = null; else { sel.clear(); firmaP = ''; } } else if (ev.code === 'KeyP') { pausa = !pausa; aviso(pausa ? 'Pausa' : 'Sigue'); }
     else if (ev.code === 'Tab') { ev.preventDefault(); const ids = [...equipos().keys()]; if (ids.length) { const i = ids.indexOf([...sel][0]); sel.clear(); const eq = ids[(i + 1) % ids.length]; sel.add(eq); const u = mios().find((e) => e.eq === eq); cam.x = u.x; cam.y = u.y; firmaP = ''; } }
     if (ev.code.startsWith('Arrow') || ev.code === 'Space') ev.preventDefault();
   });
@@ -223,7 +248,9 @@
   lienzo.addEventListener('pointerdown', (ev) => {
     const r = lienzo.getBoundingClientRect(), px = ev.clientX - r.left, py = ev.clientY - r.top; lienzo.setPointerCapture(ev.pointerId);
     if (ev.button === 1 || (ev.button === 0 && teclas.has('Space'))) arrastre = { x: ev.clientX, y: ev.clientY, cx: cam.x, cy: cam.y }; // desplazar: botón central o Espacio + arrastrar
+    else if (ev.button === 0 && lanza) { const p = aMundo(px, py); orden({ t: lanza, x: p.x, y: p.y }); lanza = null; } // con granada o humo en la mano, el clic dice dónde
     else if (ev.button === 0) caja = { x0: px, y0: py, x1: px, y1: py, mayus: ev.shiftKey };
+    else if (ev.button === 2 && lanza) lanza = null;
     else if (ev.button === 2 && sel.size && !m.fin) { // la orden: sobre un edificio enemigo descubierto, volarlo; si no, ir allí
       const p = aMundo(px, py); let ob = null, md = 1.8; for (const e of m.ents) if (e.clase === 'edif' && e.j !== YO && m.conocido[YO].has(e.id)) { const d = Math.hypot(e.x - p.x, e.y - p.y); if (d < md) { md = d; ob = e; } }
       if (ob) { if (seleccionados().some((u) => D.SOL[u.tipo].carga)) { orden({ t: 'volar', obj: ob.id }); fx.push({ k: 'anillo', x: ob.x, y: ob.y, r: 2.5, c: '#c2552d', t0: tiempo, dur: 0.7 }); } else aviso('En ese equipo nadie lleva carga: hace falta un asaltante o un zapador'); }

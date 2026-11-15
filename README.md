@@ -19,4 +19,6 @@ pilotos (ataque) o defender el centro.
 - Construir: `node drone/build.js`. Pruebas: `node drone/tests/sim.test.js`.
 - Estado: se juega la parte de infantería. Equipos de fuerzas especiales que se seleccionan y se mueven (con sigilo y fuego
   contenido), detección por cobertura, luz y línea de visión, combate entre soldados, la carga que vuela edificios y el final
-  (el atacante gana si vuela el centro; el defensor, si amanece). El rival es provisional y los drones aún no se mandan.
+  (el atacante gana si vuela el centro; el defensor, si amanece). Tacto de Company of Heroes: obstáculos bajos, cobertura
+  con dirección y vista previa de puestos al ordenar, supresión en dos grados (agachado y clavado), retirada, granada y
+  humo. El rival es provisional y los drones aún no se mandan.
