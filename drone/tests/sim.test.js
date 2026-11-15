@@ -80,7 +80,7 @@ prueba('combate: dos fusileros al descubierto se disparan hasta que uno cae; a c
     const tiro = (x, y) => m.paso[y * m.N + x + 9] && m.mapa.terreno[y * m.N + x + 9] <= 2 && D.seVe(m.mapa, x + 0.5, y + 0.5, x + 9.5, y + 0.5), p = cubierto ? celda(m, T.TRINCHERA, tiro) : celda(m, T.SUELO, (x, y) => llano(m, x, y, 12)); lleva(b, p); lleva(a, { x: p.x + 9, y: p.y }); a.vida = a.vidaMax = 1e6; D.detectar(m);
     let n = 0; while (b.vida > 0 && n < 4000) { D.tick(m); n++; } return n; };
   let abierto = 0, tapado = 0; for (let s = 1; s <= 20; s++) { abierto += duelo(false, s); tapado += duelo(true, s); }
-  assert.ok(abierto / 20 < 600, 'al descubierto cae en menos de medio minuto: ' + abierto / 20); assert.ok(tapado > abierto * 1.25, 'la trinchera no protege: ' + abierto + ' / ' + tapado);
+  assert.ok(abierto / 20 > 300 && abierto / 20 < 1200, 'al descubierto un fusilero tarda entre 15 s y un minuto en tumbar a otro: ' + abierto / 20); assert.ok(tapado > abierto * 1.25, 'la trinchera no protege: ' + abierto + ' / ' + tapado);
   const m = D.crearMundo(2, { t: DIA }), a = sol(m, 0, 'asaltante'), b = sol(m, 1, 'asaltante'); solos(m, a, b); const p = celda(m, D.T.SUELO, (x, y) => llano(m, x, y, 12)); lleva(b, p); lleva(a, { x: p.x + 10, y: p.y }); a.fuego = false; b.fuego = false; D.detectar(m);
   avanza(m, 200); assert.ok(a.vida === a.vidaMax && b.vida === b.vidaMax && m.efectos.every((e) => e.tipo !== 'tiro'), 'con fuego contenido, a 10 celdas nadie dispara');
   a.fuego = true; avanza(m, 100); assert.ok(m.efectos.some((e) => e.tipo === 'tiro'), 'con fuego libre, sí'); assert.ok(b.supr > 0 || b.vida <= 0, 'el que recibe se agacha');
@@ -201,6 +201,15 @@ prueba('rastros: el centro está oculto; las antenas que emiten dan rumbo y posa
     const ta = m.ents.find((e) => e.j === 1 && e.tipo === 'taller'); assert.ok(Math.hypot(h.pts[0][0] - ta.x, h.pts[0][1] - ta.y) < 6, 'el hilo empieza en el taller');
     const p = h.pts[Math.floor(h.pts.length * 0.7)]; lleva(a, D.cercaLibre(m, p[0], p[1])); avanza(m, 21); assert.ok(h.visto[0] && m.efectos.some((q) => q.tipo === 'hilo' && q.j === 0), 'pisando el hilo debía verlo');
   }
+});
+prueba('tiroteo de escuadrón: dura más de un minuto, clava a la gente y no gana siempre el que va primero en la lista', () => {
+  let ga = 0, gb = 0, dur = 0, clav = 0, n = 0, k = 0;
+  for (let s = 1; s <= 24; s++) { const m = D.crearMundo(s, { t: DIA }), A = m.ents.filter((e) => e.clase === 'sol' && e.j === 0 && e.num === 1), B = m.ents.filter((e) => e.clase === 'sol' && e.j === 1 && e.num === 1); let p; try { p = celda(m, D.T.SUELO, (x, y) => llano(m, x, y, 14) && llano(m, x, y - 2, 14) && llano(m, x, y + 2, 14)); } catch (e) { continue; }
+    solos(m, ...A, ...B); A.forEach((u, i) => { u.tipo = 'asaltante'; u.recarga = 0; u.fuego = true; lleva(u, { x: p.x, y: p.y - 1.5 + i }); }); B.forEach((u, i) => { u.tipo = 'asaltante'; u.recarga = 0; u.fuego = true; lleva(u, { x: p.x + 10, y: p.y - 1.5 + i }); }); D.detectar(m);
+    let t = 0; while (t < 8000 && A.some((u) => u.vida > 0) && B.some((u) => u.vida > 0)) { D.tick(m); t++; for (const u of [...A, ...B]) if (u.vida > 0) { n++; if (D.nivelSupr(u) === 2) clav++; } }
+    k++; dur += t; if (!B.some((u) => u.vida > 0)) ga++; else if (!A.some((u) => u.vida > 0)) gb++; }
+  assert.ok(k >= 12, 'pocas escenas: ' + k); assert.ok(dur / k > 1200, 'el tiroteo debe durar más de un minuto: ' + dur / k / 20 + ' s'); assert.ok(clav / n > 0.2, 'debe haber gente clavada: ' + clav / n);
+  assert.ok(Math.min(ga, gb) >= k * 0.2, 'no puede ganar casi siempre el mismo lado: ' + ga + ' / ' + gb);
 });
 prueba('partida entera, máquina contra máquina: termina, es idéntica si se repite, y el tick es barato', () => {
   const juega = (s, esc) => { const m = D.crearMundo(s, { escenario: esc, ia: [true, true] }), t0 = Date.now(); let n = 0; while (!m.fin) { D.tick(m); n++; assert.ok(n <= D.ECON.dia, 'no termina'); } return { fin: m.fin, n, ms: (Date.now() - t0) / n, firma: m.ents.map((e) => e.id + ':' + e.x.toFixed(3) + ',' + e.y.toFixed(3) + ',' + Math.round(e.vida)).join('|'), bajas: [m.jug[0].bajas, m.jug[1].bajas] }; };

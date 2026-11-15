@@ -32,7 +32,7 @@
     op = op || {};
     const mapa = D.generarMapa(semilla, op.escenario), N = mapa.N, az = D.prng(semilla ^ 0x51ED);
     const m = { semilla, t: op.t === undefined ? ECON.inicio : op.t, N, mapa, paso: mapa.paso.slice(), ents: [], porId: new Map(), sigId: 1, az,
-      jug: [{ personas: 0, pilotos: 0, bajas: 0, fab: 0, nFab: 0 }, { personas: 0, pilotos: 0, bajas: 0, fab: 0, nFab: 0 }], visto: [new Set(), new Set()], conocido: [new Set(), new Set()], efectos: [], cola: [], fin: null, caido: 0, extraccion: { x: mapa.bases[0].x + 0.5, y: mapa.bases[0].y + 0.5, r: ECON.extraeRadio }, ia: [null, null], humos: [], proy: [], hilos: [], rumbo: [[], []] };
+      jug: [{ personas: 0, pilotos: 0, bajas: 0, fab: 0, nFab: 0 }, { personas: 0, pilotos: 0, bajas: 0, fab: 0, nFab: 0 }], visto: [new Set(), new Set()], conocido: [new Set(), new Set()], efectos: [], cola: [], fin: null, tiros: [], caido: 0, extraccion: { x: mapa.bases[0].x + 0.5, y: mapa.bases[0].y + 0.5, r: ECON.extraeRadio }, ia: [null, null], humos: [], proy: [], hilos: [], rumbo: [[], []] };
     // Coste de pisar cada celda: a paso normal manda la velocidad; en sigilo se prefiere lo que tapa.
     m.coste = new Float32Array(N * N); m.costeSigilo = new Float32Array(N * N);
     for (let c = 0; c < N * N; c++) { const t = mapa.terreno[c], v = D.PASO[t] || 1; m.coste[c] = 1 / v; m.costeSigilo[c] = Math.max(0.5, (1 / v) * (1.5 - D.COBERTURA[t])); }
@@ -188,15 +188,22 @@
     const a = D.ARMA[D.SOL[u.tipo].arma]; if (u.recarga > 0 || u.canal > 0 || u.orden === 'retirada') return;
     let ob = null, md = a.alc; for (const id of m.visto[u.j]) { const o = m.porId.get(id); if (!o || o.vida <= 0) continue; const d = Math.hypot(o.x - u.x, o.y - u.y); if (d < md) { md = d; ob = o; } }
     if (!ob) return;
+    // No todos al mismo: entre los que están casi igual de cerca que el más cercano, cada uno se queda con uno (y lo mantiene unos segundos).
+    { const cs = []; for (const id of m.visto[u.j]) { const o = m.porId.get(id); if (o && o.vida > 0 && Math.hypot(o.x - u.x, o.y - u.y) <= Math.min(a.alc, md + 2.5)) cs.push(o); } if (cs.length > 1) { ob = cs[(u.id + Math.floor(m.t / 100)) % cs.length]; md = Math.hypot(ob.x - u.x, ob.y - u.y); } }
     if (!u.fuego && md > 5 && m.t - (u.tHerido || -999) > 100) return; // fuego contenido: solo de cerca o si le están dando
     if (!D.seVe(m.mapa, u.x, u.y, ob.x, ob.y) || (m.humos.length && humoCorta(m, u.x, u.y, ob.x, ob.y))) return;
-    const ns = D.nivelSupr(u); u.recarga = a.cad * (ns === 2 ? 2 : 1); u.tTiro = m.t; u.ang = Math.atan2(ob.y - u.y, ob.x - u.x);
-    const cob = D.cobFrente(m, ob.x, ob.y, u.x, u.y); // lo cubierto que está el blanco visto desde aquí
-    const p = a.prec * (1 - cob * ECON.cobTiro * (ob.movio && cob > 0 ? 0.5 : 1)) * (1 - 0.5 * (md / a.alc)) * (u.movio ? ECON.andaPrec : 1) * (ns === 2 ? ECON.clavadoPrec : ns === 1 ? ECON.suprPrec : 1) * (ob.orden === 'retirada' ? ECON.retiradaBlanco : 1), da = m.az() < p;
+    const ns = D.nivelSupr(u); u.recarga = Math.round(a.cad * (ns === 2 ? ECON.clavadoCad : 1)); u.tTiro = m.t; u.ang = Math.atan2(ob.y - u.y, ob.x - u.x);
+    const cob = D.cobFrente(m, ob.x, ob.y, u.x, u.y), nb = D.nivelSupr(ob); // lo cubierto que está el blanco visto desde aquí, y si está cuerpo a tierra
+    const p = a.prec * (1 - cob * ECON.cobTiro * (ob.movio && cob > 0 ? 0.5 : 1)) * (1 - 0.5 * (md / a.alc)) * (u.movio ? ECON.andaPrec : 1) * (ns === 2 ? ECON.clavadoPrec : ns === 1 ? ECON.suprPrec : 1) * (ob.orden === 'retirada' ? ECON.retiradaBlanco : 1) * (nb === 2 ? ECON.clavadoBlanco : nb === 1 ? ECON.agachadoBlanco : 1), da = m.az() < p;
     m.efectos.push({ tipo: 'tiro', x1: u.x, y1: u.y, x2: ob.x, y2: ob.y, da, arma: D.SOL[u.tipo].arma, j: u.j, t: m.t });
-    const amort = 1 - Math.max(0, cob) * 0.5; ob.supr = Math.min(100, ob.supr + a.supr * amort); ob.tHerido = m.t; // cada tiro que te tiran, dé o no, te aprieta contra el suelo (menos si estás cubierto)
-    for (const o of m.ents) if (o.clase === 'sol' && o.j === ob.j && o !== ob && Math.abs(o.x - ob.x) < 2 && Math.abs(o.y - ob.y) < 2) o.supr = Math.min(100, o.supr + a.supr * ECON.suprVecino * amort); // y a los de al lado
-    if (da) { ob.vida -= a.dano * (0.8 + m.az() * 0.4); if (ob.vida <= 0) baja(m, ob); }
+    m.tiros.push({ ob, s: a.supr * (1 - Math.max(0, cob) * 0.5), d: da ? a.dano * (0.8 + m.az() * 0.4) : 0 }); // el efecto se aplica cuando han disparado todos: nadie saca ventaja por ir antes en la lista
+  }
+  // Los tiros del tick, a la vez: cada tiro que te tiran, dé o no, te aprieta contra el suelo (menos si estás cubierto), y a los de al lado, la mitad.
+  function impactos(m) {
+    for (const q of m.tiros) { const ob = q.ob; if (ob.vida <= 0 && !q.d) continue; ob.supr = Math.min(100, ob.supr + q.s); ob.tHerido = m.t;
+      for (const o of m.ents) if (o.clase === 'sol' && o.j === ob.j && o !== ob && Math.abs(o.x - ob.x) < 2 && Math.abs(o.y - ob.y) < 2) o.supr = Math.min(100, o.supr + q.s * ECON.suprVecino);
+      if (q.d && ob.vida > 0) { ob.vida -= q.d; if (ob.vida <= 0) baja(m, ob); } }
+    m.tiros.length = 0;
   }
   function curar(m, u) { for (const o of m.ents) if (o.clase === 'sol' && o.j === u.j && o.vida > 0 && o.vida < o.vidaMax && o.supr < ECON.suprAgachado && Math.hypot(o.x - u.x, o.y - u.y) <= ECON.curaRadio) o.vida = Math.min(o.vidaMax, o.vida + ECON.cura); }
   // Colocar la carga: pegado al edificio y sin que le estén disparando, cinco segundos. Si es el centro, se acabó.
@@ -318,7 +325,7 @@
     drones(m); if (m.t % 20 === 0) { fabricar(m); rastros(m); } if (m.proy.length || m.humos.length) lanzados(m);
     for (const u of m.ents) if (u.clase === 'sol' && u.vida > 0) mover(m, u);
     if (m.t % 4 === 0) detectar(m);
-    for (const u of m.ents) { if (u.clase !== 'sol' || u.vida <= 0) continue; if (u.orden === 'volar') volar(m, u); combatir(m, u); if (D.SOL[u.tipo].cura && m.t % 2 === 0) curar(m, u); }
+    for (const u of m.ents) { if (u.clase !== 'sol' || u.vida <= 0) continue; if (u.orden === 'volar') volar(m, u); combatir(m, u); if (D.SOL[u.tipo].cura && m.t % 2 === 0) curar(m, u); } if (m.tiros.length) impactos(m);
     // Los caídos y lo volado salen del mundo.
     let hay = false; for (const e of m.ents) if (e.vida <= 0) { hay = true; break; }
     if (hay) { m.ents = m.ents.filter((e) => { if (e.vida > 0) return true; m.porId.delete(e.id); if (e.clase === 'edif') { const r = D.EDIF[e.tipo].tam >= 3 ? 1 : 0, cx = Math.floor(e.x), cy = Math.floor(e.y); for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) { const c = (cy + dy) * m.N + cx + dx; if (m.mapa.paso[c]) m.paso[c] = 1; } } return false; }); }

@@ -31,10 +31,10 @@
   // Armas: alcance (celdas), ticks entre disparos, daño, puntería de partida y cuánto aprieta contra el suelo cada tiro (supr).
   // Un fusil solo apenas suprime; tres sobre el mismo blanco lo clavan en unos segundos.
   D.ARMA = {
-    fusil:    { nombre: 'fusil', alc: 14, cad: 14, dano: 17, prec: 0.5, supr: 9 },
-    escopeta: { nombre: 'escopeta', alc: 5, cad: 18, dano: 36, prec: 0.7, supr: 13 },
-    rifle:    { nombre: 'rifle de precisión', alc: 26, cad: 70, dano: 85, prec: 0.8, supr: 40 },
-    pistola:  { nombre: 'pistola', alc: 6, cad: 16, dano: 9, prec: 0.4, supr: 4 },
+    fusil:    { nombre: 'fusil', alc: 14, cad: 14, dano: 10, prec: 0.42, supr: 9 },
+    escopeta: { nombre: 'escopeta', alc: 5, cad: 18, dano: 26, prec: 0.7, supr: 13 },
+    rifle:    { nombre: 'rifle de precisión', alc: 26, cad: 70, dano: 60, prec: 0.8, supr: 45 },
+    pistola:  { nombre: 'pistola', alc: 6, cad: 16, dano: 6, prec: 0.4, supr: 4 },
   };
   // Cuánto frena cada terreno a quien va a pie (1 = paso normal).
   D.PASO = [1, 0.9, 0.95, 0.8, 1.1, 0, 0.5, 1.1, 0, 0.7, 0.8, 0.8, 0];
@@ -64,9 +64,10 @@
     dia: 28800, diaLuz: 14400, crepusculo: 600, inicio: 0, hora0: 22, extraeRadio: 5, tope: [30, 30], // la partida simula 24 horas en 24 min (un minuto por hora): de las 22:00 a las 22:00 del día siguiente, cuando llegan los refuerzos aéreos de la defensa. Amanece a las 06:00 y anochece a las 18:00. La zona de extracción: 50 m de radio. 30 personas por bando
     verNoche: 0.45, verEdif: 14, dronVe: 12, dronVeEdif: 10, // de noche el soldado ve el 45 % (lleva visor); a qué distancia se descubre un edificio; lo que ve un dron de reconocimiento
     sigiloVel: 0.5, sigiloFirma: 0.6, quietoCob: 1, andaCob: 0.35, firmaTiro: 1.4, tiroDelata: 40, // en sigilo: media velocidad y menos firma; quieto, la cobertura tapa del todo; andando, un tercio; quien dispara se delata 2 s
-    supr: 50, suprVel: 0.5, suprPrec: 0.6, cobTiro: 0.6, andaPrec: 0.5, curaRadio: 2.5, cura: 0.15, // bajo fuego: 2,5 s agachado, lento y con peor puntería; la cobertura quita hasta el 60 % de los impactos; el sanitario
+    agachadoBlanco: 0.8, clavadoBlanco: 0.55, clavadoCad: 1.5, // cuerpo a tierra: al agachado se le acierta menos y al clavado, casi la mitad; el clavado dispara más despacio. La supresión para a la gente, no la mata
+    supr: 50, suprVel: 0.5, suprPrec: 0.75, cobTiro: 0.75, andaPrec: 0.5, curaRadio: 2.5, cura: 0.08, // bajo fuego: 2,5 s agachado, lento y con peor puntería; la cobertura quita hasta el 60 % de los impactos; el sanitario
     cargaTicks: 100, cargaDist: 2.2, // colocar la carga: 5 s pegado al edificio
-    suprVecino: 0.5, suprBaja: 0.55, suprAgachado: 35, suprClavado: 75, clavadoPrec: 0.3, // supresión: cada tiro que te tiran la sube (menos si estás cubierto) y baja sola; agachado: lento y peor puntería; clavado: ni se mueve
+    suprVecino: 0.5, suprBaja: 0.55, suprAgachado: 35, suprClavado: 75, clavadoPrec: 0.5, // supresión: cada tiro que te tiran la sube (menos si estás cubierto) y baja sola; agachado: lento y peor puntería; clavado: ni se mueve
     retiradaVel: 1.35, retiradaBlanco: 0.6, // retirada: corren al barracón, no disparan y cuesta más darles
     granadaAlc: 5, granadaVuelo: 20, granadaRadio: 1.6, granadaDano: 70, granadaSupr: 70, granadaCd: 400, // granada: 50 m, 1 s de vuelo, 20 s de recarga por equipo
     humoAlc: 6, humoRadio: 2.6, humoDura: 500, humoCd: 600, // bote de humo: nube de 25 s que corta la vista (no a la térmica)
