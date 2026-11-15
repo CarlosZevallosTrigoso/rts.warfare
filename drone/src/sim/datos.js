@@ -17,8 +17,8 @@
     asaltante:  { nombre: 'Asaltante', que: 'Fusil. Llega y coloca la carga que destruye el centro enemigo.', proto: true },
     escopetero: { nombre: 'Escopetero', que: 'Última defensa del equipo contra el FPV que entra.', proto: true },
     zapador:    { nombre: 'Zapador', que: 'Cargas, minas, túneles; corta y sigue el hilo de fibra.' },
-    inhibidor:  { nombre: 'Operador de inhibidor', que: 'Burbuja que tumba los FPV de radio de los dos bandos. Emite.' },
-    observador: { nombre: 'Observador', que: 'Marca blancos para tus drones.' },
+    inhibidor:  { nombre: 'Operador de inhibidor', que: 'Burbuja de 60 m que tumba los FPV de radio enemigos. Emite.' },
+    observador: { nombre: 'Observador', que: 'Lleva un repetidor: da enlace de radio a tus drones a 220 m a su alrededor.' },
     tirador:    { nombre: 'Tirador', que: 'Largo alcance contra pilotos y antenas; se oculta mejor.' },
     sanitario:  { nombre: 'Sanitario', que: 'Estabiliza heridos para evacuarlos.' },
     piloto:     { nombre: 'Piloto', que: 'Vuela un dron a la vez desde el centro de operaciones.', proto: true },
@@ -39,9 +39,9 @@
   // Cuánto frena cada terreno a quien va a pie (1 = paso normal).
   D.PASO = [1, 0.9, 0.95, 0.8, 1.1, 0, 0.5, 1.1, 0, 0.7, 0.8, 0.8, 0];
   D.DRON = {
-    recon:       { nombre: 'Dron de reconocimiento', que: 'Los ojos: encuentra equipos, antenas e hilo de fibra.', alt: 3.2, radio: true, proto: true },
-    fpvRadio:    { nombre: 'FPV de radio', que: 'Golpe barato de un solo uso. Lo tumba el inhibidor.', alt: 1.4, radio: true, proto: true },
-    fpvFibra:    { nombre: 'FPV de fibra', que: 'Inmune al inhibidor y entra en edificios; deja hilo.', alt: 1.2, radio: false, proto: true },
+    recon:       { nombre: 'Dron de reconocimiento', que: 'Los ojos: encuentra equipos, antenas e hilo de fibra.', alt: 3.2, radio: true, proto: true, vel: 0.08, bat: 3600 },
+    fpvRadio:    { nombre: 'FPV de radio', que: 'Golpe barato de un solo uso. Lo tumba el inhibidor.', alt: 1.4, radio: true, proto: true, vel: 0.16, bat: 900, fpv: true },
+    fpvFibra:    { nombre: 'FPV de fibra', que: 'Inmune al inhibidor y entra en edificios; deja hilo.', alt: 1.2, radio: false, proto: true, vel: 0.13, bat: 900, fpv: true },
     bombardero:  { nombre: 'Bombardero', que: 'Granadas sobre gente parada.', alt: 2.2, radio: true },
     interceptor: { nombre: 'Interceptor', que: 'Derriba drones.', alt: 3.2, radio: true },
     repetidor:   { nombre: 'Repetidor', que: 'Alarga el enlace de radio.', alt: 3.8, radio: true },
@@ -70,6 +70,11 @@
     retiradaVel: 1.35, retiradaBlanco: 0.6, // retirada: corren al barracón, no disparan y cuesta más darles
     granadaAlc: 5, granadaVuelo: 20, granadaRadio: 1.6, granadaDano: 70, granadaSupr: 70, granadaCd: 400, // granada: 50 m, 1 s de vuelo, 20 s de recarga por equipo
     humoAlc: 6, humoRadio: 2.6, humoDura: 500, humoCd: 600, // bote de humo: nube de 25 s que corta la vista (no a la térmica)
+    // Drones. Cada dron en el aire ocupa a un piloto. Los de radio necesitan una antena propia a menos de `enlace` o a un observador (repetidor) a menos de `enlaceObs`; el de fibra, lo que da el carrete desde el taller.
+    enlace: 60, enlaceObs: 22, enlaceCorte: 40, fibraAlc: 80, inhibeRadio: 6, reconRadio: 4, recarga: 6, // sin enlace 2 s, el dron cae; el de reconocimiento vuelve solo a recargar (30 s) y sale otra vez
+    fpvRadio: 1.4, fpvDano: 80, fpvSupr: 80, fpvTecho: 0.3, // el FPV revienta al llegar; el de radio apenas hace daño bajo techo, el de fibra entra
+    dronTiroAlc: 5, escopetaDron: 0.35, fusilDron: 0.07, dronOye: 9, // a 50 m el equipo le dispara: la escopeta acierta uno de cada tres tiros; el fusil, casi nunca
+    fabrica: [1800, 1200], fpvTope: [2, 4], // el taller saca un FPV cada 90 s (atacante) o 60 s (defensor), hasta tener tantos posados
   };
   // Los dos papeles. El bando 0 ataca (caza pilotos: muchos equipos, pocos drones); el bando 1 defiende (el centro de drones: muchos pilotos y medios, una guardia corta).
   D.ROL = [

@@ -21,4 +21,6 @@ pilotos (ataque) o defender el centro.
   contenido), detección por cobertura, luz y línea de visión, combate entre soldados, la carga que vuela edificios y el final
   (el atacante gana si vuela el centro; el defensor, si amanece). Tacto de Company of Heroes: obstáculos bajos, cobertura
   con dirección y vista previa de puestos al ordenar, supresión en dos grados (agachado y clavado), retirada, granada y
-  humo. El rival es provisional y los drones aún no se mandan.
+  humo. Drones: el de reconocimiento se manda a vigilar un punto y vuelve solo a recargar; los FPV (de radio y de fibra) se
+  lanzan contra lo que se ve; cada dron en el aire ocupa a un piloto; el de radio necesita enlace (antenas y observadores) y
+  lo tumba el inhibidor; la escopeta los derriba; el taller repone FPV. El rival es provisional.

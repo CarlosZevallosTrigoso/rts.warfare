@@ -17,6 +17,7 @@
   .fila { display: flex; justify-content: space-between; gap: 8px; } .fila b { font-weight: 600; text-align: right; }
   h2 { font-size: 10px; text-transform: uppercase; letter-spacing: .12em; color: var(--suave); font-weight: normal; margin: 14px 0 6px; border-top: 1px solid var(--linea); padding-top: 9px; }
   button { font: inherit; color: var(--tinta); background: #fff; border: 1px solid var(--tinta); padding: 5px 8px; cursor: pointer; width: 100%; text-align: left; margin-bottom: 4px; display: flex; justify-content: space-between; }
+  button[hidden] { display: none; }
   button.on { background: var(--tinta); color: #fff; } button kbd { opacity: .6; font: inherit; }
   #bajo { min-height: 5.6em; } #bajo b { display: block; }
   #aviso { position: absolute; left: 50%; top: 46px; transform: translateX(-50%); background: #fff; border: 1px solid var(--tinta); padding: 4px 10px; pointer-events: none; opacity: 0; transition: opacity .25s; white-space: nowrap; }
@@ -25,7 +26,7 @@
   #fin { position: absolute; inset: 0; background: rgba(255,255,255,.88); display: flex; align-items: center; justify-content: center; z-index: 4; padding: 16px; } #fin[hidden] { display: none; } #fin > div { max-width: 420px; } #fin h1 { font-size: 26px; margin: 0 0 6px; } #fin p { margin: 0 0 14px; }
   .eq { border: 1px solid var(--linea); padding: 4px 7px; margin-bottom: 4px; cursor: pointer; background: #fff; } .eq.on { border-color: var(--tinta); } .eq i { font-style: normal; color: var(--rival); }
   .mi { display: flex; align-items: center; gap: 6px; font-size: 11px; } .mi span:first-child { flex: 1; } .mi i { flex: none; width: 42px; height: 4px; background: var(--linea); position: relative; } .mi i b { position: absolute; left: 0; top: 0; bottom: 0; background: #4d7a38; } .mi i b.mal { background: var(--rival); }
-  #ordenes button i { font-style: normal; opacity: .7; } .ley { font-size: 10px; margin-top: 4px; } .ley i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--tinta); margin: 0 3px 0 6px; vertical-align: -1px; } .ley i:first-child { margin-left: 0; }
+  #ordenes button i, #bFpvR i, #bFpvF i { font-style: normal; opacity: .7; } .ley { font-size: 10px; margin-top: 4px; } .ley i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--tinta); margin: 0 3px 0 6px; vertical-align: -1px; } .ley i:first-child { margin-left: 0; }
   #menu { position: absolute; inset: 0; background: rgba(255,255,255,.93); display: flex; align-items: center; justify-content: center; padding: 16px; overflow-y: auto; z-index: 5; } #menu[hidden] { display: none; }
   #menuCaja { max-width: 560px; width: 100%; } #menuCaja h1 { font-size: 20px; } #menuCaja p { margin: 4px 0 14px; }
   #menuRoles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; } button.rol { display: block; padding: 12px; margin: 0; } button.rol b { display: block; font-size: 14px; margin-bottom: 4px; } button.rol span { color: var(--suave); } button.rol:hover { background: var(--tinta); color: #fff; } button.rol:hover span { color: #ddd; }
@@ -40,7 +41,7 @@
     <div id="menu" hidden><div id="menuCaja"><h1>drone<i>.</i>warfare</h1><p class="tenue">Un centro de operaciones de drones y los equipos que van a destruirlo. Elige de qué lado estás.</p><div id="menuRoles"></div><h2>Escenario</h2><div id="menuEsc"></div><button type="button" id="menuCierra" hidden><span>volver</span></button></div></div><div id="rend" title="Rendimiento del último segundo"></div></div>
   <aside id="panel">
     <h1>drone<i>.</i>warfare</h1>
-    <div class="tenue v">versión d3 · infantería con cobertura, supresión, retirada, granada y humo. Los drones aún no se mandan.</div>
+    <div class="tenue v">versión d4 · infantería y drones: reconocimiento y FPV, con pilotos, batería y enlace de radio.</div>
     <h2>Tu papel</h2>
     <div><b id="rol"></b></div><div class="tenue" id="rolQue"></div>
     <button type="button" id="cambia" style="margin-top:6px"><span>cambiar de papel o escenario</span></button>
@@ -52,13 +53,17 @@
     <h2>Equipos</h2>
     <div id="equipos"></div>
     <div id="ordenes" hidden><button type="button" id="bSigilo"><span>sigilo</span><kbd>C</kbd></button><button type="button" id="bFuego"><span>fuego contenido</span><kbd>F</kbd></button><button type="button" id="bAlto"><span>alto</span><kbd>X</kbd></button><button type="button" id="bRetira"><span>retirada</span><kbd>R</kbd></button><button type="button" id="bGranada"><span>granada · <i id="cdGranada"></i></span><kbd>G</kbd></button><button type="button" id="bHumo"><span>humo · <i id="cdHumo"></i></span><kbd>B</kbd></button><div class="tenue ley"><i style="background:#3f8f3a"></i>cubierto <i style="background:#d6a21e"></i>a medias <i style="background:#9aa0a6"></i>sin cobertura <i style="background:#c2552d"></i>expuesto</div></div>
+    <h2>Drones</h2>
+    <div class="fila"><span>pilotos libres</span><b id="pil"></b></div>
+    <div id="drones" style="margin-top:4px"></div>
+    <button type="button" id="bFpvR"><span>lanzar FPV de radio · <i id="nFpvR"></i></span><kbd>V</kbd></button><button type="button" id="bFpvF"><span>lanzar FPV de fibra · <i id="nFpvF"></i></span><kbd>N</kbd></button><button type="button" id="bCasa" hidden><span>recoger el dron elegido</span><kbd>Z</kbd></button>
     <h2>Visión</h2>
     <div id="visiones"></div>
     <div class="tenue" id="notaVision"></div>
     <h2>Bajo el cursor</h2>
     <div id="bajo" class="tenue"></div>
     <h2>Manejo</h2>
-    <div class="tenue">clic: elegir equipo · arrastrar: varios<br>clic derecho: ir (los puntos de color muestran dónde quedará cada uno y su cobertura) · sobre un edificio enemigo: volarlo<br>C sigilo · F fuego · X alto · R retirada<br>G granada · B humo · Tab siguiente equipo<br>WASD o flechas: cámara · rueda: zoom<br>Espacio + arrastrar: desplazar<br>1–4: visión · H: tu base · P: pausa</div>
+    <div class="tenue">clic: elegir equipo · arrastrar: varios<br>clic derecho: ir (los puntos de color muestran dónde quedará cada uno y su cobertura) · sobre un edificio enemigo: volarlo<br>C sigilo · F fuego · X alto · R retirada<br>G granada · B humo · Tab siguiente equipo<br>dron de reconocimiento: clic en él (o en su línea) y clic derecho donde debe vigilar · Z lo recoge<br>V / N: FPV de radio / de fibra, y clic en el blanco<br>WASD o flechas: cámara · rueda: zoom<br>Espacio + arrastrar: desplazar<br>1–4: visión · H: tu base · P: pausa</div>
   </aside>
 </div>
 <script>
@@ -82,8 +87,8 @@
     asaltante:  { nombre: 'Asaltante', que: 'Fusil. Llega y coloca la carga que destruye el centro enemigo.', proto: true },
     escopetero: { nombre: 'Escopetero', que: 'Última defensa del equipo contra el FPV que entra.', proto: true },
     zapador:    { nombre: 'Zapador', que: 'Cargas, minas, túneles; corta y sigue el hilo de fibra.' },
-    inhibidor:  { nombre: 'Operador de inhibidor', que: 'Burbuja que tumba los FPV de radio de los dos bandos. Emite.' },
-    observador: { nombre: 'Observador', que: 'Marca blancos para tus drones.' },
+    inhibidor:  { nombre: 'Operador de inhibidor', que: 'Burbuja de 60 m que tumba los FPV de radio enemigos. Emite.' },
+    observador: { nombre: 'Observador', que: 'Lleva un repetidor: da enlace de radio a tus drones a 220 m a su alrededor.' },
     tirador:    { nombre: 'Tirador', que: 'Largo alcance contra pilotos y antenas; se oculta mejor.' },
     sanitario:  { nombre: 'Sanitario', que: 'Estabiliza heridos para evacuarlos.' },
     piloto:     { nombre: 'Piloto', que: 'Vuela un dron a la vez desde el centro de operaciones.', proto: true },
@@ -104,9 +109,9 @@
   // Cuánto frena cada terreno a quien va a pie (1 = paso normal).
   D.PASO = [1, 0.9, 0.95, 0.8, 1.1, 0, 0.5, 1.1, 0, 0.7, 0.8, 0.8, 0];
   D.DRON = {
-    recon:       { nombre: 'Dron de reconocimiento', que: 'Los ojos: encuentra equipos, antenas e hilo de fibra.', alt: 3.2, radio: true, proto: true },
-    fpvRadio:    { nombre: 'FPV de radio', que: 'Golpe barato de un solo uso. Lo tumba el inhibidor.', alt: 1.4, radio: true, proto: true },
-    fpvFibra:    { nombre: 'FPV de fibra', que: 'Inmune al inhibidor y entra en edificios; deja hilo.', alt: 1.2, radio: false, proto: true },
+    recon:       { nombre: 'Dron de reconocimiento', que: 'Los ojos: encuentra equipos, antenas e hilo de fibra.', alt: 3.2, radio: true, proto: true, vel: 0.08, bat: 3600 },
+    fpvRadio:    { nombre: 'FPV de radio', que: 'Golpe barato de un solo uso. Lo tumba el inhibidor.', alt: 1.4, radio: true, proto: true, vel: 0.16, bat: 900, fpv: true },
+    fpvFibra:    { nombre: 'FPV de fibra', que: 'Inmune al inhibidor y entra en edificios; deja hilo.', alt: 1.2, radio: false, proto: true, vel: 0.13, bat: 900, fpv: true },
     bombardero:  { nombre: 'Bombardero', que: 'Granadas sobre gente parada.', alt: 2.2, radio: true },
     interceptor: { nombre: 'Interceptor', que: 'Derriba drones.', alt: 3.2, radio: true },
     repetidor:   { nombre: 'Repetidor', que: 'Alarga el enlace de radio.', alt: 3.8, radio: true },
@@ -135,6 +140,11 @@
     retiradaVel: 1.35, retiradaBlanco: 0.6, // retirada: corren al barracón, no disparan y cuesta más darles
     granadaAlc: 5, granadaVuelo: 20, granadaRadio: 1.6, granadaDano: 70, granadaSupr: 70, granadaCd: 400, // granada: 50 m, 1 s de vuelo, 20 s de recarga por equipo
     humoAlc: 6, humoRadio: 2.6, humoDura: 500, humoCd: 600, // bote de humo: nube de 25 s que corta la vista (no a la térmica)
+    // Drones. Cada dron en el aire ocupa a un piloto. Los de radio necesitan una antena propia a menos de `enlace` o a un observador (repetidor) a menos de `enlaceObs`; el de fibra, lo que da el carrete desde el taller.
+    enlace: 60, enlaceObs: 22, enlaceCorte: 40, fibraAlc: 80, inhibeRadio: 6, reconRadio: 4, recarga: 6, // sin enlace 2 s, el dron cae; el de reconocimiento vuelve solo a recargar (30 s) y sale otra vez
+    fpvRadio: 1.4, fpvDano: 80, fpvSupr: 80, fpvTecho: 0.3, // el FPV revienta al llegar; el de radio apenas hace daño bajo techo, el de fibra entra
+    dronTiroAlc: 5, escopetaDron: 0.35, fusilDron: 0.07, dronOye: 9, // a 50 m el equipo le dispara: la escopeta acierta uno de cada tres tiros; el fusil, casi nunca
+    fabrica: [1800, 1200], fpvTope: [2, 4], // el taller saca un FPV cada 90 s (atacante) o 60 s (defensor), hasta tener tantos posados
   };
   // Los dos papeles. El bando 0 ataca (caza pilotos: muchos equipos, pocos drones); el bando 1 defiende (el centro de drones: muchos pilotos y medios, una guardia corta).
   D.ROL = [
@@ -348,6 +358,8 @@
   D.hora = function (m) { const f = ((m.t % ECON.dia) / ECON.dia) * 24, h = Math.floor(f + 6) % 24, mi = Math.floor((f % 1) * 60); return String(h).padStart(2, '0') + ':' + String(mi).padStart(2, '0'); }; // el día empieza a las 06:00
   D.faltaAmanecer = (m) => Math.max(0, ECON.dia - m.t); // ticks que quedan de partida
 
+  // Un dron posado en su hueco junto al taller (i: el hueco). Estados: posado · vuelo · vuelve (a recargar) · carga.
+  D.dronNuevo = function (m, j, t, p, i, ang) { const d = D.DRON[t], x = p.x + 2.4 + (i % 3) * 1.5, y = p.y + 0.5 + (Math.floor(i / 3) - 0.5) * 1.6; return crear(m, 'dron', j, t, x, y, { alt: 0, ang, estado: 'posado', hueco: i, bat: d.bat || 0, batMax: d.bat || 0, casa: { x, y }, sinEnlace: 0, obj: 0, dest: null, orbita: null }); };
   function crear(m, clase, j, tipo, x, y, extra) { const e = Object.assign({ id: m.sigId++, clase, j, tipo, x, y, ang: 0, vida: 1 }, extra); m.ents.push(e); m.porId.set(e.id, e); return e; }
   const libre = (m, x, y) => { x = Math.floor(x); y = Math.floor(y); return x >= 0 && y >= 0 && x < m.N && y < m.N && m.paso[y * m.N + x] === 1; };
   // La celda pisable más cercana a un punto (en espiral), que no sea ninguna de las ya dadas.
@@ -361,7 +373,7 @@
     op = op || {};
     const mapa = D.generarMapa(semilla, op.escenario), N = mapa.N, az = D.prng(semilla ^ 0x51ED);
     const m = { semilla, t: op.t === undefined ? ECON.inicio : op.t, N, mapa, paso: mapa.paso.slice(), ents: [], porId: new Map(), sigId: 1, az,
-      jug: [{ personas: 0, pilotos: 0, bajas: 0 }, { personas: 0, pilotos: 0, bajas: 0 }], visto: [new Set(), new Set()], conocido: [new Set(), new Set()], efectos: [], cola: [], fin: null, ia: [null, null], humos: [], proy: [] };
+      jug: [{ personas: 0, pilotos: 0, bajas: 0, fab: 0, nFab: 0 }, { personas: 0, pilotos: 0, bajas: 0, fab: 0, nFab: 0 }], visto: [new Set(), new Set()], conocido: [new Set(), new Set()], efectos: [], cola: [], fin: null, ia: [null, null], humos: [], proy: [] };
     // Coste de pisar cada celda: a paso normal manda la velocidad; en sigilo se prefiere lo que tapa.
     m.coste = new Float32Array(N * N); m.costeSigilo = new Float32Array(N * N);
     for (let c = 0; c < N * N; c++) { const t = mapa.terreno[c], v = D.PASO[t] || 1; m.coste[c] = 1 / v; m.costeSigilo[c] = Math.max(0.5, (1 / v) * (1.5 - D.COBERTURA[t])); }
@@ -369,8 +381,8 @@
     const equipo = (j, roles, x, y, ang) => { const us = new Set(); roles.forEach((r, i) => { const d = (i - (roles.length - 1) / 2) * 1.3, p = D.cercaLibre(m, x + Math.cos(ang + 1.57) * d, y + Math.sin(ang + 1.57) * d, us), s = D.SOL[r]; crear(m, 'sol', j, r, p.x, p.y, { ang, eq, vida: s.vida, vidaMax: s.vida, orden: 'nada', ruta: null, ri: 0, sigilo: false, fuego: true, recarga: 0, supr: 0, obj: 0, canal: 0, movio: false, tTiro: -999, firma: 1, mira: ang, cdGranada: 0, cdHumo: 0 }); m.jug[j].personas++; }); eq++; };
     const edif = (j, t, p) => { if (!p) return; const e = crear(m, 'edif', j, t, p.x + 0.5, p.y + 0.5, { vida: 1 }), r = D.EDIF[t].tam >= 3 ? 1 : 0; for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) { const X = p.x + dx, Y = p.y + dy; if (X >= 0 && Y >= 0 && X < N && Y < N && (r === 0 || Math.abs(dy) < 1 || t === 'centro')) m.paso[Y * N + X] = 0; } return e; };
     const pilotos = (j, n) => { m.jug[j].pilotos = n; m.jug[j].personas += n; }; // están dentro: cuentan, pero no se ven
-    const posado = (j, t, p, i, ang) => crear(m, 'dron', j, t, p.x + 2.4 + (i % 3) * 1.5, p.y + 0.5 + (Math.floor(i / 3) - 0.5) * 1.6, { alt: 0, ang });
-    const orbita = (j, t, x, y, r) => crear(m, 'dron', j, t, x, y, { alt: D.DRON[t].alt, orbita: { x, y, r, fase: az() * TAU } });
+    const posado = (j, t, p, i, ang) => D.dronNuevo(m, j, t, p, i, ang);
+    const orbita = (j, t, x, y, r, p, i) => { const e = D.dronNuevo(m, j, t, p, i, 0); e.estado = 'vuelo'; e.alt = D.DRON[t].alt; e.x = x; e.y = y; e.orbita = { x, y, r, fase: az() * TAU }; return e; };
 
     // El atacante: cuatro equipos de fuerzas especiales y solo dos pilotos.
     { const b = mapa.bases[0], f = b.frente, lado = f + Math.PI / 2;
@@ -379,16 +391,16 @@
       equipo(0, ['asaltante', 'asaltante', 'escopetero', 'observador'], b.x + Math.cos(f) * 5 - Math.cos(lado) * 4, b.y + Math.sin(f) * 5 - Math.sin(lado) * 4, f);
       equipo(0, ['asaltante', 'escopetero', 'inhibidor', 'sanitario'], b.x + Math.cos(f) * 9, b.y + Math.sin(f) * 9, f);
       equipo(0, ['tirador', 'observador'], b.x + Math.cos(f) * 13 + Math.cos(lado) * 6, b.y + Math.sin(f) * 13 + Math.sin(lado) * 6, f);
-      pilotos(0, 2); orbita(0, 'recon', b.x + Math.cos(f) * 16, b.y + Math.sin(f) * 16, 9); posado(0, 'fpvRadio', b.taller, 0, f); posado(0, 'fpvFibra', b.taller, 1, f); }
+      pilotos(0, 2); m.jug[0].taller = b.taller; orbita(0, 'recon', b.x + Math.cos(f) * 16, b.y + Math.sin(f) * 16, 9, b.taller, 6); posado(0, 'fpvRadio', b.taller, 0, f); posado(0, 'fpvFibra', b.taller, 1, f); }
     // El defensor: el centro con seis pilotos, dos antenas y una falsa, la estación de escucha, y una guardia de dos equipos.
     { const b = mapa.bases[1], f = b.frente;
       edif(1, 'centro', b.centro); edif(1, 'taller', b.taller); edif(1, 'barracon', b.barracon); for (const a of b.antenas) edif(1, 'antena', a); edif(1, 'falsa', b.falsa); edif(1, 'escucha', b.escucha);
       equipo(1, ['asaltante', 'asaltante', 'escopetero', 'sanitario'], b.x + Math.cos(f) * 5, b.y + Math.sin(f) * 5, f);
       equipo(1, ['asaltante', 'escopetero', 'tirador', 'inhibidor'], b.x - Math.cos(f) * 4, b.y - Math.sin(f) * 4, f);
-      pilotos(1, 6); orbita(1, 'recon', b.x + Math.cos(f) * 12, b.y + Math.sin(f) * 12, 11); orbita(1, 'recon', b.x + Math.cos(f) * 30, b.y + Math.sin(f) * 30, 13);
+      pilotos(1, 6); m.jug[1].taller = b.taller; orbita(1, 'recon', b.x + Math.cos(f) * 12, b.y + Math.sin(f) * 12, 11, b.taller, 6); orbita(1, 'recon', b.x + Math.cos(f) * 30, b.y + Math.sin(f) * 30, 13, b.taller, 7);
       ['fpvRadio', 'fpvRadio', 'fpvFibra', 'bombardero', 'interceptor'].forEach((t, i) => posado(1, t, b.taller, i, f)); }
     if (op.ia) for (let j = 0; j < 2; j++) if (op.ia[j] && D.iaCrear) m.ia[j] = D.iaCrear(m, j);
-    drones(m); detectar(m);
+    detectar(m);
     return m;
   };
 
@@ -400,11 +412,15 @@
   //   { t: 'modo', j, eqs, sigilo?, fuego? }   sigilo: lento y tapado · fuego: libre (true) o contenido (false)
   //   { t: 'retirada', j, eqs }        correr al barracón: no disparan y cuesta más darles
   //   { t: 'granada' | 'humo', j, eqs, x, y }   la lanza el miembro más cercano al punto, si está a tiro y el equipo no está recargando
+  //   { t: 'recon', j, id, x, y }      el dron de reconocimiento va a dar vueltas sobre ese punto (si está posado, despega)
+  //   { t: 'reconCasa', j, id }        vuelve al taller a recargar y se queda posado
+  //   { t: 'fpv', j, tipo, obj? | x, y }   despega un FPV posado de ese tipo contra un enemigo a la vista, un edificio descubierto o un punto
   D.orden = function (m, cmd) { m.cola.push(cmd); };
   const delEquipo = (m, j, eqs) => m.ents.filter((e) => e.clase === 'sol' && e.j === j && eqs.includes(e.eq));
   function irA(m, u, x, y) { const r = D.ruta(m.N, m.paso, u.sigilo ? m.costeSigilo : m.coste, u.x, u.y, x, y); u.ruta = r; u.ri = 1; if (!r) u.orden = 'nada'; return !!r; }
   function aplicar(m, cmd) {
-    if (m.fin || !cmd.eqs) return; const us = delEquipo(m, cmd.j, cmd.eqs); if (!us.length) return;
+    if (m.fin) return; if (cmd.t === 'recon' || cmd.t === 'reconCasa' || cmd.t === 'fpv') { aplicarDron(m, cmd); return; }
+    if (!cmd.eqs) return; const us = delEquipo(m, cmd.j, cmd.eqs); if (!us.length) return;
     if (cmd.t === 'mover') { // cada uno, a su puesto: los mejores sitios cubiertos alrededor del punto, de cara a la amenaza
       const cx = us.reduce((s, u) => s + u.x, 0) / us.length, cy = us.reduce((s, u) => s + u.y, 0) / us.length, am = D.amenaza(m, cmd.j, cmd.x, cmd.y, cx, cy), ps = D.puestos(m, cmd.x, cmd.y, us.length, am);
       us.forEach((u, i) => { const p = ps[i] || D.cercaLibre(m, cmd.x, cmd.y); u.orden = 'mover'; u.obj = 0; u.canal = 0; u.mira = Math.atan2(am.y - p.y, am.x - p.x); if (!irA(m, u, p.x, p.y)) { const q = D.cercaLibre(m, cmd.x, cmd.y); u.orden = 'mover'; irA(m, u, q.x, q.y); } });
@@ -537,14 +553,83 @@
       for (const o of m.ents) { if (o.clase !== 'sol' || o.vida <= 0) continue; const d = Math.hypot(o.x - p.x2, o.y - p.y2); if (d > ECON.granadaRadio) continue; const cob = D.COBERTURA[m.mapa.terreno[Math.floor(o.y) * m.N + Math.floor(o.x)]]; o.supr = Math.min(100, o.supr + ECON.granadaSupr); o.tHerido = m.t; o.vida -= ECON.granadaDano * (1 - 0.6 * (d / ECON.granadaRadio)) * (1 - cob * 0.4); if (o.vida <= 0) baja(m, o); } }
     if (m.humos.length) m.humos = m.humos.filter((h) => h.hasta > m.t);
   }
-  function drones(m) { for (const e of m.ents) if (e.orbita) { const o = e.orbita, a = o.fase + m.t * 0.004; e.x = o.x + Math.cos(a) * o.r; e.y = o.y + Math.sin(a) * o.r * 0.7; e.ang = Math.atan2(Math.cos(a) * 0.7, -Math.sin(a)); } }
+  // ---------- drones ----------
+  // Cada dron en el aire (o recargando para volver a salir) ocupa a un piloto.
+  D.pilotosLibres = function (m, j) { let n = 0; for (const e of m.ents) if (e.clase === 'dron' && e.j === j && e.estado !== 'posado') n++; return m.jug[j].pilotos - n; };
+  // De dónde sale el enlace de radio de un bando: sus antenas y sus observadores (que llevan repetidor).
+  D.enlaces = function (m, j) { const f = []; for (const e of m.ents) { if (e.j !== j || e.vida <= 0) continue; if (e.clase === 'edif' && e.tipo === 'antena') f.push({ x: e.x, y: e.y, r: ECON.enlace }); else if (e.clase === 'sol' && e.tipo === 'observador') f.push({ x: e.x, y: e.y, r: ECON.enlaceObs }); } return f; };
+  const conEnlace = (fs, x, y, margen) => { for (const f of fs) if (Math.hypot(f.x - x, f.y - y) <= f.r - margen) return true; return false; };
+  // ¿Llega un dron de ese tipo a ese punto? El de radio, si hay enlace allí; el de fibra, si le da el carrete desde su taller.
+  D.alcanza = function (m, j, tipo, x, y, casa) { return D.DRON[tipo].radio ? conEnlace(D.enlaces(m, j), x, y, 1) : Math.hypot(casa.x - x, casa.y - y) <= ECON.fibraAlc; };
+  const MR = ECON.reconRadio + 1; // el dron de reconocimiento da vueltas: su punto queda ese margen dentro del enlace
+  const noPuede = (m, j, que) => m.efectos.push({ tipo: 'noPuede', j, que, t: m.t });
+  function aplicarDron(m, cmd) {
+    const j = cmd.j;
+    if (cmd.t === 'fpv') {
+      let e = null; for (const q of m.ents) if (q.clase === 'dron' && q.j === j && q.tipo === cmd.tipo && q.estado === 'posado' && D.DRON[q.tipo].fpv) { e = q; break; }
+      if (!e) return noPuede(m, j, 'sinFpv'); if (D.pilotosLibres(m, j) < 1) return noPuede(m, j, 'pilotos');
+      let x = cmd.x, y = cmd.y, o = cmd.obj ? m.porId.get(cmd.obj) : null;
+      if (o) { if (o.j === j || o.clase === 'dron' || (o.clase === 'sol' ? !m.visto[j].has(o.id) : !m.conocido[j].has(o.id))) return noPuede(m, j, 'noVisto'); x = o.x; y = o.y; }
+      if (!(x >= 0 && y >= 0 && x < m.N && y < m.N)) return;
+      if (!D.alcanza(m, j, e.tipo, x, y, e.casa)) return noPuede(m, j, D.DRON[e.tipo].radio ? 'enlace' : 'fibra');
+      e.estado = 'vuelo'; e.alt = D.DRON[e.tipo].alt; e.obj = o ? o.id : 0; e.dest = { x, y }; e.sinEnlace = 0; m.efectos.push({ tipo: 'fpvSale', j, id: e.id, clase: e.tipo, t: m.t }); return;
+    }
+    const e = m.porId.get(cmd.id); if (!e || e.clase !== 'dron' || e.j !== j || e.tipo !== 'recon') return;
+    if (cmd.t === 'reconCasa') { e.orbita = null; if (e.estado === 'vuelo') e.estado = 'vuelve'; return; }
+    let x = Math.max(0.5, Math.min(m.N - 0.5, cmd.x)), y = Math.max(0.5, Math.min(m.N - 0.5, cmd.y)); const fs = D.enlaces(m, j); if (!fs.length) return noPuede(m, j, 'enlace');
+    if (!conEnlace(fs, x, y, MR)) { let f = null, md = 1e9; for (const q of fs) { const d = Math.hypot(q.x - x, q.y - y) - q.r; if (d < md) { md = d; f = q; } } const d = Math.hypot(f.x - x, f.y - y), k = Math.max(0, f.r - MR) / d; x = f.x + (x - f.x) * k; y = f.y + (y - f.y) * k; m.efectos.push({ tipo: 'recortado', j, x, y, t: m.t }); } // más allá del enlace no llega: se queda en el borde
+    if (e.estado === 'posado') { if (D.pilotosLibres(m, j) < 1) return noPuede(m, j, 'pilotos'); e.estado = e.bat >= e.batMax * 0.5 ? 'vuelo' : 'carga'; if (e.estado === 'vuelo') e.alt = D.DRON.recon.alt; }
+    e.orbita = { x, y, r: ECON.reconRadio, fase: e.orbita ? e.orbita.fase : 0 }; if (e.estado === 'vuelve' && e.bat > e.batMax * 0.5) e.estado = 'vuelo';
+  }
+  function cae(m, e, que) { e.vida = 0; m.efectos.push({ tipo: 'perdido', j: e.j, clase: e.tipo, que, x: e.x, y: e.y, t: m.t }); }
+  function avanza(e, tx, ty, v) { const dx = tx - e.x, dy = ty - e.y, L = Math.hypot(dx, dy); if (L <= v) { e.x = tx; e.y = ty; return true; } e.x += (dx / L) * v; e.y += (dy / L) * v; e.ang = Math.atan2(dy, dx); return false; }
+  // El FPV revienta: hiere y clava a quien esté cerca, sin mirar bando, y tumba antenas y demás edificios pequeños. El de radio
+  // no entra bajo techo (apenas hace daño a quien está dentro de una ruina); el de fibra, sí.
+  function revienta(m, e) {
+    e.vida = 0; m.efectos.push({ tipo: 'fpvBoom', j: e.j, x: e.x, y: e.y, t: m.t });
+    for (const o of m.ents) { if (o.vida <= 0 || o === e) continue; const d = Math.hypot(o.x - e.x, o.y - e.y);
+      if (o.clase === 'sol') { if (d > ECON.fpvRadio) continue; const t = m.mapa.terreno[Math.floor(o.y) * m.N + Math.floor(o.x)], techo = t === T.RUINA && D.DRON[e.tipo].radio; o.supr = Math.min(100, o.supr + ECON.fpvSupr); o.tHerido = m.t; o.vida -= ECON.fpvDano * (1 - 0.6 * (d / ECON.fpvRadio)) * (techo ? ECON.fpvTecho : 1 - D.COBERTURA[t] * 0.3); if (o.vida <= 0) baja(m, o); }
+      else if (o.clase === 'edif' && o.j !== e.j && D.EDIF[o.tipo].tam < 3 && d <= 1.3) { o.vida = 0; m.efectos.push({ tipo: 'volado', x: o.x, y: o.y, j: e.j, de: o.j, clase: o.tipo, t: m.t }); } }
+  }
+  function fpv(m, e, d) {
+    if (e.obj) { const o = m.porId.get(e.obj); if (!o || o.vida <= 0) e.obj = 0; else if (o.clase === 'edif' || m.visto[e.j].has(o.id)) { e.dest.x = o.x; e.dest.y = o.y; } } // sigue al blanco mientras lo vea alguien; si lo pierde, va a donde lo vio por última vez
+    if (!d.radio && Math.hypot(e.casa.x - e.x, e.casa.y - e.y) > ECON.fibraAlc + 1) return cae(m, e, 'fibra');
+    for (const s of m.ents) { if (s.clase !== 'sol' || s.j === e.j || s.vida <= 0) continue; const dd = Math.hypot(s.x - e.x, s.y - e.y); if (dd > ECON.dronOye) continue;
+      if (!e.oido) { e.oido = true; m.efectos.push({ tipo: 'fpvCerca', j: s.j, x: e.x, y: e.y, t: m.t }); }
+      if (d.radio && s.tipo === 'inhibidor' && dd <= ECON.inhibeRadio) return cae(m, e, 'inhibidor');
+      if (dd > ECON.dronTiroAlc || s.recarga > 0 || s.orden === 'retirada' || s.canal > 0 || D.nivelSupr(s) === 2) continue;
+      const arma = D.SOL[s.tipo].arma, p = arma === 'escopeta' ? ECON.escopetaDron : arma === 'fusil' ? ECON.fusilDron : 0; if (!p) continue;
+      if (!s.fuego && Math.hypot(e.dest.x - s.x, e.dest.y - s.y) > 3) continue; // con fuego contenido solo le tiran si viene a por ellos
+      s.recarga = D.ARMA[arma].cad; s.tTiro = m.t; s.ang = Math.atan2(e.y - s.y, e.x - s.x); const da = m.az() < p;
+      m.efectos.push({ tipo: 'tiro', x1: s.x, y1: s.y, x2: e.x, y2: e.y, da, arma, j: s.j, t: m.t }); if (da) return cae(m, e, 'derribo'); }
+    if (avanza(e, e.dest.x, e.dest.y, d.vel)) revienta(m, e);
+  }
+  function drones(m) {
+    let fs = [null, null];
+    for (const e of m.ents) { if (e.clase !== 'dron' || e.vida <= 0 || e.estado === 'posado') continue; const d = D.DRON[e.tipo];
+      if (e.estado === 'carga') { e.bat = Math.min(e.batMax, e.bat + ECON.recarga); if (e.bat >= e.batMax) { if (e.orbita) { e.estado = 'vuelo'; e.alt = d.alt; } else e.estado = 'posado'; } continue; }
+      if (--e.bat <= 0) { cae(m, e, 'bateria'); continue; }
+      if (d.radio) { if (!fs[e.j]) fs[e.j] = D.enlaces(m, e.j); if (conEnlace(fs[e.j], e.x, e.y, 0)) e.sinEnlace = 0; else if (++e.sinEnlace > ECON.enlaceCorte) { cae(m, e, 'enlace'); continue; } }
+      if (d.fpv) { fpv(m, e, d); continue; }
+      if (e.estado === 'vuelo' && (!e.orbita || e.bat < (Math.hypot(e.casa.x - e.x, e.casa.y - e.y) / d.vel) * 1.3 + 60)) { e.estado = 'vuelve'; m.efectos.push({ tipo: 'vuelve', j: e.j, id: e.id, t: m.t }); } // con la batería justa para volver, vuelve solo
+      if (e.estado === 'vuelve') { if (avanza(e, e.casa.x, e.casa.y, d.vel)) { e.estado = 'carga'; e.alt = 0; } }
+      else { const o = e.orbita, a = o.fase + (m.t * 0.036) / o.r; avanza(e, o.x + Math.cos(a) * o.r, o.y + Math.sin(a) * o.r * 0.7, d.vel); }
+    }
+  }
+  // El taller, mientras siga en pie, va sacando FPV hasta tener el tope posado: dos de radio por cada uno de fibra.
+  function fabricar(m) {
+    for (let j = 0; j < 2; j++) { const J = m.jug[j]; if (!J.taller || !m.ents.some((e) => e.clase === 'edif' && e.j === j && e.tipo === 'taller')) continue;
+      let n = 0; const huecos = new Set(); for (const e of m.ents) if (e.clase === 'dron' && e.j === j) { huecos.add(e.hueco); if (D.DRON[e.tipo].fpv && e.estado === 'posado') n++; }
+      if (n >= ECON.fpvTope[j]) { J.fab = 0; continue; } J.fab += 20; if (J.fab < ECON.fabrica[j]) continue; J.fab = 0;
+      let i = 0; while (huecos.has(i)) i++; const t = J.nFab++ % 3 === 2 ? 'fpvFibra' : 'fpvRadio'; D.dronNuevo(m, j, t, J.taller, i, m.mapa.bases[j].frente); m.efectos.push({ tipo: 'fabricado', j, clase: t, t: m.t }); }
+  }
 
   D.tick = function (m) {
     if (m.fin) return;
     m.t++;
     if (m.cola.length) { const q = m.cola; m.cola = []; for (const c of q) aplicar(m, c); }
     for (let j = 0; j < 2; j++) if (m.ia[j] && D.iaTick) D.iaTick(m, m.ia[j]);
-    drones(m); if (m.proy.length || m.humos.length) lanzados(m);
+    drones(m); if (m.t % 20 === 0) fabricar(m); if (m.proy.length || m.humos.length) lanzados(m);
     for (const u of m.ents) if (u.clase === 'sol' && u.vida > 0) mover(m, u);
     if (m.t % 4 === 0) detectar(m);
     for (const u of m.ents) { if (u.clase !== 'sol' || u.vida <= 0) continue; if (u.orden === 'volar') volar(m, u); combatir(m, u); if (D.SOL[u.tipo].cura && m.t % 2 === 0) curar(m, u); }
@@ -571,6 +656,13 @@
     const j = ia.j, mapa = m.mapa, U = mapa.urbano, equipos = {};
     for (const e of m.ents) if (e.clase === 'sol' && e.j === j) (equipos[e.eq] || (equipos[e.eq] = [])).push(e);
     const vistos = []; for (const id of m.visto[j]) { const o = m.porId.get(id); if (o) vistos.push(o); }
+    // Drones: un FPV cada 15 s contra el enemigo a la vista más cercano a su base (el de radio si llega; si no, el de fibra);
+    // y el atacante lleva su dron de reconocimiento por delante de sus equipos.
+    if (vistos.length && m.t - (ia.tFpv || -999) >= 300 && D.pilotosLibres(m, j) > 0) {
+      const b = mapa.bases[j]; let ob = null, md = 1e9; for (const o of vistos) { const d = Math.hypot(o.x - b.x, o.y - b.y); if (d < md) { md = d; ob = o; } }
+      for (const tipo of ['fpvRadio', 'fpvFibra']) { const e = m.ents.find((q) => q.clase === 'dron' && q.j === j && q.tipo === tipo && q.estado === 'posado'); if (e && D.alcanza(m, j, tipo, ob.x, ob.y, e.casa)) { D.orden(m, { t: 'fpv', j, tipo, obj: ob.id }); ia.tFpv = m.t; break; } }
+    }
+    if (j === 0 && m.t % 400 === 0) { const r = m.ents.find((q) => q.clase === 'dron' && q.j === 0 && q.tipo === 'recon' && q.estado === 'vuelo'), ss = m.ents.filter((q) => q.clase === 'sol' && q.j === 0); if (r && ss.length) { const cx = ss.reduce((s, u) => s + u.x, 0) / ss.length, cy = ss.reduce((s, u) => s + u.y, 0) / ss.length, ux = (U.x0 + U.x1) / 2 - cx, uy = (U.y0 + U.y1) / 2 - cy, L = Math.hypot(ux, uy) || 1; D.orden(m, { t: 'recon', j: 0, id: r.id, x: cx + (ux / L) * 12, y: cy + (uy / L) * 12 }); } }
     for (const k in equipos) {
       const us = equipos[k], eq = Number(k), st = ia.eqs[eq] || (ia.eqs[eq] = { paso: 0, puesto: { x: us[0].x, y: us[0].y }, tOrden: -999 });
       const cx = us.reduce((s, u) => s + u.x, 0) / us.length, cy = us.reduce((s, u) => s + u.y, 0) / us.length, parado = us.every((u) => u.orden === 'nada');
@@ -760,7 +852,7 @@
   const cam = (D.cam = { x: mapa.bases[YO].x + Math.cos(mapa.bases[YO].frente) * 7, y: mapa.bases[YO].y + Math.sin(mapa.bases[YO].frente) * 7, z: 15 });
   let cw = 0, ch = 0, dpr = 1, vision = 'optica', raton = { x: -1, y: -1, dentro: false };
   const todo = par.get('todo') === '1', sel = new Set(), fx = [], marcas = []; // todo: ver también lo que no se ha descubierto (para probar); sel: equipos seleccionados
-  let caja = null, pausa = false;
+  let caja = null, pausa = false, selDron = 0; // selDron: el dron de reconocimiento elegido
   const VISIONES = [
     ['optica', 'Óptica', 'A simple vista. De día se ve lo que no está bajo cobertura; de noche, solo lo cercano a los tuyos.'],
     ['nocturna', 'Nocturna', 'Intensificador de luz: todo en verde. No distingue bandos; los tuyos llevan una baliza que parpadea.'],
@@ -828,7 +920,10 @@
   function grano(n, color, a) { ctx.fillStyle = color; ctx.globalAlpha = a; for (let i = 0; i < n; i++) ctx.fillRect(Math.random() * cw, Math.random() * ch, 1.4, 1.4); ctx.globalAlpha = 1; }
   function vineta(color) { const g = ctx.createRadialGradient(cw / 2, ch / 2, ch * 0.42, cw / 2, ch / 2, Math.max(cw, ch) * 0.75); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, color); ctx.fillStyle = g; ctx.fillRect(0, 0, cw, ch); }
   let tiempo = 0, tDib = 0, nDib = 0, cuadros = 0, tSeg = 0; const visibles = [], COB = { pesada: '#3f8f3a', ligera: '#d6a21e', ninguna: '#9aa0a6', expuesto: '#c2552d' };
-  let lanza = null; // 'granada' | 'humo': esperando a que se elija dónde
+  let lanza = null; // 'granada' | 'humo' | 'fpvRadio' | 'fpvFibra': esperando a que se elija dónde
+  const esFpv = (k) => k === 'fpvRadio' || k === 'fpvFibra', taller = () => m.ents.find((e) => e.clase === 'edif' && e.j === YO && e.tipo === 'taller');
+  // Hasta dónde llegan mis drones: el enlace de radio (antenas y observadores) o el carrete de fibra desde el taller.
+  function zona(k, z, ox, oy, col) { ctx.strokeStyle = col; ctx.lineWidth = 1.2; ctx.globalAlpha = 0.55; ctx.setLineDash([8, 6]); if (k === 'fpvFibra') { const t = taller(); if (t) { ctx.beginPath(); ctx.arc(ox + t.x * z, oy + t.y * z, D.ECON.fibraAlc * z, 0, TAU); ctx.stroke(); } } else for (const f of D.enlaces(m, YO)) { ctx.beginPath(); ctx.arc(ox + f.x * z, oy + f.y * z, f.r * z, 0, TAU); ctx.stroke(); } ctx.setLineDash([]); ctx.globalAlpha = 1; }
   function dibujar() {
     const t0 = performance.now(), z = cam.z, ox = Math.round(cw / 2 - cam.x * z), oy = Math.round(ch / 2 - cam.y * z), luz = D.luz(m);
     const modo = vision === 'optica' ? (luz >= 0.5 ? 'dia' : 'noche') : vision, P = D.pintor(modo, tiempo), L = capa(modo), lado = N * z;
@@ -858,6 +953,10 @@
     }
     ctx.globalAlpha = modo === 'termica' ? 0.45 : modo === 'espectro' ? 0.5 : 0.93; ctx.drawImage(L.copas, ox, oy, lado, lado); ctx.globalAlpha = 1; // las copas tapan lo de debajo (a la térmica, menos)
     for (const e of visibles) if (e.clase === 'dron' && e.alt && !fuera(e.x, e.y, 3)) D.fig.dron(ctx, P, ox + e.x * z, oy + e.y * z, e.ang, e.tipo, mio(e.j), sD, e.alt * z * 0.6);
+    for (const e of visibles) { if (e.clase !== 'dron' || e.j !== YO || e.estado === 'posado' || fuera(e.x, e.y, 3)) continue; const x = ox + e.x * z, y = oy + e.y * z, f = e.bat / e.batMax, w = sD * 12; // mis drones: batería y, si está elegido, su órbita
+      ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(x - w / 2, y + sD * 9, w, 2.5); ctx.fillStyle = f < 0.25 ? '#c2552d' : COLYO; ctx.fillRect(x - w / 2, y + sD * 9, w * f, 2.5);
+      if (e.id === selDron) { ctx.strokeStyle = COLYO; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, sD * 9, 0, TAU); ctx.stroke(); if (e.orbita) { const o = e.orbita; ctx.globalAlpha = 0.5; ctx.setLineDash([4, 5]); ctx.beginPath(); ctx.ellipse(ox + o.x * z, oy + o.y * z, o.r * z, o.r * z * 0.7, 0, 0, TAU); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ox + o.x * z, oy + o.y * z); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1; } } }
+    if (selDron && !lanza) zona('recon', z, ox, oy, COLYO); else if (esFpv(lanza)) { zona(lanza, z, ox, oy, COLYO); if (raton.dentro) { const p = { x: cam.x + (raton.x - cw / 2) / z, y: cam.y + (raton.y - ch / 2) / z }, t = taller(), bien = !!t && D.alcanza(m, YO, lanza, p.x, p.y, t); ctx.strokeStyle = bien ? COLYO : '#c2552d'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.arc(raton.x, raton.y, D.ECON.fpvRadio * z, 0, TAU); ctx.stroke(); ctx.setLineDash([]); } }
     // disparos, explosiones y avisos sobre el mapa
     for (let i = fx.length - 1; i >= 0; i--) { const q = fx[i], k = (tiempo - q.t0) / q.dur; if (k >= 1) { fx.splice(i, 1); continue; }
       if (q.k === 'tiro') { const x1 = ox + q.x1 * z, y1 = oy + q.y1 * z, x2 = ox + q.x2 * z, y2 = oy + q.y2 * z, a = Math.min(1, k * 1.6), b = Math.max(0, a - 0.35); ctx.strokeStyle = modo === 'dia' ? '#b8862b' : '#ffe9a8'; ctx.globalAlpha = 0.9 * (1 - k); ctx.lineWidth = q.gordo ? 1.8 : 1.1; ctx.beginPath(); ctx.moveTo(x1 + (x2 - x1) * b, y1 + (y2 - y1) * b); ctx.lineTo(x1 + (x2 - x1) * a, y1 + (y2 - y1) * a); ctx.stroke(); if (k < 0.25) { ctx.fillStyle = '#ffe9a8'; ctx.beginPath(); ctx.arc(x1, y1, 2.5, 0, TAU); ctx.fill(); } if (k > 0.6) { ctx.fillStyle = q.da ? '#c2552d' : P.tinta; ctx.globalAlpha = (1 - k) * 2; ctx.beginPath(); ctx.arc(x2, y2, q.da ? 2.5 : 1.5, 0, TAU); ctx.fill(); } }
@@ -868,7 +967,7 @@
     for (const p of m.proy) { if (p.j !== YO && !todo && !cercaDeMios({ x: p.x2, y: p.y2 }, 14)) continue; const k = Math.min(1, (m.t - p.t0) / (p.t1 - p.t0)), x = ox + (p.x1 + (p.x2 - p.x1) * k) * z, y = oy + (p.y1 + (p.y2 - p.y1) * k) * z - Math.sin(k * Math.PI) * z * 1.2; ctx.fillStyle = P.tinta; ctx.beginPath(); ctx.arc(x, y, 2.5, 0, TAU); ctx.fill(); }
     if (raton.dentro && sel.size && !caja && !m.fin) { // la vista previa: dónde quedaría cada uno y lo cubierto que estaría (o, si se va a lanzar algo, hasta dónde llega)
       const p = { x: cam.x + (raton.x - cw / 2) / z, y: cam.y + (raton.y - ch / 2) / z }, us = mios.filter((e) => e.clase === 'sol' && sel.has(e.eq));
-      if (lanza && us.length) { const alc = lanza === 'granada' ? D.ECON.granadaAlc : D.ECON.humoAlc; let md = 1e9; for (const u of us) md = Math.min(md, Math.hypot(u.x - p.x, u.y - p.y)); const bien = md <= alc; ctx.strokeStyle = bien ? COLYO : '#c2552d'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.arc(raton.x, raton.y, (lanza === 'granada' ? D.ECON.granadaRadio : D.ECON.humoRadio) * z, 0, TAU); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 0.35; for (const u of us) { ctx.beginPath(); ctx.arc(ox + u.x * z, oy + u.y * z, alc * z, 0, TAU); ctx.stroke(); } ctx.globalAlpha = 1; }
+      if (esFpv(lanza)) { /* la zona del FPV ya está pintada */ } else if (lanza && us.length) { const alc = lanza === 'granada' ? D.ECON.granadaAlc : D.ECON.humoAlc; let md = 1e9; for (const u of us) md = Math.min(md, Math.hypot(u.x - p.x, u.y - p.y)); const bien = md <= alc; ctx.strokeStyle = bien ? COLYO : '#c2552d'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.arc(raton.x, raton.y, (lanza === 'granada' ? D.ECON.granadaRadio : D.ECON.humoRadio) * z, 0, TAU); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 0.35; for (const u of us) { ctx.beginPath(); ctx.arc(ox + u.x * z, oy + u.y * z, alc * z, 0, TAU); ctx.stroke(); } ctx.globalAlpha = 1; }
       else if (us.length && p.x >= 0 && p.y >= 0 && p.x < N && p.y < N) { const porEq = new Map(); for (const u of us) { if (!porEq.has(u.eq)) porEq.set(u.eq, []); porEq.get(u.eq).push(u); }
         for (const g of porEq.values()) { const cx = g.reduce((s, u) => s + u.x, 0) / g.length, cy = g.reduce((s, u) => s + u.y, 0) / g.length, am = D.amenaza(m, YO, p.x, p.y, cx, cy), ps = D.puestos(m, p.x, p.y, g.length, am);
           for (const q of ps) { const x = ox + q.x * z, y = oy + q.y * z; ctx.fillStyle = COB[D.cobNivel(q.cob)]; ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, Math.max(3.5, z * 0.22), 0, TAU); ctx.fill(); ctx.stroke(); }
@@ -921,7 +1020,13 @@
       else if (d.tipo === 'hallado' && d.j === YO) { aviso(d.clase === 'centro' ? '¡Centro de operaciones localizado! Clic derecho sobre él para volarlo' : 'Descubierto: ' + (d.clase === 'falsa' ? 'antena' : nomDe(d.clase))); fx.push({ k: 'anillo', x: d.x, y: d.y, r: 4, c: '#c2552d', t0: tiempo, dur: 1.4 }); }
       else if (d.tipo === 'cargando') { if (d.j !== YO) aviso('¡Te están poniendo una carga!'); fx.push({ k: 'anillo', x: d.x, y: d.y, r: 3, c: '#c2552d', t0: tiempo, dur: 1 }); }
       else if (d.tipo === 'explosion') { if (veo(d.x, d.y)) fx.push({ k: 'boom', x: d.x, y: d.y, t0: tiempo, dur: 0.7, r: 0.45 }); }
-      else if (d.tipo === 'noPuede' && d.j === YO) aviso({ recarga: 'Ese equipo aún está recargando', lejos: 'Demasiado lejos: acércate más', nadie: 'Nadie del equipo puede lanzar ahora' }[d.que]);
+      else if (d.tipo === 'noPuede' && d.j === YO) aviso({ recarga: 'Ese equipo aún está recargando', lejos: 'Demasiado lejos: acércate más', nadie: 'Nadie del equipo puede lanzar ahora', sinFpv: 'No queda ningún FPV de ese tipo posado', pilotos: 'No hay piloto libre: todos tienen un dron en el aire', noVisto: 'Ese blanco ya no está a la vista', enlace: 'Ahí no llega el enlace de radio', fibra: 'Ahí no llega el carrete de fibra' }[d.que]);
+      else if (d.tipo === 'fpvBoom') { if (d.j === YO || veo(d.x, d.y)) fx.push({ k: 'boom', x: d.x, y: d.y, t0: tiempo, dur: 0.7, r: 0.4 }); }
+      else if (d.tipo === 'perdido') { if (d.j === YO) aviso({ enlace: 'Dron perdido: se quedó sin enlace', bateria: 'Dron perdido: sin batería', inhibidor: 'FPV tumbado por un inhibidor enemigo', derribo: 'FPV derribado a tiros', fibra: 'FPV perdido: se acabó el carrete' }[d.que]); else if (veo(d.x, d.y) && (d.que === 'derribo' || d.que === 'inhibidor')) aviso(d.que === 'derribo' ? 'FPV enemigo derribado' : 'Tu inhibidor ha tumbado un FPV'); if (d.j === YO || veo(d.x, d.y)) fx.push({ k: 'anillo', x: d.x, y: d.y, r: 1.2, c: '#c2552d', t0: tiempo, dur: 0.6 }); }
+      else if (d.tipo === 'fpvCerca' && d.j === YO) { aviso('¡FPV enemigo entrando!'); fx.push({ k: 'anillo', x: d.x, y: d.y, r: 2.5, c: '#c2552d', t0: tiempo, dur: 0.9 }); }
+      else if (d.tipo === 'vuelve' && d.j === YO) aviso('El dron de reconocimiento vuelve a recargar');
+      else if (d.tipo === 'recortado' && d.j === YO) aviso('Más allá no hay enlace: se queda en el borde');
+      else if (d.tipo === 'fabricado' && d.j === YO) aviso('Taller: listo un ' + nomDe(d.clase));
       else if (d.tipo === 'volado') { fx.push({ k: 'boom', x: d.x, y: d.y, t0: tiempo, dur: 1.6 }); aviso((d.de === YO ? 'Has perdido: ' : 'Volado: ') + nomDe(d.clase)); }
     }
     m.efectos.length = 0; if (marcas.length > 60) marcas.splice(0, marcas.length - 60);
@@ -949,9 +1054,12 @@
   const retirada = () => { if (sel.size) { orden({ t: 'retirada' }); aviso('Retirada: corren al barracón'); } }, apunta = (k) => { if (!sel.size) return; lanza = lanza === k ? null : k; aviso(lanza ? (k === 'granada' ? 'Granada: clic donde la quieres' : 'Humo: clic donde lo quieres') + ' · Esc cancela' : 'Cancelado'); };
   $('bRetira').addEventListener('click', retirada); $('bGranada').addEventListener('click', () => apunta('granada')); $('bHumo').addEventListener('click', () => apunta('humo'));
   $('bSigilo').addEventListener('click', () => alterna('sigilo')); $('bFuego').addEventListener('click', () => alterna('fuego')); $('bAlto').addEventListener('click', () => orden({ t: 'detener' }));
-  $('equipos').addEventListener('click', (ev) => { const b = ev.target.closest('[data-eq]'); if (!b) return; const eq = Number(b.dataset.eq); if (!ev.shiftKey) sel.clear(); sel.add(eq); const us = mios().filter((e) => e.eq === eq); if (us.length && !ev.shiftKey) { cam.x = us[0].x; cam.y = us[0].y; } firmaP = ''; });
+  $('equipos').addEventListener('click', (ev) => { const b = ev.target.closest('[data-eq]'); if (!b) return; selDron = 0; const eq = Number(b.dataset.eq); if (!ev.shiftKey) sel.clear(); sel.add(eq); const us = mios().filter((e) => e.eq === eq); if (us.length && !ev.shiftKey) { cam.x = us[0].x; cam.y = us[0].y; } firmaP = ''; });
   $('otra').addEventListener('click', () => ir(D.ROL[YO].clave, escenario, Math.floor(Math.random() * 99999) + 1)); $('otraRol').addEventListener('click', () => ir(D.ROL[1 - YO].clave, escenario, m.semilla));
-  let firmaP = '';
+  let firmaP = '', firmaD = '';
+  const apuntaFpv = (k) => { lanza = lanza === k ? null : k; aviso(lanza ? D.DRON[k].nombre + ': clic en el blanco · Esc cancela' : 'Cancelado'); }, recoge = () => { if (selDron) { D.orden(m, { t: 'reconCasa', j: YO, id: selDron }); aviso('El dron vuelve al taller'); } };
+  $('bFpvR').addEventListener('click', () => apuntaFpv('fpvRadio')); $('bFpvF').addEventListener('click', () => apuntaFpv('fpvFibra')); $('bCasa').addEventListener('click', recoge);
+  $('drones').addEventListener('click', (ev) => { const b = ev.target.closest('[data-dron]'); if (!b) return; selDron = Number(b.dataset.dron); sel.clear(); firmaP = ''; const e = m.porId.get(selDron); if (e) { cam.x = e.x; cam.y = e.y; } });
   function panel() {
     const noche = D.luz(m) < 0.5; $('hora').textContent = D.hora(m) + (noche ? ' · noche' : ' · día'); $('amanece').textContent = mmss(D.faltaAmanecer(m));
     $('pers').textContent = m.jug[YO].personas + ' / ' + D.ECON.tope[YO] + ' · bajas ' + m.jug[YO].bajas;
@@ -963,8 +1071,12 @@
       h += '</div>'; }
     if (!h) h = '<div class="tenue">No te queda nadie en el campo.</div>';
     if (h !== firmaP) { firmaP = h; $('equipos').innerHTML = h; }
+    { const ds = m.ents.filter((e) => e.clase === 'dron' && e.j === YO), posados = (t) => ds.filter((e) => e.tipo === t && e.estado === 'posado').length; if (selDron && !ds.some((e) => e.id === selDron)) selDron = 0;
+      $('pil').textContent = D.pilotosLibres(m, YO) + ' de ' + m.jug[YO].pilotos; $('nFpvR').textContent = posados('fpvRadio'); $('nFpvF').textContent = posados('fpvFibra'); $('bFpvR').classList.toggle('on', lanza === 'fpvRadio'); $('bFpvF').classList.toggle('on', lanza === 'fpvFibra'); $('bCasa').hidden = !selDron;
+      const EST = { posado: 'posado', vuelo: 'en el aire', vuelve: 'volviendo', carga: 'recargando' }; let hd = ''; for (const e of ds) if (e.tipo === 'recon' || (D.DRON[e.tipo].fpv && e.estado !== 'posado')) hd += '<div class="eq' + (e.id === selDron ? ' on' : '') + '"' + (e.tipo === 'recon' ? ' data-dron="' + e.id + '"' : '') + '><div class="mi"><span>' + (e.tipo === 'recon' ? 'Reconocimiento' : D.DRON[e.tipo].nombre) + ' · ' + EST[e.estado] + '</span><i><b style="width:' + Math.round((e.bat / e.batMax) * 100) + '%"' + (e.bat / e.batMax < 0.25 ? ' class="mal"' : '') + '></b></i></div></div>';
+      if (!hd) hd = '<div class="tenue">Ningún dron en el aire.</div>'; if (hd !== firmaD) { firmaD = hd; $('drones').innerHTML = hd; } }
     const us = seleccionados(); $('ordenes').hidden = !us.length; if (us.length) { $('bSigilo').classList.toggle('on', us.every((u) => u.sigilo)); $('bFuego').classList.toggle('on', !us.every((u) => u.fuego)); $('bGranada').classList.toggle('on', lanza === 'granada'); $('bHumo').classList.toggle('on', lanza === 'humo');
-      const cd = (k) => { const t = Math.min(...us.map((u) => u[k])) - m.t; return t > 0 ? Math.ceil(t / 20) + ' s' : 'lista'; }; $('cdGranada').textContent = cd('cdGranada'); $('cdHumo').textContent = cd('cdHumo').replace('lista', 'listo'); } else lanza = null;
+      const cd = (k) => { const t = Math.min(...us.map((u) => u[k])) - m.t; return t > 0 ? Math.ceil(t / 20) + ' s' : 'lista'; }; $('cdGranada').textContent = cd('cdGranada'); $('cdHumo').textContent = cd('cdHumo').replace('lista', 'listo'); } else if (lanza && !esFpv(lanza)) lanza = null;
     let b = 'Pasa el cursor por el sector.';
     if (raton.dentro) {
       const x = cam.x + (raton.x - cw / 2) / cam.z, y = cam.y + (raton.y - ch / 2) / cam.z; let mejor = null, md = 1.1;
@@ -988,9 +1100,10 @@
     if (/^Digit[1-4]$/.test(ev.code)) ponVision(VISIONES[Number(ev.code.slice(5)) - 1][0]);
     else if (ev.code === 'KeyH') { cam.x = mapa.bases[YO].x; cam.y = mapa.bases[YO].y; }
     else if (ev.code === 'KeyR') retirada(); else if (ev.code === 'KeyG') apunta('granada'); else if (ev.code === 'KeyB') apunta('humo');
+    else if (ev.code === 'KeyV') apuntaFpv('fpvRadio'); else if (ev.code === 'KeyN') apuntaFpv('fpvFibra'); else if (ev.code === 'KeyZ') recoge();
     else if (ev.code === 'KeyC') alterna('sigilo'); else if (ev.code === 'KeyF') alterna('fuego'); else if (ev.code === 'KeyX') orden({ t: 'detener' });
-    else if (ev.code === 'Escape') { if (lanza) lanza = null; else { sel.clear(); firmaP = ''; } } else if (ev.code === 'KeyP') { pausa = !pausa; aviso(pausa ? 'Pausa' : 'Sigue'); }
-    else if (ev.code === 'Tab') { ev.preventDefault(); const ids = [...equipos().keys()]; if (ids.length) { const i = ids.indexOf([...sel][0]); sel.clear(); const eq = ids[(i + 1) % ids.length]; sel.add(eq); const u = mios().find((e) => e.eq === eq); cam.x = u.x; cam.y = u.y; firmaP = ''; } }
+    else if (ev.code === 'Escape') { if (lanza) lanza = null; else { sel.clear(); selDron = 0; firmaP = ''; } } else if (ev.code === 'KeyP') { pausa = !pausa; aviso(pausa ? 'Pausa' : 'Sigue'); }
+    else if (ev.code === 'Tab') { ev.preventDefault(); const ids = [...equipos().keys()]; selDron = 0; if (ids.length) { const i = ids.indexOf([...sel][0]); sel.clear(); const eq = ids[(i + 1) % ids.length]; sel.add(eq); const u = mios().find((e) => e.eq === eq); cam.x = u.x; cam.y = u.y; firmaP = ''; } }
     if (ev.code.startsWith('Arrow') || ev.code === 'Space') ev.preventDefault();
   });
   addEventListener('keyup', (ev) => teclas.delete(ev.code)); addEventListener('blur', () => teclas.clear());
@@ -998,9 +1111,13 @@
   lienzo.addEventListener('pointerdown', (ev) => {
     const r = lienzo.getBoundingClientRect(), px = ev.clientX - r.left, py = ev.clientY - r.top; lienzo.setPointerCapture(ev.pointerId);
     if (ev.button === 1 || (ev.button === 0 && teclas.has('Space'))) arrastre = { x: ev.clientX, y: ev.clientY, cx: cam.x, cy: cam.y }; // desplazar: botón central o Espacio + arrastrar
+    else if (ev.button === 0 && esFpv(lanza)) { // el FPV: contra el enemigo a la vista o el edificio descubierto que esté bajo el clic; si no hay, al punto
+      const p = aMundo(px, py); let ob = null, md = 1.6; for (const e of m.ents) { if (e.j === YO || e.clase === 'dron' || !(e.clase === 'sol' ? m.visto[YO].has(e.id) : m.conocido[YO].has(e.id))) continue; const d = Math.hypot(e.x - p.x, e.y - p.y); if (d < md) { md = d; ob = e; } }
+      D.orden(m, ob ? { t: 'fpv', j: YO, tipo: lanza, obj: ob.id } : { t: 'fpv', j: YO, tipo: lanza, x: p.x, y: p.y }); fx.push({ k: 'anillo', x: ob ? ob.x : p.x, y: ob ? ob.y : p.y, r: 1.6, c: '#c2552d', t0: tiempo, dur: 0.6 }); lanza = null; }
     else if (ev.button === 0 && lanza) { const p = aMundo(px, py); orden({ t: lanza, x: p.x, y: p.y }); lanza = null; } // con granada o humo en la mano, el clic dice dónde
     else if (ev.button === 0) caja = { x0: px, y0: py, x1: px, y1: py, mayus: ev.shiftKey };
     else if (ev.button === 2 && lanza) lanza = null;
+    else if (ev.button === 2 && selDron && !m.fin) { const p = aMundo(px, py); D.orden(m, { t: 'recon', j: YO, id: selDron, x: p.x, y: p.y }); fx.push({ k: 'anillo', x: p.x, y: p.y, r: D.ECON.reconRadio, c: '#1f6f78', t0: tiempo, dur: 0.6 }); }
     else if (ev.button === 2 && sel.size && !m.fin) { // la orden: sobre un edificio enemigo descubierto, volarlo; si no, ir allí
       const p = aMundo(px, py); let ob = null, md = 1.8; for (const e of m.ents) if (e.clase === 'edif' && e.j !== YO && m.conocido[YO].has(e.id)) { const d = Math.hypot(e.x - p.x, e.y - p.y); if (d < md) { md = d; ob = e; } }
       if (ob) { if (seleccionados().some((u) => D.SOL[u.tipo].carga)) { orden({ t: 'volar', obj: ob.id }); fx.push({ k: 'anillo', x: ob.x, y: ob.y, r: 2.5, c: '#c2552d', t0: tiempo, dur: 0.7 }); } else aviso('En ese equipo nadie lleva carga: hace falta un asaltante o un zapador'); }
@@ -1009,8 +1126,10 @@
   });
   lienzo.addEventListener('pointermove', (ev) => { const r = lienzo.getBoundingClientRect(); raton.x = ev.clientX - r.left; raton.y = ev.clientY - r.top; raton.dentro = true; if (arrastre) { cam.x = arrastre.cx - (ev.clientX - arrastre.x) / cam.z; cam.y = arrastre.cy - (ev.clientY - arrastre.y) / cam.z; limita(); } if (caja) { caja.x1 = raton.x; caja.y1 = raton.y; } });
   lienzo.addEventListener('pointerup', () => {
-    arrastre = null; if (!caja) return; const c = caja; caja = null; if (!c.mayus) sel.clear(); firmaP = '';
-    if (Math.abs(c.x1 - c.x0) < 6 && Math.abs(c.y1 - c.y0) < 6) { const p = aMundo(c.x1, c.y1); let mejor = null, md = 1.4; for (const e of mios()) { const d = Math.hypot(e.x - p.x, e.y - p.y); if (d < md) { md = d; mejor = e; } } if (mejor) sel.add(mejor.eq); } // un clic: el equipo del soldado tocado
+    arrastre = null; if (!caja) return; const c = caja; caja = null; if (!c.mayus) sel.clear(); firmaP = ''; selDron = 0;
+    if (Math.abs(c.x1 - c.x0) < 6 && Math.abs(c.y1 - c.y0) < 6) { const p = aMundo(c.x1, c.y1); let mejor = null, md = 1.4;
+      for (const e of m.ents) if (e.clase === 'dron' && e.j === YO && e.tipo === 'recon' && Math.hypot(e.x - p.x, e.y - p.y) < 1.3) { selDron = e.id; sel.clear(); return; } // un clic sobre mi dron de reconocimiento lo elige
+      for (const e of mios()) { const d = Math.hypot(e.x - p.x, e.y - p.y); if (d < md) { md = d; mejor = e; } } if (mejor) sel.add(mejor.eq); } // un clic: el equipo del soldado tocado
     else { const a = aMundo(Math.min(c.x0, c.x1), Math.min(c.y0, c.y1)), b = aMundo(Math.max(c.x0, c.x1), Math.max(c.y0, c.y1)); for (const e of mios()) if (e.x >= a.x && e.x <= b.x && e.y >= a.y && e.y <= b.y) sel.add(e.eq); } // una caja: los equipos con alguien dentro
   });
   lienzo.addEventListener('pointercancel', () => { arrastre = null; caja = null; }); lienzo.addEventListener('pointerleave', () => { raton.dentro = false; });

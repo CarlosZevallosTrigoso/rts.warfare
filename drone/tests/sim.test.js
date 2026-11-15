@@ -39,7 +39,8 @@ const celda = (m, t, cond) => { const N = m.N; for (let y = 16; y < N - 16; y++)
 const llano = (m, x, y, n) => { for (let d = 0; d <= n; d++) { const c = y * m.N + x + d; if (m.mapa.terreno[c] > 2 || !m.paso[c]) return false; } return true; };
 const sol = (m, j, tipo) => m.ents.find((e) => e.clase === 'sol' && e.j === j && e.tipo === tipo);
 const lleva = (u, p) => { u.x = p.x; u.y = p.y; u.ruta = null; u.orden = 'nada'; };
-const solos = (m, ...quedan) => { for (const e of m.ents) if (e.clase === 'sol' && !quedan.includes(e)) { e.x = e.j ? m.N - 2.5 - (e.id % 5) : 2.5 + (e.id % 5); e.y = e.j ? m.N - 2.5 : 2.5; e.fuego = false; e.recarga = 1e9; } for (const e of m.ents) if (e.clase === 'dron') { e.alt = 0; e.orbita = null; e.x = 1.5; e.y = 1.5; } D.detectar(m); }; // aparta a los demás (cada bando a una esquina) y posa los drones
+const solos = (m, ...quedan) => { for (const e of m.ents) if (e.clase === 'sol' && !quedan.includes(e)) { e.x = e.j ? m.N - 2.5 - (e.id % 5) : 2.5 + (e.id % 5); e.y = e.j ? m.N - 2.5 : 2.5; e.fuego = false; e.recarga = 1e9; } for (const e of m.ents) if (e.clase === 'dron' && e.tipo === 'recon') { e.alt = 0; e.orbita = null; e.estado = 'posado'; e.x = e.casa.x; e.y = e.casa.y; } D.detectar(m); }; // aparta a los demás (cada bando a una esquina) y posa los drones
+const solosSol = (m, ...quedan) => { for (const e of m.ents) if (e.clase === 'sol' && !quedan.includes(e)) { e.x = e.j ? m.N - 2.5 - (e.id % 5) : 2.5 + (e.id % 5); e.y = e.j ? m.N - 2.5 : 2.5; e.fuego = false; e.recarga = 1e9; } D.detectar(m); }; // lo mismo, sin tocar los drones
 const avanza = (m, n) => { for (let i = 0; i < n; i++) D.tick(m); };
 
 prueba('el reloj: la partida empieza con luz, anochece sin saltos y, si nadie hace nada, gana el defensor al amanecer', () => {
@@ -123,6 +124,45 @@ prueba('la carga: un asaltante pegado al centro lo vuela en cinco segundos y gan
   const m2 = D.crearMundo(5, {}), o = sol(m2, 0, 'observador'), c2 = m2.ents.find((e) => e.tipo === 'centro'); solos(m2, o); lleva(o, D.cercaLibre(m2, c2.x + 2, c2.y + 2)); D.detectar(m2); D.orden(m2, { t: 'volar', j: 0, eqs: [o.eq], obj: c2.id }); avanza(m2, 400);
   assert.ok(m2.porId.has(c2.id) && !m2.fin, 'un observador no lleva carga');
   const m3 = D.crearMundo(5, {}); for (const e of m3.ents) if (e.clase === 'sol' && e.j === 0 && D.SOL[e.tipo].carga) e.vida = 0; avanza(m3, 2); assert.deepStrictEqual(m3.fin && m3.fin.motivo, 'sin asalto');
+});
+prueba('drones: pilotos, enlace, batería, FPV, inhibidor, escopeta, antenas y taller', () => {
+  const E = D.ECON, dr = (m, j, t, est) => m.ents.filter((e) => e.clase === 'dron' && e.j === j && e.tipo === t && (!est || e.estado === est)), ef = (m, tipo) => m.efectos.filter((q) => q.tipo === tipo);
+  { // sin tocar nada, ningún dron se pierde: las órbitas de salida caen dentro del enlace
+    for (const esc of ['mixto', 'urbano']) for (let s = 1; s <= 6; s++) { const m = D.crearMundo(s, { escenario: esc }); solosSol(m); const n = m.ents.filter((e) => e.clase === 'dron').length; avanza(m, 600); assert.strictEqual(m.ents.filter((e) => e.clase === 'dron').length, n, 'se pierde un dron en ' + esc + ' ' + s); }
+  }
+  { // reconocimiento: va adonde se le manda, se queda en el borde del enlace, vuelve solo a recargar y sale otra vez
+    const m = D.crearMundo(4, {}); solosSol(m); const r = dr(m, 0, 'recon')[0], a = m.ents.find((e) => e.j === 0 && e.tipo === 'antena'), b = m.mapa.bases[1];
+    D.orden(m, { t: 'recon', j: 0, id: r.id, x: a.x + 10, y: a.y + 10 }); avanza(m, 400); assert.ok(Math.hypot(r.x - a.x - 10, r.y - a.y - 10) < E.reconRadio + 1, 'no llegó');
+    D.orden(m, { t: 'recon', j: 0, id: r.id, x: b.x, y: b.y }); avanza(m, 2); assert.ok(Math.abs(Math.hypot(r.orbita.x - a.x, r.orbita.y - a.y) - (E.enlace - E.reconRadio - 1)) < 0.01, 'no se recortó al enlace');
+    let volvio = false, cargo = false; for (let i = 0; i < 5200 && !(cargo && r.estado === 'vuelo'); i++) { D.tick(m); if (r.estado === 'vuelve') volvio = true; if (r.estado === 'carga') cargo = true; }
+    assert.ok(volvio && cargo && r.estado === 'vuelo' && r.vida > 0 && r.bat > r.batMax * 0.9, 'no hizo el ciclo de batería: ' + r.estado);
+    D.orden(m, { t: 'reconCasa', j: 0, id: r.id }); avanza(m, 1500); assert.strictEqual(r.estado, 'posado');
+  }
+  { // el observador da enlace lejos de la antena; si cae, el dron se pierde
+    const m = D.crearMundo(4, {}); solosSol(m); const r = dr(m, 0, 'recon')[0], o = sol(m, 0, 'observador'), b = m.mapa.bases[1]; for (const q of m.ents) if (q.clase === 'sol' && q.tipo === 'observador' && q !== o) q.vida = 0;
+    lleva(o, D.cercaLibre(m, b.x - 12, b.y - 12)); r.x = o.x; r.y = o.y; D.orden(m, { t: 'recon', j: 0, id: r.id, x: o.x + 5, y: o.y }); avanza(m, 200); assert.ok(r.vida > 0 && Math.hypot(r.x - o.x, r.y - o.y) < 12);
+    o.vida = 0; avanza(m, E.enlaceCorte + 5); assert.ok(r.vida <= 0 && ef(m, 'perdido').some((q) => q.que === 'enlace'), 'sin repetidor debía caer');
+  }
+  { // FPV: solo contra lo que se ve; ocupa piloto; llega, revienta y hiere; el de radio cae en la burbuja del inhibidor y el de fibra no
+    const m = D.crearMundo(4, {}), b1 = m.mapa.bases[1], t = sol(m, 0, 'tirador'), i0 = sol(m, 0, 'inhibidor'); solosSol(m, t, i0); const p = D.cercaLibre(m, b1.x + 14, b1.y - 14); lleva(t, p); lleva(i0, { x: 3.5, y: 3.5 });
+    D.orden(m, { t: 'fpv', j: 1, tipo: 'fpvRadio', obj: t.id }); avanza(m, 1); assert.ok(ef(m, 'noPuede').some((q) => q.que === 'noVisto')); m.efectos.length = 0;
+    m.visto[1].add(t.id); const libres = D.pilotosLibres(m, 1); D.orden(m, { t: 'fpv', j: 1, tipo: 'fpvRadio', obj: t.id }); avanza(m, 1); m.visto[1].add(t.id); assert.strictEqual(D.pilotosLibres(m, 1), libres - 1);
+    let boom = false; for (let i = 0; i < 400 && !boom; i++) { m.visto[1].add(t.id); D.tick(m); boom = ef(m, 'fpvBoom').length > 0; } assert.ok(boom && t.vida < 60, 'el FPV no hizo daño: ' + t.vida); assert.strictEqual(D.pilotosLibres(m, 1), libres);
+    m.efectos.length = 0; t.vida = 100; lleva(i0, { x: t.x + 2, y: t.y }); m.visto[1].add(t.id); D.orden(m, { t: 'fpv', j: 1, tipo: 'fpvRadio', obj: t.id }); for (let i = 0; i < 400; i++) { m.visto[1].add(t.id); D.tick(m); }
+    assert.ok(ef(m, 'perdido').some((q) => q.que === 'inhibidor') && !ef(m, 'fpvBoom').length && t.vida === 100, 'el inhibidor debía tumbarlo');
+    m.efectos.length = 0; m.visto[1].add(t.id); D.orden(m, { t: 'fpv', j: 1, tipo: 'fpvFibra', obj: t.id }); for (let i = 0; i < 400; i++) { m.visto[1].add(t.id); D.tick(m); } assert.ok(ef(m, 'fpvBoom').length === 1, 'el de fibra debía pasar');
+    m.efectos.length = 0; D.orden(m, { t: 'fpv', j: 1, tipo: 'fpvFibra', x: p.x, y: p.y }); avanza(m, 1); assert.ok(ef(m, 'noPuede').some((q) => q.que === 'sinFpv'));
+  }
+  { // la escopeta tumba la mayoría de los FPV que le entran; sin ella, casi ninguno
+    const cuenta = (tipo) => { let d = 0; for (let s = 1; s <= 12; s++) { const m = D.crearMundo(s, {}), b1 = m.mapa.bases[1], u = sol(m, 0, tipo); solosSol(m, u); u.recarga = 0; u.fuego = true; lleva(u, D.cercaLibre(m, b1.x + 14, b1.y - 14)); m.visto[1].add(u.id); D.orden(m, { t: 'fpv', j: 1, tipo: 'fpvFibra', obj: u.id }); for (let i = 0; i < 400; i++) { m.visto[1].add(u.id); D.tick(m); if (ef(m, 'perdido').some((q) => q.que === 'derribo')) { d++; break; } } } return d; };
+    const esc = cuenta('escopetero'), tir = cuenta('tirador'); assert.ok(esc >= 4 && esc <= 11 && tir === 0, 'derribos: escopeta ' + esc + ', tirador ' + tir);
+  }
+  { // sin antenas no hay radio: los drones de radio caen; el FPV también tumba antenas; el taller repone FPV
+    const m = D.crearMundo(4, {}); solosSol(m); const an = m.ents.filter((e) => e.j === 1 && e.tipo === 'antena'), a0 = m.ents.find((e) => e.j === 0 && e.tipo === 'antena'), rs = dr(m, 1, 'recon'); assert.ok(rs.length === 2);
+    m.conocido[1].add(a0.id); D.orden(m, { t: 'fpv', j: 1, tipo: 'fpvFibra', obj: a0.id }); avanza(m, 1); assert.ok(ef(m, 'noPuede').some((q) => q.que === 'fibra'), 'la antena del atacante queda fuera del carrete');
+    for (const q of m.ents) if (q.clase === 'sol' && q.tipo === 'observador') q.vida = 0; for (const a of an) a.vida = 0; avanza(m, E.enlaceCorte + 5); assert.ok(rs.every((r) => r.vida <= 0), 'sin antenas debían caer');
+    const antes = dr(m, 1, 'fpvRadio', 'posado').length + dr(m, 1, 'fpvFibra', 'posado').length; avanza(m, E.fabrica[1] * 3); const luego = dr(m, 1, 'fpvRadio', 'posado').length + dr(m, 1, 'fpvFibra', 'posado').length; assert.ok(antes === 3 && luego === E.fpvTope[1], 'el taller no repuso: ' + antes + ' → ' + luego);
+  }
 });
 prueba('partida entera, máquina contra máquina: termina, es idéntica si se repite, y el tick es barato', () => {
   const juega = (s, esc) => { const m = D.crearMundo(s, { escenario: esc, ia: [true, true] }), t0 = Date.now(); let n = 0; while (!m.fin) { D.tick(m); n++; assert.ok(n <= D.ECON.dia, 'no termina'); } return { fin: m.fin, n, ms: (Date.now() - t0) / n, firma: m.ents.map((e) => e.id + ':' + e.x.toFixed(3) + ',' + e.y.toFixed(3) + ',' + Math.round(e.vida)).join('|'), bajas: [m.jug[0].bajas, m.jug[1].bajas] }; };

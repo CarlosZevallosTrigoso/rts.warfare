@@ -9,6 +9,13 @@
     const j = ia.j, mapa = m.mapa, U = mapa.urbano, equipos = {};
     for (const e of m.ents) if (e.clase === 'sol' && e.j === j) (equipos[e.eq] || (equipos[e.eq] = [])).push(e);
     const vistos = []; for (const id of m.visto[j]) { const o = m.porId.get(id); if (o) vistos.push(o); }
+    // Drones: un FPV cada 15 s contra el enemigo a la vista más cercano a su base (el de radio si llega; si no, el de fibra);
+    // y el atacante lleva su dron de reconocimiento por delante de sus equipos.
+    if (vistos.length && m.t - (ia.tFpv || -999) >= 300 && D.pilotosLibres(m, j) > 0) {
+      const b = mapa.bases[j]; let ob = null, md = 1e9; for (const o of vistos) { const d = Math.hypot(o.x - b.x, o.y - b.y); if (d < md) { md = d; ob = o; } }
+      for (const tipo of ['fpvRadio', 'fpvFibra']) { const e = m.ents.find((q) => q.clase === 'dron' && q.j === j && q.tipo === tipo && q.estado === 'posado'); if (e && D.alcanza(m, j, tipo, ob.x, ob.y, e.casa)) { D.orden(m, { t: 'fpv', j, tipo, obj: ob.id }); ia.tFpv = m.t; break; } }
+    }
+    if (j === 0 && m.t % 400 === 0) { const r = m.ents.find((q) => q.clase === 'dron' && q.j === 0 && q.tipo === 'recon' && q.estado === 'vuelo'), ss = m.ents.filter((q) => q.clase === 'sol' && q.j === 0); if (r && ss.length) { const cx = ss.reduce((s, u) => s + u.x, 0) / ss.length, cy = ss.reduce((s, u) => s + u.y, 0) / ss.length, ux = (U.x0 + U.x1) / 2 - cx, uy = (U.y0 + U.y1) / 2 - cy, L = Math.hypot(ux, uy) || 1; D.orden(m, { t: 'recon', j: 0, id: r.id, x: cx + (ux / L) * 12, y: cy + (uy / L) * 12 }); } }
     for (const k in equipos) {
       const us = equipos[k], eq = Number(k), st = ia.eqs[eq] || (ia.eqs[eq] = { paso: 0, puesto: { x: us[0].x, y: us[0].y }, tOrden: -999 });
       const cx = us.reduce((s, u) => s + u.x, 0) / us.length, cy = us.reduce((s, u) => s + u.y, 0) / us.length, parado = us.every((u) => u.orden === 'nada');
