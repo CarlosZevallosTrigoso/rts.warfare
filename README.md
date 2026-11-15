@@ -17,5 +17,6 @@ pilotos (ataque) o defender el centro.
 
 - Jugar: `drone/index.html` (en línea, `…/rts.warfare/drone/`).
 - Construir: `node drone/build.js`. Pruebas: `node drone/tests/sim.test.js`.
-- Estado: esqueleto. Se ve el sector, las dos bases y las cuatro visiones (óptica con día y noche, nocturna, térmica y espectro);
-  aún no hay órdenes, detección ni combate.
+- Estado: se juega la parte de infantería. Equipos de fuerzas especiales que se seleccionan y se mueven (con sigilo y fuego
+  contenido), detección por cobertura, luz y línea de visión, combate entre soldados, la carga que vuela edificios y el final
+  (el atacante gana si vuela el centro; el defensor, si amanece). El rival es provisional y los drones aún no se mandan.

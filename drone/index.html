@@ -22,6 +22,9 @@
   #aviso { position: absolute; left: 50%; top: 46px; transform: translateX(-50%); background: #fff; border: 1px solid var(--tinta); padding: 4px 10px; pointer-events: none; opacity: 0; transition: opacity .25s; white-space: nowrap; }
   #aviso.ver { opacity: 1; }
   #rend { position: absolute; left: 8px; bottom: 8px; background: rgba(255,255,255,.85); border: 1px solid var(--linea); padding: 1px 7px; font-size: 10px; color: var(--suave); cursor: pointer; }
+  #fin { position: absolute; inset: 0; background: rgba(255,255,255,.88); display: flex; align-items: center; justify-content: center; z-index: 4; padding: 16px; } #fin[hidden] { display: none; } #fin > div { max-width: 420px; } #fin h1 { font-size: 26px; margin: 0 0 6px; } #fin p { margin: 0 0 14px; }
+  .eq { border: 1px solid var(--linea); padding: 4px 7px; margin-bottom: 4px; cursor: pointer; background: #fff; } .eq.on { border-color: var(--tinta); } .eq i { font-style: normal; color: var(--rival); }
+  .mi { display: flex; align-items: center; gap: 6px; font-size: 11px; } .mi span:first-child { flex: 1; } .mi i { flex: none; width: 42px; height: 4px; background: var(--linea); position: relative; } .mi i b { position: absolute; left: 0; top: 0; bottom: 0; background: #4d7a38; } .mi i b.mal { background: var(--rival); }
   #menu { position: absolute; inset: 0; background: rgba(255,255,255,.93); display: flex; align-items: center; justify-content: center; padding: 16px; overflow-y: auto; z-index: 5; } #menu[hidden] { display: none; }
   #menuCaja { max-width: 560px; width: 100%; } #menuCaja h1 { font-size: 20px; } #menuCaja p { margin: 4px 0 14px; }
   #menuRoles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; } button.rol { display: block; padding: 12px; margin: 0; } button.rol b { display: block; font-size: 14px; margin-bottom: 4px; } button.rol span { color: var(--suave); } button.rol:hover { background: var(--tinta); color: #fff; } button.rol:hover span { color: #ddd; }
@@ -32,25 +35,29 @@
 <body>
 <div id="marco">
   <div id="vista"><canvas id="lienzo"></canvas><div id="aviso"></div>
+    <div id="fin" hidden><div><h1 id="finT"></h1><p id="finQ"></p><button type="button" id="otra"><span>otra partida, mismo papel</span></button><button type="button" id="otraRol"><span>este mismo sector, desde el otro lado</span></button></div></div>
     <div id="menu" hidden><div id="menuCaja"><h1>drone<i>.</i>warfare</h1><p class="tenue">Un centro de operaciones de drones y los equipos que van a destruirlo. Elige de qué lado estás.</p><div id="menuRoles"></div><h2>Escenario</h2><div id="menuEsc"></div><button type="button" id="menuCierra" hidden><span>volver</span></button></div></div><div id="rend" title="Rendimiento del último segundo"></div></div>
   <aside id="panel">
     <h1>drone<i>.</i>warfare</h1>
-    <div class="tenue v">versión d1 · esqueleto: aún sin órdenes ni combate</div>
+    <div class="tenue v">versión d2 · infantería: equipos, sigilo y combate. Los drones aún no se mandan.</div>
     <h2>Tu papel</h2>
     <div><b id="rol"></b></div><div class="tenue" id="rolQue"></div>
     <button type="button" id="cambia" style="margin-top:6px"><span>cambiar de papel o escenario</span></button>
     <h2>Sector</h2>
     <div class="fila"><span>semilla</span><b><a id="semilla" href="#" title="Clic: otro sector"></a></b></div>
     <div class="fila"><span>hora</span><b id="hora"></b></div>
+    <div class="fila"><span>amanece en</span><b id="amanece"></b></div>
     <div class="fila"><span>personas</span><b id="pers"></b></div>
-    <button type="button" id="saltaHora"><span>pasar a la noche</span><kbd>N</kbd></button>
+    <h2>Equipos</h2>
+    <div id="equipos"></div>
+    <div id="ordenes" hidden><button type="button" id="bSigilo"><span>sigilo</span><kbd>C</kbd></button><button type="button" id="bFuego"><span>fuego contenido</span><kbd>F</kbd></button><button type="button" id="bAlto"><span>alto</span><kbd>X</kbd></button></div>
     <h2>Visión</h2>
     <div id="visiones"></div>
     <div class="tenue" id="notaVision"></div>
     <h2>Bajo el cursor</h2>
     <div id="bajo" class="tenue"></div>
     <h2>Manejo</h2>
-    <div class="tenue">WASD o flechas: mover la cámara<br>rueda: acercar y alejar<br>arrastrar: desplazar<br>1–4: visión · N: día/noche · H: tu base</div>
+    <div class="tenue">clic: elegir equipo · arrastrar: varios<br>clic derecho: ir · sobre un edificio enemigo: volarlo<br>C sigilo · F fuego · X alto · Tab siguiente equipo<br>WASD o flechas: cámara · rueda: zoom<br>Espacio + arrastrar: desplazar<br>1–4: visión · H: tu base · P: pausa</div>
   </aside>
 </div>
 <script>
@@ -65,7 +72,7 @@
   D.COBERTURA = [0, 0, 0.1, 0.7, 0, 0, 0, 0.2, 0, 0.8, 0.6, 0.35];
   D.prng = function (semilla) { let a = semilla >>> 0; return function () { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
 
-  // Fuerzas especiales. (Las cifras de combate llegan con la entrega 2; aquí está lo que hace falta para verlos.)
+  // Fuerzas especiales.
   D.SOL = {
     asaltante:  { nombre: 'Asaltante', que: 'Fusil. Llega y coloca la carga que destruye el centro enemigo.', proto: true },
     escopetero: { nombre: 'Escopetero', que: 'Última defensa del equipo contra el FPV que entra.', proto: true },
@@ -76,6 +83,20 @@
     sanitario:  { nombre: 'Sanitario', que: 'Estabiliza heridos para evacuarlos.' },
     piloto:     { nombre: 'Piloto', que: 'Vuela un dron a la vez desde el centro de operaciones.', proto: true },
   };
+  // Lo que cada soldado lleva y cómo se le ve. ver: hasta dónde ve de día (celdas); firma: cuánto se le ve a él (1 = normal);
+  // carga: puede colocar la carga que vuela un edificio; cura: atiende a los suyos.
+  for (const k in D.SOL) Object.assign(D.SOL[k], { vida: 100, vel: 0.026, ver: 20, firma: 1, arma: 'pistola' });
+  Object.assign(D.SOL.asaltante, { arma: 'fusil', carga: true }); Object.assign(D.SOL.escopetero, { arma: 'escopeta' }); Object.assign(D.SOL.zapador, { arma: 'fusil', carga: true });
+  Object.assign(D.SOL.inhibidor, { arma: 'fusil' }); Object.assign(D.SOL.observador, { ver: 25 }); Object.assign(D.SOL.tirador, { arma: 'rifle', ver: 27, firma: 0.6 }); Object.assign(D.SOL.sanitario, { cura: true });
+  // Armas: alcance (celdas), ticks entre disparos, daño y puntería de partida.
+  D.ARMA = {
+    fusil:    { nombre: 'fusil', alc: 14, cad: 14, dano: 17, prec: 0.5 },
+    escopeta: { nombre: 'escopeta', alc: 5, cad: 18, dano: 36, prec: 0.7 },
+    rifle:    { nombre: 'rifle de precisión', alc: 26, cad: 70, dano: 85, prec: 0.8 },
+    pistola:  { nombre: 'pistola', alc: 6, cad: 16, dano: 9, prec: 0.4 },
+  };
+  // Cuánto frena cada terreno a quien va a pie (1 = paso normal).
+  D.PASO = [1, 0.9, 0.95, 0.8, 1.1, 0, 0.5, 1.1, 0, 0.7, 0.8, 0.8];
   D.DRON = {
     recon:       { nombre: 'Dron de reconocimiento', que: 'Los ojos: encuentra equipos, antenas e hilo de fibra.', alt: 3.2, radio: true, proto: true },
     fpvRadio:    { nombre: 'FPV de radio', que: 'Golpe barato de un solo uso. Lo tumba el inhibidor.', alt: 1.4, radio: true, proto: true },
@@ -98,7 +119,13 @@
     suministro: { nombre: 'Punto de suministro', que: 'Munición y baterías a mano.', tam: 2 },
     boca:     { nombre: 'Boca de tubería', que: 'Entrada a un paso bajo tierra: ningún dron ve dentro.', tam: 1 },
   };
-  D.ECON = { dia: 9600, diaLuz: 5760, crepusculo: 480, tope: [30, 20] }; // un día dura 8 min (4:48 de luz); el anochecer dura 24 s; tope de personas: 30 el atacante, 20 el defensor
+  D.ECON = {
+    dia: 28800, diaLuz: 14400, crepusculo: 600, inicio: 9600, tope: [30, 30], // el día dura 24 min: 12 de luz y 12 de noche. La partida empieza 4 min antes de anochecer y acaba al amanecer (16 min). 30 personas por bando
+    verNoche: 0.45, verEdif: 14, dronVe: 12, dronVeEdif: 10, // de noche el soldado ve el 45 % (lleva visor); a qué distancia se descubre un edificio; lo que ve un dron de reconocimiento
+    sigiloVel: 0.5, sigiloFirma: 0.6, quietoCob: 1, andaCob: 0.35, firmaTiro: 1.4, tiroDelata: 40, // en sigilo: media velocidad y menos firma; quieto, la cobertura tapa del todo; andando, un tercio; quien dispara se delata 2 s
+    supr: 50, suprVel: 0.5, suprPrec: 0.6, cobTiro: 0.6, andaPrec: 0.5, curaRadio: 2.5, cura: 0.15, // bajo fuego: 2,5 s agachado, lento y con peor puntería; la cobertura quita hasta el 60 % de los impactos; el sanitario
+    cargaTicks: 100, cargaDist: 2.2, // colocar la carga: 5 s pegado al edificio
+  };
   // Los dos papeles. El bando 0 ataca (caza pilotos: muchos equipos, pocos drones); el bando 1 defiende (el centro de drones: muchos pilotos y medios, una guardia corta).
   D.ROL = [
     { clave: 'ataque', nombre: 'Cazar pilotos', que: 'Mandas varios equipos de fuerzas especiales y pocos drones. Tienes que encontrar el centro de operaciones enemigo, llegar a pie y volarlo.' },
@@ -244,125 +271,51 @@
 })();
 
 // ===== sim/ruta.js =====
-// drone.warfare — A* (copiado de rts.warfare) sobre la rejilla (8 direcciones, sin cortar esquinas).
+// drone.warfare — rutas a pie: A* sobre la rejilla (8 direcciones, sin cortar esquinas), con el coste de cada celda.
+// El sector es pequeño (96 × 96), así que se busca al momento; no hace falta cola de peticiones.
 (function () {
-  const W = globalThis.D || (globalThis.D = {}); // (dentro de este archivo se sigue llamando W)
-
-  W.crearRuta = function (N) {
-    const NN = N * N;
-    const g = new Float32Array(NN), padre = new Int32Array(NN), visto = new Uint32Array(NN), cerrado = new Uint32Array(NN);
-    // El montículo va en tablas de tamaño fijo que crecen si hace falta: sin basura que recoger en cada búsqueda.
-    let hI = new Int32Array(4096), hF = new Float64Array(4096), hn = 0;
-    let gen = 0;
-    function mete(i, f) {
-      if (hn === hI.length) { const a = new Int32Array(hn * 2), b = new Float64Array(hn * 2); a.set(hI); b.set(hF); hI = a; hF = b; }
-      let k = hn++;
-      while (k > 0) { const p = (k - 1) >> 1; if (hF[p] <= f) break; hI[k] = hI[p]; hF[k] = hF[p]; k = p; }
-      hI[k] = i; hF[k] = f;
+  const D = globalThis.D || (globalThis.D = {});
+  const DX = [1, -1, 0, 0, 1, 1, -1, -1], DY = [0, 0, 1, -1, 1, -1, 1, -1];
+  let g = null, padre = null, marca = null, gen = 0, hI = new Int32Array(4096), hF = new Float64Array(4096), hn = 0;
+  function mete(i, f) { if (hn === hI.length) { const a = new Int32Array(hn * 2), b = new Float64Array(hn * 2); a.set(hI); b.set(hF); hI = a; hF = b; } let k = hn++; while (k > 0) { const p = (k - 1) >> 1; if (hF[p] <= f) break; hI[k] = hI[p]; hF[k] = hF[p]; k = p; } hI[k] = i; hF[k] = f; }
+  function saca() { const top = hI[0], li = hI[--hn], lf = hF[hn]; let k = 0; for (;;) { let c = 2 * k + 1; if (c >= hn) break; if (c + 1 < hn && hF[c + 1] < hF[c]) c++; if (hF[c] >= lf) break; hI[k] = hI[c]; hF[k] = hF[c]; k = c; } hI[k] = li; hF[k] = lf; return top; }
+  // paso: 1 donde se puede pisar. coste: lo que cuesta entrar en cada celda (≥ 0,5). Devuelve la lista de puntos [x, y]
+  // (centros de celda, ya sin los intermedios en línea recta) o null si no hay camino. La celda de salida vale aunque no sea pisable.
+  D.ruta = function (N, paso, coste, x0, y0, x1, y1) {
+    x0 = Math.floor(x0); y0 = Math.floor(y0); x1 = Math.floor(x1); y1 = Math.floor(y1);
+    if (x1 < 0 || y1 < 0 || x1 >= N || y1 >= N || !paso[y1 * N + x1]) return null;
+    if (!g || g.length !== N * N) { g = new Float32Array(N * N); padre = new Int32Array(N * N); marca = new Uint32Array(N * N); }
+    const ini = y0 * N + x0, fin = y1 * N + x1; gen += 2; hn = 0; g[ini] = 0; padre[ini] = -1; marca[ini] = gen; mete(ini, 0);
+    while (hn) {
+      const c = saca(); if (marca[c] === gen + 1) continue; marca[c] = gen + 1; if (c === fin) break;
+      const cx = c % N, cy = (c / N) | 0;
+      for (let d = 0; d < 8; d++) {
+        const x = cx + DX[d], y = cy + DY[d]; if (x < 0 || y < 0 || x >= N || y >= N) continue; const n = y * N + x; if (!paso[n] || marca[n] === gen + 1) continue;
+        if (d >= 4 && (!paso[cy * N + x] || !paso[y * N + cx])) continue; // en diagonal no se rozan las esquinas
+        const ng = g[c] + coste[n] * (d >= 4 ? 1.4142 : 1); if (marca[n] === gen && ng >= g[n]) continue;
+        g[n] = ng; padre[n] = c; marca[n] = gen; const ax = Math.abs(x - x1), ay = Math.abs(y - y1); mete(n, ng + (Math.max(ax, ay) + 0.4142 * Math.min(ax, ay)) * 0.5);
+      }
     }
-    function saca() {
-      const top = hI[0]; hn--;
-      const li = hI[hn], lf = hF[hn], n = hn;
-      if (n > 0) {
-        let k = 0;
-        for (;;) {
-          let c = 2 * k + 1; if (c >= n) break;
-          if (c + 1 < n && hF[c + 1] < hF[c]) c++;
-          if (hF[c] >= lf) break;
-          hI[k] = hI[c]; hF[k] = hF[c]; k = c;
-        }
-        hI[k] = li; hF[k] = lf;
-      }
-      return top;
-    }
-    const DX = [1, -1, 0, 0, 1, 1, -1, -1], DY = [0, 0, 1, -1, 1, -1, 1, -1];
-    // Comprobación barata antes de buscar: ¿está el destino (o la salida) encerrado en un recinto pequeño al que no pertenece el otro extremo?
-    // Se inunda desde las celdas de destino, y luego desde la salida, hasta TOPE celdas: si la inundación se agota sin tocar el otro extremo, no hay ruta
-    // (y se sabe en unas cientos de celdas, no explorando el mapa entero). Si no se agota, no se sabe: decide la búsqueda de verdad.
-    const TOPE = 500, marca = new Uint32Array(NN), colaI = new Int32Array(TOPE + 8); let gm = 0;
-    function sinSalida(paso, abre, x0, y0, mx, my, r2) {
-      const ini = y0 * N + x0, libre = (i) => paso[i] || (abre && abre[i]);
-      const R = Math.ceil(Math.sqrt(r2)), gx = Math.floor(mx), gy = Math.floor(my);
-      // 1) desde el destino
-      gm++; let a = 0, b = 0, tocaIni = false;
-      for (let y = Math.max(0, gy - R); y <= Math.min(N - 1, gy + R) && b < TOPE; y++) for (let x = Math.max(0, gx - R); x <= Math.min(N - 1, gx + R) && b < TOPE; x++) {
-        const ex = x + 0.5 - mx, ey = y + 0.5 - my, i = y * N + x;
-        if (ex * ex + ey * ey > r2) continue;
-        if (i === ini) return false; // ya está en el destino
-        if (libre(i)) { marca[i] = gm; colaI[b++] = i; }
-      }
-      if (!b) return true; // no hay ninguna celda de destino transitable
-      while (a < b && b < TOPE) {
-        const c = colaI[a++], cx = c % N;
-        if (cx > 0) { const n = c - 1; if (n === ini) { tocaIni = true; break; } if (marca[n] !== gm && libre(n)) { marca[n] = gm; colaI[b++] = n; } }
-        if (cx < N - 1) { const n = c + 1; if (n === ini) { tocaIni = true; break; } if (marca[n] !== gm && libre(n)) { marca[n] = gm; colaI[b++] = n; } }
-        if (c >= N) { const n = c - N; if (n === ini) { tocaIni = true; break; } if (marca[n] !== gm && libre(n)) { marca[n] = gm; colaI[b++] = n; } }
-        if (c < NN - N) { const n = c + N; if (n === ini) { tocaIni = true; break; } if (marca[n] !== gm && libre(n)) { marca[n] = gm; colaI[b++] = n; } }
-      }
-      if (tocaIni) return false;
-      if (a >= b) return true; // el recinto del destino se agotó sin llegar a la salida
-      // 2) desde la salida (la celda de salida vale aunque no sea transitable: la unidad ya está en ella)
-      gm++; a = 0; b = 0; marca[ini] = gm; colaI[b++] = ini;
-      while (a < b && b < TOPE) {
-        const c = colaI[a++], cx = c % N, cy = (c / N) | 0, ex = cx + 0.5 - mx, ey = cy + 0.5 - my;
-        if (ex * ex + ey * ey <= r2) return false;
-        if (cx > 0 && marca[c - 1] !== gm && libre(c - 1)) { marca[c - 1] = gm; colaI[b++] = c - 1; }
-        if (cx < N - 1 && marca[c + 1] !== gm && libre(c + 1)) { marca[c + 1] = gm; colaI[b++] = c + 1; }
-        if (c >= N && marca[c - N] !== gm && libre(c - N)) { marca[c - N] = gm; colaI[b++] = c - N; }
-        if (c < NN - N && marca[c + N] !== gm && libre(c + N)) { marca[c + N] = gm; colaI[b++] = c + N; }
-      }
-      return a >= b; // la salida está encerrada y el destino no está dentro
-    }
-
-    // Devuelve la lista de celdas desde (x0,y0) hasta la primera cuyo centro
-    // quede a `radio` o menos de (mx,my); [] si ya está ahí; null si no hay paso.
-    // kh: factor de la estimación (1 normal; 0,62 cuando hay caminos, para que el cálculo los encuentre y los prefiera).
-    // via: las celdas de camino propias (solo esas abaratan la ruta: el camino ajeno se cruza, pero no se busca).
-    // abre: celdas que para esta unidad también son transitables (sus puertas; o todos los muros, cuando busca por dónde abrirse paso).
-    // caro: celdas que cuestan mucho más (los muros que tendría que derribar).
-    // max: tope de celdas exploradas (0 = sin tope); pasado el tope, la búsqueda se rinde (null). buscar.nodos: cuántas exploró la última.
-    const buscar = function (paso, terreno, x0, y0, mx, my, radio, kh, via, abre, caro, max) {
-      kh = kh || 1;
-      gen++; hn = 0; let nn = 0;
-      const r2 = Math.max(radio, 0.75) ** 2, ini = y0 * N + x0;
-      if (sinSalida(paso, abre, x0, y0, mx, my, r2)) { buscar.nodos = 60; return null; }
-      const h = (x, y) => { const dx = Math.abs(x + 0.5 - mx), dy = Math.abs(y + 0.5 - my); return (Math.max(dx, dy) + 0.4142 * Math.min(dx, dy)) * kh; };
-      g[ini] = 0; padre[ini] = -1; visto[ini] = gen; mete(ini, h(x0, y0));
-      while (hn) {
-        const c = saca();
-        if (cerrado[c] === gen) continue;
-        cerrado[c] = gen;
-        if (max && ++nn > max) { buscar.nodos = nn; return null; }
-        if (!max) nn++;
-        const cx = c % N, cy = (c / N) | 0, ex = cx + 0.5 - mx, ey = cy + 0.5 - my;
-        if (ex * ex + ey * ey <= r2) {
-          const out = [];
-          for (let k = c; k !== ini; k = padre[k]) out.push(k);
-          buscar.nodos = nn; return out.reverse();
-        }
-        for (let d = 0; d < 8; d++) {
-          const nx = cx + DX[d], ny = cy + DY[d];
-          if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
-          const n = ny * N + nx;
-          if ((!paso[n] && !(abre && abre[n])) || cerrado[n] === gen) continue;
-          if (d >= 4) { const a = cy * N + nx, b = ny * N + cx; if ((!paso[a] && !(abre && abre[a])) || (!paso[b] && !(abre && abre[b]))) continue; }
-          const ng = g[c] + (d >= 4 ? 1.4142 : 1) * (caro && caro[n] ? 9 : via && via[n] ? 0.62 : terreno[n] === 3 ? 1.7 : terreno[n] === 2 ? 3 : 1); // camino y puente, baratos; el agua solo la cruza la excavadora tendiendo un puente, y le sale cara
-          if (visto[n] !== gen || ng < g[n]) { visto[n] = gen; g[n] = ng; padre[n] = c; mete(n, ng + h(nx, ny)); }
-        }
-      }
-      buscar.nodos = nn; return null;
-    };
-    buscar.nodos = 0;
-    return buscar;
+    if (marca[fin] !== gen + 1) return null;
+    const pts = []; for (let c = fin; c !== -1; c = padre[c]) pts.push([(c % N) + 0.5, ((c / N) | 0) + 0.5]); pts.reverse();
+    const o = [pts[0]]; for (let i = 1; i + 1 < pts.length; i++) { const a = o[o.length - 1], b = pts[i], c = pts[i + 1]; if ((b[0] - a[0]) * (c[1] - b[1]) !== (b[1] - a[1]) * (c[0] - b[0])) o.push(b); } if (pts.length > 1) o.push(pts[pts.length - 1]);
+    return o;
+  };
+  // Línea de visión entre dos puntos, celda a celda: la cortan los muros; los árboles, solo si hay más de tres celdas de arboleda en medio.
+  D.seVe = function (mapa, ax, ay, bx, by) {
+    const N = mapa.N, T = D.T, t = mapa.terreno, n = Math.ceil(Math.hypot(bx - ax, by - ay) * 2); let arb = 0, ult = -1;
+    const c0 = Math.floor(ay) * N + Math.floor(ax), c1 = Math.floor(by) * N + Math.floor(bx);
+    for (let k = 1; k < n; k++) { const x = ax + ((bx - ax) * k) / n, y = ay + ((by - ay) * k) / n, c = Math.floor(y) * N + Math.floor(x); if (c === ult || c === c0 || c === c1) continue; ult = c; const q = t[c]; if (q === T.MURO) return false; if (q === T.BOSQUE && ++arb > 3) return false; }
+    return true;
   };
 })();
 
 // ===== sim/mundo.js =====
-// drone.warfare — el mundo y su tick. Entrega 1: el sector, las dos bases con su guarnición de muestra y el reloj
-// (día y noche); los drones de reconocimiento dan vueltas. Aún no hay órdenes, detección ni combate.
+// drone.warfare — el mundo y su tick: reloj, órdenes, movimiento de los equipos, quién ve a quién, combate entre
+// soldados, la carga que vuela edificios y el final de la partida. Los drones, por ahora, solo vigilan en círculo.
 (function () {
   const D = globalThis.D || (globalThis.D = {});
-  const ECON = D.ECON, TAU = Math.PI * 2;
+  const ECON = D.ECON, T = D.T, TAU = Math.PI * 2;
 
   D.esNoche = (m) => m.t % ECON.dia >= ECON.diaLuz;
   // Cuánta luz hay, de 0 (noche cerrada) a 1 (día): baja durante el anochecer y sube al amanecer.
@@ -375,21 +328,30 @@
     return ((h - (ECON.dia - c * 0.5)) / (c * 0.5)) * 0.5; // empieza a clarear
   };
   D.hora = function (m) { const f = ((m.t % ECON.dia) / ECON.dia) * 24, h = Math.floor(f + 6) % 24, mi = Math.floor((f % 1) * 60); return String(h).padStart(2, '0') + ':' + String(mi).padStart(2, '0'); }; // el día empieza a las 06:00
+  D.faltaAmanecer = (m) => Math.max(0, ECON.dia - m.t); // ticks que quedan de partida
 
   function crear(m, clase, j, tipo, x, y, extra) { const e = Object.assign({ id: m.sigId++, clase, j, tipo, x, y, ang: 0, vida: 1 }, extra); m.ents.push(e); m.porId.set(e.id, e); return e; }
-  // op.escenario: 'mixto' | 'urbano'. op.noche: empezar de noche.
+  const libre = (m, x, y) => { x = Math.floor(x); y = Math.floor(y); return x >= 0 && y >= 0 && x < m.N && y < m.N && m.paso[y * m.N + x] === 1; };
+  // La celda pisable más cercana a un punto (en espiral), que no sea ninguna de las ya dadas.
+  D.cercaLibre = function (m, x, y, usadas) {
+    for (let r = 0; r < 12; r++) for (let k = 0, n = Math.max(1, r * 6); k < n; k++) { const a = (k / n) * TAU + r * 0.7, X = Math.floor(x + Math.cos(a) * r), Y = Math.floor(y + Math.sin(a) * r), c = Y * m.N + X; if (libre(m, X, Y) && !(usadas && usadas.has(c))) { if (usadas) usadas.add(c); return { x: X + 0.5, y: Y + 0.5 }; } }
+    return { x: Math.floor(x) + 0.5, y: Math.floor(y) + 0.5 };
+  };
+
+  // op.escenario: 'mixto' | 'urbano'. op.t: tick de inicio (para pruebas). op.ia: [bool, bool], qué bandos lleva la máquina.
   D.crearMundo = function (semilla, op) {
     op = op || {};
     const mapa = D.generarMapa(semilla, op.escenario), N = mapa.N, az = D.prng(semilla ^ 0x51ED);
-    const m = { semilla, t: op.noche ? ECON.diaLuz : ECON.crepusculo * 0.5, // se empieza con el sol ya arriba (o al caer la noche)
-       N, mapa, ents: [], porId: new Map(), sigId: 1, jug: [{ personas: 0, pilotos: 0 }, { personas: 0, pilotos: 0 }] };
-    const libre = (x, y) => { x = Math.floor(x); y = Math.floor(y); return x >= 0 && y >= 0 && x < N && y < N && mapa.paso[y * N + x] === 1; };
-    const cerca = (x, y) => { for (let r = 0; r < 9; r++) for (let k = 0; k < 16; k++) { const a = (k / 16) * TAU + r, X = x + Math.cos(a) * r, Y = y + Math.sin(a) * r; if (libre(X, Y)) return { x: Math.floor(X) + 0.5, y: Math.floor(Y) + 0.5 }; } return { x: x + 0.5, y: y + 0.5 }; };
+    const m = { semilla, t: op.t === undefined ? ECON.inicio : op.t, N, mapa, paso: mapa.paso.slice(), ents: [], porId: new Map(), sigId: 1, az,
+      jug: [{ personas: 0, pilotos: 0, bajas: 0 }, { personas: 0, pilotos: 0, bajas: 0 }], visto: [new Set(), new Set()], conocido: [new Set(), new Set()], efectos: [], cola: [], fin: null, ia: [null, null] };
+    // Coste de pisar cada celda: a paso normal manda la velocidad; en sigilo se prefiere lo que tapa.
+    m.coste = new Float32Array(N * N); m.costeSigilo = new Float32Array(N * N);
+    for (let c = 0; c < N * N; c++) { const t = mapa.terreno[c], v = D.PASO[t] || 1; m.coste[c] = 1 / v; m.costeSigilo[c] = Math.max(0.5, (1 / v) * (1.5 - D.COBERTURA[t])); }
     let eq = 1;
-    const equipo = (j, roles, x, y, ang) => { roles.forEach((r, i) => { const d = (i - (roles.length - 1) / 2) * 1.3, p = cerca(x + Math.cos(ang + 1.57) * d + (az() - 0.5) * 0.5, y + Math.sin(ang + 1.57) * d + (az() - 0.5) * 0.5); crear(m, 'sol', j, r, p.x, p.y, { ang: ang + (az() - 0.5) * 0.5, eq }); m.jug[j].personas++; }); eq++; };
-    const edif = (j, t, p) => p && crear(m, 'edif', j, t, p.x + 0.5, p.y + 0.5);
+    const equipo = (j, roles, x, y, ang) => { const us = new Set(); roles.forEach((r, i) => { const d = (i - (roles.length - 1) / 2) * 1.3, p = D.cercaLibre(m, x + Math.cos(ang + 1.57) * d, y + Math.sin(ang + 1.57) * d, us), s = D.SOL[r]; crear(m, 'sol', j, r, p.x, p.y, { ang, eq, vida: s.vida, vidaMax: s.vida, orden: 'nada', ruta: null, ri: 0, sigilo: false, fuego: true, recarga: 0, supr: 0, obj: 0, canal: 0, movio: false, tTiro: -999, firma: 1 }); m.jug[j].personas++; }); eq++; };
+    const edif = (j, t, p) => { if (!p) return; const e = crear(m, 'edif', j, t, p.x + 0.5, p.y + 0.5, { vida: 1 }), r = D.EDIF[t].tam >= 3 ? 1 : 0; for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) { const X = p.x + dx, Y = p.y + dy; if (X >= 0 && Y >= 0 && X < N && Y < N && (r === 0 || Math.abs(dy) < 1 || t === 'centro')) m.paso[Y * N + X] = 0; } return e; };
     const pilotos = (j, n) => { m.jug[j].pilotos = n; m.jug[j].personas += n; }; // están dentro: cuentan, pero no se ven
-    const posado = (j, t, p, i, ang) => crear(m, 'dron', j, t, p.x + 2.4 + (i % 3) * 1.5, p.y + 0.5 + (Math.floor(i / 3) - 0.5) * 1.6, { alt: 0, ang }); // en fila junto a la plataforma
+    const posado = (j, t, p, i, ang) => crear(m, 'dron', j, t, p.x + 2.4 + (i % 3) * 1.5, p.y + 0.5 + (Math.floor(i / 3) - 0.5) * 1.6, { alt: 0, ang });
     const orbita = (j, t, x, y, r) => crear(m, 'dron', j, t, x, y, { alt: D.DRON[t].alt, orbita: { x, y, r, fase: az() * TAU } });
 
     // El atacante: cuatro equipos de fuerzas especiales y solo dos pilotos.
@@ -407,13 +369,153 @@
       equipo(1, ['asaltante', 'escopetero', 'tirador', 'inhibidor'], b.x - Math.cos(f) * 4, b.y - Math.sin(f) * 4, f);
       pilotos(1, 6); orbita(1, 'recon', b.x + Math.cos(f) * 12, b.y + Math.sin(f) * 12, 11); orbita(1, 'recon', b.x + Math.cos(f) * 30, b.y + Math.sin(f) * 30, 13);
       ['fpvRadio', 'fpvRadio', 'fpvFibra', 'bombardero', 'interceptor'].forEach((t, i) => posado(1, t, b.taller, i, f)); }
-    D.tick(m); m.t--; // coloca lo que se mueve en su sitio desde el primer cuadro
+    if (op.ia) for (let j = 0; j < 2; j++) if (op.ia[j] && D.iaCrear) m.ia[j] = D.iaCrear(m, j);
+    drones(m); detectar(m);
     return m;
   };
 
+  // ---------- órdenes ----------
+  // Se dan con D.orden y se aplican al principio del tick siguiente. Van por equipos (cmd.eqs).
+  //   { t: 'mover', j, eqs, x, y }     ir a un punto (cada miembro, a su sitio alrededor)
+  //   { t: 'volar', j, eqs, obj }      ir a un edificio enemigo y colocarle la carga (lo hacen asaltantes y zapadores)
+  //   { t: 'detener', j, eqs }
+  //   { t: 'modo', j, eqs, sigilo?, fuego? }   sigilo: lento y tapado · fuego: libre (true) o contenido (false)
+  D.orden = function (m, cmd) { m.cola.push(cmd); };
+  const delEquipo = (m, j, eqs) => m.ents.filter((e) => e.clase === 'sol' && e.j === j && eqs.includes(e.eq));
+  function irA(m, u, x, y) { const r = D.ruta(m.N, m.paso, u.sigilo ? m.costeSigilo : m.coste, u.x, u.y, x, y); u.ruta = r; u.ri = 1; if (!r) u.orden = 'nada'; return !!r; }
+  function aplicar(m, cmd) {
+    if (m.fin || !cmd.eqs) return; const us = delEquipo(m, cmd.j, cmd.eqs); if (!us.length) return;
+    if (cmd.t === 'mover') { const usadas = new Set(); for (const u of us) { const p = D.cercaLibre(m, cmd.x, cmd.y, usadas); u.orden = 'mover'; u.obj = 0; u.canal = 0; irA(m, u, p.x, p.y); } }
+    else if (cmd.t === 'detener') { for (const u of us) { u.orden = 'nada'; u.ruta = null; u.obj = 0; u.canal = 0; } }
+    else if (cmd.t === 'modo') { for (const u of us) { if (cmd.sigilo !== undefined && u.sigilo !== cmd.sigilo) { u.sigilo = cmd.sigilo; if (u.ruta && u.ri < u.ruta.length) { const f = u.ruta[u.ruta.length - 1]; irA(m, u, f[0], f[1]); } } if (cmd.fuego !== undefined) u.fuego = cmd.fuego; } }
+    else if (cmd.t === 'volar') { const o = m.porId.get(cmd.obj); if (!o || o.clase !== 'edif' || o.j === cmd.j || !m.conocido[cmd.j].has(o.id)) return; const usadas = new Set(); for (const u of us) { const p = D.cercaLibre(m, o.x + (u.x > o.x ? 1.6 : -1.6), o.y + (u.y > o.y ? 1.6 : -1.6), usadas); u.orden = D.SOL[u.tipo].carga ? 'volar' : 'mover'; u.obj = D.SOL[u.tipo].carga ? o.id : 0; u.canal = 0; irA(m, u, p.x, p.y); } }
+  }
+
+  // ---------- firma y detección ----------
+  // La firma de un soldado: cuánto se le ve (1 = de pie en campo abierto). Quieto, la cobertura le tapa del todo; andando,
+  // solo en parte; en sigilo, menos; y si acaba de disparar, se le ve más que nunca.
+  function firmaDe(m, u) {
+    const cob = D.COBERTURA[m.mapa.terreno[Math.floor(u.y) * m.N + Math.floor(u.x)]];
+    let f = D.SOL[u.tipo].firma * (1 - cob * (u.movio ? ECON.andaCob : ECON.quietoCob)); if (u.movio && u.sigilo) f *= ECON.sigiloFirma; if (!u.movio && u.sigilo) f *= 0.8;
+    if (m.t - u.tTiro < ECON.tiroDelata) f = Math.max(f, ECON.firmaTiro);
+    return Math.max(0.05, f);
+  }
+  // Cada cuatro ticks: qué enemigos ve cada bando (m.visto) y qué edificios enemigos ha descubierto ya (m.conocido, no se olvida).
+  // Ven los soldados (con línea de visión, y menos de noche) y los drones de reconocimiento en vuelo (desde arriba: sin muros
+  // que estorben, pero no ven bajo techo ni a quien está quieto bajo los árboles).
+  function detectar(m) {
+    const luzF = ECON.verNoche + (1 - ECON.verNoche) * D.luz(m), N = m.N, terr = m.mapa.terreno;
+    for (const u of m.ents) if (u.clase === 'sol') u.firma = firmaDe(m, u);
+    for (let j = 0; j < 2; j++) {
+      const ve = m.visto[j]; ve.clear();
+      const ojos = [], altos = []; for (const e of m.ents) { if (e.j !== j) continue; if (e.clase === 'sol') ojos.push(e); else if (e.clase === 'dron' && e.tipo === 'recon' && e.alt) altos.push(e); }
+      for (const o of m.ents) {
+        if (o.j === j || o.clase === 'dron') continue;
+        if (o.clase === 'edif') { if (m.conocido[j].has(o.id)) continue;
+          let visto = false; for (const d of altos) if (Math.hypot(d.x - o.x, d.y - o.y) <= ECON.dronVeEdif) { visto = true; break; }
+          if (!visto) for (const s of ojos) { const dd = Math.hypot(s.x - o.x, s.y - o.y); if (dd <= ECON.verEdif * luzF && D.seVe(m.mapa, s.x, s.y, o.x, o.y)) { visto = true; break; } }
+          if (visto) { m.conocido[j].add(o.id); m.efectos.push({ tipo: 'hallado', j, id: o.id, clase: o.tipo, x: o.x, y: o.y, t: m.t }); } continue; }
+        const t = terr[Math.floor(o.y) * N + Math.floor(o.x)], techo = t === T.RUINA || t === T.MURO, arbol = t === T.BOSQUE; let visto = false;
+        for (const d of altos) { if (techo && !o.movio && m.t - o.tTiro >= ECON.tiroDelata) break; const r = ECON.dronVe * (arbol && !o.movio ? 0.4 : techo ? 0.5 : 1); if (Math.hypot(d.x - o.x, d.y - o.y) <= r) { visto = true; break; } }
+        if (!visto) for (const s of ojos) { const dd = Math.hypot(s.x - o.x, s.y - o.y), r = Math.max(1.5, D.SOL[s.tipo].ver * luzF * o.firma); if (dd <= r && D.seVe(m.mapa, s.x, s.y, o.x, o.y)) { visto = true; break; } }
+        if (visto) ve.add(o.id);
+      }
+    }
+  }
+  D.detectar = detectar;
+
+  // ---------- movimiento ----------
+  function mover(m, u) {
+    u.movio = false; if (u.supr > 0) u.supr--; if (u.recarga > 0) u.recarga--;
+    if (!u.ruta || u.ri >= u.ruta.length) { if (u.orden === 'mover') u.orden = 'nada'; return; }
+    if (u.canal > 0) return;
+    const d = D.SOL[u.tipo], t = m.mapa.terreno[Math.floor(u.y) * m.N + Math.floor(u.x)];
+    let paso = d.vel * (D.PASO[t] || 1) * (u.sigilo ? ECON.sigiloVel : 1) * (u.supr > 0 ? ECON.suprVel : 1) * (0.6 + 0.4 * (u.vida / u.vidaMax));
+    while (paso > 0 && u.ri < u.ruta.length) { const [px, py] = u.ruta[u.ri], dx = px - u.x, dy = py - u.y, L = Math.hypot(dx, dy); if (L <= paso) { u.x = px; u.y = py; u.ri++; paso -= L; } else { u.x += (dx / L) * paso; u.y += (dy / L) * paso; u.ang = Math.atan2(dy, dx); paso = 0; } u.movio = true; }
+  }
+
+  // ---------- combate ----------
+  function baja(m, u) { u.vida = 0; m.jug[u.j].personas--; m.jug[u.j].bajas++; m.efectos.push({ tipo: 'baja', x: u.x, y: u.y, j: u.j, clase: u.tipo, t: m.t }); }
+  function combatir(m, u) {
+    const a = D.ARMA[D.SOL[u.tipo].arma]; if (u.recarga > 0 || u.canal > 0) return;
+    let ob = null, md = a.alc; for (const id of m.visto[u.j]) { const o = m.porId.get(id); if (!o || o.vida <= 0) continue; const d = Math.hypot(o.x - u.x, o.y - u.y); if (d < md) { md = d; ob = o; } }
+    if (!ob) return;
+    if (!u.fuego && md > 5 && m.t - (u.tHerido || -999) > 100) return; // fuego contenido: solo de cerca o si le están dando
+    if (!D.seVe(m.mapa, u.x, u.y, ob.x, ob.y)) return;
+    u.recarga = a.cad; u.tTiro = m.t; u.ang = Math.atan2(ob.y - u.y, ob.x - u.x);
+    const cob = D.COBERTURA[m.mapa.terreno[Math.floor(ob.y) * m.N + Math.floor(ob.x)]];
+    const p = a.prec * (1 - cob * ECON.cobTiro * (ob.movio ? 0.5 : 1)) * (1 - 0.5 * (md / a.alc)) * (u.movio ? ECON.andaPrec : 1) * (u.supr > 0 ? ECON.suprPrec : 1), da = m.az() < p;
+    m.efectos.push({ tipo: 'tiro', x1: u.x, y1: u.y, x2: ob.x, y2: ob.y, da, arma: D.SOL[u.tipo].arma, j: u.j, t: m.t });
+    ob.supr = Math.max(ob.supr, ECON.supr); ob.tHerido = m.t;
+    for (const o of m.ents) if (o.clase === 'sol' && o.j === ob.j && o !== ob && Math.abs(o.x - ob.x) < 2 && Math.abs(o.y - ob.y) < 2) o.supr = Math.max(o.supr, ECON.supr * 0.6); // los de al lado también se agachan
+    if (da) { ob.vida -= a.dano * (0.8 + m.az() * 0.4); if (ob.vida <= 0) baja(m, ob); }
+  }
+  function curar(m, u) { for (const o of m.ents) if (o.clase === 'sol' && o.j === u.j && o.vida > 0 && o.vida < o.vidaMax && o.supr <= 0 && Math.hypot(o.x - u.x, o.y - u.y) <= ECON.curaRadio) o.vida = Math.min(o.vidaMax, o.vida + ECON.cura); }
+  // Colocar la carga: pegado al edificio y sin que le estén disparando, cinco segundos. Si es el centro, se acabó.
+  function volar(m, u) {
+    const o = m.porId.get(u.obj); if (!o || o.vida <= 0) { u.orden = 'nada'; u.obj = 0; u.canal = 0; return; }
+    if (Math.hypot(o.x - u.x, o.y - u.y) > ECON.cargaDist + (D.EDIF[o.tipo].tam >= 3 ? 1 : 0)) { u.canal = 0; if (!u.ruta || u.ri >= u.ruta.length) { u.orden = 'nada'; u.obj = 0; } return; }
+    u.ruta = null; if (u.supr > 0) { u.canal = Math.max(0, u.canal - 1); return; }
+    u.canal++; if (u.canal === 1) m.efectos.push({ tipo: 'cargando', x: o.x, y: o.y, j: u.j, id: o.id, t: m.t });
+    if (u.canal < ECON.cargaTicks) return;
+    o.vida = 0; m.efectos.push({ tipo: 'volado', x: o.x, y: o.y, j: u.j, de: o.j, clase: o.tipo, t: m.t });
+    for (const q of m.ents) if (q.clase === 'sol' && q.obj === o.id) { q.orden = 'nada'; q.obj = 0; q.canal = 0; }
+    if (o.tipo === 'centro') m.fin = { gana: u.j, motivo: 'centro', t: m.t };
+  }
+  function drones(m) { for (const e of m.ents) if (e.orbita) { const o = e.orbita, a = o.fase + m.t * 0.004; e.x = o.x + Math.cos(a) * o.r; e.y = o.y + Math.sin(a) * o.r * 0.7; e.ang = Math.atan2(Math.cos(a) * 0.7, -Math.sin(a)); } }
+
   D.tick = function (m) {
+    if (m.fin) return;
     m.t++;
-    for (const e of m.ents) if (e.orbita) { const o = e.orbita, a = o.fase + m.t * 0.004; e.x = o.x + Math.cos(a) * o.r; e.y = o.y + Math.sin(a) * o.r * 0.7; e.ang = Math.atan2(Math.cos(a) * 0.7, -Math.sin(a)); }
+    if (m.cola.length) { const q = m.cola; m.cola = []; for (const c of q) aplicar(m, c); }
+    for (let j = 0; j < 2; j++) if (m.ia[j] && D.iaTick) D.iaTick(m, m.ia[j]);
+    drones(m);
+    for (const u of m.ents) if (u.clase === 'sol' && u.vida > 0) mover(m, u);
+    if (m.t % 4 === 0) detectar(m);
+    for (const u of m.ents) { if (u.clase !== 'sol' || u.vida <= 0) continue; if (u.orden === 'volar') volar(m, u); combatir(m, u); if (D.SOL[u.tipo].cura && m.t % 2 === 0) curar(m, u); }
+    // Los caídos y lo volado salen del mundo.
+    let hay = false; for (const e of m.ents) if (e.vida <= 0) { hay = true; break; }
+    if (hay) { m.ents = m.ents.filter((e) => { if (e.vida > 0) return true; m.porId.delete(e.id); if (e.clase === 'edif') { const r = D.EDIF[e.tipo].tam >= 3 ? 1 : 0, cx = Math.floor(e.x), cy = Math.floor(e.y); for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) { const c = (cy + dy) * m.N + cx + dx; if (m.mapa.paso[c]) m.paso[c] = 1; } } return false; }); }
+    // El final: el atacante gana si vuela el centro; el defensor, si amanece o si al atacante no le queda quien ponga la carga.
+    if (!m.fin) {
+      if (m.t >= ECON.dia) m.fin = { gana: 1, motivo: 'amanecer', t: m.t };
+      else if (!m.ents.some((e) => e.clase === 'sol' && e.j === 0 && D.SOL[e.tipo].carga)) m.fin = { gana: 1, motivo: 'sin asalto', t: m.t };
+    }
+  };
+})();
+
+// ===== sim/ia.js =====
+// drone.warfare — el rival, provisional: lo justo para que haya partida mientras llega la IA de verdad (entrega 5).
+// El atacante avanza hacia el casco urbano, lo va registrando por puntos y, cuando alguien descubre el centro, van todos
+// a volarlo. El defensor tiene a su guardia en su puesto y manda al equipo más cercano a cortar el paso a quien ve acercarse.
+(function () {
+  const D = globalThis.D || (globalThis.D = {});
+  D.iaCrear = function (m, j) { return { j, eqs: {}, tVisto: -999 }; };
+  D.iaTick = function (m, ia) {
+    if ((m.t + ia.j * 11) % 40) return;
+    const j = ia.j, mapa = m.mapa, U = mapa.urbano, equipos = {};
+    for (const e of m.ents) if (e.clase === 'sol' && e.j === j) (equipos[e.eq] || (equipos[e.eq] = [])).push(e);
+    const vistos = []; for (const id of m.visto[j]) { const o = m.porId.get(id); if (o) vistos.push(o); }
+    for (const k in equipos) {
+      const us = equipos[k], eq = Number(k), st = ia.eqs[eq] || (ia.eqs[eq] = { paso: 0, puesto: { x: us[0].x, y: us[0].y }, tOrden: -999 });
+      const cx = us.reduce((s, u) => s + u.x, 0) / us.length, cy = us.reduce((s, u) => s + u.y, 0) / us.length, parado = us.every((u) => u.orden === 'nada');
+      let cerca = null, dc = 1e9; for (const o of vistos) { const d = Math.hypot(o.x - cx, o.y - cy); if (d < dc) { dc = d; cerca = o; } }
+      if (j === 0) { // ---- atacante ----
+        let centro = null; for (const id of m.conocido[0]) { const o = m.porId.get(id); if (o && o.tipo === 'centro') centro = o; }
+        if (cerca && dc < 11) { if (!parado && !centro) D.orden(m, { t: 'detener', j, eqs: [eq] }); if (!centro) continue; } // contacto: se planta y pelea (si ya sabe dónde está el centro, sigue)
+        if (centro) { if (parado || m.t - st.tOrden > 400) { D.orden(m, { t: 'volar', j, eqs: [eq], obj: centro.id }); st.tOrden = m.t; } continue; }
+        if (!parado && m.t - st.tOrden < 1200) continue;
+        const dentro = cx >= U.x0 && cx <= U.x1 && cy >= U.y0 && cy <= U.y1; let x, y;
+        if (st.paso === 0) { x = Math.max(U.x0 + 3, Math.min(U.x1 - 3, cx)); y = Math.max(U.y0 + 3, Math.min(U.y1 - 3, cy)); if (dentro) { x = U.x0 + 4 + m.az() * (U.x1 - U.x0 - 8); y = U.y0 + 4 + m.az() * (U.y1 - U.y0 - 8); } } // primero, al borde del pueblo
+        else { x = U.x0 + 4 + m.az() * (U.x1 - U.x0 - 8); y = U.y0 + 4 + m.az() * (U.y1 - U.y0 - 8); } // luego, a registrar: un punto al azar del casco
+        st.paso++; st.tOrden = m.t; D.orden(m, { t: 'modo', j, eqs: [eq], sigilo: dentro && D.luz(m) > 0.5 }); D.orden(m, { t: 'mover', j, eqs: [eq], x, y });
+      } else { // ---- defensor ----
+        const b = mapa.bases[1];
+        let amenaza = null, da = 28; for (const o of vistos) { const d = Math.hypot(o.x - b.x, o.y - b.y); if (d < da) { da = d; amenaza = o; } }
+        if (amenaza) { ia.tVisto = m.t; const d = Math.hypot(amenaza.x - cx, amenaza.y - cy); if (d > 10 && m.t - st.tOrden > 160) { const a = Math.atan2(b.y - amenaza.y, b.x - amenaza.x); D.orden(m, { t: 'mover', j, eqs: [eq], x: amenaza.x + Math.cos(a) * 7, y: amenaza.y + Math.sin(a) * 7 }); st.tOrden = m.t; } }
+        else if (m.t - ia.tVisto > 300 && parado && Math.hypot(st.puesto.x - cx, st.puesto.y - cy) > 4) { D.orden(m, { t: 'mover', j, eqs: [eq], x: st.puesto.x, y: st.puesto.y }); st.tOrden = m.t; }
+      }
+    }
   };
 })();
 
@@ -578,9 +680,11 @@
   const par = new URLSearchParams(location.search);
   const semilla = Number(par.get('s')) || Math.floor(Math.random() * 99999) + 1;
   const escenario = par.get('esc') === 'urbano' ? 'urbano' : 'mixto', YO = par.get('rol') === 'defensa' ? 1 : 0, elegido = par.has('rol'); // el bando 0 ataca; el 1 defiende
-  const m = (D.mundo = D.crearMundo(semilla, { noche: par.get('noche') === '1', escenario })), N = m.N, mapa = m.mapa, mio = (j) => (j === YO ? 0 : j === 1 - YO ? 1 : null);
+  const m = (D.mundo = D.crearMundo(semilla, { escenario, ia: [YO !== 0, YO !== 1], t: par.get('noche') === '1' ? D.ECON.diaLuz : undefined })), N = m.N, mapa = m.mapa, mio = (j) => (j === YO ? 0 : j === 1 - YO ? 1 : null);
   const cam = (D.cam = { x: mapa.bases[YO].x + Math.cos(mapa.bases[YO].frente) * 7, y: mapa.bases[YO].y + Math.sin(mapa.bases[YO].frente) * 7, z: 15 });
   let cw = 0, ch = 0, dpr = 1, vision = 'optica', raton = { x: -1, y: -1, dentro: false };
+  const todo = par.get('todo') === '1', sel = new Set(), fx = [], marcas = []; // todo: ver también lo que no se ha descubierto (para probar); sel: equipos seleccionados
+  let caja = null, pausa = false;
   const VISIONES = [
     ['optica', 'Óptica', 'A simple vista. De día se ve lo que no está bajo cobertura; de noche, solo lo cercano a los tuyos.'],
     ['nocturna', 'Nocturna', 'Intensificador de luz: todo en verde. No distingue bandos; los tuyos llevan una baliza que parpadea.'],
@@ -640,7 +744,7 @@
   const oscuro = document.createElement('canvas');
   function grano(n, color, a) { ctx.fillStyle = color; ctx.globalAlpha = a; for (let i = 0; i < n; i++) ctx.fillRect(Math.random() * cw, Math.random() * ch, 1.4, 1.4); ctx.globalAlpha = 1; }
   function vineta(color) { const g = ctx.createRadialGradient(cw / 2, ch / 2, ch * 0.42, cw / 2, ch / 2, Math.max(cw, ch) * 0.75); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, color); ctx.fillStyle = g; ctx.fillRect(0, 0, cw, ch); }
-  let tiempo = 0, tDib = 0, nDib = 0, cuadros = 0, tSeg = 0;
+  let tiempo = 0, tDib = 0, nDib = 0, cuadros = 0, tSeg = 0; const visibles = [];
   function dibujar() {
     const t0 = performance.now(), z = cam.z, ox = Math.round(cw / 2 - cam.x * z), oy = Math.round(ch / 2 - cam.y * z), luz = D.luz(m);
     const modo = vision === 'optica' ? (luz >= 0.5 ? 'dia' : 'noche') : vision, P = D.pintor(modo, tiempo), L = capa(modo), lado = N * z;
@@ -649,11 +753,33 @@
     if (vision === 'optica' && luz > 0 && luz < 1) { ctx.globalAlpha = modo === 'dia' ? 1 - luz : luz; ctx.drawImage(capa(modo === 'dia' ? 'noche' : 'dia').suelo, ox, oy, lado, lado); ctx.globalAlpha = 1; } // anochece y amanece: las dos capas fundidas
     const fuera = (x, y, r) => ox + (x + r) * z < 0 || oy + (y + r) * z < 0 || ox + (x - r) * z > cw || oy + (y - r) * z > ch;
     const sE = z * 0.092, sS = Math.max(0.8, z * 0.075), sD = Math.max(0.85, z * 0.082);
-    for (const e of m.ents) if (e.clase === 'edif' && !fuera(e.x, e.y, 3)) D.fig.edificio(ctx, P, ox + e.x * z, oy + e.y * z, e.tipo, mio(e.j), sE * (e.tipo === 'centro' ? 1.15 : 1));
-    for (const e of m.ents) if (e.clase === 'dron' && !e.alt && !fuera(e.x, e.y, 2)) D.fig.dron(ctx, P, ox + e.x * z, oy + e.y * z, e.ang, e.tipo, mio(e.j), sD, 0);
-    for (const e of m.ents) if (e.clase === 'sol' && !fuera(e.x, e.y, 2)) D.fig.soldado(ctx, P, ox + e.x * z, oy + e.y * z, e.ang, e.tipo, mio(e.j), sS, {});
+    // Qué se ve: lo propio siempre; del rival, los soldados que alguien tuyo está viendo, los edificios ya descubiertos y los drones que pasan cerca de los tuyos.
+    const mios = m.ents.filter((e) => e.j === YO && e.clase !== 'dron'), cercaDeMios = (e, r) => mios.some((q) => Math.abs(q.x - e.x) < r && Math.abs(q.y - e.y) < r);
+    const ve = (e) => e.j === YO || todo || (e.clase === 'sol' ? m.visto[YO].has(e.id) : e.clase === 'edif' ? m.conocido[YO].has(e.id) : cercaDeMios(e, e.alt ? 14 : 6));
+    visibles.length = 0; for (const e of m.ents) if (ve(e)) visibles.push(e);
+    for (const q of marcas) { const k = 1 - (tiempo - q.t0) / q.dur; if (k <= 0) continue; const x = ox + q.x * z, y = oy + q.y * z; ctx.globalAlpha = 0.5 * k; ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x - 4, y - 4); ctx.lineTo(x + 4, y + 4); ctx.moveTo(x + 4, y - 4); ctx.lineTo(x - 4, y + 4); ctx.stroke(); } ctx.globalAlpha = 1; // donde cayó alguien
+    for (const e of visibles) if (e.clase === 'edif' && !fuera(e.x, e.y, 3)) D.fig.edificio(ctx, P, ox + e.x * z, oy + e.y * z, e.j !== YO && e.tipo === 'falsa' && !todo ? 'antena' : e.tipo, mio(e.j), sE * (e.tipo === 'centro' ? 1.15 : 1)); // la antena falsa, para el rival, es una antena
+    for (const e of visibles) if (e.clase === 'dron' && !e.alt && !fuera(e.x, e.y, 2)) D.fig.dron(ctx, P, ox + e.x * z, oy + e.y * z, e.ang, e.tipo, mio(e.j), sD, 0);
+    // rutas y aros de lo seleccionado, debajo de las figuras
+    const COLYO = { dia: '#1f6f78', noche: '#4fb3c0', nocturna: '#e8fff0', termica: '#fff', espectro: '#39c6d6' }[modo];
+    for (const e of mios) { if (e.clase !== 'sol' || !sel.has(e.eq)) continue; const x = ox + e.x * z, y = oy + e.y * z;
+      if (e.ruta && e.ri < e.ruta.length) { ctx.strokeStyle = COLYO; ctx.globalAlpha = 0.45; ctx.lineWidth = 1; ctx.setLineDash(e.sigilo ? [2, 5] : [6, 5]); ctx.beginPath(); ctx.moveTo(x, y); for (let i = e.ri; i < e.ruta.length; i++) ctx.lineTo(ox + e.ruta[i][0] * z, oy + e.ruta[i][1] * z); ctx.stroke(); ctx.setLineDash([]); const f = e.ruta[e.ruta.length - 1]; ctx.beginPath(); ctx.arc(ox + f[0] * z, oy + f[1] * z, 2.5, 0, TAU); ctx.fillStyle = COLYO; ctx.fill(); ctx.globalAlpha = 1; }
+      ctx.strokeStyle = COLYO; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, sS * 6.5, 0, TAU); ctx.stroke(); }
+    for (const e of visibles) { if (e.clase !== 'sol' || fuera(e.x, e.y, 2)) continue; const x = ox + e.x * z, y = oy + e.y * z;
+      D.fig.soldado(ctx, P, x, y, e.ang, e.tipo, mio(e.j), sS, { anda: e.movio, oculto: e.j === YO && e.firma < 0.35 });
+      if (e.vida < e.vidaMax || (e.j === YO && sel.has(e.eq))) { const w = sS * 11, f = e.vida / e.vidaMax; ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(x - w / 2, y - sS * 9, w, 2.5); ctx.fillStyle = f < 0.35 ? '#c2552d' : modo === 'dia' ? '#4d7a38' : '#9be08a'; ctx.fillRect(x - w / 2, y - sS * 9, w * f, 2.5); }
+      if (e.supr > 0) { ctx.strokeStyle = COLYO; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(x - 4, y + sS * 7); ctx.lineTo(x, y + sS * 7 + 3); ctx.lineTo(x + 4, y + sS * 7); ctx.stroke(); } // agachado bajo el fuego
+      if (e.canal > 0) { ctx.strokeStyle = '#c2552d'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(x, y, sS * 8, -Math.PI / 2, -Math.PI / 2 + TAU * (e.canal / D.ECON.cargaTicks)); ctx.stroke(); } // poniendo la carga
+    }
     ctx.globalAlpha = modo === 'termica' ? 0.45 : modo === 'espectro' ? 0.5 : 0.93; ctx.drawImage(L.copas, ox, oy, lado, lado); ctx.globalAlpha = 1; // las copas tapan lo de debajo (a la térmica, menos)
-    for (const e of m.ents) if (e.clase === 'dron' && e.alt && !fuera(e.x, e.y, 3)) D.fig.dron(ctx, P, ox + e.x * z, oy + e.y * z, e.ang, e.tipo, mio(e.j), sD, e.alt * z * 0.6);
+    for (const e of visibles) if (e.clase === 'dron' && e.alt && !fuera(e.x, e.y, 3)) D.fig.dron(ctx, P, ox + e.x * z, oy + e.y * z, e.ang, e.tipo, mio(e.j), sD, e.alt * z * 0.6);
+    // disparos, explosiones y avisos sobre el mapa
+    for (let i = fx.length - 1; i >= 0; i--) { const q = fx[i], k = (tiempo - q.t0) / q.dur; if (k >= 1) { fx.splice(i, 1); continue; }
+      if (q.k === 'tiro') { const x1 = ox + q.x1 * z, y1 = oy + q.y1 * z, x2 = ox + q.x2 * z, y2 = oy + q.y2 * z, a = Math.min(1, k * 1.6), b = Math.max(0, a - 0.35); ctx.strokeStyle = modo === 'dia' ? '#b8862b' : '#ffe9a8'; ctx.globalAlpha = 0.9 * (1 - k); ctx.lineWidth = q.gordo ? 1.8 : 1.1; ctx.beginPath(); ctx.moveTo(x1 + (x2 - x1) * b, y1 + (y2 - y1) * b); ctx.lineTo(x1 + (x2 - x1) * a, y1 + (y2 - y1) * a); ctx.stroke(); if (k < 0.25) { ctx.fillStyle = '#ffe9a8'; ctx.beginPath(); ctx.arc(x1, y1, 2.5, 0, TAU); ctx.fill(); } if (k > 0.6) { ctx.fillStyle = q.da ? '#c2552d' : P.tinta; ctx.globalAlpha = (1 - k) * 2; ctx.beginPath(); ctx.arc(x2, y2, q.da ? 2.5 : 1.5, 0, TAU); ctx.fill(); } }
+      else if (q.k === 'anillo') { ctx.strokeStyle = q.c; ctx.globalAlpha = 1 - k; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(ox + q.x * z, oy + q.y * z, q.r * z * (0.2 + 0.8 * k), 0, TAU); ctx.stroke(); }
+      else if (q.k === 'boom') { const x = ox + q.x * z, y = oy + q.y * z; ctx.globalAlpha = 1 - k; ctx.fillStyle = k < 0.15 ? '#fff3c4' : 'rgba(90,86,78,0.7)'; ctx.beginPath(); ctx.arc(x, y, z * (0.8 + k * 3.2), 0, TAU); ctx.fill(); ctx.strokeStyle = P.tinta; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, z * (1 + k * 5), 0, TAU); ctx.stroke(); }
+      ctx.globalAlpha = 1; }
+    if (caja) { ctx.strokeStyle = COLYO; ctx.lineWidth = 1; ctx.setLineDash([4, 3]); ctx.strokeRect(Math.min(caja.x0, caja.x1), Math.min(caja.y0, caja.y1), Math.abs(caja.x1 - caja.x0), Math.abs(caja.y1 - caja.y0)); ctx.setLineDash([]); }
     if (vision === 'optica' && luz < 1) { // la noche: oscuridad con claros alrededor de lo tuyo
       if (oscuro.width !== lienzo.width || oscuro.height !== lienzo.height) { oscuro.width = lienzo.width; oscuro.height = lienzo.height; }
       const o = oscuro.getContext('2d'); o.setTransform(dpr, 0, 0, dpr, 0, 0); o.globalCompositeOperation = 'source-over'; o.clearRect(0, 0, cw, ch); o.fillStyle = 'rgba(6,9,16,' + (0.86 * (1 - luz)).toFixed(3) + ')'; o.fillRect(0, 0, cw, ch); o.globalCompositeOperation = 'destination-out';
@@ -669,8 +795,8 @@
   function emisiones(z, ox, oy) { // lo que emite por radio: anillos; el enlace de cada dron con su antena; la burbuja del inhibidor
     const COL = ['#39c6d6', '#ff8a4c'], anillo = (x, y, r, c, n) => { for (let i = 0; i < n; i++) { const k = (tiempo * 0.5 + i / n) % 1; ctx.strokeStyle = c; ctx.globalAlpha = 0.75 * (1 - k); ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(x, y, r * k, 0, TAU); ctx.stroke(); } ctx.globalAlpha = 1; };
     ctx.strokeStyle = 'rgba(57,198,214,0.08)'; ctx.lineWidth = 1; ctx.beginPath(); const p = 5 * z; for (let x = ((ox % p) + p) % p; x < cw; x += p) { ctx.moveTo(x, 0); ctx.lineTo(x, ch); } for (let y = ((oy % p) + p) % p; y < ch; y += p) { ctx.moveTo(0, y); ctx.lineTo(cw, y); } ctx.stroke();
-    const antenas = [[], []]; for (const e of m.ents) if (e.clase === 'edif' && e.tipo === 'antena') { antenas[e.j].push(e); anillo(ox + e.x * z, oy + e.y * z, 16 * z, COL[mio(e.j)], 4); }
-    for (const e of m.ents) {
+    const antenas = [[], []]; for (const e of visibles) if (e.clase === 'edif' && (e.tipo === 'antena' || (e.tipo === 'falsa' && e.j !== YO && !todo))) { if (e.tipo === 'falsa') continue; antenas[e.j].push(e); anillo(ox + e.x * z, oy + e.y * z, 16 * z, COL[mio(e.j)], 4); }
+    for (const e of visibles) {
       if (e.clase === 'dron' && e.alt && D.DRON[e.tipo].radio) { const x = ox + e.x * z, y = oy + e.y * z; let a = null; for (const q of antenas[e.j]) if (!a || Math.hypot(q.x - e.x, q.y - e.y) < Math.hypot(a.x - e.x, a.y - e.y)) a = q; anillo(x, y, 2 * z, COL[mio(e.j)], 2); if (a) { ctx.setLineDash([4, 6]); ctx.strokeStyle = COL[mio(e.j)]; ctx.globalAlpha = 0.7; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(ox + a.x * z, oy + a.y * z); ctx.lineTo(x, y); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1; } }
       if (e.clase === 'sol' && e.tipo === 'inhibidor') { const x = ox + e.x * z, y = oy + e.y * z, r = 6 * z; ctx.save(); ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.clip(); ctx.strokeStyle = COL[mio(e.j)]; ctx.globalAlpha = 0.3; ctx.lineWidth = 1; ctx.beginPath(); for (let i = -r * 2; i < r * 2; i += 9) { ctx.moveTo(x + i, y - r); ctx.lineTo(x + i - r, y + r); } ctx.stroke(); ctx.restore(); ctx.globalAlpha = 1; ctx.strokeStyle = COL[mio(e.j)]; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.stroke(); }
     }
@@ -688,52 +814,103 @@
     ctx.globalAlpha = 1;
   }
 
-  // ---------- panel ----------
+  // ---------- lo que pasa en el mundo: de los avisos de la simulación a dibujo y texto ----------
   let tAviso = 0;
-  function aviso(txt) { const a = $('aviso'); a.textContent = txt; a.classList.add('ver'); tAviso = performance.now() + 2200; }
+  function aviso(txt) { const a = $('aviso'); a.textContent = txt; a.classList.add('ver'); tAviso = performance.now() + 2600; }
+  const nomDe = (clase) => (D.EDIF[clase] || D.SOL[clase] || D.DRON[clase]).nombre.toLowerCase();
+  function sucesos() {
+    for (const d of m.efectos) {
+      const veo = (x, y) => todo || mios().some((q) => Math.abs(q.x - x) < 16 && Math.abs(q.y - y) < 16);
+      if (d.tipo === 'tiro') { if (d.j === YO || veo(d.x1, d.y1) || veo(d.x2, d.y2)) { const fallo = d.da ? 0 : 0.5; fx.push({ k: 'tiro', x1: d.x1, y1: d.y1, x2: d.x2 + (Math.random() - 0.5) * fallo, y2: d.y2 + (Math.random() - 0.5) * fallo, da: d.da, gordo: d.arma === 'rifle' || d.arma === 'escopeta', t0: tiempo, dur: d.arma === 'rifle' ? 0.45 : 0.28 }); } }
+      else if (d.tipo === 'baja') { if (d.j === YO) aviso('Baja: ' + nomDe(d.clase)); if (d.j === YO || veo(d.x, d.y)) marcas.push({ x: d.x, y: d.y, t0: tiempo, dur: 40 }); }
+      else if (d.tipo === 'hallado' && d.j === YO) { aviso(d.clase === 'centro' ? '¡Centro de operaciones localizado! Clic derecho sobre él para volarlo' : 'Descubierto: ' + (d.clase === 'falsa' ? 'antena' : nomDe(d.clase))); fx.push({ k: 'anillo', x: d.x, y: d.y, r: 4, c: '#c2552d', t0: tiempo, dur: 1.4 }); }
+      else if (d.tipo === 'cargando') { if (d.j !== YO) aviso('¡Te están poniendo una carga!'); fx.push({ k: 'anillo', x: d.x, y: d.y, r: 3, c: '#c2552d', t0: tiempo, dur: 1 }); }
+      else if (d.tipo === 'volado') { fx.push({ k: 'boom', x: d.x, y: d.y, t0: tiempo, dur: 1.6 }); aviso((d.de === YO ? 'Has perdido: ' : 'Volado: ') + nomDe(d.clase)); }
+    }
+    m.efectos.length = 0; if (marcas.length > 60) marcas.splice(0, marcas.length - 60);
+  }
+  const mios = () => m.ents.filter((e) => e.j === YO && e.clase === 'sol');
+  const equipos = () => { const o = new Map(); for (const e of m.ents) if (e.j === YO && e.clase === 'sol') { if (!o.has(e.eq)) o.set(e.eq, []); o.get(e.eq).push(e); } return o; };
+
+  // ---------- panel ----------
   function ponVision(v) { vision = v; for (const b of document.querySelectorAll('#visiones button')) b.classList.toggle('on', b.dataset.v === v); $('notaVision').textContent = VISIONES.find((x) => x[0] === v)[2]; }
   VISIONES.forEach(([v, n], i) => { const b = document.createElement('button'); b.type = 'button'; b.dataset.v = v; b.innerHTML = '<span>' + n + '</span><kbd>' + (i + 1) + '</kbd>'; b.addEventListener('click', () => ponVision(v)); $('visiones').appendChild(b); });
   const ir = (rol, esc, s) => { location.search = '?rol=' + rol + '&esc=' + esc + '&s=' + s; };
   $('semilla').textContent = m.semilla + ' · ' + escenario; $('semilla').addEventListener('click', (ev) => { ev.preventDefault(); ir(D.ROL[YO].clave, escenario, Math.floor(Math.random() * 99999) + 1); });
-  $('rol').textContent = D.ROL[YO].nombre; $('rolQue').textContent = D.ROL[YO].que; $('cambia').addEventListener('click', () => { $('menu').hidden = false; });
+  $('rol').textContent = D.ROL[YO].nombre; $('rolQue').textContent = YO === 0 ? 'Encuentra el centro de operaciones enemigo y vuélalo antes de que amanezca.' : 'Que tu centro siga en pie cuando amanezca.';
+  $('cambia').addEventListener('click', () => { $('menu').hidden = false; });
   { // el menú de inicio: primero se elige el papel
-    let esc = escenario; const caja = $('menuRoles'), cajaE = $('menuEsc');
-    D.ROL.forEach((r) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'rol'; b.innerHTML = '<b>' + r.nombre + '</b><span>' + r.que + '</span>'; b.addEventListener('click', () => ir(r.clave, esc, elegido ? m.semilla : Math.floor(Math.random() * 99999) + 1)); caja.appendChild(b); });
+    let esc = escenario; const cajaR = $('menuRoles'), cajaE = $('menuEsc');
+    D.ROL.forEach((r) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'rol'; b.innerHTML = '<b>' + r.nombre + '</b><span>' + r.que + '</span>'; b.addEventListener('click', () => ir(r.clave, esc, Math.floor(Math.random() * 99999) + 1)); cajaR.appendChild(b); });
     for (const k in D.ESCENARIO) { const b = document.createElement('button'); b.type = 'button'; b.dataset.e = k; b.textContent = D.ESCENARIO[k]; b.classList.toggle('on', k === esc); b.addEventListener('click', () => { esc = k; for (const q of cajaE.children) q.classList.toggle('on', q.dataset.e === k); }); cajaE.appendChild(b); }
     $('menu').hidden = elegido; $('menuCierra').hidden = !elegido; $('menuCierra').addEventListener('click', () => { $('menu').hidden = true; });
   }
-  function saltaHora() { const E = D.ECON, h = m.t % E.dia; m.t += h < E.diaLuz - E.crepusculo ? E.diaLuz - E.crepusculo - h : E.dia - h; aviso(h < E.diaLuz - E.crepusculo ? 'Anochece' : 'Amanece'); }
-  $('saltaHora').addEventListener('click', saltaHora);
+  const mmss = (ticks) => { const s = Math.ceil(ticks / 20); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+  const orden = (o) => { if (sel.size) D.orden(m, Object.assign({ j: YO, eqs: [...sel] }, o)); };
+  const seleccionados = () => mios().filter((e) => sel.has(e.eq));
+  function alterna(que) { const us = seleccionados(); if (!us.length) return; const v = !us.every((u) => u[que]); orden({ t: 'modo', [que]: v }); aviso(que === 'sigilo' ? (v ? 'Sigilo: despacio y por lo tapado' : 'Paso normal') : v ? 'Fuego libre' : 'Fuego contenido: solo de cerca o si les dan'); }
+  $('bSigilo').addEventListener('click', () => alterna('sigilo')); $('bFuego').addEventListener('click', () => alterna('fuego')); $('bAlto').addEventListener('click', () => orden({ t: 'detener' }));
+  $('equipos').addEventListener('click', (ev) => { const b = ev.target.closest('[data-eq]'); if (!b) return; const eq = Number(b.dataset.eq); if (!ev.shiftKey) sel.clear(); sel.add(eq); const us = mios().filter((e) => e.eq === eq); if (us.length && !ev.shiftKey) { cam.x = us[0].x; cam.y = us[0].y; } firmaP = ''; });
+  $('otra').addEventListener('click', () => ir(D.ROL[YO].clave, escenario, Math.floor(Math.random() * 99999) + 1)); $('otraRol').addEventListener('click', () => ir(D.ROL[1 - YO].clave, escenario, m.semilla));
+  let firmaP = '';
   function panel() {
-    const noche = D.luz(m) < 0.5; $('hora').textContent = D.hora(m) + (noche ? ' · noche' : ' · día'); $('pers').textContent = m.jug[YO].personas + ' / ' + D.ECON.tope[YO] + ' · pilotos ' + m.jug[YO].pilotos;
-    $('saltaHora').firstChild.textContent = noche ? 'pasar al día' : 'pasar a la noche';
-    let h = 'Pasa el cursor por el sector.';
+    const noche = D.luz(m) < 0.5; $('hora').textContent = D.hora(m) + (noche ? ' · noche' : ' · día'); $('amanece').textContent = mmss(D.faltaAmanecer(m));
+    $('pers').textContent = m.jug[YO].personas + ' / ' + D.ECON.tope[YO] + ' · bajas ' + m.jug[YO].bajas;
+    // equipos: una línea por equipo; los seleccionados, con sus miembros
+    const eqs = equipos(); for (const eq of [...sel]) if (!eqs.has(eq)) sel.delete(eq);
+    let h = ''; for (const [eq, us] of eqs) { const on = sel.has(eq), visto = us.some((u) => m.visto[1 - YO].has(u.id));
+      h += '<div class="eq' + (on ? ' on' : '') + '" data-eq="' + eq + '"><b>Equipo ' + eq + '</b> · ' + us.length + (us[0].sigilo ? ' · sigilo' : '') + (us[0].fuego ? '' : ' · fuego contenido') + (us.some((u) => u.supr > 0) ? ' · <i>bajo fuego</i>' : '') + (visto ? ' · <i>localizado</i>' : '');
+      if (on) for (const u of us) h += '<div class="mi"><span>' + D.SOL[u.tipo].nombre + '</span><span class="tenue">firma ' + Math.round(Math.min(1.4, u.firma) * 100) + ' %</span><i><b style="width:' + Math.round((u.vida / u.vidaMax) * 100) + '%"' + (u.vida / u.vidaMax < 0.35 ? ' class="mal"' : '') + '></b></i></div>';
+      h += '</div>'; }
+    if (!h) h = '<div class="tenue">No te queda nadie en el campo.</div>';
+    if (h !== firmaP) { firmaP = h; $('equipos').innerHTML = h; }
+    const us = seleccionados(); $('ordenes').hidden = !us.length; if (us.length) { $('bSigilo').classList.toggle('on', us.every((u) => u.sigilo)); $('bFuego').classList.toggle('on', !us.every((u) => u.fuego)); }
+    let b = 'Pasa el cursor por el sector.';
     if (raton.dentro) {
       const x = cam.x + (raton.x - cw / 2) / cam.z, y = cam.y + (raton.y - ch / 2) / cam.z; let mejor = null, md = 1.1;
-      for (const e of m.ents) { const d = Math.hypot(e.x - x, e.y - y) / (e.clase === 'edif' ? 1.6 : 1); if (d < md) { md = d; mejor = e; } }
-      for (const t of mapa.tubos) for (const b of [t.a, t.b]) if (Math.hypot(b.x - x, b.y - y) < md) { md = Math.hypot(b.x - x, b.y - y); mejor = { clase: 'edif', tipo: 'boca', j: -1 }; }
-      if (mejor) { const d = (mejor.clase === 'sol' ? D.SOL : mejor.clase === 'dron' ? D.DRON : D.EDIF)[mejor.tipo]; h = '<b style="color:' + (mejor.j === YO ? 'var(--yo)' : mejor.j === 1 - YO ? 'var(--rival)' : 'var(--tinta)') + '">' + d.nombre + (mejor.j === YO ? ' · tuyo' : mejor.j === 1 - YO ? ' · rival' : '') + '</b>' + d.que + (mejor.eq ? '<br>equipo ' + mejor.eq : '') + (d.proto ? '' : '<br><i>llega en la segunda tanda</i>'); }
-      else if (x >= 0 && y >= 0 && x < N && y < N) { const t = mapa.terreno[Math.floor(y) * N + Math.floor(x)], cb = D.COBERTURA[t]; h = '<b style="color:var(--tinta)">' + D.TERRENO[t] + '</b>' + (mapa.paso[Math.floor(y) * N + Math.floor(x)] ? 'se pasa a pie' : 'no se pasa') + ' · cobertura ' + Math.round(cb * 100) + ' %'; }
+      for (const e of visibles) { const d = Math.hypot(e.x - x, e.y - y) / (e.clase === 'edif' ? 1.6 : 1); if (d < md) { md = d; mejor = e; } }
+      for (const t of mapa.tubos) for (const q of [t.a, t.b]) if (Math.hypot(q.x - x, q.y - y) < md) { md = Math.hypot(q.x - x, q.y - y); mejor = { clase: 'edif', tipo: 'boca', j: -1 }; }
+      if (mejor) { const tipo = mejor.j === 1 - YO && mejor.tipo === 'falsa' && !todo ? 'antena' : mejor.tipo, d = (mejor.clase === 'sol' ? D.SOL : mejor.clase === 'dron' ? D.DRON : D.EDIF)[tipo]; b = '<b style="color:' + (mejor.j === YO ? 'var(--yo)' : mejor.j === 1 - YO ? 'var(--rival)' : 'var(--tinta)') + '">' + d.nombre + (mejor.j === YO ? ' · tuyo' : mejor.j === 1 - YO ? ' · rival' : '') + '</b>' + d.que + (mejor.clase === 'sol' ? '<br>' + D.ARMA[d.arma].nombre + (mejor.j === YO ? ' · equipo ' + mejor.eq : '') : ''); }
+      else if (x >= 0 && y >= 0 && x < N && y < N) { const t = mapa.terreno[Math.floor(y) * N + Math.floor(x)]; b = '<b style="color:var(--tinta)">' + D.TERRENO[t] + '</b>' + (mapa.paso[Math.floor(y) * N + Math.floor(x)] ? 'se pasa a pie' : 'no se pasa') + ' · cobertura ' + Math.round(D.COBERTURA[t] * 100) + ' %'; }
     }
-    if ($('bajo').innerHTML !== h) $('bajo').innerHTML = h;
+    if ($('bajo').innerHTML !== b) $('bajo').innerHTML = b;
+    if (m.fin && $('fin').hidden) { const gano = m.fin.gana === YO, por = { centro: 'El centro de operaciones ha volado.', amanecer: 'Ha amanecido y el centro sigue en pie.', 'sin asalto': 'Al atacante no le queda nadie que pueda poner la carga.' }[m.fin.motivo]; $('finT').textContent = gano ? 'Victoria' : 'Derrota'; $('finQ').textContent = por + ' Bajas: ' + m.jug[YO].bajas + ' tuyas, ' + m.jug[1 - YO].bajas + ' del rival.'; $('fin').hidden = false; }
   }
 
   // ---------- entrada ----------
   const teclas = new Set();
   function medir() { dpr = Math.min(2, window.devicePixelRatio || 1); const r = lienzo.getBoundingClientRect(); cw = Math.max(1, r.width); ch = Math.max(1, r.height); lienzo.width = Math.round(cw * dpr); lienzo.height = Math.round(ch * dpr); }
   const limita = () => { cam.z = Math.max(5, Math.min(44, cam.z)); cam.x = Math.max(0, Math.min(N, cam.x)); cam.y = Math.max(0, Math.min(N, cam.y)); };
+  const aMundo = (px, py) => ({ x: cam.x + (px - cw / 2) / cam.z, y: cam.y + (py - ch / 2) / cam.z });
   addEventListener('resize', medir);
   addEventListener('keydown', (ev) => {
     if (ev.metaKey || ev.ctrlKey) return; teclas.add(ev.code);
-    if (ev.code === 'Digit1' || ev.code === 'Digit2' || ev.code === 'Digit3' || ev.code === 'Digit4') ponVision(VISIONES[Number(ev.code.slice(5)) - 1][0]);
-    else if (ev.code === 'KeyN') saltaHora(); else if (ev.code === 'KeyH') { cam.x = mapa.bases[YO].x; cam.y = mapa.bases[YO].y; }
+    if (/^Digit[1-4]$/.test(ev.code)) ponVision(VISIONES[Number(ev.code.slice(5)) - 1][0]);
+    else if (ev.code === 'KeyH') { cam.x = mapa.bases[YO].x; cam.y = mapa.bases[YO].y; }
+    else if (ev.code === 'KeyC') alterna('sigilo'); else if (ev.code === 'KeyF') alterna('fuego'); else if (ev.code === 'KeyX') orden({ t: 'detener' });
+    else if (ev.code === 'Escape') { sel.clear(); firmaP = ''; } else if (ev.code === 'KeyP') { pausa = !pausa; aviso(pausa ? 'Pausa' : 'Sigue'); }
+    else if (ev.code === 'Tab') { ev.preventDefault(); const ids = [...equipos().keys()]; if (ids.length) { const i = ids.indexOf([...sel][0]); sel.clear(); const eq = ids[(i + 1) % ids.length]; sel.add(eq); const u = mios().find((e) => e.eq === eq); cam.x = u.x; cam.y = u.y; firmaP = ''; } }
     if (ev.code.startsWith('Arrow') || ev.code === 'Space') ev.preventDefault();
   });
   addEventListener('keyup', (ev) => teclas.delete(ev.code)); addEventListener('blur', () => teclas.clear());
   let arrastre = null;
-  lienzo.addEventListener('pointerdown', (ev) => { arrastre = { x: ev.clientX, y: ev.clientY, cx: cam.x, cy: cam.y }; lienzo.setPointerCapture(ev.pointerId); });
-  lienzo.addEventListener('pointermove', (ev) => { const r = lienzo.getBoundingClientRect(); raton.x = ev.clientX - r.left; raton.y = ev.clientY - r.top; raton.dentro = true; if (arrastre) { cam.x = arrastre.cx - (ev.clientX - arrastre.x) / cam.z; cam.y = arrastre.cy - (ev.clientY - arrastre.y) / cam.z; limita(); } });
-  lienzo.addEventListener('pointerup', () => { arrastre = null; }); lienzo.addEventListener('pointercancel', () => { arrastre = null; }); lienzo.addEventListener('pointerleave', () => { raton.dentro = false; });
+  lienzo.addEventListener('pointerdown', (ev) => {
+    const r = lienzo.getBoundingClientRect(), px = ev.clientX - r.left, py = ev.clientY - r.top; lienzo.setPointerCapture(ev.pointerId);
+    if (ev.button === 1 || (ev.button === 0 && teclas.has('Space'))) arrastre = { x: ev.clientX, y: ev.clientY, cx: cam.x, cy: cam.y }; // desplazar: botón central o Espacio + arrastrar
+    else if (ev.button === 0) caja = { x0: px, y0: py, x1: px, y1: py, mayus: ev.shiftKey };
+    else if (ev.button === 2 && sel.size && !m.fin) { // la orden: sobre un edificio enemigo descubierto, volarlo; si no, ir allí
+      const p = aMundo(px, py); let ob = null, md = 1.8; for (const e of m.ents) if (e.clase === 'edif' && e.j !== YO && m.conocido[YO].has(e.id)) { const d = Math.hypot(e.x - p.x, e.y - p.y); if (d < md) { md = d; ob = e; } }
+      if (ob) { if (seleccionados().some((u) => D.SOL[u.tipo].carga)) { orden({ t: 'volar', obj: ob.id }); fx.push({ k: 'anillo', x: ob.x, y: ob.y, r: 2.5, c: '#c2552d', t0: tiempo, dur: 0.7 }); } else aviso('En ese equipo nadie lleva carga: hace falta un asaltante o un zapador'); }
+      else if (p.x >= 0 && p.y >= 0 && p.x < N && p.y < N) { if (!m.paso[Math.floor(p.y) * N + Math.floor(p.x)]) aviso('Ahí no se puede pisar: irán a lo más cercano'); orden({ t: 'mover', x: p.x, y: p.y }); fx.push({ k: 'anillo', x: p.x, y: p.y, r: 1.2, c: '#1f6f78', t0: tiempo, dur: 0.5 }); }
+    }
+  });
+  lienzo.addEventListener('pointermove', (ev) => { const r = lienzo.getBoundingClientRect(); raton.x = ev.clientX - r.left; raton.y = ev.clientY - r.top; raton.dentro = true; if (arrastre) { cam.x = arrastre.cx - (ev.clientX - arrastre.x) / cam.z; cam.y = arrastre.cy - (ev.clientY - arrastre.y) / cam.z; limita(); } if (caja) { caja.x1 = raton.x; caja.y1 = raton.y; } });
+  lienzo.addEventListener('pointerup', () => {
+    arrastre = null; if (!caja) return; const c = caja; caja = null; if (!c.mayus) sel.clear(); firmaP = '';
+    if (Math.abs(c.x1 - c.x0) < 6 && Math.abs(c.y1 - c.y0) < 6) { const p = aMundo(c.x1, c.y1); let mejor = null, md = 1.4; for (const e of mios()) { const d = Math.hypot(e.x - p.x, e.y - p.y); if (d < md) { md = d; mejor = e; } } if (mejor) sel.add(mejor.eq); } // un clic: el equipo del soldado tocado
+    else { const a = aMundo(Math.min(c.x0, c.x1), Math.min(c.y0, c.y1)), b = aMundo(Math.max(c.x0, c.x1), Math.max(c.y0, c.y1)); for (const e of mios()) if (e.x >= a.x && e.x <= b.x && e.y >= a.y && e.y <= b.y) sel.add(e.eq); } // una caja: los equipos con alguien dentro
+  });
+  lienzo.addEventListener('pointercancel', () => { arrastre = null; caja = null; }); lienzo.addEventListener('pointerleave', () => { raton.dentro = false; });
   lienzo.addEventListener('contextmenu', (ev) => ev.preventDefault());
   lienzo.addEventListener('wheel', (ev) => { ev.preventDefault(); const r = lienzo.getBoundingClientRect(), px = ev.clientX - r.left - cw / 2, py = ev.clientY - r.top - ch / 2, wx = cam.x + px / cam.z, wy = cam.y + py / cam.z; cam.z *= Math.exp(-ev.deltaY * 0.0012); limita(); cam.x = wx - px / cam.z; cam.y = wy - py / cam.z; limita(); }, { passive: false });
 
@@ -743,8 +920,8 @@
     const dt = Math.min(100, ahora - antes); antes = ahora; tiempo += dt / 1000;
     const v = (dt / 1000) * 26 * (14 / cam.z + 0.4);
     if (teclas.has('KeyW') || teclas.has('ArrowUp')) cam.y -= v; if (teclas.has('KeyS') || teclas.has('ArrowDown')) cam.y += v; if (teclas.has('KeyA') || teclas.has('ArrowLeft')) cam.x -= v; if (teclas.has('KeyD') || teclas.has('ArrowRight')) cam.x += v; limita();
-    deuda += dt; let n = 0; while (deuda >= 50 && n < 4) { const t0 = performance.now(); D.tick(m); tSim += performance.now() - t0; nSim++; deuda -= 50; n++; } if (deuda > 200) deuda = 0;
-    dibujar(); cuadros++;
+    if (!pausa && $('menu').hidden) { deuda += dt; let n = 0; while (deuda >= 50 && n < 4) { const t0 = performance.now(); D.tick(m); tSim += performance.now() - t0; nSim++; deuda -= 50; n++; } if (deuda > 200) deuda = 0; }
+    sucesos(); dibujar(); cuadros++;
     if (ahora - tSeg >= 1000) { $('rend').textContent = cuadros + ' cuadros/s · dibujo ' + (tDib / Math.max(1, nDib)).toFixed(2).replace('.', ',') + ' ms · simulación ' + (tSim / Math.max(1, nSim)).toFixed(3).replace('.', ',') + ' ms/tick'; cuadros = 0; tDib = 0; nDib = 0; tSim = 0; nSim = 0; tSeg = ahora; panel(); }
     else if (cuadros % 6 === 0) panel();
     if (tAviso && ahora > tAviso) { $('aviso').classList.remove('ver'); tAviso = 0; }
