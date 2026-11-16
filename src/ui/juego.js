@@ -266,7 +266,7 @@
     let dtCuadro = 16;
     function parte(k, x, y, vx, vy, vida, s, o) { if (parts.length > 2600) parts.shift(); const q = { k, x, y, vx, vy, v: 0, m: vida, s }; if (o) Object.assign(q, o); parts.push(q); }
     // La rodada de un vehículo: un trazo por cada lado, del punto anterior al actual (así las curvas salen seguidas). o: de oruga (trazo a rayas).
-    function rodada(x0, y0, a0, x, y, ang, s, o) { if (suelo.length > 700) suelo.shift(); suelo.push({ k: 'rodada', x, y, x0, y0, a0, ang, s, o, t0: performance.now(), dur: 22000 }); }
+    function rodada(x0, y0, a0, x, y, ang, s, o) { if (suelo.length > 700) suelo.shift(); suelo.push({ k: 'rodada', x, y, x0, y0, a0, ang, s, o, b: conRed && W.clima(m) > 0, t0: performance.now(), dur: 22000 }); } // (b: con lluvia, la rodada es de barro)
     const pisadas = []; // las de la infantería, aparte: son muchas y cortas, y no deben echar de la lista a cráteres y rodadas
     const ORUGA = new Set(['tanque', 'pesado', 'antiaereoMovil', 'artilleria', 'excavadora', 'lanzacohetes']);
     const muelleDe = (g, k, obj, rig, fr, dt) => { const v = (g[k + 'v'] || 0) + ((obj - (g[k] || 0)) * rig - (g[k + 'v'] || 0) * fr) * dt; g[k + 'v'] = v; return (g[k] = (g[k] || 0) + v * dt); }; // muelle amortiguado: lo que da el peso
@@ -814,7 +814,10 @@
       }
 
       const barras = [], signos = [], iconos = [], tiempo = performance.now();
-      const so = z * 0.13; // desplazamiento de las sombras
+      // La luz: el sol sale por el este y se pone por el oeste, así que la sombra gira y se alarga a lo largo del día; de noche, la de la luna, corta y tenue.
+      const fDia = m.t % W.ECON.dia, luzD = W.luz(m), hd = fDia < W.ECON.diaLuz ? fDia / W.ECON.diaLuz : fDia >= W.ECON.dia - 600 ? 0 : 1, cs = Math.cos(Math.PI * hd);
+      const svx = 0.7 + (-cs - 0.7) * luzD, svy = 0.75, sl = 0.8 + (0.75 + 1.1 * Math.abs(cs) - 0.8) * luzD, SOX = z * 0.13 * svx * sl, SOY = z * 0.13 * svy * sl, sombraCol = 'rgba(0,0,0,' + (0.17 * (0.5 + 0.5 * luzD)).toFixed(3) + ')';
+      const nL = Math.hypot(svx, svy), LUX = -svx / nL, LUY = -svy / nL, luces = []; // de dónde viene la luz; y las luces que se encienden de noche: [x, y, rumbo, clase, radio]
 
       // Marcas en el suelo: quemaduras, huellas de oruga, restos y ruinas, que se van borrando.
       for (let i = suelo.length - 1; i >= 0; i--) {
@@ -830,7 +833,7 @@
         }
         else if (q.k === 'rodada') {
           const c0 = Math.cos(q.a0), s0 = Math.sin(q.a0), c1 = Math.cos(q.ang), s1 = Math.sin(q.ang), w = q.s * z, X0 = ox + q.x0 * z, Y0 = oy + q.y0 * z, raya = q.o && z >= 40; // el dibujo de la oruga, solo de cerca
-          ctx.globalAlpha = 0.12 * a; ctx.strokeStyle = P.tinta; ctx.lineWidth = Math.max(1, z * 0.1); if (raya) ctx.setLineDash([z * 0.05, z * 0.045]); ctx.beginPath();
+          ctx.globalAlpha = (q.b ? 0.3 : 0.12) * a; ctx.strokeStyle = q.b ? '#6b5a40' : P.tinta; ctx.lineWidth = Math.max(1, z * (q.b ? 0.13 : 0.1)); if (raya) ctx.setLineDash([z * 0.05, z * 0.045]); ctx.beginPath();
           ctx.moveTo(X0 - s0 * w, Y0 + c0 * w); ctx.lineTo(sx - s1 * w, sy + c1 * w); ctx.moveTo(X0 + s0 * w, Y0 - c0 * w); ctx.lineTo(sx + s1 * w, sy - c1 * w); ctx.stroke(); if (raya) ctx.setLineDash([]);
         }
         else if (q.k === 'huella') {
@@ -904,10 +907,11 @@
         else if (EDIF[e.tipo].arma) { est.ang = giro(e).t; est.retro = retroceso(e, EDIF[e.tipo].arma); }
         const h = lod ? ALTO[e.tipo] * z : 0, redondo = e.tipo === 'torreta' || e.tipo === 'antiaerea' || e.tipo === 'torretaMuro'; // altura en píxeles
         if (lod) { // sombra: cae hacia el sureste, más larga cuanto más alto el edificio
-          const sx = so + h * 0.75, sy = so + h * 0.45;
-          ctx.fillStyle = 'rgba(0,0,0,0.17)'; ctx.beginPath();
-          if (redondo) { ctx.arc(px + t / 2 + sx, py + t / 2 + sy, t * 0.47, 0, TAU); ctx.moveTo(px + t / 2, py + t / 2 + t * 0.47); ctx.lineTo(px + t / 2 + sx, py + t / 2 + sy + t * 0.47); ctx.lineTo(px + t / 2 + sx + t * 0.47, py + t / 2 + sy); ctx.lineTo(px + t / 2 + t * 0.47, py + t / 2); }
-          else { ctx.moveTo(px + 1, py + t); ctx.lineTo(px + t, py + t); ctx.lineTo(px + t, py + 1); ctx.lineTo(px + t + sx, py + 1 + sy); ctx.lineTo(px + t + sx, py + t + sy); ctx.lineTo(px + 1 + sx, py + t + sy); }
+          const sx = SOX + h * 0.6 * svx * sl, sy = SOY + h * 0.6 * svy * sl;
+          ctx.fillStyle = sombraCol; ctx.beginPath();
+          if (redondo) { const R = t * 0.47, cx = px + t / 2, cy = py + t / 2, n = Math.hypot(sx, sy) || 1, nx = -sy / n * R, ny = sx / n * R; ctx.arc(cx + sx, cy + sy, R, 0, TAU); ctx.moveTo(cx + nx, cy + ny); ctx.lineTo(cx + sx + nx, cy + sy + ny); ctx.lineTo(cx + sx - nx, cy + sy - ny); ctx.lineTo(cx - nx, cy - ny); }
+          else { const x0 = px + 1, x1 = px + t, y0 = py + 1, y1 = py + t; ctx.rect(x0 + sx, y0 + sy, x1 - x0, y1 - y0); // la sombra del tejado y, entre ella y el edificio, las de sus cuatro esquinas
+            for (const [ax, ay, bx, by] of [[x0, y0, x1, y1], [x1, y0, x0, y1]]) { ctx.moveTo(ax, ay); ctx.lineTo(ax + sx, ay + sy); ctx.lineTo(bx + sx, by + sy); ctx.lineTo(bx, by); } }
           ctx.closePath(); ctx.fill();
         }
         const edadObra = e.nace > 0 ? (m.t - e.nace + alfa) / 30 : 1; // recién colocado: se levanta de abajo arriba
@@ -1002,10 +1006,10 @@
         const d = UNID[e.tipo], px = ox + wx * z, py = oy + wy * z, r = Math.max(2, d.radio * z * (e.enTierra ? 0.72 : 1)), g = giro(e); // posado se ve más pequeño: está abajo
         const anda = (e.x - e.px) ** 2 + (e.y - e.py) ** 2 > 1e-6;
         if (lod) { // sombra
-          ctx.fillStyle = 'rgba(0,0,0,0.17)'; ctx.beginPath();
+          ctx.fillStyle = sombraCol; ctx.beginPath();
           const alto = d.aire && !e.enTierra ? r * 1.5 : 0; // la sombra de un avión cae lejos: vuela
           if (alto) ctx.fillStyle = 'rgba(0,0,0,0.12)';
-          ctx.ellipse(px + so * 0.8 + alto, py + so * 0.8 + alto, r * (d.cat === 'inf' ? 1.1 : 1.45), r * 1.1, g.a, 0, TAU); ctx.fill();
+          ctx.ellipse(px + SOX * 0.8 + alto, py + SOY * 0.8 + alto, r * (d.cat === 'inf' ? 1.1 : 1.45), r * 1.1, g.a, 0, TAU); ctx.fill();
           if (anda && d.cat === 'veh' && !d.aire && !pausa) { // los vehículos dejan su rodada, un trazo seguido por cada lado, y levantan polvo
             g.d = (g.d || 0) + e.v * (dtCuadro / 50);
             if (g.rx === undefined || Math.hypot(wx - g.rx, wy - g.ry) > 1.5) { g.rx = wx; g.ry = wy; g.ra = g.a; g.d = 0; }
@@ -1034,7 +1038,7 @@
           if (fino && anda && lod === 2 && !pausa) { const lado = Math.cos(fi) >= 0 ? 1 : -1; if (lado !== g.pl) { g.pl = lado; const R = d.radio * 1.4, l = s >= 0 ? 0.4 : -0.4, c = Math.cos(g.a), sn = Math.sin(g.a); if (pisadas.length > 500) pisadas.splice(0, 60); pisadas.push({ x: wx + c * R * 0.9 - sn * l * R, y: wy + sn * R * 0.9 + c * l * R, a: g.a, s: R, t0: tiempo }); } } // la pisada del pie que acaba de apoyar
         }
         const st = {
-          ang: d.cat === 'inf' && e.obj && !anda ? g.t : g.a, angT: g.t, retro: d.arma ? retroceso(e, d.arma) : 0, hundido: hund, monta: d.monta ? (e.monta || 0) / d.monta : 1,
+          ang: d.cat === 'inf' && e.obj && !anda ? g.t : g.a, angT: g.t, retro: d.arma ? retroceso(e, d.arma) : 0, hundido: hund, monta: d.monta ? (e.monta || 0) / d.monta : 1, herido: d.cat === 'inf' && e.vida < d.vida * 0.5,
           anda, tiempo, carga: e.carga / (d.carga || 1), cosecha: e.est === 'cosechar', raro: e.cargaTipo === 2,
         };
         if (partes) Object.assign(st, partes);
@@ -1049,6 +1053,17 @@
         const canto = lod && !d.aire && r >= 3.5 && !st.hundido && !(g.te > 0.3) ? Math.max(1, r * 0.26) : 0; // el cuerpo de la unidad: su silueta en oscuro, y encima la ficha
         if (canto) { W.fichaUnidad(ctx, e, r, 1, e.j === YO ? COL.yoLado : COL.rivalLado, st); ctx.translate(0, -canto); }
         W.fichaUnidad(ctx, e, r, lod, e.j === YO ? COL.yo : COL.rival, st);
+        if (lod === 2 && d.cat === 'veh' && !d.aire && r >= 5) { // el volumen: la cara que no mira al sol, en sombra; y el daño, a la vista
+          const ca = Math.cos(g.a), sa = Math.sin(g.a), ll = -sa * LUX + ca * LUY, fv = e.vida / d.vida;
+          ctx.save(); ctx.rotate(g.a); ctx.globalAlpha = 0.17 * Math.min(1, Math.abs(ll) * 1.6); ctx.fillStyle = '#000'; ctx.fillRect(-r * 1.25, ll > 0 ? -r * 0.6 : 0, r * 2.5, r * 0.6); ctx.globalAlpha = 1;
+          if (fv < 0.6) { ctx.fillStyle = 'rgba(20,18,16,0.4)'; for (let k = 0; k < (fv < 0.3 ? 3 : 2); k++) { ctx.beginPath(); ctx.ellipse(Math.sin(e.id * 3.1 + k * 2.4) * r * 0.8, Math.cos(e.id * 1.7 + k * 4.2) * r * 0.35, r * 0.3, r * 0.2, k, 0, TAU); ctx.fill(); } } // quemaduras en el casco
+          ctx.restore();
+          if (fv < 0.3) { ctx.fillStyle = P.roca; for (let k = 0; k < 3; k++) { const f = (tiempo * 0.0006 + k / 3 + e.id * 0.37) % 1; ctx.globalAlpha = 0.4 * (1 - f); ctx.beginPath(); ctx.arc(-ca * r * 0.5 + f * r * 0.9, -sa * r * 0.5 - f * r * 1.6, r * (0.18 + f * 0.35), 0, TAU); ctx.fill(); } ctx.globalAlpha = 1; } // muy tocado: echa humo
+        }
+        if (luzD < 1 && lod) { // de noche: los faros de los vehículos, la linterna del infante (de cerca) y el resplandor de quien dispara
+          if (d.cat === 'veh' && !d.aire && lod === 2) luces.push([px, py, g.a, 0, r]); else if (d.cat === 'inf' && fino && !st.hundido) luces.push([px, py, st.ang, 1, r]);
+          if (st.retro > 0.5) luces.push([px, py, d.cat === 'inf' ? st.ang : g.t, 2, r]);
+        }
         ctx.restore();
         if (lod && !d.aire) { // si está pegada a la cara norte de un edificio, este la tapa
           const idb = m.ocup[Math.floor(wy + 0.45) * N + Math.floor(wx)], cb = idb ? cuerpos.get(idb) : null;
@@ -1231,10 +1246,18 @@
       if (destelloP > 0) { ctx.globalAlpha = Math.min(0.3, destelloP * 5); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cw, ch); ctx.globalAlpha = 1; }
 
       ctx.imageSmoothingEnabled = true;
-      { const luz = W.luz(m); if (luz < 1) { ctx.fillStyle = 'rgba(14,20,48,' + (0.36 * (1 - luz)).toFixed(3) + ')'; ctx.fillRect(0, 0, cw, ch); } } // la noche: un velo azulado sobre el mapa
+      { const luz = W.luz(m); if (luz < 1) { ctx.fillStyle = 'rgba(14,20,48,' + (0.36 * (1 - luz)).toFixed(3) + ')'; ctx.fillRect(0, 0, cw, ch);
+        if (luces.length) { const k = 1 - luz; ctx.globalCompositeOperation = 'lighter';
+          for (const [x, y, a, cl, r] of luces) {
+            if (cl === 2) { const R = z * 1.3, gx = x + Math.cos(a) * r * 2, gy = y + Math.sin(a) * r * 2, gr = ctx.createRadialGradient(gx, gy, 0, gx, gy, R); gr.addColorStop(0, 'rgba(255,190,90,' + (0.5 * k).toFixed(3) + ')'); gr.addColorStop(1, 'rgba(255,190,90,0)'); ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(gx, gy, R, 0, TAU); ctx.fill(); }
+            else { const L = z * (cl ? 1.8 : 3.4), ab = cl ? 0.3 : 0.36, x0 = x + Math.cos(a) * r, y0 = y + Math.sin(a) * r, gr = ctx.createRadialGradient(x0, y0, 0, x0, y0, L); gr.addColorStop(0, 'rgba(255,232,170,' + ((cl ? 0.12 : 0.2) * k).toFixed(3) + ')'); gr.addColorStop(1, 'rgba(255,238,180,0)'); ctx.fillStyle = gr; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.arc(x0, y0, L, a - ab, a + ab); ctx.closePath(); ctx.fill(); }
+          }
+          ctx.globalCompositeOperation = 'source-over'; } } } // la noche: un velo azulado sobre el mapa
       { const cl = conRed ? W.clima(m) : 0; if (cl) { /* lluvia: trazos inclinados en pantalla (130; con tormenta, 260 y un velo gris) */
         const n = cl === 2 ? 260 : 130, L = cl === 2 ? 20 : 13, inc = cl === 2 ? -0.5 : -0.22, ts = performance.now() / 1000;
         if (cl === 2) { ctx.fillStyle = 'rgba(40,48,66,0.12)'; ctx.fillRect(0, 0, cw, ch); }
+        ctx.strokeStyle = 'rgba(60,82,116,0.3)'; ctx.lineWidth = 1; ctx.beginPath(); // las gotas en el suelo: anillos que se abren y se borran
+        for (let k = 0; k < (cl === 2 ? 46 : 26); k++) { const u = ts * 1.3 + k * 0.618, f = u % 1, c2 = Math.floor(u), x = (Math.sin(k * 91.7 + c2 * 13.3) * 0.5 + 0.5) * cw, y = (Math.sin(k * 47.3 + c2 * 7.9) * 0.5 + 0.5) * ch, R = 2 + f * 7; if (f > 0.75) continue; ctx.moveTo(x + R, y); ctx.ellipse(x, y, R, R * 0.6, 0, 0, TAU); } ctx.stroke();
         ctx.strokeStyle = cl === 2 ? 'rgba(38,56,88,0.45)' : 'rgba(60,82,116,0.32)'; ctx.lineWidth = 1; ctx.beginPath();
         for (let i = 0; i < n; i++) { const y = ((i * 0.3247) % 1 * ch + ts * (620 + (i % 7) * 70)) % ch, x = (((i * 0.618034) % 1 * cw + inc * y) % cw + cw) % cw; ctx.moveTo(x, y); ctx.lineTo(x + inc * L, y + L); }
         ctx.stroke(); } }

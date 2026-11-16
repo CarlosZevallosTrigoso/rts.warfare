@@ -116,6 +116,7 @@
         c.fillStyle = col.osc; for (const x of [x1, x2]) { c.beginPath(); c.arc(x, y1, R * 0.11, 0, TAU); c.fill(); } // guantes
       }
       c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; rr(c, tx - fondo, -ancho, fondo * 2, ancho * 2, Math.min(fondo, ancho)); c.fill(); c.stroke(); // el tronco
+      if (e.herido && cerca && te <= 0.5) { c.strokeStyle = '#f2f0ea'; c.lineWidth = Math.max(1.5, R * 0.2); c.lineCap = 'butt'; c.beginPath(); c.moveTo(tx - fondo * 0.8, -ancho * 0.55); c.lineTo(tx + fondo * 0.8, ancho * 0.25); c.stroke(); c.lineCap = 'round'; } // herido: una venda cruzada
       if (cerca) { const chal = esp ? null : civ ? '#e0b83a' : med ? col.luz : col.osc;
         if (chal) { c.fillStyle = chal; if (!fino) c.fillRect(tx - fondo * 0.55, -ancho * 0.58, fondo * 1.5, ancho * 1.16); else { rr(c, tx - fondo * 0.55, -ancho * 0.58, fondo * 1.5, ancho * 1.16, R * 0.1); c.fill(); } if (fino && chal !== col.osc) { c.strokeStyle = col.osc; c.lineWidth = 0.8; c.stroke(); } // chaleco
           if (fino && chal === col.osc) { c.strokeStyle = col.luz; c.globalAlpha = 0.6; c.lineWidth = 1; c.beginPath(); for (const q of [-0.3, 0, 0.3]) { c.moveTo(tx + fondo * 0.25, ancho * (q - 0.1)); c.lineTo(tx + fondo * 0.25, ancho * (q + 0.1)); c.moveTo(tx + fondo * 0.25, ancho * (q - 0.1)); c.lineTo(tx + fondo * 0.85, ancho * (q - 0.1)); } c.stroke(); c.globalAlpha = 1; } } // portacargadores
