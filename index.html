@@ -355,12 +355,12 @@
   <button type="button" id="tutorial">Tutorial guiado<small style="display:block;color:var(--suave);font-size:10px">ocho pasos, con el rival dormido hasta el final</small></button>
   <button type="button" id="continuar" hidden>Continuar la partida guardada</button>
   <button type="button" id="irDrone" onclick="location.href='drone/index.html'">drone.warfare<small style="display:block;color:var(--suave);font-size:10px">el otro juego: el mismo conflicto con lupa, infantería y drones</small></button>
-  <div id="version">versión 115</div>
+  <div id="version">versión 116</div>
 </div></div>
 <div id="guia" hidden><div class="caja"><div class="cab"><strong>Guía: para qué sirve cada cosa</strong><button type="button" id="cierraGuia">cerrar</button></div><div id="guiaTxt"></div></div></div>
-<div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finVer" href="#" title="Vuelve a ver la partida entera, con todo el mapa a la vista y a la velocidad que quieras.">ver repetición</a><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
+<div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finVer" href="#" title="Vuelve a ver la partida entera, con todo el mapa a la vista y a la velocidad que quieras.">ver repetición</a><a id="finLog" href="#" title="Descarga el registro de la partida: la semilla, las opciones y todas las órdenes de los dos bandos, con su instante. Sirve para reproducirla y analizar cómo jugó la IA.">descargar registro</a><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 115' };
+globalThis.W = { VERSION: 'versión 116' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -8438,6 +8438,14 @@ globalThis.W = { VERSION: 'versión 115' };
       catch (e) { aviso('La repetición no cabe en la memoria del navegador'); }
     };
     W.verRepeticion = verRepeticion; // a mano en la consola, también a media partida
+    // El registro de la partida, para descargar: con la semilla, las opciones y todas las órdenes (las del jugador y las de la IA) se puede reproducir entera y analizarla fuera.
+    const bajarRegistro = () => {
+      try {
+        const datos = { rts: 'registro', version: W.VERSION, fecha: new Date().toISOString(), consulta: op.consulta, semilla, humano: YO, fin: m.t, ganador: m.ganador, jug: m.jug.map((J) => ({ minerales: Math.round(J.minerales), nivel: J.nivel, cuenta: J.cuenta })), ordenes: rep || m.registro || [] };
+        const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(datos)], { type: 'application/json' })); a.download = 'rts-registro-' + semilla + '-' + m.t + '.json'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      } catch (e) { aviso('No se pudo preparar el registro'); }
+    };
+    $('finLog').hidden = !rep && !m.registro; $('finLog').addEventListener('click', (ev) => { ev.preventDefault(); bajarRegistro(); }); W.bajarRegistro = bajarRegistro; // también a media partida, desde la consola
     $('finVer').addEventListener('click', (ev) => { ev.preventDefault(); verRepeticion(); });
     if (rep) {
       $('repBar').hidden = false; $('repSalir').href = location.pathname;

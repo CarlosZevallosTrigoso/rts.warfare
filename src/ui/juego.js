@@ -2816,6 +2816,14 @@
       catch (e) { aviso('La repetición no cabe en la memoria del navegador'); }
     };
     W.verRepeticion = verRepeticion; // a mano en la consola, también a media partida
+    // El registro de la partida, para descargar: con la semilla, las opciones y todas las órdenes (las del jugador y las de la IA) se puede reproducir entera y analizarla fuera.
+    const bajarRegistro = () => {
+      try {
+        const datos = { rts: 'registro', version: W.VERSION, fecha: new Date().toISOString(), consulta: op.consulta, semilla, humano: YO, fin: m.t, ganador: m.ganador, jug: m.jug.map((J) => ({ minerales: Math.round(J.minerales), nivel: J.nivel, cuenta: J.cuenta })), ordenes: rep || m.registro || [] };
+        const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(datos)], { type: 'application/json' })); a.download = 'rts-registro-' + semilla + '-' + m.t + '.json'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      } catch (e) { aviso('No se pudo preparar el registro'); }
+    };
+    $('finLog').hidden = !rep && !m.registro; $('finLog').addEventListener('click', (ev) => { ev.preventDefault(); bajarRegistro(); }); W.bajarRegistro = bajarRegistro; // también a media partida, desde la consola
     $('finVer').addEventListener('click', (ev) => { ev.preventDefault(); verRepeticion(); });
     if (rep) {
       $('repBar').hidden = false; $('repSalir').href = location.pathname;
