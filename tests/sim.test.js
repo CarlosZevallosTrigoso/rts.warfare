@@ -1463,6 +1463,30 @@ prueba('comando: no se le ve quieto ni andando por el bosque; pone una carga en 
   const i0 = cel(Math.floor(cm.x), Math.floor(cm.y)); m.mapa.terreno[i0] = 3; cm.v = 0.05; cm.orden = 'mover'; assert.ok(W.oculta(m, cm), 'por el bosque, aunque ande');
 });
 
+prueba('criterio de combate: en inferioridad no persigue y se repliega con los suyos; a toda costa, sí va; el apoyo no se adelanta', () => {
+  const m = W.crearMundo(4242, { N: 128 }), N = m.N; m.logistica = false;
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const cel = (x, y) => y * N + x, avanza = (n) => { for (let i = 0; i < n; i++) W.tick(m); };
+  for (let y = 30; y < 90; y++) for (let x = 20; x < 110; x++) { const i = cel(x, y); if (m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  m.niebla[0].fill(2); m.niebla[1].fill(2);
+  // Un fusilero suelto ve tres tanques a ocho celdas: no va a por ellos; con los suyos a la espalda, se repliega hacia ellos.
+  const solo = W.crearUnidad(m, 0, 'infanteria', cel(50, 50)), amigos = [0, 1, 2, 3].map((k) => W.crearUnidad(m, 0, 'tanque', cel(38, 46 + k * 2))); amigos.forEach((u) => { u.guardia = true; });
+  const tq = [0, 1, 2].map((k) => W.crearUnidad(m, 1, 'tanque', cel(58, 48 + k * 2))); tq.forEach((u) => { u.guardia = true; u.recarga = 99999; });
+  for (let i = 0; i < 200; i++) { W.tick(m); m.niebla[0].fill(2); tq.forEach((u) => { u.recarga = 99999; }); }
+  assert.ok(solo.bal < W.ECON.critRet || solo.x < 46, 'se ve en clara inferioridad'); assert.ok(solo.x < 47, 'y se repliega hacia los suyos (x ' + solo.x.toFixed(1) + ')');
+  // A toda costa: el mismo fusilero, con la orden de atacar en marcha, va.
+  W.orden(m, { t: 'aToda', j: 0, on: true }); const otro = W.crearUnidad(m, 0, 'infanteria', cel(50, 56)); W.orden(m, { t: 'amover', j: 0, ids: [otro.id], x: 58.5, y: 56.5 });
+  for (let i = 0; i < 120; i++) { W.tick(m); m.niebla[0].fill(2); tq.forEach((u) => { u.recarga = 99999; }); } assert.ok(otro.x > 52, 'a toda costa avanza (x ' + otro.x.toFixed(1) + ')');
+  W.orden(m, { t: 'aToda', j: 0, on: false }); avanza(2);
+  // El apoyo: un médico y dos fusileros reciben la misma marcha hacia el enemigo; el médico no llega antes que ellos.
+  [solo, otro].forEach((u) => { u.vida = 0; }); tq.forEach((u) => { u.vida = 0; }); avanza(3);
+  const en = W.crearUnidad(m, 1, 'infanteria', cel(80, 70)); en.guardia = true; en.recarga = 99999; en.vida = en.vidaMax = 9999;
+  const med = W.crearUnidad(m, 0, 'medico', cel(64, 70)), fus = [0, 1].map((k) => W.crearUnidad(m, 0, 'infanteria', cel(60, 69 + k * 2)));
+  W.orden(m, { t: 'amover', j: 0, ids: [med.id, ...fus.map((u) => u.id)], x: 79.5, y: 70.5 });
+  let delante = 0; for (let i = 0; i < 500; i++) { W.tick(m); m.niebla[0].fill(2); en.recarga = 99999; fus.forEach((u) => { u.vida = u.vidaMax; }); const dm = Math.hypot(med.x - en.x, med.y - en.y); if (dm < 9 && fus.every((u) => Math.hypot(u.x - en.x, u.y - en.y) > dm + 1.5)) delante++; }
+  assert.ok(delante < 60, 'el médico no va por delante de los fusileros (' + delante + ' ticks adelantado)'); assert.ok(W.UNID.medico.atras && W.UNID.mortero.atras && !W.UNID.tanque.atras, 'apoyo y segunda línea están marcados');
+});
+
 prueba('torreta ametralladora: barata, sin consumo, contra tierra y nunca contra el aire', () => {
   const d = W.EDIF.nidoMG, A = W.ARMAS[d.arma];
   assert.ok(d && A, 'existe, con su arma'); assert.ok(A.vs.ligero === 1 && !A.vs.aire, 'no dispara al aire'); assert.ok(d.energia === 0 && d.costo < W.EDIF.torreta.costo, 'barata y sin consumo'); assert.ok(W.MUN[d.arma] > 0, 'tiene munición definida');
@@ -2004,6 +2028,7 @@ prueba('v1, primera entrega: granadero, alerta amplia, explorar en grupo, proteg
   assert.ok(esc.every((u) => u.protege === vip.id && Math.hypot(u.x - vip.x, u.y - vip.y) < 6), 'la escolta se pone a su lado');
   W.orden(m, { t: 'mover', j: 0, ids: [vip.id], x: 70.5, y: 44.5 }); avanza(3); for (let i = 0; i < 1500 && vip.orden !== 'nada'; i++) W.tick(m); avanza(200);
   assert.ok(esc.every((u) => Math.hypot(u.x - vip.x, u.y - vip.y) < 7), 'y lo sigue cuando se mueve');
+  m.jug[1].aToda = true; // (el agresor, a toda costa: uno solo contra dos tanques ya no se acercaría por su cuenta)
   const ag = W.crearUnidad(m, 1, 'francotirador', cel(80, 44)); ag.ang = Math.PI; avanza(700);
   assert.ok(ag.vida <= 0 || ag.vida < ag.vidaMax, 'atacan a quien dispara a su protegido');
   ag.vida = 0; W.orden(m, { t: 'mover', j: 0, ids: [esc[0].id], x: 50.5, y: 60.5 }); avanza(5); assert.ok(!esc[0].protege && esc[1].protege, 'otra orden le quita la escolta');
@@ -2410,7 +2435,7 @@ prueba('enlace de datos: sin cable ni radio, la torre de vigilancia y la cámara
   assert.ok(W.enlazado(m, vg), 'la torre de radio le da enlace'); assert.strictEqual(m.niebla[0][cel(lx + 14, ly)], 2, 'ahora ve a 14 celdas'); assert.ok(!W.oculta(m, fr), 'y descubre al escondido');
   // artillería fija sin enlace: no tira a lo que le cantan otros
   tr.vida = 0; fr.vida = 0; avanza(45); assert.ok(!W.enlazado(m, vg));
-  const art = W.crearEdificio(m, 0, 'artFija', lx, ly + 10); const ojo = W.crearUnidad(m, 0, 'explorador', cel(lx + 14, ly + 14)); ojo.recarga = 99999; ojo.ang = 0;
+  const art = W.crearEdificio(m, 0, 'artFija', lx, ly + 10); const ojo = W.crearUnidad(m, 0, 'explorador', cel(lx + 14, ly + 14)); ojo.recarga = 99999; ojo.ang = 0; ojo.guardia = true; // (fijo en su puesto: suelto, uno solo ante un tanque se replegaría)
   const tq = W.crearUnidad(m, 1, 'tanque', cel(lx + 17, ly + 11)); tq.recarga = 99999; const v0 = tq.vida;
   for (let i = 0; i < 500; i++) { W.tick(m); art.sinLuz = false; tq.recarga = 99999; tq.orden = 'nada'; tq.obj = 0; ojo.vida = ojo.vidaMax; }
   assert.strictEqual(m.niebla[0][cel(Math.floor(tq.x), Math.floor(tq.y))], 2, 'el explorador ve al tanque'); assert.ok(!W.enlazado(m, art)); assert.strictEqual(tq.vida, v0, 'sin enlace, la artillería fija no le tira aunque otro lo vea');
@@ -2863,7 +2888,7 @@ if (!process.env.RAPIDO) prueba('partidas completas IA contra IA', () => {
     let maxEnts = 0;
     while (m.ganador < 0 && m.t < LIMITE) { W.iaTick(m, a); W.iaTick(m, b); W.tick(m); if (m.ents.length > maxEnts) maxEnts = m.ents.length; }
     const [J0, J1] = m.jug;
-    console.log(`      semilla ${s} (${lado}): ganador ${m.ganador} en ${(m.t / 1200).toFixed(1)} min de juego · cosechado ${J0.cosechado}/${J1.cosechado} · producidas ${J0.producidas}/${J1.producidas} · bajas ${J0.bajas}/${J1.bajas} · petróleo ${J0.extraido}/${J1.extraido} · info ${J0.info}/${J1.info} · nivel ${J0.nivel}/${J1.nivel} · mejoras ${Object.keys(J0.mejoras).length}/${Object.keys(J1.mejoras).length} · máx entidades ${maxEnts} · ${(Date.now() - t0)} ms (${((Date.now() - t0) / m.t).toFixed(3)} ms/tick)`);
+    console.log(`      semilla ${s} (${lado}): ganador ${m.ganador} en ${(m.t / 1200).toFixed(1)} min de juego · cosechado ${J0.cosechado}/${J1.cosechado} · producidas ${J0.producidas}/${J1.producidas} · bajas ${J0.bajas}/${J1.bajas} · solas ${J0.solas || 0}/${J1.solas || 0} de ${J0.tropas || 0}/${J1.tropas || 0} · petróleo ${J0.extraido}/${J1.extraido} · info ${J0.info}/${J1.info} · nivel ${J0.nivel}/${J1.nivel} · mejoras ${Object.keys(J0.mejoras).length}/${Object.keys(J1.mejoras).length} · máx entidades ${maxEnts} · ${(Date.now() - t0)} ms (${((Date.now() - t0) / m.t).toFixed(3)} ms/tick)`);
     for (const J of [J0, J1]) {
       assert.ok(J.cosechado > 3000, 'economía parada, semilla ' + s);
       assert.ok(J.producidas > 8, 'sin producción, semilla ' + s);

@@ -200,7 +200,7 @@
       <div>un edificio destruido deja una ruina que frena mucho a los vehículos; construye encima el mismo edificio y recuperas la mitad, o despéjala con un ingeniero civil (clic derecho). Las explosiones grandes dejan cráteres que frenan a los vehículos y rompen cables</div>
       <div>los edificios tienden solos su cable hasta la red (24 celdas); <kbd>J</kbd> con un ingeniero civil: conectar a mano lo que quede más lejos · <kbd>K</kbd> con la excavadora: camino militar</div>
       <div><kbd>Supr</kbd> demoler el edificio seleccionado</div>
-      <div><kbd>G</kbd> guardia: la unidad queda fija · <kbd>C</kbd> colmena sí/no</div>
+      <div><kbd>G</kbd> guardia: la unidad queda fija · <kbd>C</kbd> colmena sí/no · <kbd>Mayús</kbd>+<kbd>C</kbd> a toda costa sí/no</div>
       <div><kbd>Z</kbd> atrincherarse (infantería quieta): recibe menos daño</div>
       <div>tras mover, otro clic cerca (cualquier botón): hacia dónde mirar</div>
       <div>bosque: cubre a la infantería y frena a los vehículos</div>
@@ -355,12 +355,12 @@
   <button type="button" id="tutorial">Tutorial guiado<small style="display:block;color:var(--suave);font-size:10px">ocho pasos, con el rival dormido hasta el final</small></button>
   <button type="button" id="continuar" hidden>Continuar la partida guardada</button>
   <button type="button" id="irDrone" onclick="location.href='drone/index.html'">drone.warfare<small style="display:block;color:var(--suave);font-size:10px">el otro juego: el mismo conflicto con lupa, infantería y drones</small></button>
-  <div id="version">versión 119</div>
+  <div id="version">versión 120</div>
 </div></div>
 <div id="guia" hidden><div class="caja"><div class="cab"><strong>Guía: para qué sirve cada cosa</strong><button type="button" id="cierraGuia">cerrar</button></div><div id="guiaTxt"></div></div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finVer" href="#" title="Vuelve a ver la partida entera, con todo el mapa a la vista y a la velocidad que quieras.">ver repetición</a><a id="finLog" href="#" title="Descarga el registro de la partida: la semilla, las opciones y todas las órdenes de los dos bandos, con su instante. Sirve para reproducirla y analizar cómo jugó la IA.">descargar registro</a><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 119' };
+globalThis.W = { VERSION: 'versión 120' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -549,6 +549,9 @@ globalThis.W = { VERSION: 'versión 119' };
   // vs.aire: daño contra aviones; un arma sin vs.aire no puede dispararles (y una sin vs de tierra, solo a aviones).
   // indirecto: tira por encima; le basta con que cualquier unidad propia vea el blanco (hace de observador).
   // alcanceMin: no puede disparar más cerca que eso. area: radio de la explosión (daña a todo enemigo dentro).
+  // atras: apoyo y segunda línea. Nunca se adelantan a las unidades de combate: van detrás del frente y, si se quedan delante, esperan o se repliegan.
+  for (const k of ['medico', 'ingeniero', 'radioOp', 'operador', 'hacker', 'cazadron', 'mando', 'vehRadio', 'comandoDrones', 'tallerMovil', 'camionSum', 'mortero', 'artilleria', 'francotirador', 'manpad', 'lanzacohetes', 'antiaereoMovil']) W.UNID[k].atras = true;
+
   W.ARMAS = {
     fusil:   { alcance: 4,   dano: 8,  recarga: 16, vs: { ligero: 1,   pesado: 0.25, edificio: 0.3, aire: 0.4 } },
     canon:   { alcance: 5,   dano: 40, recarga: 50, vuelo: 0.9, vs: { ligero: 0.4, pesado: 1,    edificio: 0.9 } },
@@ -636,6 +639,9 @@ globalThis.W = { VERSION: 'versión 119' };
     dronMisRadio: 8, autoReserva: 400, autoLargo: 70, cableMax: 24, climaBloque: 3600, climaCalma: 2, climaLluvia: 0.28, climaTormenta: 0.1, lluviaVeh: 0.75, lluviaInf: 0.9, lluviaVado: 0.5, lluviaGasto: 1.5, tormentaVis: 0.7, /* clima: va por bloques de 3 min (los dos primeros, despejados); con lluvia, fuera de camino se anda más lento y se gasta más, y los vados se embarran; la tormenta además quita vista y deja en tierra lo que vuela */ aceroInicio: 300, aceroBase: 400, aceroPorFund: 600, aceroMin: 2, aceroReserva: 300, /* acero: con cuánto se empieza, cuánto cabe sin fundición y cuánto añade cada una, cuánto mineral cuesta cada unidad, y por debajo de cuánto mineral la fundición no trabaja (para no dejarte seco) */ desgCelda: 0.12, desgTiro: 0.1, desgLento: 60, desgMal: 85, desgVel1: 0.85, desgVel2: 0.7, desgFallo: 15, desgMant: 2, desgRepara: 1, desgAviso: 30, desgProd: 5, desgProd1: 50, desgProd2: 80, /* desgaste (0 a 100). Vehículos de combate: lo que suma cada celda andada y cada disparo; desde desgLento van a desgVel1 de su velocidad, y desde desgMal a desgVel2 y fallan desgFallo de cada 100 tiros. Con suministro (o junto a un taller de campaña) baja desgMant cada medio segundo; un ingeniero lo baja desgRepara por tick. Edificios que producen: desgProd por unidad hecha; desde desgProd1 producen al 85 % y desde desgProd2 al 70 % */ depositoMax: 40, lineaMax: 40, /* un depósito va, como mucho, a esa distancia de un edificio conectado (y se cablea solo hasta él); ninguna línea de servicio puede ser más larga */ sinEnlaceVision: 2, ruinaVale: 0.25, despejaT: 200, craterMax: 300, craterArea: 1.4, craterFreno: 0.5, ruinaFreno: 0.4, craterDano: 150, rellenaT: 60, /* ruinas: lo que se recupera al reconstruir encima y lo que tarda en despejarse una; cráteres: tope, radio mínimo de explosión que los deja, freno a los vehículos, daño a cables y caminos, y lo que tarda en rellenarse uno */ tuboMax: 30, sinTubo: 0.3, quemaCada: 80, sinCombEnergia: 0.3, /* oleoducto: largo máximo y rendimiento del extractor sin él; central: cada cuántos ticks quema 1 de petróleo y qué fracción da sin él */ bunkerDano: 0.25, ambCarga: 8, hospitalCura: 0.6, /* largo máximo del cable que un edificio nuevo tiende solo hasta la red */
     rutaNodos: 30000, // presupuesto de celdas que se exploran por tick buscando rutas
     misilesMax: 10, mejoraMax: 3, mejoraCosto: 0.6, mejoraBono: 0.5, // mejora de un edificio: hasta nivel 3; cada nivel cuesta el 60 % del edificio por el nivel que tiene y rinde un 50 % más
+    // Criterio de combate: cada segundo la unidad compara la fuerza propia y la enemiga que ve en torno a sí (bloques de critBloque celdas, critAlcance bloques a cada lado).
+    // Por debajo de critInf no avanza ni persigue por su cuenta; por debajo de critRet se repliega hacia los suyos. En marcha de ataque, espera a los demás hasta critEspera ticks.
+    critInf: 0.6, critRet: 0.3, critEspera: 300, critBloque: 4, critAlcance: 2,
     inicio: 2500, petInicio: 150, cosecha: 5, descarga: 25, colaMax: 9, separacionColocar: 3, goteoCada: 5, vistaInicial: 22, obrasMax: 8, curaUnidad: 0.01, curaEdificio: 0.0025, curaCosto: 0.15, venta: 0.5, trinchera: 0.45, arco: 0.14, arcoTrinchera: 1.05, visAd: 1.3, visLado: 0.75, visAt: 0.3, cono: 1.05, periferia: 1.83, flanco: 1.25, espalda: 1.5, bosqueVeh: 0.6, bosqueCubre: 0.7, reposta: 12, retiroBajo: 0.3, retiroAlto: 0.9, huida: 300, dia: 9600, diaLuz: 6000, nocheVis: 0.7, caminoVel: 1.6, tramoLargo: 4, enlace: 5, cobNodo: 14, cobEdif: 6, lineaVel: 0.12, lineaCelda: 3, sinSum: 400, sinSumRecarga: 1.5, abastDura: 1500, heliRepone: 300, cobAvanzada: 10, hospitalCura: 2, dronFpv: 40, dronBomba: 15, dronRepone: 200, dronFpvCada: 60, hackInfo: 25, hackVeh: 240, hackCtrl: 600, hackCtrlInfo: 60, hackCtrlRecarga: 400, /* el hacker toma el control de un vehículo durante hackCtrl ticks (30 s); cuesta más y tarda más en poder repetirlo */ hackEdif: 300, hackRecarga: 200, hackCanal: 40, trazaVel: 0.45, caminoLlano: 4, caminoBosque: 12, caminoAgua: 30, mandoCada: 40, mandoGiro: 1.5, captura: 600, capturaRadio: 2, antenaRadio: 12, depositoCada: 8, tallerRadio: 4, ocultaVe: 2.5, chatarra: 0.25, reparaRadio: 8, reparaVeh: 0.5, curaMedico: 0.35, reparaEdif: 0.8, rangos: [2, 5, 10], rangoDano: 0.1, rangoVida: 0.1, cupoAviones: 5, pasada: 7, orbita: 3.5, fuelCae: 80, cavar: 80, aplasta: 10, bonoProd: 0.5, bonoMax: 2.5 };
   // Pelotones: paquetes de unidades que se encargan de una vez y actúan juntas. Cada miembro se fabrica donde le toca
   // (la infantería en el cuartel, los vehículos en la fábrica) y cuesta lo mismo que suelto; lo que cambia es que nacen como un grupo.
@@ -2728,6 +2734,7 @@ globalThis.W = { VERSION: 'versión 119' };
         }
         return;
       case 'colmena': J.colmena = !J.colmena; return;
+      case 'aToda': J.aToda = cmd.on !== undefined ? !!cmd.on : !J.aToda; return; // a toda costa: las unidades dejan de medir fuerzas antes de meterse
       case 'vender': { // demoler un edificio propio: devuelve parte de su costo, según la vida que le quede
         const e = m.porId.get(cmd.id);
         if (!e || !e.edif || e.j !== cmd.j || e.tipo === 'patio' || e.vida <= 0) return;
@@ -3191,7 +3198,7 @@ globalThis.W = { VERSION: 'versión 119' };
         for (const id of f.resp) { const u = m.porId.get(id); nodos.push({ x: u.x, y: u.y, r: 12, salto: u.salto }); }
         const cand = [];
         for (const u of m.ents) {
-          if (u.j !== j || u.edif || u.acude || u.guardia || u.retirando || u.vida <= 0 || vict.has(u.id) || !UNID[u.tipo].arma || u.vigila || u.protege) continue; // (quien vigila una zona o protege a alguien no deja su puesto)
+          if (u.j !== j || u.edif || u.acude || u.guardia || u.retirando || cauto(m, u) || u.vida <= 0 || vict.has(u.id) || !UNID[u.tipo].arma || u.vigila || u.protege) continue; // (quien vigila una zona o protege a alguien no deja su puesto)
           const libre = (u.orden === 'nada' || u.orden === 'amover') && !u.obj;
           // Con una orden directa solo acude si atacan a una compañera que marcha en su misma misión.
           if (!libre && !(u.orden !== 'nada' && u.mision && f.victimas.some((v) => !v.edif && v.mision === u.mision && v.orden !== 'nada'))) continue;
@@ -3442,6 +3449,13 @@ globalThis.W = { VERSION: 'versión 119' };
     u.x = u.px = (c % N) + 0.5; u.y = u.py = ((c / N) | 0) + 0.5;
     if (caido) u.vida = Math.max(1, u.vida * 0.6);
   }
+  // En marcha de ataque: quien llega en inferioridad espera a los suyos (hasta critEspera ticks; el apoyo, mientras siga por delante de las de combate).
+  function espera(m, u) {
+    if (!cauto(m, u)) { u.espT = 0; return false; }
+    if (u.adel) return true;
+    if (!u.espT) u.espT = m.t;
+    return m.t - u.espT < ECON.critEspera;
+  }
   function tickUnidad(m, u) {
     const d = UNID[u.tipo];
     u.px = u.x; u.py = u.y;
@@ -3501,6 +3515,7 @@ globalThis.W = { VERSION: 'versión 119' };
       if (u.orden === 'murar') { tickMurar(m, u); return; }
       if (u.orden === 'zapar') { tickZapar(m, u); return; }
       if (u.orden === 'recuperar') { tickRecuperar(m, u); return; }
+      if (u.orden === 'mover' && d.atras && u.adel && !m.jug[u.j].aToda) { u.v = 0; return; } // el apoyo no se adelanta: espera a que pasen las de combate
       if (u.orden !== 'nada') { u.arregla = 0; if (avanzar(m, u) || (!u.ruta && !u.pend)) u.orden = 'nada'; return; }
       if (d.recupera && (m.t + u.id) % 40 === 0 && m.cascos && m.cascos.length) autoRecuperar(m, u);
       if (d.tiende && u.auto && m.logistica !== false && (m.t + u.id) % 30 === 0 && m.t >= (u.autoT || 0)) { autoConectar(m, u); if (u.orden === 'nada') autoEntubar(m, u); if (u.orden === 'nada' && !u.arregla) autoRellenar(m, u); }
@@ -3532,7 +3547,7 @@ globalThis.W = { VERSION: 'versión 119' };
       return;
     }
     if (!o && (m.t + u.id) % 5 === 0) {
-      o = buscarEnemigo(m, u, u.x, u.y, alc + (u.guardia || u.retirando ? 0 : 2));
+      o = buscarEnemigo(m, u, u.x, u.y, alc + (u.guardia || u.retirando || cauto(m, u) ? 0 : 2)); // (en inferioridad no sale a buscar)
       if (o) { u.obj = o.id; u.ruta = null; u.pend = null; }
     }
     if (o) {
@@ -3541,11 +3556,12 @@ globalThis.W = { VERSION: 'versión 119' };
         const listo = apuntar(m, u, o, true);
         if (listo && u.recarga <= 0 && dd >= (arma.alcanceMin || 0)) disparar(m, u, o, arma); // demasiado cerca, la artillería no puede tirar
         else if (!listo && u.orden !== 'atacar' && enTrinchera(m, u)) u.obj = 0; // fuera del arco de la trinchera: no puede responder
-      } else if (u.guardia || u.retirando) {
-        u.obj = 0; // en guardia, o reparándose, no persigue
+      } else if (u.guardia || u.retirando || (u.orden === 'nada' && !u.protege && !u.acude && cauto(m, u))) {
+        u.obj = 0; // en guardia, reparándose o en inferioridad, no persigue
       } else if (u.orden !== 'atacar' && dd > alc + (m.t - u.tRep < 240 ? 14 : 4)) { // al agresor lo persigue más lejos
         u.obj = 0; u.ruta = null; // se alejó demasiado: lo suelta
       } else {
+        if (u.orden === 'amover' && espera(m, u)) { u.v = 0; return; } // en marcha de ataque y en inferioridad: aguarda a los suyos antes de echarse encima
         if (!u.pend && (!u.ruta || (!o.edif && (m.t + u.id) % 20 === 0))) pedirRuta(m, u, posX(o), posY(o), o.edif ? o.tam / 2 + 1 : 1);
         if (d.giroT) apuntar(m, u, o, false); // la torreta va siguiendo al blanco mientras el casco avanza
         avanzar(m, u);
@@ -3553,6 +3569,7 @@ globalThis.W = { VERSION: 'versión 119' };
       return;
     }
     if (u.orden === 'amover') {
+      if (espera(m, u)) { u.v = 0; return; }
       if (u.ruta) { if (avanzar(m, u)) u.orden = 'nada'; }
       else if (!u.pend) {
         if (Math.hypot(u.dest.x - u.x, u.dest.y - u.y) > 1.5) pedirRuta(m, u, u.dest.x, u.dest.y, 0); else u.orden = 'nada';
@@ -3921,6 +3938,42 @@ globalThis.W = { VERSION: 'versión 119' };
   };
 
   // ---------- tick ----------
+  // ---------- criterio de combate ----------
+  // Cada segundo: un mapa grueso de fuerza por bando (coste por vida, solo lo armado) y, para cada unidad de tierra, su balance local (u.bal: lo propio entre lo enemigo que ve)
+  // y, si es de apoyo o de segunda línea, si se ha quedado por delante de las de combate (u.adel) y a qué distancia tiene al enemigo (u.amen).
+  const cauto = (m, u) => !m.jug[u.j].aToda && (u.bal < ECON.critInf || u.adel);
+  function tickCriterio(m) {
+    const N = m.N, B = ECON.critBloque, nb = Math.ceil(N / B), R = ECON.critAlcance;
+    if (!m.fuerza || m.fuerza[0].length !== nb * nb) m.fuerza = [new Float32Array(nb * nb), new Float32Array(nb * nb)];
+    const F = m.fuerza; F[0].fill(0); F[1].fill(0);
+    const comb = [[], []];
+    for (const e of m.ents) {
+      if (e.vida <= 0 || e.j > 1) continue;
+      if (e.edif) { const d = EDIF[e.tipo]; if (d && d.arma) F[e.j][((e.cy / B) | 0) * nb + ((e.cx / B) | 0)] += d.costo * e.vida / (e.vidaMax || d.vida); continue; }
+      const d = UNID[e.tipo]; if (!d.arma || d.mini || e.enTierra) continue;
+      F[e.j][((e.y / B) | 0) * nb + ((e.x / B) | 0)] += d.costo * e.vida / e.vidaMax; if (!d.aire) comb[e.j].push(e);
+    }
+    for (const u of m.ents) {
+      if (u.edif || u.vida <= 0 || u.j > 1) continue; const d = UNID[u.tipo]; if (d.aire || d.mini || (!d.arma && !d.atras)) continue;
+      const bx = (u.x / B) | 0, by = (u.y / B) | 0, nie = m.niebla[u.j], Fp = F[u.j], Fe = F[1 - u.j]; let pro = 0, ene = 0;
+      for (let dy = -R; dy <= R; dy++) { const y = by + dy; if (y < 0 || y >= nb) continue; for (let dx = -R; dx <= R; dx++) { const x = bx + dx; if (x < 0 || x >= nb) continue; const k = y * nb + x; pro += Fp[k];
+        if (Fe[k] > 0 && nie[Math.min(N - 1, y * B + (B >> 1)) * N + Math.min(N - 1, x * B + (B >> 1))] === 2) ene += Fe[k]; } }
+      u.bal = ene > 0 ? pro / ene : 9; u.adel = false; u.amen = 99;
+      if (d.atras && ene > 0) { // ¿quién tiene más cerca al enemigo, ella o las de combate?
+        let en = null, md = 10; for (const e of comb[1 - u.j]) { const dd = Math.hypot(e.x - u.x, e.y - u.y); if (dd < md && nie[Math.floor(e.y) * N + Math.floor(e.x)] === 2) { md = dd; en = e; } }
+        if (en) { u.amen = md; let delante = false, cerca = false; for (const o of comb[u.j]) { if (o === u || UNID[o.tipo].atras) continue; const du = Math.hypot(o.x - u.x, o.y - u.y); if (du > 14) continue; cerca = true; if (Math.hypot(o.x - en.x, o.y - en.y) < md - 0.5) { delante = true; break; } } u.adel = cerca && !delante; }
+      }
+      // El repliegue: por su cuenta (sin orden, o en marcha de ataque), quien está en clara inferioridad, o el apoyo que tiene al enemigo encima, se va con los suyos.
+      if (m.jug[u.j].aToda || u.guardia || u.bunk || u.retirando || u.protege || u.acude || u.vigila || u.cava > 0 || (u.orden !== 'nada' && u.orden !== 'amover') || ene <= 0 || m.t - (u.replT === undefined ? -999 : u.replT) < 100 || enTrinchera(m, u)) continue;
+      if (!(d.atras ? u.amen < 6 && (u.adel || u.bal < ECON.critInf) : u.bal < ECON.critRet)) continue;
+      const yo = d.arma ? d.costo * u.vida / u.vidaMax : 0; let mk = -1, mv = 0;
+      for (let dy = -R - 1; dy <= R + 1; dy++) { const y = by + dy; if (y < 0 || y >= nb) continue; for (let dx = -R - 1; dx <= R + 1; dx++) { const x = bx + dx; if (x < 0 || x >= nb || (!dx && !dy)) continue; const k = y * nb + x, v = Fp[k] - Fe[k]; if (v > mv) { mv = v; mk = k; } } }
+      if (mk < 0 || mv <= yo * 0.5) continue; // nadie con quien juntarse: aguanta donde está
+      const c = W.cercaLibre(m, ((mk % nb) + 0.5) * B, (((mk / nb) | 0) + 0.5) * B);
+      limpiar(u); u.obj = 0; u.replT = m.t; asignar(m, u, { t: 'mover', x: (c % N) + 0.5, y: ((c / N) | 0) + 0.5 }); m.efectos.push({ tipo: 'retira', x1: u.x, y1: u.y, j: u.j, t: m.t });
+    }
+  }
+  W.cauto = cauto;
   function tickInhibir(m) { // los inhibidores: el dron enemigo guiado por radio que entra en su radio pierde el enlace y cae (el de fibra, no)
     let inh = null; for (const u of m.ents) if (!u.edif && u.vida > 0 && UNID[u.tipo].inhibe) (inh || (inh = [])).push(u);
     if (!inh) return;
@@ -3939,6 +3992,7 @@ globalThis.W = { VERSION: 'versión 119' };
     tickProduccion(m, 0); tickProduccion(m, 1);
     if (m.t % 5 === 3) tickControl(m);
     if (m.t % 5 === 1) tickInhibir(m);
+    if (m.t % 20 === 7) tickCriterio(m);
     if (m.cargas && m.cargas.length) tickCargas(m);
     for (let k = 0, n = m.ents.length; k < n; k++) {
       const e = m.ents[k];
@@ -3999,6 +4053,10 @@ globalThis.W = { VERSION: 'versión 119' };
       if (e.infra) { quitarTramo(m, e); m.efectos.push({ tipo: e.vendido ? 'venta' : 'muerte', x2: e.cx, y2: e.cy, edif: true, tam: 1, clase: 'camino', ang: 0, j: e.j, t: m.t }); continue; }
       if (e.retirado) continue; // el helicóptero que ya ha cumplido se va sin más
       m.jug[e.j].bajas++;
+      if (!e.edif && UNID[e.tipo].arma && !UNID[e.tipo].aire) { // ¿murió sola? (sin una compañera armada a seis celdas): la medida de si las unidades se mandan solas
+        const J = m.jug[e.j]; let sola = true; for (const o of m.ents) if (o !== e && !o.edif && o.j === e.j && o.vida > 0 && UNID[o.tipo].arma && Math.hypot(o.x - e.x, o.y - e.y) <= 6) { sola = false; break; }
+        J.tropas = (J.tropas || 0) + 1; if (sola) J.solas = (J.solas || 0) + 1;
+      }
       if (!e.edif && e.pasajeros.length) { // del transporte destruido sale la mitad de su carga
         const vivos = e.pasajeros.filter((p, i) => i % 2 === 0);
         m.jug[e.j].bajas += e.pasajeros.length - vivos.length; e.pasajeros = [];
@@ -4654,7 +4712,7 @@ globalThis.W = { VERSION: 'versión 119' };
 (function () {
   const W = globalThis.W || (globalThis.W = {});
   const TIPOS = { Uint8Array, Int8Array, Uint8ClampedArray, Uint16Array, Int16Array, Int32Array, Uint32Array, Float32Array, Float64Array };
-  const FUERA = ['porId', 'ruta', 'vistas', 'pasoT', 'registro', 'soloRep', 'cob', 'redCel', 'gr', 'radioCob']; // del mundo: se reconstruyen al cargar
+  const FUERA = ['porId', 'ruta', 'vistas', 'pasoT', 'registro', 'soloRep', 'fuerza', 'cob', 'redCel', 'gr', 'radioCob']; // del mundo: se reconstruyen al cargar
   const DE_ENTIDADES = new Set(['victimas', 'agresores', 'embarques']); // listas que apuntan a unidades: se guardan sus números
 
   function comprimir(a, flotante) { // "valor,veces,valor,veces…"; los enteros, en base 36
@@ -8492,7 +8550,8 @@ globalThis.W = { VERSION: 'versión 119' };
         case 'KeyV': elegirEdificios('fabrica'); break;
         case 'KeyX': elegirEdificios('aerodromo'); break;
         case 'KeyG': { const ids = unidadesSel().map((u) => u.id); if (ids.length) { W.orden(m, { t: 'guardia', j: YO, ids }); son.orden(); } break; }
-        case 'KeyC': W.orden(m, { t: 'colmena', j: YO }); aviso(J.colmena ? 'Colmena desactivada: nadie acude solo' : 'Colmena activada'); break;
+        case 'KeyC': if (ev.shiftKey) { W.orden(m, { t: 'aToda', j: YO }); aviso(J.aToda ? 'Criterio activado: las unidades miden fuerzas antes de meterse' : 'A toda costa: las unidades atacan sin medir fuerzas'); break; }
+          W.orden(m, { t: 'colmena', j: YO }); aviso(J.colmena ? 'Colmena desactivada: nadie acude solo' : 'Colmena activada'); break;
         case 'KeyF': ponerForma(FORMAS[(FORMAS.indexOf(fA()) + 1) % FORMAS.length]); break;
         case 'KeyO': if (conMision().length) modo = 'dronMis'; break;
         case 'KeyY': if (armadas().length) modo = 'proteger'; break;

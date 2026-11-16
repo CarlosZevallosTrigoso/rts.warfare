@@ -2792,7 +2792,8 @@
         case 'KeyV': elegirEdificios('fabrica'); break;
         case 'KeyX': elegirEdificios('aerodromo'); break;
         case 'KeyG': { const ids = unidadesSel().map((u) => u.id); if (ids.length) { W.orden(m, { t: 'guardia', j: YO, ids }); son.orden(); } break; }
-        case 'KeyC': W.orden(m, { t: 'colmena', j: YO }); aviso(J.colmena ? 'Colmena desactivada: nadie acude solo' : 'Colmena activada'); break;
+        case 'KeyC': if (ev.shiftKey) { W.orden(m, { t: 'aToda', j: YO }); aviso(J.aToda ? 'Criterio activado: las unidades miden fuerzas antes de meterse' : 'A toda costa: las unidades atacan sin medir fuerzas'); break; }
+          W.orden(m, { t: 'colmena', j: YO }); aviso(J.colmena ? 'Colmena desactivada: nadie acude solo' : 'Colmena activada'); break;
         case 'KeyF': ponerForma(FORMAS[(FORMAS.indexOf(fA()) + 1) % FORMAS.length]); break;
         case 'KeyO': if (conMision().length) modo = 'dronMis'; break;
         case 'KeyY': if (armadas().length) modo = 'proteger'; break;

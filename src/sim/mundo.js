@@ -1723,6 +1723,7 @@
         }
         return;
       case 'colmena': J.colmena = !J.colmena; return;
+      case 'aToda': J.aToda = cmd.on !== undefined ? !!cmd.on : !J.aToda; return; // a toda costa: las unidades dejan de medir fuerzas antes de meterse
       case 'vender': { // demoler un edificio propio: devuelve parte de su costo, según la vida que le quede
         const e = m.porId.get(cmd.id);
         if (!e || !e.edif || e.j !== cmd.j || e.tipo === 'patio' || e.vida <= 0) return;
@@ -2186,7 +2187,7 @@
         for (const id of f.resp) { const u = m.porId.get(id); nodos.push({ x: u.x, y: u.y, r: 12, salto: u.salto }); }
         const cand = [];
         for (const u of m.ents) {
-          if (u.j !== j || u.edif || u.acude || u.guardia || u.retirando || u.vida <= 0 || vict.has(u.id) || !UNID[u.tipo].arma || u.vigila || u.protege) continue; // (quien vigila una zona o protege a alguien no deja su puesto)
+          if (u.j !== j || u.edif || u.acude || u.guardia || u.retirando || cauto(m, u) || u.vida <= 0 || vict.has(u.id) || !UNID[u.tipo].arma || u.vigila || u.protege) continue; // (quien vigila una zona o protege a alguien no deja su puesto)
           const libre = (u.orden === 'nada' || u.orden === 'amover') && !u.obj;
           // Con una orden directa solo acude si atacan a una compañera que marcha en su misma misión.
           if (!libre && !(u.orden !== 'nada' && u.mision && f.victimas.some((v) => !v.edif && v.mision === u.mision && v.orden !== 'nada'))) continue;
@@ -2437,6 +2438,13 @@
     u.x = u.px = (c % N) + 0.5; u.y = u.py = ((c / N) | 0) + 0.5;
     if (caido) u.vida = Math.max(1, u.vida * 0.6);
   }
+  // En marcha de ataque: quien llega en inferioridad espera a los suyos (hasta critEspera ticks; el apoyo, mientras siga por delante de las de combate).
+  function espera(m, u) {
+    if (!cauto(m, u)) { u.espT = 0; return false; }
+    if (u.adel) return true;
+    if (!u.espT) u.espT = m.t;
+    return m.t - u.espT < ECON.critEspera;
+  }
   function tickUnidad(m, u) {
     const d = UNID[u.tipo];
     u.px = u.x; u.py = u.y;
@@ -2496,6 +2504,7 @@
       if (u.orden === 'murar') { tickMurar(m, u); return; }
       if (u.orden === 'zapar') { tickZapar(m, u); return; }
       if (u.orden === 'recuperar') { tickRecuperar(m, u); return; }
+      if (u.orden === 'mover' && d.atras && u.adel && !m.jug[u.j].aToda) { u.v = 0; return; } // el apoyo no se adelanta: espera a que pasen las de combate
       if (u.orden !== 'nada') { u.arregla = 0; if (avanzar(m, u) || (!u.ruta && !u.pend)) u.orden = 'nada'; return; }
       if (d.recupera && (m.t + u.id) % 40 === 0 && m.cascos && m.cascos.length) autoRecuperar(m, u);
       if (d.tiende && u.auto && m.logistica !== false && (m.t + u.id) % 30 === 0 && m.t >= (u.autoT || 0)) { autoConectar(m, u); if (u.orden === 'nada') autoEntubar(m, u); if (u.orden === 'nada' && !u.arregla) autoRellenar(m, u); }
@@ -2527,7 +2536,7 @@
       return;
     }
     if (!o && (m.t + u.id) % 5 === 0) {
-      o = buscarEnemigo(m, u, u.x, u.y, alc + (u.guardia || u.retirando ? 0 : 2));
+      o = buscarEnemigo(m, u, u.x, u.y, alc + (u.guardia || u.retirando || cauto(m, u) ? 0 : 2)); // (en inferioridad no sale a buscar)
       if (o) { u.obj = o.id; u.ruta = null; u.pend = null; }
     }
     if (o) {
@@ -2536,11 +2545,12 @@
         const listo = apuntar(m, u, o, true);
         if (listo && u.recarga <= 0 && dd >= (arma.alcanceMin || 0)) disparar(m, u, o, arma); // demasiado cerca, la artillería no puede tirar
         else if (!listo && u.orden !== 'atacar' && enTrinchera(m, u)) u.obj = 0; // fuera del arco de la trinchera: no puede responder
-      } else if (u.guardia || u.retirando) {
-        u.obj = 0; // en guardia, o reparándose, no persigue
+      } else if (u.guardia || u.retirando || (u.orden === 'nada' && !u.protege && !u.acude && cauto(m, u))) {
+        u.obj = 0; // en guardia, reparándose o en inferioridad, no persigue
       } else if (u.orden !== 'atacar' && dd > alc + (m.t - u.tRep < 240 ? 14 : 4)) { // al agresor lo persigue más lejos
         u.obj = 0; u.ruta = null; // se alejó demasiado: lo suelta
       } else {
+        if (u.orden === 'amover' && espera(m, u)) { u.v = 0; return; } // en marcha de ataque y en inferioridad: aguarda a los suyos antes de echarse encima
         if (!u.pend && (!u.ruta || (!o.edif && (m.t + u.id) % 20 === 0))) pedirRuta(m, u, posX(o), posY(o), o.edif ? o.tam / 2 + 1 : 1);
         if (d.giroT) apuntar(m, u, o, false); // la torreta va siguiendo al blanco mientras el casco avanza
         avanzar(m, u);
@@ -2548,6 +2558,7 @@
       return;
     }
     if (u.orden === 'amover') {
+      if (espera(m, u)) { u.v = 0; return; }
       if (u.ruta) { if (avanzar(m, u)) u.orden = 'nada'; }
       else if (!u.pend) {
         if (Math.hypot(u.dest.x - u.x, u.dest.y - u.y) > 1.5) pedirRuta(m, u, u.dest.x, u.dest.y, 0); else u.orden = 'nada';
@@ -2916,6 +2927,42 @@
   };
 
   // ---------- tick ----------
+  // ---------- criterio de combate ----------
+  // Cada segundo: un mapa grueso de fuerza por bando (coste por vida, solo lo armado) y, para cada unidad de tierra, su balance local (u.bal: lo propio entre lo enemigo que ve)
+  // y, si es de apoyo o de segunda línea, si se ha quedado por delante de las de combate (u.adel) y a qué distancia tiene al enemigo (u.amen).
+  const cauto = (m, u) => !m.jug[u.j].aToda && (u.bal < ECON.critInf || u.adel);
+  function tickCriterio(m) {
+    const N = m.N, B = ECON.critBloque, nb = Math.ceil(N / B), R = ECON.critAlcance;
+    if (!m.fuerza || m.fuerza[0].length !== nb * nb) m.fuerza = [new Float32Array(nb * nb), new Float32Array(nb * nb)];
+    const F = m.fuerza; F[0].fill(0); F[1].fill(0);
+    const comb = [[], []];
+    for (const e of m.ents) {
+      if (e.vida <= 0 || e.j > 1) continue;
+      if (e.edif) { const d = EDIF[e.tipo]; if (d && d.arma) F[e.j][((e.cy / B) | 0) * nb + ((e.cx / B) | 0)] += d.costo * e.vida / (e.vidaMax || d.vida); continue; }
+      const d = UNID[e.tipo]; if (!d.arma || d.mini || e.enTierra) continue;
+      F[e.j][((e.y / B) | 0) * nb + ((e.x / B) | 0)] += d.costo * e.vida / e.vidaMax; if (!d.aire) comb[e.j].push(e);
+    }
+    for (const u of m.ents) {
+      if (u.edif || u.vida <= 0 || u.j > 1) continue; const d = UNID[u.tipo]; if (d.aire || d.mini || (!d.arma && !d.atras)) continue;
+      const bx = (u.x / B) | 0, by = (u.y / B) | 0, nie = m.niebla[u.j], Fp = F[u.j], Fe = F[1 - u.j]; let pro = 0, ene = 0;
+      for (let dy = -R; dy <= R; dy++) { const y = by + dy; if (y < 0 || y >= nb) continue; for (let dx = -R; dx <= R; dx++) { const x = bx + dx; if (x < 0 || x >= nb) continue; const k = y * nb + x; pro += Fp[k];
+        if (Fe[k] > 0 && nie[Math.min(N - 1, y * B + (B >> 1)) * N + Math.min(N - 1, x * B + (B >> 1))] === 2) ene += Fe[k]; } }
+      u.bal = ene > 0 ? pro / ene : 9; u.adel = false; u.amen = 99;
+      if (d.atras && ene > 0) { // ¿quién tiene más cerca al enemigo, ella o las de combate?
+        let en = null, md = 10; for (const e of comb[1 - u.j]) { const dd = Math.hypot(e.x - u.x, e.y - u.y); if (dd < md && nie[Math.floor(e.y) * N + Math.floor(e.x)] === 2) { md = dd; en = e; } }
+        if (en) { u.amen = md; let delante = false, cerca = false; for (const o of comb[u.j]) { if (o === u || UNID[o.tipo].atras) continue; const du = Math.hypot(o.x - u.x, o.y - u.y); if (du > 14) continue; cerca = true; if (Math.hypot(o.x - en.x, o.y - en.y) < md - 0.5) { delante = true; break; } } u.adel = cerca && !delante; }
+      }
+      // El repliegue: por su cuenta (sin orden, o en marcha de ataque), quien está en clara inferioridad, o el apoyo que tiene al enemigo encima, se va con los suyos.
+      if (m.jug[u.j].aToda || u.guardia || u.bunk || u.retirando || u.protege || u.acude || u.vigila || u.cava > 0 || (u.orden !== 'nada' && u.orden !== 'amover') || ene <= 0 || m.t - (u.replT === undefined ? -999 : u.replT) < 100 || enTrinchera(m, u)) continue;
+      if (!(d.atras ? u.amen < 6 && (u.adel || u.bal < ECON.critInf) : u.bal < ECON.critRet)) continue;
+      const yo = d.arma ? d.costo * u.vida / u.vidaMax : 0; let mk = -1, mv = 0;
+      for (let dy = -R - 1; dy <= R + 1; dy++) { const y = by + dy; if (y < 0 || y >= nb) continue; for (let dx = -R - 1; dx <= R + 1; dx++) { const x = bx + dx; if (x < 0 || x >= nb || (!dx && !dy)) continue; const k = y * nb + x, v = Fp[k] - Fe[k]; if (v > mv) { mv = v; mk = k; } } }
+      if (mk < 0 || mv <= yo * 0.5) continue; // nadie con quien juntarse: aguanta donde está
+      const c = W.cercaLibre(m, ((mk % nb) + 0.5) * B, (((mk / nb) | 0) + 0.5) * B);
+      limpiar(u); u.obj = 0; u.replT = m.t; asignar(m, u, { t: 'mover', x: (c % N) + 0.5, y: ((c / N) | 0) + 0.5 }); m.efectos.push({ tipo: 'retira', x1: u.x, y1: u.y, j: u.j, t: m.t });
+    }
+  }
+  W.cauto = cauto;
   function tickInhibir(m) { // los inhibidores: el dron enemigo guiado por radio que entra en su radio pierde el enlace y cae (el de fibra, no)
     let inh = null; for (const u of m.ents) if (!u.edif && u.vida > 0 && UNID[u.tipo].inhibe) (inh || (inh = [])).push(u);
     if (!inh) return;
@@ -2934,6 +2981,7 @@
     tickProduccion(m, 0); tickProduccion(m, 1);
     if (m.t % 5 === 3) tickControl(m);
     if (m.t % 5 === 1) tickInhibir(m);
+    if (m.t % 20 === 7) tickCriterio(m);
     if (m.cargas && m.cargas.length) tickCargas(m);
     for (let k = 0, n = m.ents.length; k < n; k++) {
       const e = m.ents[k];
@@ -2994,6 +3042,10 @@
       if (e.infra) { quitarTramo(m, e); m.efectos.push({ tipo: e.vendido ? 'venta' : 'muerte', x2: e.cx, y2: e.cy, edif: true, tam: 1, clase: 'camino', ang: 0, j: e.j, t: m.t }); continue; }
       if (e.retirado) continue; // el helicóptero que ya ha cumplido se va sin más
       m.jug[e.j].bajas++;
+      if (!e.edif && UNID[e.tipo].arma && !UNID[e.tipo].aire) { // ¿murió sola? (sin una compañera armada a seis celdas): la medida de si las unidades se mandan solas
+        const J = m.jug[e.j]; let sola = true; for (const o of m.ents) if (o !== e && !o.edif && o.j === e.j && o.vida > 0 && UNID[o.tipo].arma && Math.hypot(o.x - e.x, o.y - e.y) <= 6) { sola = false; break; }
+        J.tropas = (J.tropas || 0) + 1; if (sola) J.solas = (J.solas || 0) + 1;
+      }
       if (!e.edif && e.pasajeros.length) { // del transporte destruido sale la mitad de su carga
         const vivos = e.pasajeros.filter((p, i) => i % 2 === 0);
         m.jug[e.j].bajas += e.pasajeros.length - vivos.length; e.pasajeros = [];
