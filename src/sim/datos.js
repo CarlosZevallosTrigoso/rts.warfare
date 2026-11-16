@@ -164,6 +164,9 @@
     // Dron espía: vuela muy lejos y mucho rato desde su central; no ataca.
     // Radio móvil: llevan la cobertura de radio con el ejército (a pie, 15 celdas; el vehículo, 36; el dron, 30 mientras le dure el combustible).
     // Cazadrones: va desarmado con un inhibidor a la espalda; el dron enemigo que entra en su radio (inhibe) pierde el enlace y cae. Antiaéreo portátil: un misil de hombro contra helicópteros y aviones.
+    // Mortero: equipo de dos con fuego indirecto; se monta como la gatling y su tiro cae desde arriba (la trinchera no cubre). Asalto: escudo (frena lo que llega de frente) y subfusil, que a quemarropa no respeta trinchera ni búnker.
+    mortero:     { nombre: 'Mortero', cat: 'inf', vida: 90, vel: 0.05, costo: 320, tiempo: 220, blindaje: 'ligero', arma: 'mortero', vision: 6.5, radio: 0.16, req: ['cuartel'], agua: 2, giro: 0.12, acel: 0.015, nivel: 2, monta: 50, arco: 0.5 },
+    asalto:      { nombre: 'Asalto', cat: 'inf', vida: 120, vel: 0.06, costo: 240, tiempo: 170, blindaje: 'ligero', arma: 'subfusil', vision: 6, radio: 0.115, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, arco: 0.5, cono: 1.4, escudo: 0.5 },
     cazadron:    { nombre: 'Cazadrones', cat: 'inf', vida: 50, vel: 0.065, costo: 220, tiempo: 160, blindaje: 'ligero', arma: null, vision: 7, radio: 0.105, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, inhibe: 4.5 },
     manpad:      { nombre: 'Antiaéreo portátil', cat: 'inf', vida: 55, vel: 0.06, costo: 260, tiempo: 180, blindaje: 'ligero', arma: 'misilHombro', vision: 8, radio: 0.11, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, arco: 0.5, cono: 1.4 },
     radioOp:     { enlace: true, radioCom: 15, nombre: 'Radioperador', cat: 'inf', vida: 45, vel: 0.075, costo: 140, tiempo: 100, blindaje: 'ligero', arma: 'pistola', vision: 7, radio: 0.105, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, arco: 0.5, cono: 1.4 },
@@ -197,6 +200,8 @@
     coheteAire: { alcance: 5.5, dano: 50, recarga: 55, vuelo: 0.7, vs: { ligero: 0.4, pesado: 1.3, edificio: 0.6 } },
     pistola: { alcance: 3,   dano: 4,  recarga: 18, vs: { ligero: 1,   pesado: 0.1,  edificio: 0.1 } },
     // Blindaje 'dron': los drones. Las armas de la infantería no les hacen nada; solo los derriban la antiaérea, la batería de la torreta, el caza y, sin disparar, los inhibidores.
+    mortero: { indirecto: true, sobre: true, alcance: 8.5, alcanceMin: 2.5, area: 1.2, dano: 42, recarga: 80, vuelo: 0.35, vs: { ligero: 1, pesado: 0.4, edificio: 0.6 } }, // sobre: cae desde arriba, la trinchera no cubre
+    subfusil: { asalto: true, alcance: 2.6, dano: 9, recarga: 4, vs: { ligero: 1, pesado: 0.15, edificio: 0.5 } }, // asalto: a quemarropa, ni la trinchera ni el búnker cubren
     misilHombro: { alcance: 7.5, dano: 95, recarga: 130, vuelo: 1.0, vs: { aire: 1 } }, // el del antiaéreo portátil: helicópteros y aviones; a un dron no lo puede fijar
     ametrFija: { alcance: 5.5, dano: 6, recarga: 5, vs: { ligero: 1, pesado: 0.15, edificio: 0.1 } }, // la de la torreta ametralladora: nada contra el aire
     ametralladora: { alcance: 4.5, dano: 6, recarga: 5, vs: { ligero: 1, pesado: 0.15, edificio: 0.15, aire: 0.25 } },
@@ -245,7 +250,7 @@
   };
   W.MURO_N = [null, W.MUROS.alambrada, W.MUROS.muro, W.MUROS.reforzado, W.MUROS.puerta];
   // Munición que lleva encima cada arma (disparos; una salva cuenta como uno). Los edificios con arma guardan cuatro veces más.
-  W.MUN = { obusFijo: 10, fusil: 100, canon: 30, cohete: 12, obus: 14, canonPesado: 24, canonTorre: 30, bateria: 50, flak: 70, flakMovil: 70, rifle: 16, salva: 6, pistola: 60, ametralladora: 300, ametrFija: 400, misilHombro: 6, gatling: 700, granadaMano: 12, misil: 40 };
+  W.MUN = { obusFijo: 10, fusil: 100, canon: 30, cohete: 12, obus: 14, canonPesado: 24, canonTorre: 30, bateria: 50, flak: 70, flakMovil: 70, rifle: 16, salva: 6, pistola: 60, ametralladora: 300, ametrFija: 400, misilHombro: 6, mortero: 20, subfusil: 150, gatling: 700, granadaMano: 12, misil: 40 };
   W.munDe = (tipo, edif) => { const a = (edif ? W.EDIF[tipo] : W.UNID[tipo]).arma; return a ? (W.MUN[a] || 60) * (edif ? 4 : 1) : 0; };
   // Misiles balísticos. alcance en celdas desde la misilera (0 = todo el mapa); vel en celdas por tick; aguante: impactos de interceptor que resiste.
   W.MISILES = {

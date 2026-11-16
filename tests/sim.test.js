@@ -1431,6 +1431,21 @@ prueba('drones: las armas de la infantería no los derriban; sí la antiaérea; 
   assert.ok(lejos.vida > 0, 'fuera del radio no cae');
 });
 
+prueba('mortero y asalto: el mortero tira por alto y sin montar no dispara; al de asalto el escudo le cubre el frente y su subfusil no respeta la trinchera', () => {
+  const m = W.crearMundo(4242, { N: 128 }), N = m.N;
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const cel = (x, y) => y * N + x;
+  for (let y = 40; y < 80; y++) for (let x = 30; x < 100; x++) { const i = cel(x, y); if (m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  const A = W.ARMAS; assert.ok(A.mortero.indirecto && A.mortero.sobre && A.mortero.alcanceMin > 0 && !A.mortero.vs.aire && !A.mortero.vs.dron, 'mortero: indirecto, con alcance mínimo, solo a tierra');
+  assert.ok(A.subfusil.asalto && A.subfusil.alcance < A.fusil.alcance && W.UNID.asalto.escudo < 1 && W.UNID.mortero.monta > 0, 'asalto: corto y con escudo; el mortero se monta');
+  const mor = W.crearUnidad(m, 0, 'mortero', cel(50, 50)), blanco = W.crearUnidad(m, 1, 'infanteria', cel(56, 50)); blanco.guardia = true; blanco.recarga = 99999; const v0 = blanco.vida;
+  for (let i = 0; i < 20; i++) { W.tick(m); blanco.recarga = 99999; } assert.strictEqual(blanco.vida, v0, 'sin montar no dispara');
+  for (let i = 0; i < 400 && blanco.vida === v0; i++) { W.tick(m); blanco.recarga = 99999; } assert.ok(blanco.vida < v0, 'montado, alcanza a seis celdas');
+  const a1 = W.crearUnidad(m, 0, 'asalto', cel(60, 70)), a2 = W.crearUnidad(m, 0, 'asalto', cel(60, 74)); a1.ang = 0; a2.ang = 0; const v1 = a1.vida;
+  W.herir(m, a1, A.fusil, 1, null, a1.x + 3, a1.y); W.herir(m, a2, A.fusil, 1, null, a2.x - 3, a2.y);
+  assert.ok(Math.abs((v1 - a1.vida) - (v1 - a2.vida) * W.UNID.asalto.escudo) < 1e-9 && a1.vida > a2.vida, 'de frente recibe la mitad que por la espalda');
+});
+
 prueba('torreta ametralladora: barata, sin consumo, contra tierra y nunca contra el aire', () => {
   const d = W.EDIF.nidoMG, A = W.ARMAS[d.arma];
   assert.ok(d && A, 'existe, con su arma'); assert.ok(A.vs.ligero === 1 && !A.vs.aire, 'no dispara al aire'); assert.ok(d.energia === 0 && d.costo < W.EDIF.torreta.costo, 'barata y sin consumo'); assert.ok(W.MUN[d.arma] > 0, 'tiene munición definida');

@@ -41,6 +41,15 @@
       return;
     }
     c.save(); c.rotate(e.ang); c.lineJoin = 'round';
+    if (u.tipo === 'mortero') { // dos sirvientes y el mortero: al hombro mientras caminan; montado, sobre su placa y su bípode
+      const R = r * 1.12, mo = e.monta === undefined ? 1 : e.monta, d = e.retro;
+      for (const lado of [-1, 1]) { c.save(); c.translate(-R * 0.35, lado * R * 1.0); c.rotate(-lado * 0.45 * mo); c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; rr(c, -R * 0.3, -R * 0.62, R * 0.6, R * 1.24, R * 0.3); c.fill(); c.stroke(); if (lod === 2) { c.fillStyle = col.osc; c.fillRect(-R * 0.18, -R * 0.36, R * 0.42, R * 0.72); } c.fillStyle = col.luz; c.beginPath(); c.arc(R * 0.06, 0, R * 0.28, 0, TAU); c.fill(); c.stroke(); c.restore(); }
+      if (mo > 0) { c.fillStyle = col.osc; c.beginPath(); c.arc(R * 0.9, 0, R * 0.5 * mo, 0, TAU); c.fill(); c.strokeStyle = col.osc; c.lineWidth = Math.max(1, R * 0.13); c.beginPath(); c.moveTo(R * 1.75, -R * 0.5 * mo); c.lineTo(R * 1.35, 0); c.lineTo(R * 1.75, R * 0.5 * mo); c.stroke(); } // placa base y bípode, que aparecen al montar
+      c.strokeStyle = col.tinta || '#1a1a1a'; c.lineCap = 'butt'; c.lineWidth = Math.max(2, R * 0.32); c.beginPath(); c.moveTo(R * 0.9 - d * R * 0.1, 0); c.lineTo(R * (1.9 - mo * 0.25) - d * R * 0.1, 0); c.stroke(); // el tubo: montado apunta alto y se ve más corto
+      if (lod === 2 && mo > 0.5) { c.fillStyle = col.saco || '#c9b990'; c.fillRect(R * 0.05, -R * 0.26, R * 0.42, R * 0.52); } // la caja de granadas
+      if (d > 0.5) { c.fillStyle = col.fuego; c.beginPath(); c.arc(R * 1.85, 0, R * 0.42 * d, 0, TAU); c.fill(); }
+      c.restore(); return;
+    }
     if (u.tipo === 'gatling') { // dos sirvientes, y entre ambos el arma: al hombro mientras caminan, sobre su trípode cuando está montada
       const R = r * 1.12, mo = e.monta === undefined ? 1 : e.monta;
       c.strokeStyle = col.osc; c.lineCap = 'butt';
@@ -136,6 +145,7 @@
       if (e.fino && lod === 2 && !esp && !civ) { c.strokeStyle = col.osc; c.lineWidth = Math.max(1, R * 0.12); c.beginPath(); c.arc(R * 0.08, 0, R * 0.42, -0.55, 0.55); c.stroke(); } // el frente del casco
       if (cerca && !esp && !civ && !med && !expl) { c.fillStyle = col.osc; c.fillRect(R * 0.4, -R * 0.12, R * 0.16, R * 0.24); if (fino) { c.beginPath(); c.arc(R * 0.04, -R * 0.42, R * 0.1, 0, TAU); c.arc(R * 0.04, R * 0.42, R * 0.1, 0, TAU); c.fill(); } } // visor y, de cerca, los cascos
       c.restore();
+      if (u.tipo === 'asalto' && lod && !(e.te > 0.5)) { const R = r * 1.4; c.strokeStyle = col.osc; c.lineWidth = Math.max(1.5, R * 0.34); c.lineCap = 'round'; c.beginPath(); c.arc(R * 0.5, -R * 0.25, R * 0.95, -1.25, 0.35); c.stroke(); if (lod === 2) { c.strokeStyle = col.claro || col.luz; c.lineWidth = Math.max(1, R * 0.16); c.beginPath(); c.arc(R * 0.5, -R * 0.25, R * 0.95, -1.15, 0.25); c.stroke(); } c.lineCap = 'butt'; } // el escudo, por delante
     } else if (u.tipo === 'tanque' || pesado) {
       const L = r * 1.4, w = r;
       orugas(c, col, e, lod, -L, L, w, w * 0.44); c.translate(e.hx || 0, e.hy || 0); // el casco, sobre su tren de rodaje: cabecea y se ladea

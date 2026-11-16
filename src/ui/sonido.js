@@ -90,13 +90,13 @@
       if (!listo(v)) return;
       const b = bus(v, pan);
       let k = vari();
-      if (arma === 'misil') arma = 'cohete'; else if (arma === 'bomba') arma = 'obus'; else if (arma === 'flak') arma = 'bateria';
+      if (arma === 'misil') arma = 'cohete'; else if (arma === 'bomba' || arma === 'mortero') arma = 'obus'; else if (arma === 'flak') arma = 'bateria';
       if (arma === 'cohete') { // silbido que sube y un golpe seco
         ruido(b, 'bandpass', 500 * k, 2600, 0.45, 0.5); tono(b, 'sawtooth', 180 * k, 320, 0.35, 0.12); ruido(b, 'lowpass', 700, 200, 0.12, 0.5);
         return;
       }
       if (arma === 'rifle') { k *= 0.6; v = Math.min(1, v * 1.3); arma = 'fusil'; } else if (arma === 'salva' || arma === 'coheteAire') arma = 'cohete';
-      if (arma === 'pistola') { k *= 1.3; v *= 0.6; arma = 'fusil'; } else if (arma === 'ametralladora' || arma === 'ametrFija' || arma === 'gatling') { k *= 0.85; v *= 0.7; arma = 'fusil'; }
+      if (arma === 'pistola' || arma === 'subfusil') { k *= 1.3; v *= 0.6; arma = 'fusil'; } else if (arma === 'ametralladora' || arma === 'ametrFija' || arma === 'gatling') { k *= 0.85; v *= 0.7; arma = 'fusil'; }
       if (arma === 'obus') { k *= 0.7; arma = 'canon'; } else if (arma === 'canonPesado' || arma === 'canonTorre') { k *= 0.85; arma = 'canon'; }
       if (arma === 'fusil') {
         ruido(b, 'highpass', 2400 * k, 2000, 0.04, 0.5); // chasquido

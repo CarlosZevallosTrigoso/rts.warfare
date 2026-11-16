@@ -355,12 +355,12 @@
   <button type="button" id="tutorial">Tutorial guiado<small style="display:block;color:var(--suave);font-size:10px">ocho pasos, con el rival dormido hasta el final</small></button>
   <button type="button" id="continuar" hidden>Continuar la partida guardada</button>
   <button type="button" id="irDrone" onclick="location.href='drone/index.html'">drone.warfare<small style="display:block;color:var(--suave);font-size:10px">el otro juego: el mismo conflicto con lupa, infantería y drones</small></button>
-  <div id="version">versión 117</div>
+  <div id="version">versión 118</div>
 </div></div>
 <div id="guia" hidden><div class="caja"><div class="cab"><strong>Guía: para qué sirve cada cosa</strong><button type="button" id="cierraGuia">cerrar</button></div><div id="guiaTxt"></div></div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finVer" href="#" title="Vuelve a ver la partida entera, con todo el mapa a la vista y a la velocidad que quieras.">ver repetición</a><a id="finLog" href="#" title="Descarga el registro de la partida: la semilla, las opciones y todas las órdenes de los dos bandos, con su instante. Sirve para reproducirla y analizar cómo jugó la IA.">descargar registro</a><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 117' };
+globalThis.W = { VERSION: 'versión 118' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -528,6 +528,9 @@ globalThis.W = { VERSION: 'versión 117' };
     // Dron espía: vuela muy lejos y mucho rato desde su central; no ataca.
     // Radio móvil: llevan la cobertura de radio con el ejército (a pie, 15 celdas; el vehículo, 36; el dron, 30 mientras le dure el combustible).
     // Cazadrones: va desarmado con un inhibidor a la espalda; el dron enemigo que entra en su radio (inhibe) pierde el enlace y cae. Antiaéreo portátil: un misil de hombro contra helicópteros y aviones.
+    // Mortero: equipo de dos con fuego indirecto; se monta como la gatling y su tiro cae desde arriba (la trinchera no cubre). Asalto: escudo (frena lo que llega de frente) y subfusil, que a quemarropa no respeta trinchera ni búnker.
+    mortero:     { nombre: 'Mortero', cat: 'inf', vida: 90, vel: 0.05, costo: 320, tiempo: 220, blindaje: 'ligero', arma: 'mortero', vision: 6.5, radio: 0.16, req: ['cuartel'], agua: 2, giro: 0.12, acel: 0.015, nivel: 2, monta: 50, arco: 0.5 },
+    asalto:      { nombre: 'Asalto', cat: 'inf', vida: 120, vel: 0.06, costo: 240, tiempo: 170, blindaje: 'ligero', arma: 'subfusil', vision: 6, radio: 0.115, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, arco: 0.5, cono: 1.4, escudo: 0.5 },
     cazadron:    { nombre: 'Cazadrones', cat: 'inf', vida: 50, vel: 0.065, costo: 220, tiempo: 160, blindaje: 'ligero', arma: null, vision: 7, radio: 0.105, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, inhibe: 4.5 },
     manpad:      { nombre: 'Antiaéreo portátil', cat: 'inf', vida: 55, vel: 0.06, costo: 260, tiempo: 180, blindaje: 'ligero', arma: 'misilHombro', vision: 8, radio: 0.11, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, arco: 0.5, cono: 1.4 },
     radioOp:     { enlace: true, radioCom: 15, nombre: 'Radioperador', cat: 'inf', vida: 45, vel: 0.075, costo: 140, tiempo: 100, blindaje: 'ligero', arma: 'pistola', vision: 7, radio: 0.105, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, arco: 0.5, cono: 1.4 },
@@ -561,6 +564,8 @@ globalThis.W = { VERSION: 'versión 117' };
     coheteAire: { alcance: 5.5, dano: 50, recarga: 55, vuelo: 0.7, vs: { ligero: 0.4, pesado: 1.3, edificio: 0.6 } },
     pistola: { alcance: 3,   dano: 4,  recarga: 18, vs: { ligero: 1,   pesado: 0.1,  edificio: 0.1 } },
     // Blindaje 'dron': los drones. Las armas de la infantería no les hacen nada; solo los derriban la antiaérea, la batería de la torreta, el caza y, sin disparar, los inhibidores.
+    mortero: { indirecto: true, sobre: true, alcance: 8.5, alcanceMin: 2.5, area: 1.2, dano: 42, recarga: 80, vuelo: 0.35, vs: { ligero: 1, pesado: 0.4, edificio: 0.6 } }, // sobre: cae desde arriba, la trinchera no cubre
+    subfusil: { asalto: true, alcance: 2.6, dano: 9, recarga: 4, vs: { ligero: 1, pesado: 0.15, edificio: 0.5 } }, // asalto: a quemarropa, ni la trinchera ni el búnker cubren
     misilHombro: { alcance: 7.5, dano: 95, recarga: 130, vuelo: 1.0, vs: { aire: 1 } }, // el del antiaéreo portátil: helicópteros y aviones; a un dron no lo puede fijar
     ametrFija: { alcance: 5.5, dano: 6, recarga: 5, vs: { ligero: 1, pesado: 0.15, edificio: 0.1 } }, // la de la torreta ametralladora: nada contra el aire
     ametralladora: { alcance: 4.5, dano: 6, recarga: 5, vs: { ligero: 1, pesado: 0.15, edificio: 0.15, aire: 0.25 } },
@@ -609,7 +614,7 @@ globalThis.W = { VERSION: 'versión 117' };
   };
   W.MURO_N = [null, W.MUROS.alambrada, W.MUROS.muro, W.MUROS.reforzado, W.MUROS.puerta];
   // Munición que lleva encima cada arma (disparos; una salva cuenta como uno). Los edificios con arma guardan cuatro veces más.
-  W.MUN = { obusFijo: 10, fusil: 100, canon: 30, cohete: 12, obus: 14, canonPesado: 24, canonTorre: 30, bateria: 50, flak: 70, flakMovil: 70, rifle: 16, salva: 6, pistola: 60, ametralladora: 300, ametrFija: 400, misilHombro: 6, gatling: 700, granadaMano: 12, misil: 40 };
+  W.MUN = { obusFijo: 10, fusil: 100, canon: 30, cohete: 12, obus: 14, canonPesado: 24, canonTorre: 30, bateria: 50, flak: 70, flakMovil: 70, rifle: 16, salva: 6, pistola: 60, ametralladora: 300, ametrFija: 400, misilHombro: 6, mortero: 20, subfusil: 150, gatling: 700, granadaMano: 12, misil: 40 };
   W.munDe = (tipo, edif) => { const a = (edif ? W.EDIF[tipo] : W.UNID[tipo]).arma; return a ? (W.MUN[a] || 60) * (edif ? 4 : 1) : 0; };
   // Misiles balísticos. alcance en celdas desde la misilera (0 = todo el mapa); vel en celdas por tick; aguante: impactos de interceptor que resiste.
   W.MISILES = {
@@ -3064,7 +3069,8 @@ globalThis.W = { VERSION: 'versión 117' };
     if (!puede(arma, b) || m.jug[b.j].tr.invulnerable) return; // ADMIN: invulnerables
     let fl = 1;
     if (ox !== undefined && !b.edif && UNID[b.tipo].cat === 'veh') { const s = W.sector(m, b, { x: ox, y: oy }); fl = s === 2 ? ECON.espalda : s === 1 ? ECON.flanco : 1; if (s && m.t - (b.tFlanco === undefined ? -99 : b.tFlanco) > 25) { b.tFlanco = m.t; m.efectos.push({ tipo: 'flanco', x1: b.x, y1: b.y, s, j: b.j, t: m.t }); } }
-    b.vida -= fl * arma.dano * (mult || 1) * arma.vs[b.edif ? 'edificio' : UNID[b.tipo].blindaje] * (b.bunk ? ECON.bunkerDano : enTrinchera(m, b) ? ECON.trinchera : 1) * (enBosque(m, b) && UNID[b.tipo].cat === 'inf' ? ECON.bosqueCubre : 1);
+    if (ox !== undefined && !b.edif && UNID[b.tipo].escudo && W.sector(m, b, { x: ox, y: oy }) === 0) fl = UNID[b.tipo].escudo; // el escudo: lo que llega de frente pega la mitad
+    b.vida -= fl * arma.dano * (mult || 1) * arma.vs[b.edif ? 'edificio' : UNID[b.tipo].blindaje] * (arma.asalto ? 1 : b.bunk ? ECON.bunkerDano : enTrinchera(m, b) ? (arma.sobre ? 1 : ECON.trinchera) : 1) * (enBosque(m, b) && UNID[b.tipo].cat === 'inf' ? ECON.bosqueCubre : 1);
     b.tDano = m.t; b.agresor = de;
     if (b.vida <= 0 && !b.contada) { // veteranía: la baja se la apunta quien disparó
       b.contada = true;
@@ -4413,6 +4419,8 @@ globalThis.W = { VERSION: 'versión 117' };
         if ((c.gatling || 0) + J.colas.gatling.n < 2 && (c.infanteria || 0) >= 8) entrena('gatling', 500);
         else if ((c.hacker || 0) + J.colas.hacker.n < 1 && soldados.length >= 10) entrena('hacker', 500);
         else if (c.estDrones && (c.operador || 0) + J.colas.operador.n < 2 && soldados.length >= 8) entrena('operador', 500);
+        else if ((c.mortero || 0) + J.colas.mortero.n < 2 && soldados.length >= 10) entrena('mortero', 600); // fuego indirecto propio, contra trincheras y defensas
+        else if ((c.asalto || 0) + J.colas.asalto.n < 2 && soldados.length >= 8) entrena('asalto', 500);
         else if ((c.cazadron || 0) + J.colas.cazadron.n < 1 && soldados.length >= 8) entrena('cazadron', 500); // un inhibidor que va con el grueso: los fusiles ya no derriban drones
         else if ((c.manpad || 0) + J.colas.manpad.n < 2 && soldados.length >= 10) entrena('manpad', 600);
       }
@@ -4749,13 +4757,13 @@ globalThis.W = { VERSION: 'versión 117' };
       if (!listo(v)) return;
       const b = bus(v, pan);
       let k = vari();
-      if (arma === 'misil') arma = 'cohete'; else if (arma === 'bomba') arma = 'obus'; else if (arma === 'flak') arma = 'bateria';
+      if (arma === 'misil') arma = 'cohete'; else if (arma === 'bomba' || arma === 'mortero') arma = 'obus'; else if (arma === 'flak') arma = 'bateria';
       if (arma === 'cohete') { // silbido que sube y un golpe seco
         ruido(b, 'bandpass', 500 * k, 2600, 0.45, 0.5); tono(b, 'sawtooth', 180 * k, 320, 0.35, 0.12); ruido(b, 'lowpass', 700, 200, 0.12, 0.5);
         return;
       }
       if (arma === 'rifle') { k *= 0.6; v = Math.min(1, v * 1.3); arma = 'fusil'; } else if (arma === 'salva' || arma === 'coheteAire') arma = 'cohete';
-      if (arma === 'pistola') { k *= 1.3; v *= 0.6; arma = 'fusil'; } else if (arma === 'ametralladora' || arma === 'ametrFija' || arma === 'gatling') { k *= 0.85; v *= 0.7; arma = 'fusil'; }
+      if (arma === 'pistola' || arma === 'subfusil') { k *= 1.3; v *= 0.6; arma = 'fusil'; } else if (arma === 'ametralladora' || arma === 'ametrFija' || arma === 'gatling') { k *= 0.85; v *= 0.7; arma = 'fusil'; }
       if (arma === 'obus') { k *= 0.7; arma = 'canon'; } else if (arma === 'canonPesado' || arma === 'canonTorre') { k *= 0.85; arma = 'canon'; }
       if (arma === 'fusil') {
         ruido(b, 'highpass', 2400 * k, 2000, 0.04, 0.5); // chasquido
@@ -4848,6 +4856,15 @@ globalThis.W = { VERSION: 'versión 117' };
       return;
     }
     c.save(); c.rotate(e.ang); c.lineJoin = 'round';
+    if (u.tipo === 'mortero') { // dos sirvientes y el mortero: al hombro mientras caminan; montado, sobre su placa y su bípode
+      const R = r * 1.12, mo = e.monta === undefined ? 1 : e.monta, d = e.retro;
+      for (const lado of [-1, 1]) { c.save(); c.translate(-R * 0.35, lado * R * 1.0); c.rotate(-lado * 0.45 * mo); c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; rr(c, -R * 0.3, -R * 0.62, R * 0.6, R * 1.24, R * 0.3); c.fill(); c.stroke(); if (lod === 2) { c.fillStyle = col.osc; c.fillRect(-R * 0.18, -R * 0.36, R * 0.42, R * 0.72); } c.fillStyle = col.luz; c.beginPath(); c.arc(R * 0.06, 0, R * 0.28, 0, TAU); c.fill(); c.stroke(); c.restore(); }
+      if (mo > 0) { c.fillStyle = col.osc; c.beginPath(); c.arc(R * 0.9, 0, R * 0.5 * mo, 0, TAU); c.fill(); c.strokeStyle = col.osc; c.lineWidth = Math.max(1, R * 0.13); c.beginPath(); c.moveTo(R * 1.75, -R * 0.5 * mo); c.lineTo(R * 1.35, 0); c.lineTo(R * 1.75, R * 0.5 * mo); c.stroke(); } // placa base y bípode, que aparecen al montar
+      c.strokeStyle = col.tinta || '#1a1a1a'; c.lineCap = 'butt'; c.lineWidth = Math.max(2, R * 0.32); c.beginPath(); c.moveTo(R * 0.9 - d * R * 0.1, 0); c.lineTo(R * (1.9 - mo * 0.25) - d * R * 0.1, 0); c.stroke(); // el tubo: montado apunta alto y se ve más corto
+      if (lod === 2 && mo > 0.5) { c.fillStyle = col.saco || '#c9b990'; c.fillRect(R * 0.05, -R * 0.26, R * 0.42, R * 0.52); } // la caja de granadas
+      if (d > 0.5) { c.fillStyle = col.fuego; c.beginPath(); c.arc(R * 1.85, 0, R * 0.42 * d, 0, TAU); c.fill(); }
+      c.restore(); return;
+    }
     if (u.tipo === 'gatling') { // dos sirvientes, y entre ambos el arma: al hombro mientras caminan, sobre su trípode cuando está montada
       const R = r * 1.12, mo = e.monta === undefined ? 1 : e.monta;
       c.strokeStyle = col.osc; c.lineCap = 'butt';
@@ -4943,6 +4960,7 @@ globalThis.W = { VERSION: 'versión 117' };
       if (e.fino && lod === 2 && !esp && !civ) { c.strokeStyle = col.osc; c.lineWidth = Math.max(1, R * 0.12); c.beginPath(); c.arc(R * 0.08, 0, R * 0.42, -0.55, 0.55); c.stroke(); } // el frente del casco
       if (cerca && !esp && !civ && !med && !expl) { c.fillStyle = col.osc; c.fillRect(R * 0.4, -R * 0.12, R * 0.16, R * 0.24); if (fino) { c.beginPath(); c.arc(R * 0.04, -R * 0.42, R * 0.1, 0, TAU); c.arc(R * 0.04, R * 0.42, R * 0.1, 0, TAU); c.fill(); } } // visor y, de cerca, los cascos
       c.restore();
+      if (u.tipo === 'asalto' && lod && !(e.te > 0.5)) { const R = r * 1.4; c.strokeStyle = col.osc; c.lineWidth = Math.max(1.5, R * 0.34); c.lineCap = 'round'; c.beginPath(); c.arc(R * 0.5, -R * 0.25, R * 0.95, -1.25, 0.35); c.stroke(); if (lod === 2) { c.strokeStyle = col.claro || col.luz; c.lineWidth = Math.max(1, R * 0.16); c.beginPath(); c.arc(R * 0.5, -R * 0.25, R * 0.95, -1.15, 0.25); c.stroke(); } c.lineCap = 'butt'; } // el escudo, por delante
     } else if (u.tipo === 'tanque' || pesado) {
       const L = r * 1.4, w = r;
       orugas(c, col, e, lod, -L, L, w, w * 0.44); c.translate(e.hx || 0, e.hy || 0); // el casco, sobre su tren de rodaje: cabecea y se ladea
@@ -7593,6 +7611,7 @@ globalThis.W = { VERSION: 'versión 117' };
       infanteria: 'Barata y versátil; captura puestos, cava y ocupa trincheras.', granadero: 'Desde el nivel 1: granadas de mano a corta distancia, con explosión. La respuesta barata a los primeros vehículos y a la infantería amontonada.', antitanque: 'Infantería con cohetes: contra vehículos y aviones.', explorador: 'Rápido y ve lejos; explora solo con E.', ingeniero: 'Zapador: pone y retira minas, tiende pontones sobre el agua y vuela caminos y puentes (botones al seleccionarlo). Repara solo vehículos y edificios; cava más rápido.', medico: 'Cura solo a la infantería herida cercana.',
       francotirador: 'Mata infantería desde muy lejos; se esconde.', gatling: 'Equipo de dos: tarda en montar, y montada tritura infantería y aviones bajos.', hacker: 'Toma el control de un vehículo enemigo durante medio minuto (lo manejas como tuyo) o apaga un edificio; cuesta información.', operador: 'Lleva tres drones: vuela uno y los otros dos son repuestos; cuando se le acaban hay que reponerlos junto a una estación de drones, un puesto logístico, un puesto de avanzada o un camión de suministro. El dron vuelve solo a cambiar la batería y a repararse. Parado, despliega un dron de reconocimiento, y puede mandarlo en misión a vigilar un punto a 45 celdas (tecla O): lo que vea lo ve tu artillería. Con las tecnologías de la estación de drones lleva también kamikazes y un bombardero, que atacan en la zona de la misión.', espia: 'Pasa inadvertido aunque se mueva. Junto a un edificio enemigo ves lo que produce el rival y ganas información.', dronEspia: 'Vuela muy lejos y mucho rato desde su central; no ataca.',
       tanque: 'El vehículo de combate básico.', artilleria: 'Dispara muy lejos, en área, a lo que vea cualquiera de los tuyos.', pesado: 'Tanque lento, muy duro y de gran pegada.', blindado: 'Rápido, con ametralladora: contra infantería.', antiaereoMovil: 'Antiaérea sobre ruedas para acompañar al ejército.',
+      mortero: 'Equipo de dos: tarda en montar y tira por encima de bosques y edificios. La trinchera no cubre de su fuego. No puede tirar de cerca.', asalto: 'Escudo y subfusil: aguanta el doble de frente y a quemarropa ni la trinchera ni el búnker cubren al enemigo. Alcance muy corto.',
       cazadron: 'Va desarmado, con un inhibidor a la espalda: el dron enemigo que entra en su radio pierde el enlace y cae.', manpad: 'Misil de hombro contra helicópteros y aviones. No sirve contra tierra ni contra drones.',
       radioOp: 'Lleva la radio a pie: da cobertura a 15 celdas a su alrededor, para que la tropa que acompaña vea y obedezca sin retraso lejos de tus torres.', vehRadio: 'Radio sobre ruedas: cobertura a 36 celdas. Sin armas; llévalo detrás del ejército.', dronRadio: 'Repetidor volante: cobertura a 30 celdas donde lo mandes patrullar, mientras le dure el combustible; luego vuelve a repostar a la central de inteligencia.',
       transporte: 'Lleva infantería dentro, rápido.', lanzacohetes: 'Salvas de cohetes a mucha distancia, sobre una zona.', mando: 'Los tuyos a su alrededor ven en redondo y giran más rápido; interfiere drones enemigos. Gasta información.', comandoDrones: 'Lleva drones de reconocimiento, bombarderos y kamikazes que atacan solos.',
