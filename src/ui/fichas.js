@@ -24,10 +24,12 @@
       c.restore(); }
   }
 
+  function rr(c, x, y, w, h, rad) { rad = Math.max(0, Math.min(rad, w / 2, h / 2)); c.beginPath(); c.moveTo(x + rad, y); c.lineTo(x + w - rad, y); c.arcTo(x + w, y, x + w, y + rad, rad); c.lineTo(x + w, y + h - rad); c.arcTo(x + w, y + h, x + w - rad, y + h, rad); c.lineTo(x + rad, y + h); c.arcTo(x, y + h, x, y + h - rad, rad); c.lineTo(x, y + rad); c.arcTo(x, y, x + rad, y, rad); c.closePath(); } // rectángulo de esquinas redondas
+
   // ---------- unidades ----------
   // El contexto llega trasladado al centro de la unidad. r = radio en píxeles.
   // e = { ang, angT, retro (0..1), anda, tiempo, carga (0..1), cosecha }
-  // y, para el movimiento: vehículos { fI, fD, rod, dir, fino, hx, hy }; infantería { pies: [{x, y}, {x, y}] (en R), hombro, cabeza, inc (en R), resp, fino }
+  // y, para el movimiento: vehículos { fI, fD, rod, dir, fino, hx, hy }; infantería { pies: [{x, y}, {x, y}] (en R), hombro, cabeza, inc (en R), resp, fino, rodilla (0..1), te (0..1, cuerpo a tierra) }
   W.fichaUnidad = function (c, u, r, lod, col, e) {
     const inf = W.UNID[u.tipo].cat === 'inf', at = u.tipo === 'antitanque', pesado = u.tipo === 'pesado', expl = u.tipo === 'explorador', ing = u.tipo === 'ingeniero', med = u.tipo === 'medico', civ = u.tipo === 'civil', hk = u.tipo === 'hacker', op = u.tipo === 'operador', rad = u.tipo === 'radioOp', franco = u.tipo === 'francotirador', esp = u.tipo === 'espia', gra = u.tipo === 'granadero';
     if (lod === 0) {
@@ -61,13 +63,23 @@
       c.restore(); return;
     }
     if (inf) {
-      const R = r * 1.4;
-      if (e.pies && lod === 2) { // las botas asoman por delante y por detrás al andar; de cerca, también la pierna
-        c.fillStyle = col.osc; if (e.fino) { c.strokeStyle = col.osc; c.lineCap = 'round'; c.lineWidth = Math.max(1.2, R * 0.28); c.beginPath(); for (const q of e.pies) { c.moveTo(0, q.y * R * 0.75); c.lineTo(q.x * R, q.y * R); } c.stroke(); }
-        for (const q of e.pies) { c.beginPath(); c.ellipse(q.x * R, q.y * R, R * 0.36, R * 0.2, 0, 0, TAU); c.fill(); }
+      // La figura: un tronco estrecho de delante a atrás, brazos y piernas finos, casco pequeño y el equipo encima (chaleco, hombreras, mochila con correas).
+      // Tres posturas, que se funden: de pie o andando, rodilla en tierra (e.rodilla, al disparar parado) y cuerpo a tierra (e.te, cuando le tiran).
+      const R = r * 1.4, te = e.te || 0, ro = (e.rodilla || 0) * (1 - te), cerca = lod === 2, fino = cerca && e.fino, mz = (a, b, k) => a + (b - a) * k;
+      const fondo = R * mz(mz(0.34, 0.4, ro), 1.0, te), ancho = R * mz(0.88, 0.5, te) * (e.resp || 1), tx = R * mz(-0.1 * ro, -0.55, te), hx = R * mz(0.06 + 0.12 * ro, 0.74, te), ax = R * 0.6 * te, ay = -R * 0.22 * te;
+      c.lineCap = 'round';
+      if (lod && te > 0.3) { // tendido: las piernas, estiradas hacia atrás
+        c.strokeStyle = col.osc; c.lineWidth = Math.max(1.2, R * 0.24); c.beginPath(); for (const q of [-1, 1]) { c.moveTo(tx - fondo * 0.8, q * R * 0.2); c.lineTo(tx - fondo - R * 0.95 * te, q * R * 0.36); } c.stroke();
+      } else if (fino && ro > 0.3) { // rodilla en tierra: un pie por delante y la otra pierna doblada hacia atrás
+        c.strokeStyle = col.osc; c.lineWidth = Math.max(1.2, R * 0.22); c.beginPath(); c.moveTo(0, -R * 0.3); c.lineTo(R * 0.55 * ro, -R * 0.34); c.moveTo(0, R * 0.3); c.lineTo(-R * 0.75 * ro, R * 0.36); c.stroke();
+        c.fillStyle = col.osc; for (const [x, y] of [[R * 0.62 * ro, -R * 0.34], [-R * 0.86 * ro, R * 0.36]]) { c.beginPath(); c.ellipse(x, y, R * 0.27, R * 0.14, 0, 0, TAU); c.fill(); }
+      } else if (e.pies && cerca) { // andando: las botas asoman por delante y por detrás, con su pierna
+        c.strokeStyle = col.osc; c.lineWidth = Math.max(1.1, R * 0.2); c.beginPath(); for (const q of e.pies) { c.moveTo(0, q.y * R * 0.6); c.lineTo(q.x * R, q.y * R * 0.8); } c.stroke();
+        c.fillStyle = col.osc; for (const q of e.pies) { c.beginPath(); c.ellipse(q.x * R + R * 0.06, q.y * R * 0.8, R * 0.29, R * 0.15, 0, 0, TAU); c.fill(); }
       }
       if (e.inc) c.translate(e.inc * R, 0); // se echa adelante al arrancar y atrás al frenar
-      if (e.hombro) c.rotate(e.hombro); // los hombros giran contra el paso
+      if (e.hombro) c.rotate(e.hombro * (1 - te)); // los hombros giran contra el paso
+      c.save(); c.translate(ax, ay); // el arma o la herramienta: tendido, la lleva por delante
       c.strokeStyle = col.osc; c.lineCap = at ? 'butt' : 'round'; c.lineWidth = Math.max(1.4, R * (at ? 0.55 : 0.3)); // fusil, o tubo lanzacohetes al hombro
       if (ing) { // sin arma: lleva una llave inglesa por delante
         c.lineWidth = Math.max(1.2, R * 0.26); c.beginPath(); c.moveTo(R * 0.3, R * 0.45); c.lineTo(R * 1.25, R * 0.45); c.moveTo(R * 1.25, R * 0.15); c.lineTo(R * 1.25, R * 0.75); c.stroke();
@@ -92,15 +104,25 @@
         c.lineWidth = Math.max(1, R * 0.18); c.beginPath(); c.moveTo(-R * 0.2, R * 0.45); c.lineTo(R * (2.5 - e.retro * 0.3), R * 0.45); c.stroke();
         c.fillStyle = col.osc; c.fillRect(R * 0.5, R * 0.2, R * 0.6, R * 0.2);
       } else { c.beginPath(); c.moveTo(R * (at ? -0.7 : 0.1), R * 0.5); c.lineTo(R * ((at ? 1.3 : 1.55) - e.retro * 0.3), R * 0.5); c.stroke();
-        if (e.fino && lod === 2 && !at) { // de cerca, los brazos: del hombro a la empuñadura y al guardamanos
-          const k = -e.retro * 0.3 * R; c.strokeStyle = col.base; c.lineWidth = Math.max(1.2, R * 0.3); c.beginPath(); c.moveTo(0, R * 0.78); c.lineTo(R * 0.5 + k, R * 0.5); c.moveTo(0, -R * 0.78); c.quadraticCurveTo(R * 0.75, -R * 0.45, R * 1.05 + k, R * 0.5); c.stroke();
-          c.fillStyle = col.luz; c.strokeStyle = col.osc; c.lineWidth = 0.8; for (const x of [0.5, 1.05]) { c.beginPath(); c.arc(R * x + k, R * 0.5, R * 0.15, 0, TAU); c.fill(); c.stroke(); }
-        } }
-      if (lod === 2) { c.fillStyle = col.osc; c.fillRect(-R * 0.95, -R * 0.5, R * 0.5, R); } // mochila
+        if (fino && !at) { c.lineCap = 'butt'; c.lineWidth = Math.max(1.6, R * 0.34); c.beginPath(); c.moveTo(R * 0.1, R * 0.5); c.lineTo(R * 0.48, R * 0.5); c.stroke(); c.fillStyle = col.luz; c.beginPath(); c.arc(R * (0.85 - e.retro * 0.3), R * 0.5, R * 0.08, 0, TAU); c.fill(); } }
+      if (e.retro > 0.5) { c.fillStyle = col.fuego; c.beginPath(); c.arc(R * 1.75, R * 0.5, R * 0.3, 0, TAU); c.fill(); }
+      c.restore();
+      if (cerca && te <= 0.5) { c.fillStyle = col.osc; if (fino) { rr(c, tx - fondo - R * 0.36, -ancho * 0.46, R * 0.42, ancho * 0.92, R * 0.1); c.fill(); } else c.fillRect(tx - fondo - R * 0.36, -ancho * 0.46, R * 0.42, ancho * 0.92); // mochila
+        if (fino) { c.strokeStyle = col.luz; c.globalAlpha = 0.55; c.lineWidth = 1; c.beginPath(); for (const q of [-0.2, 0.2]) { c.moveTo(tx - fondo - R * 0.3, ancho * q); c.lineTo(tx - fondo + R * 0.04, ancho * q); } c.stroke(); c.globalAlpha = 1; } }
       if (expl) { c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.moveTo(-R * 0.7, -R * 0.3); c.lineTo(-R * 1.7, -R * 0.9); c.stroke(); } // antena de la radio
-      const re = e.resp || 1; c.fillStyle = col.base; c.beginPath(); c.ellipse(0, 0, R * 0.62 * re, R * re, 0, 0, TAU); c.fill(); // hombros (respira)
-      c.strokeStyle = col.osc; c.lineWidth = 1; c.stroke();
-      const gc = (e.cabeza || 0) - (e.hombro || 0); if (gc) c.rotate(gc); // la cabeza no gira con los hombros: mira adonde va, y un poco antes
+      if (fino && !at && !ing && !rad && !op && !hk && !civ && !med && !gra && !esp && !expl && !franco) { // de cerca, los brazos: del hombro a la empuñadura y al guardamanos
+        const k = -e.retro * 0.3 * R, x1 = R * 0.5 + k + ax, x2 = R * 1.05 + k + ax, y1 = R * 0.5 + ay, br = () => { c.beginPath(); c.moveTo(tx, ancho * 0.86); c.quadraticCurveTo(tx + R * 0.3 + ax * 0.5, ancho * 0.86 + R * 0.1 * (1 + te * 3), x1, y1); c.moveTo(tx, -ancho * 0.86); c.quadraticCurveTo(tx + R * 0.72 + ax * 0.6, -ancho * (0.7 + te * 0.9), x2, y1); };
+        c.strokeStyle = col.osc; c.lineWidth = Math.max(1.6, R * 0.27); br(); c.stroke(); c.strokeStyle = col.base; c.lineWidth = Math.max(1, R * 0.17); br(); c.stroke();
+        c.fillStyle = col.osc; for (const x of [x1, x2]) { c.beginPath(); c.arc(x, y1, R * 0.11, 0, TAU); c.fill(); } // guantes
+      }
+      c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; rr(c, tx - fondo, -ancho, fondo * 2, ancho * 2, Math.min(fondo, ancho)); c.fill(); c.stroke(); // el tronco
+      if (cerca) { const chal = esp ? null : civ ? '#e0b83a' : med ? col.luz : col.osc;
+        if (chal) { c.fillStyle = chal; if (!fino) c.fillRect(tx - fondo * 0.55, -ancho * 0.58, fondo * 1.5, ancho * 1.16); else { rr(c, tx - fondo * 0.55, -ancho * 0.58, fondo * 1.5, ancho * 1.16, R * 0.1); c.fill(); } if (fino && chal !== col.osc) { c.strokeStyle = col.osc; c.lineWidth = 0.8; c.stroke(); } // chaleco
+          if (fino && chal === col.osc) { c.strokeStyle = col.luz; c.globalAlpha = 0.6; c.lineWidth = 1; c.beginPath(); for (const q of [-0.3, 0, 0.3]) { c.moveTo(tx + fondo * 0.25, ancho * (q - 0.1)); c.lineTo(tx + fondo * 0.25, ancho * (q + 0.1)); c.moveTo(tx + fondo * 0.25, ancho * (q - 0.1)); c.lineTo(tx + fondo * 0.85, ancho * (q - 0.1)); } c.stroke(); c.globalAlpha = 1; } } // portacargadores
+        if (fino) { c.fillStyle = col.luz; c.globalAlpha = 0.42; for (const q of [-1, 1]) { rr(c, tx - fondo * 0.6, q * ancho * 0.72 - ancho * 0.13, fondo * 1.2, ancho * 0.26, R * 0.08); c.fill(); } c.globalAlpha = 1; } // hombreras
+        if (te > 0.5) { c.fillStyle = col.osc; rr(c, tx - fondo * 0.75, -ancho * 0.7, fondo * 0.6, ancho * 1.4, R * 0.1); c.fill(); } } // tendido, la mochila se ve encima
+      const gc = ((e.cabeza || 0) - (e.hombro || 0)) * (1 - te * 0.6); // la cabeza no gira con los hombros: mira adonde va, y un poco antes
+      c.save(); c.translate(hx, 0); if (gc) c.rotate(gc); c.scale(0.8, 0.8); c.translate(-R * 0.08, 0); // el casco, más pequeño que antes
       c.fillStyle = at ? col.osc : col.luz; c.strokeStyle = at ? col.luz : col.osc; c.beginPath(); c.arc(R * 0.08, 0, R * 0.42, 0, TAU); c.fill(); c.stroke(); // casco
       if (esp) { c.fillStyle = col.osc; c.beginPath(); c.arc(R * 0.08, 0, R * 0.62, 0, TAU); c.fill(); c.fillStyle = col.luz; c.beginPath(); c.arc(R * 0.08, 0, R * 0.3, 0, TAU); c.fill(); } // sombrero de ala ancha
       if (franco || hk) { c.fillStyle = col.osc; c.beginPath(); c.arc(R * 0.08, 0, R * 0.42, Math.PI * 0.5, Math.PI * 1.5); c.fill(); } // capucha
@@ -109,8 +131,8 @@
       if (ing) { c.strokeStyle = col.osc; c.lineWidth = Math.max(1, R * 0.2); c.beginPath(); c.moveTo(R * 0.08 - R * 0.42, 0); c.lineTo(R * 0.08 + R * 0.42, 0); c.stroke(); } // franja del casco
       if (expl) { c.fillStyle = col.osc; c.fillRect(R * 0.3, -R * 0.3, R * 0.35, R * 0.6); } // prismáticos
       if (e.fino && lod === 2 && !esp && !civ) { c.strokeStyle = col.osc; c.lineWidth = Math.max(1, R * 0.12); c.beginPath(); c.arc(R * 0.08, 0, R * 0.42, -0.55, 0.55); c.stroke(); } // el frente del casco
-      if (gc) c.rotate(-gc);
-      if (e.retro > 0.5) { c.fillStyle = col.fuego; c.beginPath(); c.arc(R * 1.75, R * 0.5, R * 0.3, 0, TAU); c.fill(); }
+      if (cerca && !esp && !civ && !med && !expl) { c.fillStyle = col.osc; c.fillRect(R * 0.4, -R * 0.12, R * 0.16, R * 0.24); if (fino) { c.beginPath(); c.arc(R * 0.04, -R * 0.42, R * 0.1, 0, TAU); c.arc(R * 0.04, R * 0.42, R * 0.1, 0, TAU); c.fill(); } } // visor y, de cerca, los cascos
+      c.restore();
     } else if (u.tipo === 'tanque' || pesado) {
       const L = r * 1.4, w = r;
       orugas(c, col, e, lod, -L, L, w, w * 0.44); c.translate(e.hx || 0, e.hy || 0); // el casco, sobre su tren de rodaje: cabecea y se ladea

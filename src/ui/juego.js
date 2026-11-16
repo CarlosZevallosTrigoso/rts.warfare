@@ -1021,18 +1021,20 @@
         if (g.aAnt !== undefined && dtS) g.w = (g.w || 0) + (hacia(0, g.a - g.aAnt, 1) / dtS - (g.w || 0)) * Math.min(1, dtS * 10); g.aAnt = g.a; // cuánto está girando (rad/s), suavizado
         // La infantería camina por partes: los pies alternan, los hombros giran contra el paso, la cabeza mira adonde va un poco antes,
         // el cuerpo se echa adelante al arrancar y atrás al frenar, y parada respira (y de vez en cuando mira a un lado).
-        let partes = null;
+        let partes = null; const hund = d.cat === 'inf' && W.enTrinchera(m, e);
+        let tumbado = false; if (d.cat === 'inf' && lod && suprT.size) { const h = suprT.get(e.id); if (h) { if (h > tiempo) tumbado = !hund && !anda; else suprT.delete(e.id); } } // le están tirando: cuerpo a tierra (solo si está quieto)
         if (d.cat === 'inf' && lod) {
+          const kp = 1 - Math.exp(-dtS * 9); g.te = (g.te || 0) + ((tumbado ? 1 : 0) - (g.te || 0)) * kp; g.ro = (g.ro || 0) + ((!anda && e.obj && d.arma && !tumbado && !hund ? 1 : 0) - (g.ro || 0)) * kp; // las posturas se funden: cuerpo a tierra, rodilla en tierra al disparar parado
           if (anda && !pausa) g.paso = (g.paso || 0) + e.v * (dtCuadro / 50);
           const fi = (g.paso || 0) * 15, s = Math.sin(fi), amp = (g.amp = (g.amp || 0) + ((anda ? 1 : 0) - (g.amp || 0)) * (1 - Math.exp(-dtS * 12)));
           if (amp > 0.02) ctx.translate(-Math.sin(g.a) * s * amp * r * 0.09, Math.cos(g.a) * s * amp * r * 0.09);
           let mira = 0; if (!anda && !e.obj && e.orden === 'nada') { const ph = (tiempo / 1000 + e.id * 1.7) % 11; if (ph < 1.4) mira = Math.sin((ph / 1.4) * Math.PI) * 0.6 * (e.id % 2 ? 1 : -1); }
           const w = g.w || 0, inc = muelleDe(g, 'inc', Math.max(-1, Math.min(1, (g.ac || 0) / d.acel)) * 0.2 * (anda ? 1 : 0.5), 70, 11, dtS), cz = muelleDe(g, 'cz', Math.max(-0.7, Math.min(0.7, w * 0.3)) + mira, 120, 15, dtS), hm = muelleDe(g, 'hm', Math.max(-0.3, Math.min(0.3, w * 0.11)), 45, 10, dtS);
-          partes = { pies: fino && lod === 2 && amp > 0.02 ? [{ x: s * amp, y: 0.4 }, { x: -s * amp, y: -0.4 }] : null, hombro: -s * 0.17 * amp + hm, cabeza: cz, inc, resp: amp > 0.02 ? 1 + Math.cos(fi * 2) * 0.03 * amp : 1 + Math.sin(tiempo / 1000 * 2.3 + e.id) * 0.03, fino };
+          partes = { pies: fino && lod === 2 && amp > 0.02 ? [{ x: s * amp, y: 0.4 }, { x: -s * amp, y: -0.4 }] : null, hombro: -s * 0.17 * amp + hm, cabeza: cz, inc, resp: amp > 0.02 ? 1 + Math.cos(fi * 2) * 0.03 * amp : 1 + Math.sin(tiempo / 1000 * 2.3 + e.id) * 0.03, fino, te: g.te, rodilla: g.ro };
           if (fino && anda && lod === 2 && !pausa) { const lado = Math.cos(fi) >= 0 ? 1 : -1; if (lado !== g.pl) { g.pl = lado; const R = d.radio * 1.4, l = s >= 0 ? 0.4 : -0.4, c = Math.cos(g.a), sn = Math.sin(g.a); if (pisadas.length > 500) pisadas.splice(0, 60); pisadas.push({ x: wx + c * R * 0.9 - sn * l * R, y: wy + sn * R * 0.9 + c * l * R, a: g.a, s: R, t0: tiempo }); } } // la pisada del pie que acaba de apoyar
         }
         const st = {
-          ang: d.cat === 'inf' && e.obj && !anda ? g.t : g.a, angT: g.t, retro: d.arma ? retroceso(e, d.arma) : 0, hundido: d.cat === 'inf' && W.enTrinchera(m, e), monta: d.monta ? (e.monta || 0) / d.monta : 1,
+          ang: d.cat === 'inf' && e.obj && !anda ? g.t : g.a, angT: g.t, retro: d.arma ? retroceso(e, d.arma) : 0, hundido: hund, monta: d.monta ? (e.monta || 0) / d.monta : 1,
           anda, tiempo, carga: e.carga / (d.carga || 1), cosecha: e.est === 'cosechar', raro: e.cargaTipo === 2,
         };
         if (partes) Object.assign(st, partes);
@@ -1044,10 +1046,8 @@
           const bal = muelleDe(g, 'bal', Math.max(-1, Math.min(1, v * w * 0.12)), 60, 9, dtS), rel = g.t - g.a, golpe = st.retro * 0.17; // se ladea en las curvas; el disparo lo empuja hacia atrás
           st.hx = (g.cab - Math.cos(rel) * golpe) * r; st.hy = (bal * 0.09 - Math.sin(rel) * golpe) * r;
         }
-        let tumbado = false; if (d.cat === 'inf' && lod && suprT.size) { const h = suprT.get(e.id); if (h) { if (h > tiempo) tumbado = !st.hundido && !anda; else suprT.delete(e.id); } } // le están tirando: cuerpo a tierra (solo si está quieto)
-        const canto = lod && !d.aire && r >= 3.5 && !st.hundido && !tumbado ? Math.max(1, r * 0.26) : 0; // el cuerpo de la unidad: su silueta en oscuro, y encima la ficha
+        const canto = lod && !d.aire && r >= 3.5 && !st.hundido && !(g.te > 0.3) ? Math.max(1, r * 0.26) : 0; // el cuerpo de la unidad: su silueta en oscuro, y encima la ficha
         if (canto) { W.fichaUnidad(ctx, e, r, 1, e.j === YO ? COL.yoLado : COL.rivalLado, st); ctx.translate(0, -canto); }
-        if (tumbado) { ctx.rotate(st.ang); ctx.scale(1.3, 0.64); ctx.rotate(-st.ang); }
         W.fichaUnidad(ctx, e, r, lod, e.j === YO ? COL.yo : COL.rival, st);
         ctx.restore();
         if (lod && !d.aire) { // si está pegada a la cara norte de un edificio, este la tapa
