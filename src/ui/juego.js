@@ -265,7 +265,12 @@
     const parts = [], suelo = [], senales = [], azar = Math.random; // senales: ondas de llamada y enlaces de la colmena
     let dtCuadro = 16;
     function parte(k, x, y, vx, vy, vida, s, o) { if (parts.length > 2600) parts.shift(); const q = { k, x, y, vx, vy, v: 0, m: vida, s }; if (o) Object.assign(q, o); parts.push(q); }
-    function marcaSuelo(k, x, y, s, ang, dur, clase) { if (suelo.length > 500) suelo.shift(); suelo.push({ k, x, y, s, ang, t0: performance.now(), dur, clase }); }
+    // La rodada de un vehículo: un trazo por cada lado, del punto anterior al actual (así las curvas salen seguidas). o: de oruga (trazo a rayas).
+    function rodada(x0, y0, a0, x, y, ang, s, o) { if (suelo.length > 700) suelo.shift(); suelo.push({ k: 'rodada', x, y, x0, y0, a0, ang, s, o, t0: performance.now(), dur: 22000 }); }
+    const pisadas = []; // las de la infantería, aparte: son muchas y cortas, y no deben echar de la lista a cráteres y rodadas
+    const ORUGA = new Set(['tanque', 'pesado', 'antiaereoMovil', 'artilleria', 'excavadora', 'lanzacohetes']);
+    const muelleDe = (g, k, obj, rig, fr, dt) => { const v = (g[k + 'v'] || 0) + ((obj - (g[k] || 0)) * rig - (g[k + 'v'] || 0) * fr) * dt; g[k + 'v'] = v; return (g[k] = (g[k] || 0) + v * dt); }; // muelle amortiguado: lo que da el peso
+    function marcaSuelo(k, x, y, s, ang, dur, clase) { if (suelo.length > 700) suelo.shift(); suelo.push({ k, x, y, s, ang, t0: performance.now(), dur, clase }); }
     function estallido(x, y, tam) { // tam: 1 impacto, 2 unidad, 3 edificio
       parte('fogonazo', x, y, 0, 0, 0.13, 0.28 + tam * 0.22);
       parte('anillo', x, y, 0, 0, 0.28 + tam * 0.09, 0.5 + tam * 0.5);
@@ -823,6 +828,11 @@
           ctx.globalAlpha = 0.26 * a; ctx.beginPath(); ctx.ellipse(sx, sy, R * 0.45, R * 0.32, 0, 0, TAU); ctx.fill();
           if (lod === 2) { ctx.globalAlpha = 0.2 * a; ctx.strokeStyle = '#5a5145'; ctx.lineWidth = Math.max(1, z * 0.07); ctx.beginPath(); for (let k = 0; k < 9; k++) { const an = q.ang + k * 0.7 + Math.sin(k * 12.9 + q.ang) * 0.25, l = 1.05 + (Math.sin(k * 7.3 + q.ang * 3) * 0.5 + 0.5) * 0.5; ctx.moveTo(sx + Math.cos(an) * R * 0.7, sy + Math.sin(an) * R * 0.5); ctx.lineTo(sx + Math.cos(an) * R * l, sy + Math.sin(an) * R * l * 0.7); } ctx.stroke(); }
         }
+        else if (q.k === 'rodada') {
+          const c0 = Math.cos(q.a0), s0 = Math.sin(q.a0), c1 = Math.cos(q.ang), s1 = Math.sin(q.ang), w = q.s * z, X0 = ox + q.x0 * z, Y0 = oy + q.y0 * z, raya = q.o && z >= 40; // el dibujo de la oruga, solo de cerca
+          ctx.globalAlpha = 0.12 * a; ctx.strokeStyle = P.tinta; ctx.lineWidth = Math.max(1, z * 0.1); if (raya) ctx.setLineDash([z * 0.05, z * 0.045]); ctx.beginPath();
+          ctx.moveTo(X0 - s0 * w, Y0 + c0 * w); ctx.lineTo(sx - s1 * w, sy + c1 * w); ctx.moveTo(X0 + s0 * w, Y0 - c0 * w); ctx.lineTo(sx + s1 * w, sy - c1 * w); ctx.stroke(); if (raya) ctx.setLineDash([]);
+        }
         else if (q.k === 'huella') {
           const c = Math.cos(q.ang), s = Math.sin(q.ang), w = q.s * z * 0.78, l = z * 0.26;
           ctx.globalAlpha = 0.15 * a; ctx.strokeStyle = P.tinta; ctx.lineWidth = Math.max(1, z * 0.1); ctx.beginPath();
@@ -977,6 +987,11 @@
         }
       }
 
+      if (pisadas.length && lod === 2) { // las pisadas: se borran en cinco segundos
+        ctx.fillStyle = P.tinta; for (let i = pisadas.length - 1; i >= 0; i--) { const q = pisadas[i], ed = (tiempo - q.t0) / 5000; if (ed >= 1) { pisadas.splice(i, 1); continue; } if (fuera(q.x, q.y) || !f[Math.floor(q.y) * N + Math.floor(q.x)]) continue;
+          ctx.globalAlpha = 0.16 * (1 - ed); ctx.beginPath(); ctx.ellipse(ox + q.x * z, oy + q.y * z, q.s * z * 0.36, q.s * z * 0.19, q.a, 0, TAU); ctx.fill(); }
+        ctx.globalAlpha = 1;
+      }
       let repasado = false;
       const repasar = () => { repasado = true; for (const id of tapan) cuerpo(...cuerpos.get(id)); }; // los edificios tapan a quien tienen justo detrás
       for (const e of m.ents.filter((u) => !u.edif && !UNID[u.tipo].aire && !u.bunk).concat(m.ents.filter((u) => !u.edif && UNID[u.tipo].aire))) { // los aviones, encima
@@ -991,34 +1006,47 @@
           const alto = d.aire && !e.enTierra ? r * 1.5 : 0; // la sombra de un avión cae lejos: vuela
           if (alto) ctx.fillStyle = 'rgba(0,0,0,0.12)';
           ctx.ellipse(px + so * 0.8 + alto, py + so * 0.8 + alto, r * (d.cat === 'inf' ? 1.1 : 1.45), r * 1.1, g.a, 0, TAU); ctx.fill();
-          if (anda && d.cat === 'veh' && !pausa) { // los vehículos dejan huella y levantan polvo
+          if (anda && d.cat === 'veh' && !d.aire && !pausa) { // los vehículos dejan su rodada, un trazo seguido por cada lado, y levantan polvo
             g.d = (g.d || 0) + e.v * (dtCuadro / 50);
-            if (g.d > 0.5) {
-              g.d = 0; marcaSuelo('huella', e.x, e.y, d.radio, g.a, 22000);
-              if (azar() < 0.6) parte('polvo', e.x - Math.cos(g.a) * d.radio * 1.3, e.y - Math.sin(g.a) * d.radio * 1.3, (azar() - 0.5) * 0.4, (azar() - 0.5) * 0.4, 0.8, 0.22);
+            if (g.rx === undefined || Math.hypot(wx - g.rx, wy - g.ry) > 1.5) { g.rx = wx; g.ry = wy; g.ra = g.a; g.d = 0; }
+            if (g.d > 0.45 || (g.d > 0.12 && Math.abs(hacia(0, g.a - g.ra, 1)) > 0.3)) { // en curva, tramos más cortos
+              rodada(g.rx, g.ry, g.ra, wx, wy, g.a, d.radio * 0.78, ORUGA.has(e.tipo)); g.rx = wx; g.ry = wy; g.ra = g.a;
+              if (g.d > 0.3 && azar() < 0.6) parte('polvo', wx - Math.cos(g.a) * d.radio * 1.3, wy - Math.sin(g.a) * d.radio * 1.3, (azar() - 0.5) * 0.4, (azar() - 0.5) * 0.4, 0.8, 0.22);
+              g.d = 0;
             }
-          }
+          } else if (!anda) g.rx = undefined;
         }
         ctx.save(); ctx.translate(px, py);
-        let mec = 0; // la infantería camina: se balancea a cada paso; quieta y sin nada que hacer, de vez en cuando mira a un lado
+        const dtS = pausa ? 0 : Math.min(0.05, dtCuadro / 1000), fino = z >= 40; // las piezas finas (pies, brazos, dibujo de las ruedas) solo de cerca
+        if (g.aAnt !== undefined && dtS) g.w = (g.w || 0) + (hacia(0, g.a - g.aAnt, 1) / dtS - (g.w || 0)) * Math.min(1, dtS * 10); g.aAnt = g.a; // cuánto está girando (rad/s), suavizado
+        // La infantería camina por partes: los pies alternan, los hombros giran contra el paso, la cabeza mira adonde va un poco antes,
+        // el cuerpo se echa adelante al arrancar y atrás al frenar, y parada respira (y de vez en cuando mira a un lado).
+        let partes = null;
         if (d.cat === 'inf' && lod) {
           if (anda && !pausa) g.paso = (g.paso || 0) + e.v * (dtCuadro / 50);
-          if (anda) { const s = Math.sin((g.paso || 0) * 15); mec = s * 0.13; ctx.translate(-Math.sin(g.a) * s * r * 0.17, Math.cos(g.a) * s * r * 0.17); }
-          else if (!e.obj && e.orden === 'nada') { const ph = (tiempo / 1000 + e.id * 1.7) % 11; if (ph < 1.4) mec = Math.sin((ph / 1.4) * Math.PI) * 0.5 * (e.id % 2 ? 1 : -1); }
+          const fi = (g.paso || 0) * 15, s = Math.sin(fi), amp = (g.amp = (g.amp || 0) + ((anda ? 1 : 0) - (g.amp || 0)) * (1 - Math.exp(-dtS * 12)));
+          if (amp > 0.02) ctx.translate(-Math.sin(g.a) * s * amp * r * 0.09, Math.cos(g.a) * s * amp * r * 0.09);
+          let mira = 0; if (!anda && !e.obj && e.orden === 'nada') { const ph = (tiempo / 1000 + e.id * 1.7) % 11; if (ph < 1.4) mira = Math.sin((ph / 1.4) * Math.PI) * 0.6 * (e.id % 2 ? 1 : -1); }
+          const w = g.w || 0, inc = muelleDe(g, 'inc', Math.max(-1, Math.min(1, (g.ac || 0) / d.acel)) * 0.2 * (anda ? 1 : 0.5), 70, 11, dtS), cz = muelleDe(g, 'cz', Math.max(-0.7, Math.min(0.7, w * 0.3)) + mira, 120, 15, dtS), hm = muelleDe(g, 'hm', Math.max(-0.3, Math.min(0.3, w * 0.11)), 45, 10, dtS);
+          partes = { pies: fino && lod === 2 && amp > 0.02 ? [{ x: s * amp, y: 0.4 }, { x: -s * amp, y: -0.4 }] : null, hombro: -s * 0.17 * amp + hm, cabeza: cz, inc, resp: amp > 0.02 ? 1 + Math.cos(fi * 2) * 0.03 * amp : 1 + Math.sin(tiempo / 1000 * 2.3 + e.id) * 0.03, fino };
+          if (fino && anda && lod === 2 && !pausa) { const lado = Math.cos(fi) >= 0 ? 1 : -1; if (lado !== g.pl) { g.pl = lado; const R = d.radio * 1.4, l = s >= 0 ? 0.4 : -0.4, c = Math.cos(g.a), sn = Math.sin(g.a); if (pisadas.length > 500) pisadas.splice(0, 60); pisadas.push({ x: wx + c * R * 0.9 - sn * l * R, y: wy + sn * R * 0.9 + c * l * R, a: g.a, s: R, t0: tiempo }); } } // la pisada del pie que acaba de apoyar
         }
         const st = {
-          ang: (d.cat === 'inf' && e.obj && !anda ? g.t : g.a) + mec, angT: g.t, retro: d.arma ? retroceso(e, d.arma) : 0, hundido: d.cat === 'inf' && W.enTrinchera(m, e), monta: d.monta ? (e.monta || 0) / d.monta : 1,
+          ang: d.cat === 'inf' && e.obj && !anda ? g.t : g.a, angT: g.t, retro: d.arma ? retroceso(e, d.arma) : 0, hundido: d.cat === 'inf' && W.enTrinchera(m, e), monta: d.monta ? (e.monta || 0) / d.monta : 1,
           anda, tiempo, carga: e.carga / (d.carga || 1), cosecha: e.est === 'cosechar', raro: e.cargaTipo === 2,
         };
+        if (partes) Object.assign(st, partes);
+        if (d.cat === 'veh' && !d.aire && lod) { // el vehículo, por partes: cada oruga a su ritmo, las ruedas ruedan y viran, y el casco se mueve sobre su rodaje
+          const v = anda ? e.v * 20 : 0, w = g.w || 0, semi = d.radio * 0.78;
+          if (ORUGA.has(e.tipo)) { st.fI = g.fI = (g.fI || 0) + (v + w * semi) * dtS * z; st.fD = g.fD = (g.fD || 0) + (v - w * semi) * dtS * z; }
+          else if (fino) { st.rod = g.rod = (g.rod || 0) + v * dtS * z; st.dir = muelleDe(g, 'dir', Math.max(-0.6, Math.min(0.6, Math.atan2(d.radio * 1.4 * w, Math.max(v, 0.35)))), 110, 13, dtS); st.fino = true; }
+          const quiere = Math.max(-1, Math.min(2, -(g.ac || 0) / d.acel)) * 0.075; g.cab = (g.cab || 0) + (quiere - (g.cab || 0)) * (1 - Math.exp(-dtS * 9)); // cabecea al frenar y al arrancar
+          const bal = muelleDe(g, 'bal', Math.max(-1, Math.min(1, v * w * 0.12)), 60, 9, dtS), rel = g.t - g.a, golpe = st.retro * 0.17; // se ladea en las curvas; el disparo lo empuja hacia atrás
+          st.hx = (g.cab - Math.cos(rel) * golpe) * r; st.hy = (bal * 0.09 - Math.sin(rel) * golpe) * r;
+        }
         let tumbado = false; if (d.cat === 'inf' && lod && suprT.size) { const h = suprT.get(e.id); if (h) { if (h > tiempo) tumbado = !st.hundido && !anda; else suprT.delete(e.id); } } // le están tirando: cuerpo a tierra (solo si está quieto)
         const canto = lod && !d.aire && r >= 3.5 && !st.hundido && !tumbado ? Math.max(1, r * 0.26) : 0; // el cuerpo de la unidad: su silueta en oscuro, y encima la ficha
         if (canto) { W.fichaUnidad(ctx, e, r, 1, e.j === YO ? COL.yoLado : COL.rivalLado, st); ctx.translate(0, -canto); }
-        if (d.cat === 'veh' && !d.aire && lod) { // el casco tiene peso: cabecea al frenar y al arrancar, y recula con el disparo
-          const quiere = Math.max(-1, Math.min(2, -(g.ac || 0) / d.acel)) * 0.075;
-          g.cab = (g.cab || 0) + (quiere - (g.cab || 0)) * (1 - Math.exp(-(pausa ? 0 : dtCuadro / 1000) * 9));
-          const golpe = st.retro * 0.17;
-          ctx.translate((Math.cos(g.a) * g.cab - Math.cos(g.t) * golpe) * r, (Math.sin(g.a) * g.cab - Math.sin(g.t) * golpe) * r);
-        }
         if (tumbado) { ctx.rotate(st.ang); ctx.scale(1.3, 0.64); ctx.rotate(-st.ang); }
         W.fichaUnidad(ctx, e, r, lod, e.j === YO ? COL.yo : COL.rival, st);
         ctx.restore();

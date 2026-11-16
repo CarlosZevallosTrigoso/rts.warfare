@@ -355,12 +355,12 @@
   <button type="button" id="tutorial">Tutorial guiado<small style="display:block;color:var(--suave);font-size:10px">ocho pasos, con el rival dormido hasta el final</small></button>
   <button type="button" id="continuar" hidden>Continuar la partida guardada</button>
   <button type="button" id="irDrone" onclick="location.href='drone/index.html'">drone.warfare<small style="display:block;color:var(--suave);font-size:10px">el otro juego: el mismo conflicto con lupa, infantería y drones</small></button>
-  <div id="version">versión 108</div>
+  <div id="version">versión 109</div>
 </div></div>
 <div id="guia" hidden><div class="caja"><div class="cab"><strong>Guía: para qué sirve cada cosa</strong><button type="button" id="cierraGuia">cerrar</button></div><div id="guiaTxt"></div></div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finVer" href="#" title="Vuelve a ver la partida entera, con todo el mapa a la vista y a la velocidad que quieras.">ver repetición</a><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 108' };
+globalThis.W = { VERSION: 'versión 109' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -4794,9 +4794,30 @@ globalThis.W = { VERSION: 'versión 108' };
 (function () {
   const W = globalThis.W, TAU = Math.PI * 2;
 
+  // ---------- piezas que se mueven ----------
+  // Orugas: dos bandas con sus eslabones; cada una corre a su ritmo (e.fI, e.fD, en píxeles): en un giro sobre el sitio, una va hacia atrás.
+  function orugas(c, col, e, lod, x0, x1, w, alto) {
+    c.fillStyle = col.osc; c.fillRect(x0, -w, x1 - x0, alto); c.fillRect(x0, w - alto, x1 - x0, alto);
+    if (lod !== 2) return; const paso = Math.max(3, (x1 - x0) * 0.15), fI = e.fI === undefined ? (e.anda ? e.tiempo * 0.02 : 0) : e.fI, fD = e.fD === undefined ? fI : e.fD;
+    c.strokeStyle = col.luz; c.globalAlpha = 0.45; c.lineWidth = 1; c.beginPath();
+    for (const [f, y0, y1] of [[fI, -w, -w + alto], [fD, w - alto, w]]) { const o = ((f % paso) + paso) % paso; for (let x = x0 + o; x < x1; x += paso) { c.moveTo(x, y0); c.lineTo(x, y1); } }
+    c.stroke(); c.globalAlpha = 1;
+  }
+  // Ruedas: xs = borde trasero de cada eje; yb = borde interior; lw × lh, el tamaño. Las del eje más adelantado viran (e.dir) y, de cerca
+  // (e.fino), se ve rodar su dibujo (e.rod, en píxeles).
+  function ruedas(c, col, e, lod, xs, yb, lw, lh) {
+    c.fillStyle = col.osc; const del = Math.max.apply(null, xs), fino = lod === 2 && e.fino;
+    for (const x of xs) for (const s of [-1, 1]) { const cy = s * (yb + lh / 2), dir = x === del ? e.dir || 0 : 0;
+      if (!dir && !fino) { c.fillRect(x, cy - lh / 2, lw, lh); continue; }
+      c.save(); c.translate(x + lw / 2, cy); if (dir) c.rotate(dir); c.fillRect(-lw / 2, -lh / 2, lw, lh);
+      if (fino) { const p = lw * 0.28, o = (((e.rod || 0) % p) + p) % p; c.strokeStyle = col.luz; c.globalAlpha = 0.5; c.lineWidth = 1; c.beginPath(); for (let q = -lw / 2 + o; q < lw / 2; q += p) { c.moveTo(q, -lh / 2); c.lineTo(q, lh / 2); } c.stroke(); c.globalAlpha = 1; }
+      c.restore(); }
+  }
+
   // ---------- unidades ----------
   // El contexto llega trasladado al centro de la unidad. r = radio en píxeles.
   // e = { ang, angT, retro (0..1), anda, tiempo, carga (0..1), cosecha }
+  // y, para el movimiento: vehículos { fI, fD, rod, dir, fino, hx, hy }; infantería { pies: [{x, y}, {x, y}] (en R), hombro, cabeza, inc (en R), resp, fino }
   W.fichaUnidad = function (c, u, r, lod, col, e) {
     const inf = W.UNID[u.tipo].cat === 'inf', at = u.tipo === 'antitanque', pesado = u.tipo === 'pesado', expl = u.tipo === 'explorador', ing = u.tipo === 'ingeniero', med = u.tipo === 'medico', civ = u.tipo === 'civil', hk = u.tipo === 'hacker', op = u.tipo === 'operador', rad = u.tipo === 'radioOp', franco = u.tipo === 'francotirador', esp = u.tipo === 'espia', gra = u.tipo === 'granadero';
     if (lod === 0) {
@@ -4831,6 +4852,12 @@ globalThis.W = { VERSION: 'versión 108' };
     }
     if (inf) {
       const R = r * 1.4;
+      if (e.pies && lod === 2) { // las botas asoman por delante y por detrás al andar; de cerca, también la pierna
+        c.fillStyle = col.osc; if (e.fino) { c.strokeStyle = col.osc; c.lineCap = 'round'; c.lineWidth = Math.max(1.2, R * 0.28); c.beginPath(); for (const q of e.pies) { c.moveTo(0, q.y * R * 0.75); c.lineTo(q.x * R, q.y * R); } c.stroke(); }
+        for (const q of e.pies) { c.beginPath(); c.ellipse(q.x * R, q.y * R, R * 0.36, R * 0.2, 0, 0, TAU); c.fill(); }
+      }
+      if (e.inc) c.translate(e.inc * R, 0); // se echa adelante al arrancar y atrás al frenar
+      if (e.hombro) c.rotate(e.hombro); // los hombros giran contra el paso
       c.strokeStyle = col.osc; c.lineCap = at ? 'butt' : 'round'; c.lineWidth = Math.max(1.4, R * (at ? 0.55 : 0.3)); // fusil, o tubo lanzacohetes al hombro
       if (ing) { // sin arma: lleva una llave inglesa por delante
         c.lineWidth = Math.max(1.2, R * 0.26); c.beginPath(); c.moveTo(R * 0.3, R * 0.45); c.lineTo(R * 1.25, R * 0.45); c.moveTo(R * 1.25, R * 0.15); c.lineTo(R * 1.25, R * 0.75); c.stroke();
@@ -4854,11 +4881,16 @@ globalThis.W = { VERSION: 'versión 108' };
       } else if (franco) { // rifle largo y fino, con mira
         c.lineWidth = Math.max(1, R * 0.18); c.beginPath(); c.moveTo(-R * 0.2, R * 0.45); c.lineTo(R * (2.5 - e.retro * 0.3), R * 0.45); c.stroke();
         c.fillStyle = col.osc; c.fillRect(R * 0.5, R * 0.2, R * 0.6, R * 0.2);
-      } else { c.beginPath(); c.moveTo(R * (at ? -0.7 : 0.1), R * 0.5); c.lineTo(R * ((at ? 1.3 : 1.55) - e.retro * 0.3), R * 0.5); c.stroke(); }
+      } else { c.beginPath(); c.moveTo(R * (at ? -0.7 : 0.1), R * 0.5); c.lineTo(R * ((at ? 1.3 : 1.55) - e.retro * 0.3), R * 0.5); c.stroke();
+        if (e.fino && lod === 2 && !at) { // de cerca, los brazos: del hombro a la empuñadura y al guardamanos
+          const k = -e.retro * 0.3 * R; c.strokeStyle = col.base; c.lineWidth = Math.max(1.2, R * 0.3); c.beginPath(); c.moveTo(0, R * 0.78); c.lineTo(R * 0.5 + k, R * 0.5); c.moveTo(0, -R * 0.78); c.quadraticCurveTo(R * 0.75, -R * 0.45, R * 1.05 + k, R * 0.5); c.stroke();
+          c.fillStyle = col.luz; c.strokeStyle = col.osc; c.lineWidth = 0.8; for (const x of [0.5, 1.05]) { c.beginPath(); c.arc(R * x + k, R * 0.5, R * 0.15, 0, TAU); c.fill(); c.stroke(); }
+        } }
       if (lod === 2) { c.fillStyle = col.osc; c.fillRect(-R * 0.95, -R * 0.5, R * 0.5, R); } // mochila
       if (expl) { c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.moveTo(-R * 0.7, -R * 0.3); c.lineTo(-R * 1.7, -R * 0.9); c.stroke(); } // antena de la radio
-      c.fillStyle = col.base; c.beginPath(); c.ellipse(0, 0, R * 0.62, R, 0, 0, TAU); c.fill(); // hombros
+      const re = e.resp || 1; c.fillStyle = col.base; c.beginPath(); c.ellipse(0, 0, R * 0.62 * re, R * re, 0, 0, TAU); c.fill(); // hombros (respira)
       c.strokeStyle = col.osc; c.lineWidth = 1; c.stroke();
+      const gc = (e.cabeza || 0) - (e.hombro || 0); if (gc) c.rotate(gc); // la cabeza no gira con los hombros: mira adonde va, y un poco antes
       c.fillStyle = at ? col.osc : col.luz; c.strokeStyle = at ? col.luz : col.osc; c.beginPath(); c.arc(R * 0.08, 0, R * 0.42, 0, TAU); c.fill(); c.stroke(); // casco
       if (esp) { c.fillStyle = col.osc; c.beginPath(); c.arc(R * 0.08, 0, R * 0.62, 0, TAU); c.fill(); c.fillStyle = col.luz; c.beginPath(); c.arc(R * 0.08, 0, R * 0.3, 0, TAU); c.fill(); } // sombrero de ala ancha
       if (franco || hk) { c.fillStyle = col.osc; c.beginPath(); c.arc(R * 0.08, 0, R * 0.42, Math.PI * 0.5, Math.PI * 1.5); c.fill(); } // capucha
@@ -4866,16 +4898,12 @@ globalThis.W = { VERSION: 'versión 108' };
       if (med) { c.strokeStyle = col.mal; c.lineWidth = Math.max(1.2, R * 0.2); c.beginPath(); c.moveTo(R * 0.08 - R * 0.28, 0); c.lineTo(R * 0.08 + R * 0.28, 0); c.moveTo(R * 0.08, -R * 0.28); c.lineTo(R * 0.08, R * 0.28); c.stroke(); } // cruz en el casco
       if (ing) { c.strokeStyle = col.osc; c.lineWidth = Math.max(1, R * 0.2); c.beginPath(); c.moveTo(R * 0.08 - R * 0.42, 0); c.lineTo(R * 0.08 + R * 0.42, 0); c.stroke(); } // franja del casco
       if (expl) { c.fillStyle = col.osc; c.fillRect(R * 0.3, -R * 0.3, R * 0.35, R * 0.6); } // prismáticos
+      if (e.fino && lod === 2 && !esp && !civ) { c.strokeStyle = col.osc; c.lineWidth = Math.max(1, R * 0.12); c.beginPath(); c.arc(R * 0.08, 0, R * 0.42, -0.55, 0.55); c.stroke(); } // el frente del casco
+      if (gc) c.rotate(-gc);
       if (e.retro > 0.5) { c.fillStyle = col.fuego; c.beginPath(); c.arc(R * 1.75, R * 0.5, R * 0.3, 0, TAU); c.fill(); }
     } else if (u.tipo === 'tanque' || pesado) {
       const L = r * 1.4, w = r;
-      c.fillStyle = col.osc; c.fillRect(-L, -w, L * 2, w * 0.44); c.fillRect(-L, w * 0.56, L * 2, w * 0.44); // orugas
-      if (lod === 2) { // eslabones, que corren al avanzar
-        const paso = L * 0.3, fase = e.anda ? (e.tiempo * 0.02) % paso : 0;
-        c.strokeStyle = col.luz; c.globalAlpha = 0.45; c.lineWidth = 1; c.beginPath();
-        for (let x = -L + fase; x < L; x += paso) { c.moveTo(x, -w); c.lineTo(x, -w * 0.56); c.moveTo(x, w * 0.56); c.lineTo(x, w); }
-        c.stroke(); c.globalAlpha = 1;
-      }
+      orugas(c, col, e, lod, -L, L, w, w * 0.44); c.translate(e.hx || 0, e.hy || 0); // el casco, sobre su tren de rodaje: cabecea y se ladea
       c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); // casco con proa en bisel
       c.moveTo(-L * 0.92, -w * 0.64); c.lineTo(L * 0.6, -w * 0.64); c.lineTo(L * 0.96, -w * 0.3); c.lineTo(L * 0.96, w * 0.3); c.lineTo(L * 0.6, w * 0.64); c.lineTo(-L * 0.92, w * 0.64); c.closePath();
       c.fill(); c.stroke();
@@ -4897,8 +4925,7 @@ globalThis.W = { VERSION: 'versión 108' };
       if (e.retro > 0.6) { c.fillStyle = col.fuego; c.beginPath(); c.arc(w * 0.2 + L * 1.45, 0, w * 0.34, 0, TAU); c.fill(); }
     } else if (u.tipo === 'blindado') { // coche de cuatro ruedas, con torreta pequeña y ametralladora
       const L = r * 1.35, w = r * 0.9;
-      c.fillStyle = col.osc;
-      for (const x of [-L * 0.75, L * 0.3]) { c.fillRect(x, -w * 1.05, L * 0.45, w * 0.32); c.fillRect(x, w * 0.73, L * 0.45, w * 0.32); } // ruedas
+      ruedas(c, col, e, lod, [-L * 0.75, L * 0.3], w * 0.73, L * 0.45, w * 0.32); c.translate(e.hx || 0, e.hy || 0); // el casco, sobre su tren de rodaje: cabecea y se ladea
       c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); // casco afilado hacia delante
       c.moveTo(-L, -w * 0.72); c.lineTo(L * 0.45, -w * 0.72); c.lineTo(L, -w * 0.3); c.lineTo(L, w * 0.3); c.lineTo(L * 0.45, w * 0.72); c.lineTo(-L, w * 0.72); c.closePath(); c.fill(); c.stroke();
       if (lod === 2) { c.fillStyle = col.luz; c.fillRect(L * 0.5, -w * 0.3, L * 0.14, w * 0.6); } // parabrisas
@@ -4908,7 +4935,7 @@ globalThis.W = { VERSION: 'versión 108' };
       if (e.retro > 0.5) { c.fillStyle = col.fuego; c.beginPath(); c.arc(L * 1.05, 0, w * 0.2, 0, TAU); c.fill(); }
     } else if (u.tipo === 'antiaereoMovil') { // chasis de orugas con dos cañones finos y un plato de radar
       const L = r * 1.35, w = r * 0.95;
-      c.fillStyle = col.osc; c.fillRect(-L, -w, L * 2, w * 0.4); c.fillRect(-L, w * 0.6, L * 2, w * 0.4); // orugas
+      orugas(c, col, e, lod, -L, L, w, w * 0.4); c.translate(e.hx || 0, e.hy || 0); // el casco, sobre su tren de rodaje: cabecea y se ladea
       c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.rect(-L * 0.92, -w * 0.64, L * 1.84, w * 1.28); c.fill(); c.stroke();
       c.rotate(e.angT - e.ang);
       const rec = e.retro * L * 0.2;
@@ -4925,30 +4952,35 @@ globalThis.W = { VERSION: 'versión 108' };
       if (u.tipo === 'dronBomba') { c.fillStyle = col.tinta; c.beginPath(); c.arc(0, 0, L * 0.2, 0, TAU); c.fill(); }
     } else if (u.tipo === 'tallerMovil') { // camión con una grúa plegada sobre la caja
       const L = r * 1.3, w = r * 0.75;
-      c.fillStyle = col.osc; c.fillRect(-L, -w, L * 2, w * 2);
+      if (lod === 2) ruedas(c, col, e, lod, [-L * 0.82, L * 0.4], w * 0.88, L * 0.4, w * 0.28);
+      c.fillStyle = col.osc; c.fillRect(-L, -w, L * 2, w * 2); c.translate(e.hx || 0, e.hy || 0); // el casco, sobre su tren de rodaje: cabecea y se ladea
       c.fillStyle = col.base; c.fillRect(L * 0.5, -w * 0.75, L * 0.42, w * 1.5);
       c.strokeStyle = col.luz; c.lineWidth = Math.max(1.2, r * 0.22); c.beginPath(); c.moveTo(-L * 0.75, 0); c.lineTo(L * 0.3, 0); c.moveTo(-L * 0.75, 0); c.lineTo(-L * 0.75, -w * 0.5); c.stroke();
       c.fillStyle = col.luz; c.beginPath(); c.arc(L * 0.3, 0, r * 0.2, 0, TAU); c.fill();
     } else if (u.tipo === 'ambulancia') { // furgón claro con la cruz roja en el techo
       const L = r * 1.25, w = r * 0.72;
-      c.fillStyle = col.osc; c.fillRect(-L, -w, L * 2, w * 2);
+      if (lod === 2) ruedas(c, col, e, lod, [-L * 0.82, L * 0.4], w * 0.88, L * 0.4, w * 0.28);
+      c.fillStyle = col.osc; c.fillRect(-L, -w, L * 2, w * 2); c.translate(e.hx || 0, e.hy || 0); // el casco, sobre su tren de rodaje: cabecea y se ladea
       c.fillStyle = '#f2f0ea'; c.fillRect(-L * 0.9, -w * 0.82, L * 1.35, w * 1.64);
       c.fillStyle = col.base; c.fillRect(L * 0.52, -w * 0.75, L * 0.4, w * 1.5);
       c.fillStyle = '#c0392b'; c.fillRect(-L * 0.38, -w * 0.5, L * 0.3, w * 1.0); c.fillRect(-L * 0.62, -w * 0.18, L * 0.78, w * 0.36);
     } else if (u.tipo === 'camionSum') { // camión de caja abierta con tres cajones
       const L = r * 1.3, w = r * 0.72;
-      c.fillStyle = col.osc; c.fillRect(-L, -w, L * 2, w * 2);
+      if (lod === 2) ruedas(c, col, e, lod, [-L * 0.82, L * 0.4], w * 0.88, L * 0.4, w * 0.28);
+      c.fillStyle = col.osc; c.fillRect(-L, -w, L * 2, w * 2); c.translate(e.hx || 0, e.hy || 0); // el casco, sobre su tren de rodaje: cabecea y se ladea
       c.fillStyle = col.base; c.fillRect(L * 0.5, -w * 0.75, L * 0.42, w * 1.5);
       c.fillStyle = col.luz; for (let k = 0; k < 3; k++) c.fillRect(-L * 0.9 + k * L * 0.45, -w * 0.6, L * 0.36, w * 1.2);
     } else if (u.tipo === 'avanzadaMovil') { // camión largo con la cruz del hospital en el techo
       const L = r * 1.45, w = r * 0.8;
-      c.fillStyle = col.osc; c.fillRect(-L, -w, L * 2, w * 2);
+      if (lod === 2) ruedas(c, col, e, lod, [-L * 0.82, L * 0.4], w * 0.88, L * 0.4, w * 0.28);
+      c.fillStyle = col.osc; c.fillRect(-L, -w, L * 2, w * 2); c.translate(e.hx || 0, e.hy || 0); // el casco, sobre su tren de rodaje: cabecea y se ladea
       c.fillStyle = col.luz; c.fillRect(-L * 0.92, -w * 0.82, L * 1.4, w * 1.64);
       c.fillStyle = col.base; c.fillRect(L * 0.55, -w * 0.7, L * 0.38, w * 1.4);
       c.fillStyle = col.mal; c.fillRect(-L * 0.36, -w * 0.18, L * 0.5, w * 0.36); c.fillRect(-L * 0.2, -w * 0.5, L * 0.18, w * 1.0);
     } else if (u.tipo === 'comandoDrones') { // furgón con plataforma de despegue detrás y antena
       const L = r * 1.35, w = r * 0.85;
-      c.fillStyle = col.osc; c.fillRect(-L, -w, L * 2, w * 2);
+      if (lod === 2) ruedas(c, col, e, lod, [-L * 0.82, L * 0.4], w * 0.88, L * 0.4, w * 0.28);
+      c.fillStyle = col.osc; c.fillRect(-L, -w, L * 2, w * 2); c.translate(e.hx || 0, e.hy || 0); // el casco, sobre su tren de rodaje: cabecea y se ladea
       c.fillStyle = col.base; c.fillRect(-L * 0.92, -w * 0.84, L * 1.84, w * 1.68);
       c.fillStyle = col.luz; c.fillRect(L * 0.45, -w * 0.6, L * 0.38, w * 1.2); // cabina
       c.strokeStyle = col.luz; c.lineWidth = Math.max(1, r * 0.1); c.beginPath(); c.arc(-L * 0.35, 0, w * 0.55, 0, TAU); c.stroke(); // plataforma
@@ -4988,7 +5020,7 @@ globalThis.W = { VERSION: 'versión 108' };
       const L = r * 1.4, w = r * 0.85;
       c.strokeStyle = col.osc; c.lineWidth = Math.max(1.5, r * 0.22); c.beginPath(); // patas de anclaje
       c.moveTo(-L * 0.7, -w * 0.4); c.lineTo(-L * 1.4, -w); c.moveTo(-L * 0.7, w * 0.4); c.lineTo(-L * 1.4, w); c.stroke();
-      c.fillStyle = col.osc; c.fillRect(-L * 0.9, -w, L * 1.5, w * 0.4); c.fillRect(-L * 0.9, w * 0.6, L * 1.5, w * 0.4); // orugas cortas
+      orugas(c, col, e, lod, -L * 0.9, L * 0.6, w, w * 0.4); c.translate(e.hx || 0, e.hy || 0); // el casco, sobre su tren de rodaje: cabecea y se ladea
       c.fillStyle = col.base; c.lineWidth = 1; c.beginPath(); c.rect(-L * 0.85, -w * 0.62, L * 1.45, w * 1.24); c.fill(); c.stroke();
       c.rotate(e.angT - e.ang);
       const rec = e.retro * L * 0.45;
@@ -4997,7 +5029,7 @@ globalThis.W = { VERSION: 'versión 108' };
       if (e.retro > 0.6) { c.fillStyle = col.fuego; c.beginPath(); c.arc(L * 2.3, 0, w * 0.45, 0, TAU); c.fill(); }
     } else if (u.tipo === 'excavadora') { // orugas anchas, cabina atrás y una pala delante
       const L = r * 1.35, w = r * 0.95;
-      c.fillStyle = col.osc; c.fillRect(-L, -w, L * 1.7, w * 0.42); c.fillRect(-L, w * 0.58, L * 1.7, w * 0.42); // orugas
+      orugas(c, col, e, lod, -L, L * 0.7, w, w * 0.42); c.translate(e.hx || 0, e.hy || 0); // el casco, sobre su tren de rodaje: cabecea y se ladea
       c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.rect(-L * 0.9, -w * 0.6, L * 1.45, w * 1.2); c.fill(); c.stroke();
       c.fillStyle = col.osc; c.fillRect(-L * 0.8, -w * 0.42, L * 0.5, w * 0.84); // cabina
       if (lod === 2) { c.fillStyle = col.luz; c.fillRect(-L * 0.42, -w * 0.32, L * 0.08, w * 0.64); }
@@ -5005,15 +5037,14 @@ globalThis.W = { VERSION: 'versión 108' };
       c.fillStyle = col.luz; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.moveTo(L * 0.95, -w * 1.15); c.lineTo(L * 1.2, -w * 1.0); c.lineTo(L * 1.2, w * 1.0); c.lineTo(L * 0.95, w * 1.15); c.closePath(); c.fill(); c.stroke(); // pala
     } else if (u.tipo === 'transporte') { // caja blindada de ocho ruedas con rampa trasera
       const L = r * 1.45, w = r * 0.9;
-      c.fillStyle = col.osc;
-      for (const x of [-L * 0.85, -L * 0.35, L * 0.15, L * 0.6]) { c.fillRect(x, -w * 1.05, L * 0.32, w * 0.28); c.fillRect(x, w * 0.77, L * 0.32, w * 0.28); }
+      ruedas(c, col, e, lod, [-L * 0.85, -L * 0.35, L * 0.15, L * 0.6], w * 0.77, L * 0.32, w * 0.28); c.translate(e.hx || 0, e.hy || 0); // el casco, sobre su tren de rodaje: cabecea y se ladea
       c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath();
       c.moveTo(-L, -w * 0.78); c.lineTo(L * 0.6, -w * 0.78); c.lineTo(L, -w * 0.45); c.lineTo(L, w * 0.45); c.lineTo(L * 0.6, w * 0.78); c.lineTo(-L, w * 0.78); c.closePath(); c.fill(); c.stroke();
       c.fillStyle = col.osc; c.fillRect(-L * 0.98, -w * 0.5, L * 0.12, w); // rampa
       if (lod === 2) { c.strokeStyle = col.luz; c.beginPath(); for (let k = 0; k < 3; k++) { const x = -L * 0.55 + k * L * 0.42; c.rect(x, -w * 0.42, L * 0.26, w * 0.84); } c.stroke(); } // escotillas de la tropa
     } else if (u.tipo === 'lanzacohetes') { // camión de orugas con una caja de tubos
       const L = r * 1.4, w = r * 0.9;
-      c.fillStyle = col.osc; c.fillRect(-L, -w, L * 2, w * 0.38); c.fillRect(-L, w * 0.62, L * 2, w * 0.38);
+      orugas(c, col, e, lod, -L, L, w, w * 0.38); c.translate(e.hx || 0, e.hy || 0); // el casco, sobre su tren de rodaje: cabecea y se ladea
       c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.rect(-L * 0.95, -w * 0.66, L * 1.9, w * 1.32); c.fill(); c.stroke();
       c.fillStyle = col.osc; c.fillRect(L * 0.55, -w * 0.5, L * 0.3, w); // cabina
       c.fillStyle = col.luz; c.strokeStyle = col.osc; c.beginPath(); c.rect(-L * 0.85 - e.retro * L * 0.1, -w * 0.56, L * 1.25, w * 1.12); c.fill(); c.stroke(); // lanzador
@@ -5021,7 +5052,7 @@ globalThis.W = { VERSION: 'versión 108' };
       if (e.retro > 0.5) { c.fillStyle = col.fuego; c.beginPath(); c.arc(-L * 1.1, 0, w * 0.5, 0, TAU); c.fill(); } // rebufo
     } else if (u.tipo === 'vehRadio') { // camioneta con caseta y un mástil alto de antena con ondas
       const L = r * 1.3, w = r * 0.8;
-      c.fillStyle = col.osc; for (const x of [-L * 0.8, L * 0.35]) { c.fillRect(x, -w * 1.05, L * 0.45, w * 0.3); c.fillRect(x, w * 0.75, L * 0.45, w * 0.3); }
+      ruedas(c, col, e, lod, [-L * 0.8, L * 0.35], w * 0.75, L * 0.45, w * 0.3); c.translate(e.hx || 0, e.hy || 0); // el casco, sobre su tren de rodaje: cabecea y se ladea
       c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.rect(-L, -w * 0.78, L * 2, w * 1.56); c.fill(); c.stroke();
       c.fillStyle = col.osc; c.fillRect(L * 0.45, -w * 0.58, L * 0.4, w * 1.16); c.fillStyle = col.luz; c.fillRect(-L * 0.85, -w * 0.5, L * 1.0, w * 1.0);
       c.fillStyle = col.osc; c.beginPath(); c.arc(-L * 0.35, 0, w * 0.2, 0, TAU); c.fill();
@@ -5029,8 +5060,7 @@ globalThis.W = { VERSION: 'versión 108' };
       for (const q of [k, (k + 0.5) % 1]) { c.globalAlpha = 0.7 * (1 - q); c.beginPath(); c.arc(-L * 0.35, 0, w * (0.35 + q * 1.3), 0, TAU); c.stroke(); } c.globalAlpha = 1;
     } else if (u.tipo === 'mando') { // furgón con antena y plato giratorio
       const L = r * 1.35, w = r * 0.9;
-      c.fillStyle = col.osc;
-      for (const x of [-L * 0.8, L * 0.3]) { c.fillRect(x, -w * 1.05, L * 0.45, w * 0.3); c.fillRect(x, w * 0.75, L * 0.45, w * 0.3); }
+      ruedas(c, col, e, lod, [-L * 0.8, L * 0.3], w * 0.75, L * 0.45, w * 0.3); c.translate(e.hx || 0, e.hy || 0); // el casco, sobre su tren de rodaje: cabecea y se ladea
       c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.rect(-L, -w * 0.78, L * 2, w * 1.56); c.fill(); c.stroke();
       c.fillStyle = col.osc; c.fillRect(L * 0.6, -w * 0.58, L * 0.3, w * 1.16);
       c.strokeStyle = col.luz; c.lineWidth = Math.max(1, r * 0.14);
@@ -5051,8 +5081,7 @@ globalThis.W = { VERSION: 'versión 108' };
       if (e.retro > 0.6) { c.fillStyle = col.fuego; c.beginPath(); c.arc(L * 0.5, -L * 0.46, L * 0.12, 0, TAU); c.arc(L * 0.5, L * 0.46, L * 0.12, 0, TAU); c.fill(); }
     } else if (u.tipo === 'patioMovil') { // camión largo de seis ruedas con el patio plegado encima
       const L = r * 1.5, w = r * 0.95;
-      c.fillStyle = col.osc;
-      for (const x of [-L * 0.85, -L * 0.2, L * 0.45]) { c.fillRect(x, -w * 1.06, L * 0.4, w * 0.3); c.fillRect(x, w * 0.76, L * 0.4, w * 0.3); } // ruedas
+      ruedas(c, col, e, lod, [-L * 0.85, -L * 0.2, L * 0.45], w * 0.76, L * 0.4, w * 0.3); c.translate(e.hx || 0, e.hy || 0); // el casco, sobre su tren de rodaje: cabecea y se ladea
       c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1;
       c.beginPath(); c.rect(-L, -w * 0.8, L * 2, w * 1.6); c.fill(); c.stroke();
       c.fillStyle = col.osc; c.fillRect(L * 0.62, -w * 0.6, L * 0.3, w * 1.2); // cabina
@@ -5066,8 +5095,8 @@ globalThis.W = { VERSION: 'versión 108' };
     } else { // cosechadora
       const L = r * 1.45, w = r * 0.95;
       const mand = e.cosecha ? Math.sin(e.tiempo * 0.012) * w * 0.14 : 0;
+      if (lod === 2) ruedas(c, col, e, lod, [-L * 0.8, L * 0.15], w * 0.78, L * 0.5, w * 0.3); c.translate(e.hx || 0, e.hy || 0); // el casco, sobre su tren de rodaje: cabecea y se ladea
       c.fillStyle = col.osc;
-      if (lod === 2) for (const x of [-L * 0.8, L * 0.15]) { c.fillRect(x, -w * 1.08, L * 0.5, w * 0.3); c.fillRect(x, w * 0.78, L * 0.5, w * 0.3); } // ruedas
       c.beginPath(); // pala con mandíbulas
       c.moveTo(L * 0.62, -w * 0.95); c.lineTo(L * 1.22, -w * 0.78 - mand); c.lineTo(L * 0.98, 0); c.lineTo(L * 1.22, w * 0.78 + mand); c.lineTo(L * 0.62, w * 0.95); c.closePath(); c.fill();
       c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1;
@@ -5651,7 +5680,12 @@ globalThis.W = { VERSION: 'versión 108' };
     const parts = [], suelo = [], senales = [], azar = Math.random; // senales: ondas de llamada y enlaces de la colmena
     let dtCuadro = 16;
     function parte(k, x, y, vx, vy, vida, s, o) { if (parts.length > 2600) parts.shift(); const q = { k, x, y, vx, vy, v: 0, m: vida, s }; if (o) Object.assign(q, o); parts.push(q); }
-    function marcaSuelo(k, x, y, s, ang, dur, clase) { if (suelo.length > 500) suelo.shift(); suelo.push({ k, x, y, s, ang, t0: performance.now(), dur, clase }); }
+    // La rodada de un vehículo: un trazo por cada lado, del punto anterior al actual (así las curvas salen seguidas). o: de oruga (trazo a rayas).
+    function rodada(x0, y0, a0, x, y, ang, s, o) { if (suelo.length > 700) suelo.shift(); suelo.push({ k: 'rodada', x, y, x0, y0, a0, ang, s, o, t0: performance.now(), dur: 22000 }); }
+    const pisadas = []; // las de la infantería, aparte: son muchas y cortas, y no deben echar de la lista a cráteres y rodadas
+    const ORUGA = new Set(['tanque', 'pesado', 'antiaereoMovil', 'artilleria', 'excavadora', 'lanzacohetes']);
+    const muelleDe = (g, k, obj, rig, fr, dt) => { const v = (g[k + 'v'] || 0) + ((obj - (g[k] || 0)) * rig - (g[k + 'v'] || 0) * fr) * dt; g[k + 'v'] = v; return (g[k] = (g[k] || 0) + v * dt); }; // muelle amortiguado: lo que da el peso
+    function marcaSuelo(k, x, y, s, ang, dur, clase) { if (suelo.length > 700) suelo.shift(); suelo.push({ k, x, y, s, ang, t0: performance.now(), dur, clase }); }
     function estallido(x, y, tam) { // tam: 1 impacto, 2 unidad, 3 edificio
       parte('fogonazo', x, y, 0, 0, 0.13, 0.28 + tam * 0.22);
       parte('anillo', x, y, 0, 0, 0.28 + tam * 0.09, 0.5 + tam * 0.5);
@@ -6209,6 +6243,11 @@ globalThis.W = { VERSION: 'versión 108' };
           ctx.globalAlpha = 0.26 * a; ctx.beginPath(); ctx.ellipse(sx, sy, R * 0.45, R * 0.32, 0, 0, TAU); ctx.fill();
           if (lod === 2) { ctx.globalAlpha = 0.2 * a; ctx.strokeStyle = '#5a5145'; ctx.lineWidth = Math.max(1, z * 0.07); ctx.beginPath(); for (let k = 0; k < 9; k++) { const an = q.ang + k * 0.7 + Math.sin(k * 12.9 + q.ang) * 0.25, l = 1.05 + (Math.sin(k * 7.3 + q.ang * 3) * 0.5 + 0.5) * 0.5; ctx.moveTo(sx + Math.cos(an) * R * 0.7, sy + Math.sin(an) * R * 0.5); ctx.lineTo(sx + Math.cos(an) * R * l, sy + Math.sin(an) * R * l * 0.7); } ctx.stroke(); }
         }
+        else if (q.k === 'rodada') {
+          const c0 = Math.cos(q.a0), s0 = Math.sin(q.a0), c1 = Math.cos(q.ang), s1 = Math.sin(q.ang), w = q.s * z, X0 = ox + q.x0 * z, Y0 = oy + q.y0 * z, raya = q.o && z >= 40; // el dibujo de la oruga, solo de cerca
+          ctx.globalAlpha = 0.12 * a; ctx.strokeStyle = P.tinta; ctx.lineWidth = Math.max(1, z * 0.1); if (raya) ctx.setLineDash([z * 0.05, z * 0.045]); ctx.beginPath();
+          ctx.moveTo(X0 - s0 * w, Y0 + c0 * w); ctx.lineTo(sx - s1 * w, sy + c1 * w); ctx.moveTo(X0 + s0 * w, Y0 - c0 * w); ctx.lineTo(sx + s1 * w, sy - c1 * w); ctx.stroke(); if (raya) ctx.setLineDash([]);
+        }
         else if (q.k === 'huella') {
           const c = Math.cos(q.ang), s = Math.sin(q.ang), w = q.s * z * 0.78, l = z * 0.26;
           ctx.globalAlpha = 0.15 * a; ctx.strokeStyle = P.tinta; ctx.lineWidth = Math.max(1, z * 0.1); ctx.beginPath();
@@ -6363,6 +6402,11 @@ globalThis.W = { VERSION: 'versión 108' };
         }
       }
 
+      if (pisadas.length && lod === 2) { // las pisadas: se borran en cinco segundos
+        ctx.fillStyle = P.tinta; for (let i = pisadas.length - 1; i >= 0; i--) { const q = pisadas[i], ed = (tiempo - q.t0) / 5000; if (ed >= 1) { pisadas.splice(i, 1); continue; } if (fuera(q.x, q.y) || !f[Math.floor(q.y) * N + Math.floor(q.x)]) continue;
+          ctx.globalAlpha = 0.16 * (1 - ed); ctx.beginPath(); ctx.ellipse(ox + q.x * z, oy + q.y * z, q.s * z * 0.36, q.s * z * 0.19, q.a, 0, TAU); ctx.fill(); }
+        ctx.globalAlpha = 1;
+      }
       let repasado = false;
       const repasar = () => { repasado = true; for (const id of tapan) cuerpo(...cuerpos.get(id)); }; // los edificios tapan a quien tienen justo detrás
       for (const e of m.ents.filter((u) => !u.edif && !UNID[u.tipo].aire && !u.bunk).concat(m.ents.filter((u) => !u.edif && UNID[u.tipo].aire))) { // los aviones, encima
@@ -6377,34 +6421,47 @@ globalThis.W = { VERSION: 'versión 108' };
           const alto = d.aire && !e.enTierra ? r * 1.5 : 0; // la sombra de un avión cae lejos: vuela
           if (alto) ctx.fillStyle = 'rgba(0,0,0,0.12)';
           ctx.ellipse(px + so * 0.8 + alto, py + so * 0.8 + alto, r * (d.cat === 'inf' ? 1.1 : 1.45), r * 1.1, g.a, 0, TAU); ctx.fill();
-          if (anda && d.cat === 'veh' && !pausa) { // los vehículos dejan huella y levantan polvo
+          if (anda && d.cat === 'veh' && !d.aire && !pausa) { // los vehículos dejan su rodada, un trazo seguido por cada lado, y levantan polvo
             g.d = (g.d || 0) + e.v * (dtCuadro / 50);
-            if (g.d > 0.5) {
-              g.d = 0; marcaSuelo('huella', e.x, e.y, d.radio, g.a, 22000);
-              if (azar() < 0.6) parte('polvo', e.x - Math.cos(g.a) * d.radio * 1.3, e.y - Math.sin(g.a) * d.radio * 1.3, (azar() - 0.5) * 0.4, (azar() - 0.5) * 0.4, 0.8, 0.22);
+            if (g.rx === undefined || Math.hypot(wx - g.rx, wy - g.ry) > 1.5) { g.rx = wx; g.ry = wy; g.ra = g.a; g.d = 0; }
+            if (g.d > 0.45 || (g.d > 0.12 && Math.abs(hacia(0, g.a - g.ra, 1)) > 0.3)) { // en curva, tramos más cortos
+              rodada(g.rx, g.ry, g.ra, wx, wy, g.a, d.radio * 0.78, ORUGA.has(e.tipo)); g.rx = wx; g.ry = wy; g.ra = g.a;
+              if (g.d > 0.3 && azar() < 0.6) parte('polvo', wx - Math.cos(g.a) * d.radio * 1.3, wy - Math.sin(g.a) * d.radio * 1.3, (azar() - 0.5) * 0.4, (azar() - 0.5) * 0.4, 0.8, 0.22);
+              g.d = 0;
             }
-          }
+          } else if (!anda) g.rx = undefined;
         }
         ctx.save(); ctx.translate(px, py);
-        let mec = 0; // la infantería camina: se balancea a cada paso; quieta y sin nada que hacer, de vez en cuando mira a un lado
+        const dtS = pausa ? 0 : Math.min(0.05, dtCuadro / 1000), fino = z >= 40; // las piezas finas (pies, brazos, dibujo de las ruedas) solo de cerca
+        if (g.aAnt !== undefined && dtS) g.w = (g.w || 0) + (hacia(0, g.a - g.aAnt, 1) / dtS - (g.w || 0)) * Math.min(1, dtS * 10); g.aAnt = g.a; // cuánto está girando (rad/s), suavizado
+        // La infantería camina por partes: los pies alternan, los hombros giran contra el paso, la cabeza mira adonde va un poco antes,
+        // el cuerpo se echa adelante al arrancar y atrás al frenar, y parada respira (y de vez en cuando mira a un lado).
+        let partes = null;
         if (d.cat === 'inf' && lod) {
           if (anda && !pausa) g.paso = (g.paso || 0) + e.v * (dtCuadro / 50);
-          if (anda) { const s = Math.sin((g.paso || 0) * 15); mec = s * 0.13; ctx.translate(-Math.sin(g.a) * s * r * 0.17, Math.cos(g.a) * s * r * 0.17); }
-          else if (!e.obj && e.orden === 'nada') { const ph = (tiempo / 1000 + e.id * 1.7) % 11; if (ph < 1.4) mec = Math.sin((ph / 1.4) * Math.PI) * 0.5 * (e.id % 2 ? 1 : -1); }
+          const fi = (g.paso || 0) * 15, s = Math.sin(fi), amp = (g.amp = (g.amp || 0) + ((anda ? 1 : 0) - (g.amp || 0)) * (1 - Math.exp(-dtS * 12)));
+          if (amp > 0.02) ctx.translate(-Math.sin(g.a) * s * amp * r * 0.09, Math.cos(g.a) * s * amp * r * 0.09);
+          let mira = 0; if (!anda && !e.obj && e.orden === 'nada') { const ph = (tiempo / 1000 + e.id * 1.7) % 11; if (ph < 1.4) mira = Math.sin((ph / 1.4) * Math.PI) * 0.6 * (e.id % 2 ? 1 : -1); }
+          const w = g.w || 0, inc = muelleDe(g, 'inc', Math.max(-1, Math.min(1, (g.ac || 0) / d.acel)) * 0.2 * (anda ? 1 : 0.5), 70, 11, dtS), cz = muelleDe(g, 'cz', Math.max(-0.7, Math.min(0.7, w * 0.3)) + mira, 120, 15, dtS), hm = muelleDe(g, 'hm', Math.max(-0.3, Math.min(0.3, w * 0.11)), 45, 10, dtS);
+          partes = { pies: fino && lod === 2 && amp > 0.02 ? [{ x: s * amp, y: 0.4 }, { x: -s * amp, y: -0.4 }] : null, hombro: -s * 0.17 * amp + hm, cabeza: cz, inc, resp: amp > 0.02 ? 1 + Math.cos(fi * 2) * 0.03 * amp : 1 + Math.sin(tiempo / 1000 * 2.3 + e.id) * 0.03, fino };
+          if (fino && anda && lod === 2 && !pausa) { const lado = Math.cos(fi) >= 0 ? 1 : -1; if (lado !== g.pl) { g.pl = lado; const R = d.radio * 1.4, l = s >= 0 ? 0.4 : -0.4, c = Math.cos(g.a), sn = Math.sin(g.a); if (pisadas.length > 500) pisadas.splice(0, 60); pisadas.push({ x: wx + c * R * 0.9 - sn * l * R, y: wy + sn * R * 0.9 + c * l * R, a: g.a, s: R, t0: tiempo }); } } // la pisada del pie que acaba de apoyar
         }
         const st = {
-          ang: (d.cat === 'inf' && e.obj && !anda ? g.t : g.a) + mec, angT: g.t, retro: d.arma ? retroceso(e, d.arma) : 0, hundido: d.cat === 'inf' && W.enTrinchera(m, e), monta: d.monta ? (e.monta || 0) / d.monta : 1,
+          ang: d.cat === 'inf' && e.obj && !anda ? g.t : g.a, angT: g.t, retro: d.arma ? retroceso(e, d.arma) : 0, hundido: d.cat === 'inf' && W.enTrinchera(m, e), monta: d.monta ? (e.monta || 0) / d.monta : 1,
           anda, tiempo, carga: e.carga / (d.carga || 1), cosecha: e.est === 'cosechar', raro: e.cargaTipo === 2,
         };
+        if (partes) Object.assign(st, partes);
+        if (d.cat === 'veh' && !d.aire && lod) { // el vehículo, por partes: cada oruga a su ritmo, las ruedas ruedan y viran, y el casco se mueve sobre su rodaje
+          const v = anda ? e.v * 20 : 0, w = g.w || 0, semi = d.radio * 0.78;
+          if (ORUGA.has(e.tipo)) { st.fI = g.fI = (g.fI || 0) + (v + w * semi) * dtS * z; st.fD = g.fD = (g.fD || 0) + (v - w * semi) * dtS * z; }
+          else if (fino) { st.rod = g.rod = (g.rod || 0) + v * dtS * z; st.dir = muelleDe(g, 'dir', Math.max(-0.6, Math.min(0.6, Math.atan2(d.radio * 1.4 * w, Math.max(v, 0.35)))), 110, 13, dtS); st.fino = true; }
+          const quiere = Math.max(-1, Math.min(2, -(g.ac || 0) / d.acel)) * 0.075; g.cab = (g.cab || 0) + (quiere - (g.cab || 0)) * (1 - Math.exp(-dtS * 9)); // cabecea al frenar y al arrancar
+          const bal = muelleDe(g, 'bal', Math.max(-1, Math.min(1, v * w * 0.12)), 60, 9, dtS), rel = g.t - g.a, golpe = st.retro * 0.17; // se ladea en las curvas; el disparo lo empuja hacia atrás
+          st.hx = (g.cab - Math.cos(rel) * golpe) * r; st.hy = (bal * 0.09 - Math.sin(rel) * golpe) * r;
+        }
         let tumbado = false; if (d.cat === 'inf' && lod && suprT.size) { const h = suprT.get(e.id); if (h) { if (h > tiempo) tumbado = !st.hundido && !anda; else suprT.delete(e.id); } } // le están tirando: cuerpo a tierra (solo si está quieto)
         const canto = lod && !d.aire && r >= 3.5 && !st.hundido && !tumbado ? Math.max(1, r * 0.26) : 0; // el cuerpo de la unidad: su silueta en oscuro, y encima la ficha
         if (canto) { W.fichaUnidad(ctx, e, r, 1, e.j === YO ? COL.yoLado : COL.rivalLado, st); ctx.translate(0, -canto); }
-        if (d.cat === 'veh' && !d.aire && lod) { // el casco tiene peso: cabecea al frenar y al arrancar, y recula con el disparo
-          const quiere = Math.max(-1, Math.min(2, -(g.ac || 0) / d.acel)) * 0.075;
-          g.cab = (g.cab || 0) + (quiere - (g.cab || 0)) * (1 - Math.exp(-(pausa ? 0 : dtCuadro / 1000) * 9));
-          const golpe = st.retro * 0.17;
-          ctx.translate((Math.cos(g.a) * g.cab - Math.cos(g.t) * golpe) * r, (Math.sin(g.a) * g.cab - Math.sin(g.t) * golpe) * r);
-        }
         if (tumbado) { ctx.rotate(st.ang); ctx.scale(1.3, 0.64); ctx.rotate(-st.ang); }
         W.fichaUnidad(ctx, e, r, lod, e.j === YO ? COL.yo : COL.rival, st);
         ctx.restore();
