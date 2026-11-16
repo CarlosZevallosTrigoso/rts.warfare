@@ -249,17 +249,25 @@
         for (const y of [-0.63, 0.63]) { c.beginPath(); c.moveTo(L * 0.47, L * (y - 0.2 * Math.cos(a))); c.lineTo(L * 0.47, L * (y + 0.2 * Math.cos(a))); c.stroke(); }
         c.globalAlpha = 1;
       }
-    } else if (u.tipo === 'artilleria') {
-      const L = r * 1.4, w = r * 0.85;
-      c.strokeStyle = col.osc; c.lineWidth = Math.max(1.5, r * 0.22); c.beginPath(); // patas de anclaje
-      c.moveTo(-L * 0.7, -w * 0.4); c.lineTo(-L * 1.4, -w); c.moveTo(-L * 0.7, w * 0.4); c.lineTo(-L * 1.4, w); c.stroke();
-      orugas(c, col, e, lod, -L * 0.9, L * 0.6, w, w * 0.4); c.translate(e.hx || 0, e.hy || 0); // el casco, sobre su tren de rodaje: cabecea y se ladea
-      c.fillStyle = col.base; c.lineWidth = 1; c.beginPath(); c.rect(-L * 0.85, -w * 0.62, L * 1.45, w * 1.24); c.fill(); c.stroke();
+    } else if (u.tipo === 'artilleria') { // parada se despliega (abre y clava las rejas, levanta el tubo); al disparar reculan el tubo y el casco, sale la vaina y la boca echa humo
+      const L = r * 1.4, w = r * 0.85, mar = e.marcha === undefined ? (e.anda ? 1 : 0) : e.marcha, dp = 1 - mar, tt = 1 - e.retro, cl = col.claro || col.base;
+      if (e.retro > 0.5) { c.strokeStyle = col.humo; c.globalAlpha = 0.35 * (e.retro - 0.5) * 2; c.lineWidth = 2; c.beginPath(); c.arc(0, 0, r * (1.6 + tt * 4.8), 0, TAU); c.stroke(); c.globalAlpha = 1; } // el polvo que levanta el disparo
+      c.strokeStyle = col.osc; c.lineWidth = Math.max(1.5, r * 0.2); c.lineCap = 'round'; c.beginPath();
+      for (const q of [-1, 1]) { c.moveTo(-L * 0.75, q * w * 0.4); c.lineTo(-L * (0.95 + 0.6 * dp), q * w * (0.45 + 0.6 * dp)); } c.stroke(); c.lineCap = 'butt';
+      if (dp > 0.5 && lod === 2) for (const q of [-1, 1]) { c.save(); c.translate(-L * 1.55, q * w * 1.05); c.rotate(q * 0.75); c.fillStyle = col.osc; c.fillRect(-r * 0.09, -r * 0.3, r * 0.18, r * 0.6); c.restore(); } // las rejas, clavadas
+      orugas(c, col, e, lod, -L * 0.9, L * 0.6, w, w * 0.4); c.translate((e.hx || 0) - e.retro * e.retro * r * 0.16, e.hy || 0); // el casco, sobre su tren de rodaje; el retroceso lo empuja atrás
+      c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.moveTo(-L * 0.88, -w * 0.64); c.lineTo(L * 0.42, -w * 0.64); c.lineTo(L * 0.62, -w * 0.38); c.lineTo(L * 0.62, w * 0.38); c.lineTo(L * 0.42, w * 0.64); c.lineTo(-L * 0.88, w * 0.64); c.closePath(); c.fill(); c.stroke();
+      if (lod === 2) { c.fillStyle = cl; c.fillRect(-L * 0.86, -w * 0.6, L * 0.4, w * 1.2); c.beginPath(); for (let i = 0; i < 3; i++) { c.moveTo(L * (0.3 + i * 0.09), -w * 0.4); c.lineTo(L * (0.3 + i * 0.09), w * 0.4); } c.stroke(); // plataforma de carga atrás, rejilla del motor delante
+        if (e.fino) { c.fillStyle = col.saco || '#c9b990'; for (const y of [-0.5, 0.22]) c.fillRect(-L * 0.82, w * y, L * 0.2, w * 0.28); } } // cajas de proyectiles
       c.rotate(e.angT - e.ang);
-      const rec = e.retro * L * 0.45;
-      c.fillStyle = col.osc; c.fillRect(-w * 0.1 - rec, -w * 0.12, L * 2.1, w * 0.24); c.fillRect(L * 1.85 - rec, -w * 0.21, L * 0.2, w * 0.42); // tubo largo
-      c.fillStyle = col.base; c.strokeStyle = col.luz; c.lineWidth = Math.max(1, r * 0.14); c.beginPath(); c.rect(-w * 0.55, -w * 0.42, w * 0.95, w * 0.84); c.fill(); c.stroke();
-      if (e.retro > 0.6) { c.fillStyle = col.fuego; c.beginPath(); c.arc(L * 2.3, 0, w * 0.45, 0, TAU); c.fill(); }
+      const rec = e.retro * L * 0.5, Lb = L * 2.3 * (1 - 0.2 * dp); // desplegada apunta alto: el tubo se ve más corto
+      c.fillStyle = col.osc; c.fillRect(-w * 0.05 - rec, -w * 0.17, Lb * 0.45, w * 0.34); c.fillRect(Lb * 0.4 - rec, -w * 0.11, Lb * 0.6, w * 0.22); c.fillRect(Lb * 0.94 - rec, -w * 0.2, Lb * 0.1, w * 0.4); // el tubo, en dos tramos, y el freno de boca
+      if (lod === 2) { c.fillStyle = col.luz; c.fillRect(Lb * 0.955 - rec, -w * 0.2, Lb * 0.02, w * 0.4); c.fillRect(Lb * 1.0 - rec, -w * 0.2, Lb * 0.02, w * 0.4); c.strokeStyle = col.luz; c.lineWidth = Math.max(1, r * 0.07); c.beginPath(); c.moveTo(w * 0.3, -w * 0.25); c.lineTo(w * 0.3 + Lb * 0.3 - rec * 0.6, -w * 0.25); c.stroke(); } // las ranuras del freno y el recuperador
+      c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.moveTo(-w * 0.62, -w * 0.5); c.lineTo(w * 0.36, -w * 0.5); c.lineTo(w * 0.52, -w * 0.26); c.lineTo(w * 0.52, w * 0.26); c.lineTo(w * 0.36, w * 0.5); c.lineTo(-w * 0.62, w * 0.5); c.closePath(); c.fill(); c.stroke(); // la casamata
+      c.fillStyle = col.osc; c.fillRect(-w * 0.62 - rec * 0.7, -w * 0.16, w * 0.3, w * 0.32); if (lod === 2) { c.fillStyle = cl; c.beginPath(); c.arc(-w * 0.05, w * 0.22, w * 0.14, 0, TAU); c.fill(); c.stroke(); } // la culata, que recula; la escotilla
+      if (e.fino && e.retro > 0.2 && e.retro < 0.75) { const f = (0.75 - e.retro) / 0.55; c.save(); c.translate(-w * 0.8 - f * w * 1.1, w * (0.2 + f * 0.9)); c.rotate(f * 5); c.fillStyle = '#e0b83a'; c.fillRect(-w * 0.16, -w * 0.07, w * 0.32, w * 0.14); c.restore(); } // la vaina sale por detrás
+      if (e.retro > 0.6) { const g = (e.retro - 0.6) / 0.4; c.fillStyle = col.fuego; c.beginPath(); for (let i = 0; i < 10; i++) { const a = i / 10 * TAU, R = w * (i % 2 ? 0.3 : 0.75) * (0.6 + g * 0.6); c.lineTo(Lb * 1.08 + Math.cos(a) * R * 1.5, Math.sin(a) * R); } c.closePath(); c.fill(); }
+      if (e.retro > 0 && lod === 2) { c.fillStyle = col.humo; for (let i = 0; i < 4; i++) { const f = Math.min(1, tt + i * 0.08); c.globalAlpha = 0.3 * (1 - f); c.beginPath(); c.arc(Lb * 1.1 + f * r * (1.2 + i * 0.5), (i - 1.5) * f * r * 0.5, r * (0.25 + f * 0.6), 0, TAU); c.fill(); } c.globalAlpha = 1; } // el humo de la boca
     } else if (u.tipo === 'excavadora') { // orugas anchas, cabina atrás y una pala delante
       const L = r * 1.35, w = r * 0.95;
       orugas(c, col, e, lod, -L, L * 0.7, w, w * 0.42); c.translate(e.hx || 0, e.hy || 0); // el casco, sobre su tren de rodaje: cabecea y se ladea
@@ -391,6 +399,15 @@
   const sacos = (c, k, x, y, R, n, hueco) => { for (let i = 0; i < n; i++) { if (i === hueco) continue; const a = i / n * TAU + 0.2; c.save(); c.translate(k.X(x + Math.cos(a) * R), k.Y(y + Math.sin(a) * R)); c.rotate(a + Math.PI / 2); c.fillStyle = 'rgba(0,0,0,0.14)'; c.beginPath(); c.ellipse(k.u * 0.025, k.u * 0.025, R * k.u * 0.3, R * k.u * 0.17, 0, 0, TAU); c.fill(); c.restore(); }
     for (let i = 0; i < n; i++) { if (i === hueco) continue; const a = i / n * TAU + 0.2; c.save(); c.translate(k.X(x + Math.cos(a) * R), k.Y(y + Math.sin(a) * R)); c.rotate(a + Math.PI / 2); c.fillStyle = '#c9b990'; c.strokeStyle = '#8f8160'; c.lineWidth = 1; c.beginPath(); c.ellipse(0, 0, R * k.u * 0.3, R * k.u * 0.17, 0, 0, TAU); c.fill(); c.stroke(); c.restore(); } };
   const VOL = W.EDIF_VOL = {
+    nidoMG(c, k, s, col, det, vida) { c.fillStyle = col.tierra || '#e6dfcf'; c.beginPath(); c.arc(k.X(0.5), k.Y(0.5), 0.36 * k.u, 0, TAU); c.fill(); k.aro(0.5, 0.5, 0.27, col.base, 2.2); sacos(c, k, 0.5, 0.5, 0.4, 11, 8); // un nido de sacos, abierto por detrás, con un aro del color del bando
+      if (det) k.caja(0.16, 0.6, 0.14, 0.11, 0.05, '#5d6b4a', col.osc); const a = s.ang, ca = Math.cos(a), sa = Math.sin(a), d = s.retro, u = k.u;
+      for (const q of [2.4, -2.4, 0]) k.linea([[0.5, 0.5], [0.5 + Math.cos(a + q) * 0.2, 0.5 + Math.sin(a + q) * 0.2]], col.osc, 1.6); // trípode
+      if (vida) k.hombre(0.5 - ca * 0.17, 0.5 - sa * 0.17, a);
+      c.save(); c.translate(k.X(0.5), k.Y(0.5)); c.rotate(a); c.fillStyle = 'rgba(0,0,0,0.15)'; c.fillRect(u * 0.04, u * 0.03, u * 0.46, u * 0.05);
+      c.fillStyle = col.tinta; c.fillRect(u * 0.1 - d * u * 0.03, -u * 0.02, u * 0.4, u * 0.04); c.fillStyle = col.osc; c.fillRect(-u * 0.06 - d * u * 0.02, -u * 0.045, u * 0.2, u * 0.09); // cañón y cajón
+      c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; for (const q of [-1, 1]) { c.beginPath(); c.rect(u * 0.12, q * u * 0.11 - u * 0.07, u * 0.035, u * 0.14); c.fill(); c.stroke(); } // el escudo, en dos chapas
+      if (det) { c.fillStyle = '#5d6b4a'; c.fillRect(-u * 0.02, u * 0.05, u * 0.1, u * 0.09); }
+      if (d > 0.4) { c.fillStyle = col.fuego; c.beginPath(); c.moveTo(u * 0.5, -u * 0.035); c.lineTo(u * (0.58 + d * 0.06), 0); c.lineTo(u * 0.5, u * 0.035); c.closePath(); c.fill(); } c.restore(); }, // una ametralladora pesada en trípode, con su tirador
     torreta(c, k, s, col, det) { k.cil(0.5, 0.5, 0.46, 0.45, col.horm); k.poli(oct(0.5, 0.5, 0.36, 8), 0, col.base); if (det) for (const [x, y] of oct(0.5, 0.5, 0.41, 4, 0.39)) k.punto(x, y, 0.025, col.osc); arma(c, k, s, col, 0.5, 0.5, 0.42, 'doble'); }, // un tambor de hormigón y, encima, la torre
     antiaerea(c, k, s, col, det) { for (const a of [0.79, 2.36, 3.93, 5.5]) k.linea([[0.5, 0.5], [0.5 + Math.cos(a) * 0.52, 0.5 + Math.sin(a) * 0.52]], col.osc, 2.4); for (const [x, y] of oct(0.5, 0.5, 0.52, 4, 0)) k.punto(x, y, 0.05, col.horm2); // las cuatro patas de la plataforma
       k.cil(0.5, 0.5, 0.36, 0.35, col.horm); k.cil(0.5, 0.5, 0.26, 0, col.base); arma(c, k, s, col, 0.5, 0.5, 0.34, 'aa'); if (det) { const a = k.on ? k.T * 4 + s.id : 0.5; k.cil(0.12, 0.14, 0.07, 0.3, col.luz); k.linea([[0.12 - Math.cos(a) * 0.1, 0.14 - Math.sin(a) * 0.1], [0.12 + Math.cos(a) * 0.1, 0.14 + Math.sin(a) * 0.1]], col.osc, 1.6); } }, // y su radar de tiro, que gira

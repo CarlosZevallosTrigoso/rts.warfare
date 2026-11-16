@@ -1412,6 +1412,11 @@ prueba('tanda 3: misilera (Scud, Minuteman, Sarmat) e interceptor', () => {
   assert.equal(W.huella(copia), W.huella(m));
 });
 
+prueba('torreta ametralladora: barata, sin consumo, contra tierra y nunca contra el aire', () => {
+  const d = W.EDIF.nidoMG, A = W.ARMAS[d.arma];
+  assert.ok(d && A, 'existe, con su arma'); assert.ok(A.vs.ligero === 1 && !A.vs.aire, 'no dispara al aire'); assert.ok(d.energia === 0 && d.costo < W.EDIF.torreta.costo, 'barata y sin consumo'); assert.ok(W.MUN[d.arma] > 0, 'tiene munición definida');
+});
+
 prueba('los muros se quitaron: la orden no hace nada y no hay torreta de muro; la cámara sigue descubriendo a los escondidos', () => {
   const m = W.crearMundo(4242, { N: 128 }), N = m.N, J = m.jug[0];
   m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);

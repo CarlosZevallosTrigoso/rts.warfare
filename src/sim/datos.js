@@ -35,6 +35,8 @@
     extractor: { nombre: 'Extractor', tam: 2, vida: 600,  costo: 700,  tiempo: 300, energia: -20, vision: 5, req: ['refineria'], sobre: 'petroleo', libre: true, da: { rec: 'petroleo', cada: 6 }, mejora: true },
     fabrica:   { nombre: 'Fábrica',   tam: 3, vida: 1000, costo: 1400, pet: 100, tiempo: 500, energia: -40, vision: 5, req: ['refineria'] },
     torreta:   { nombre: 'Torreta',   tam: 1, vida: 600,  costo: 350,  tiempo: 300, energia: -25, vision: 8, req: ['cuartel'], arma: 'bateria', giroT: 0.2 },
+    // Torreta ametralladora: un nido de sacos con una ametralladora pesada. Barata y sin consumo; contra infantería y vehículos ligeros. No dispara al aire.
+    nidoMG:    { nombre: 'Torreta ametralladora', tam: 1, vida: 380, costo: 180, tiempo: 160, energia: 0, vision: 7, req: ['cuartel'], arma: 'ametrFija', giroT: 0.3 },
     torreCanon: { nombre: 'Torre de cañón', tam: 2, vida: 1100, costo: 900, acero: 80, pet: 60, tiempo: 500, energia: -40, vision: 9, req: ['fabrica'], arma: 'canonTorre', nivel: 2, giroT: 0.1 },
     aerodromo: { nombre: 'Aeródromo', tam: 3, vida: 900,  costo: 1600, pet: 150, tiempo: 500, energia: -40, vision: 6, req: ['fabrica'], nivel: 2 },
     antiaerea: { nombre: 'Antiaérea', tam: 1, vida: 500,  costo: 450,  tiempo: 300, energia: -20, vision: 9, req: ['cuartel'], arma: 'flak', nivel: 2, giroT: 0.28 },
@@ -191,6 +193,7 @@
     salva:   { indirecto: true, rafaga: 4, alcance: 14, alcanceMin: 5, area: 2, dano: 50, recarga: 220, vuelo: 0.5, vs: { ligero: 1, pesado: 0.8, edificio: 1.2 } },
     coheteAire: { alcance: 5.5, dano: 50, recarga: 55, vuelo: 0.7, vs: { ligero: 0.4, pesado: 1.3, edificio: 0.6 } },
     pistola: { alcance: 3,   dano: 4,  recarga: 18, vs: { ligero: 1,   pesado: 0.1,  edificio: 0.1 } },
+    ametrFija: { alcance: 5.5, dano: 6, recarga: 5, vs: { ligero: 1, pesado: 0.15, edificio: 0.1 } }, // la de la torreta ametralladora: nada contra el aire
     ametralladora: { alcance: 4.5, dano: 6, recarga: 5, vs: { ligero: 1, pesado: 0.15, edificio: 0.15, aire: 0.25 } },
     fpv:     { dano: 150, area: 0.9, vs: { ligero: 0.5, pesado: 1, edificio: 0.5 } }, // el dron kamikaze al estrellarse
     mina:    { dano: 150, area: 1.3, vs: { ligero: 1, pesado: 1, edificio: 0 } }, // mina terrestre: la pisa quien no sea zapador
@@ -237,7 +240,7 @@
   };
   W.MURO_N = [null, W.MUROS.alambrada, W.MUROS.muro, W.MUROS.reforzado, W.MUROS.puerta];
   // Munición que lleva encima cada arma (disparos; una salva cuenta como uno). Los edificios con arma guardan cuatro veces más.
-  W.MUN = { obusFijo: 10, fusil: 100, canon: 30, cohete: 12, obus: 14, canonPesado: 24, canonTorre: 30, bateria: 50, flak: 70, flakMovil: 70, rifle: 16, salva: 6, pistola: 60, ametralladora: 300, gatling: 700, granadaMano: 12, misil: 40 };
+  W.MUN = { obusFijo: 10, fusil: 100, canon: 30, cohete: 12, obus: 14, canonPesado: 24, canonTorre: 30, bateria: 50, flak: 70, flakMovil: 70, rifle: 16, salva: 6, pistola: 60, ametralladora: 300, ametrFija: 400, gatling: 700, granadaMano: 12, misil: 40 };
   W.munDe = (tipo, edif) => { const a = (edif ? W.EDIF[tipo] : W.UNID[tipo]).arma; return a ? (W.MUN[a] || 60) * (edif ? 4 : 1) : 0; };
   // Misiles balísticos. alcance en celdas desde la misilera (0 = todo el mapa); vel en celdas por tick; aguante: impactos de interceptor que resiste.
   W.MISILES = {

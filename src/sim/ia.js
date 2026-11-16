@@ -6,8 +6,8 @@
   const EDIF = W.EDIF, UNID = W.UNID, TEC = W.TEC;
 
   // Orden de construcción: [tipo, cantidad deseada].
-  const PLAN = [['central', 1], ['refineria', 1], ['cuartel', 1], ['bomba', 1], ['extractor', 1], ['fabrica', 1], ['torreta', 1], ['refineria', 2],
-    ['estacion', 1], ['torreta', 2], ['cuartel', 2], ['extractor', 2], ['torreta', 3], ['fabrica', 2], ['torreCanon', 1], ['aerodromo', 1], ['antiaerea', 1], ['torreCanon', 2], ['antiaerea', 2]];
+  const PLAN = [['central', 1], ['refineria', 1], ['cuartel', 1], ['bomba', 1], ['extractor', 1], ['fabrica', 1], ['torreta', 1], ['nidoMG', 1], ['refineria', 2],
+    ['estacion', 1], ['torreta', 2], ['nidoMG', 2], ['cuartel', 2], ['extractor', 2], ['torreta', 3], ['fabrica', 2], ['torreCanon', 1], ['aerodromo', 1], ['antiaerea', 1], ['torreCanon', 2], ['antiaerea', 2]];
   // Orden fijo de investigación.
   const ORDEN_TEC = ['tolva', 'perforante', 'nivel2', 'motores', 'chalecos', 'reactivo', 'telemetro', 'dronesFpv', 'turbinas', 'depuracion', 'nivel3', 'canonLargo', 'dronesPes', 'analisis'];
 
@@ -104,7 +104,7 @@
         let dm = 40;
         for (let k = 0; k < cerca.length; k++) { const c = cerca[k]; const d = Math.hypot((c % N) + 0.5 - cx, ((c / N) | 0) + 0.5 - cy); if (d < dm) dm = d; }
         p = p * 0.3 + dm * 2;
-      } else if (tipo === 'torreta') {
+      } else if (tipo === 'torreta' || tipo === 'nidoMG') {
         p = p * 0.5 + Math.hypot(cx - rival.x, cy - rival.y) * 0.4;
       }
       if (p < mp) { mp = p; mejor = { x, y }; }

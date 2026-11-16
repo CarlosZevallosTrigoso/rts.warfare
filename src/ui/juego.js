@@ -343,7 +343,7 @@
         balas.push({ x1, y1, x2: d.x2, y2: d.y2, t0: ahora, dur: 380, k: 'rifle' }); fogonazoD(x1, y1, ang, 0.55); haloF(x1, y1, 0.9, 0.1); casquillo(d.x1, d.y1, ang); fin(d.x2, d.y2, true)(); return;
       }
       if (d.arma === 'misil') { fogonazoD(x1, y1, ang, 0.45); haloF(x1, y1, 0.8, 0.1); trazadora(x1, y1, d.x2, d.y2, { vel: 34, larga: 0.9, brillo: true, humo: true, fin: fin(d.x2, d.y2, true) }); return; }
-      if (d.arma === 'ametralladora' || d.arma === 'gatling') { // chorro: la que da y, alrededor, las que se abren; una de cada tantas es trazadora; el cañón se calienta
+      if (d.arma === 'ametralladora' || d.arma === 'ametrFija' || d.arma === 'gatling') { // chorro: la que da y, alrededor, las que se abren; una de cada tantas es trazadora; el cañón se calienta
         const gat = d.arma === 'gatling', c = calor.get(d.de) || { c: 0 }; c.c = Math.min(1, c.c + (gat ? 0.035 : 0.07)); c.x = x1; c.y = y1; calor.set(d.de, c);
         for (let i = 0, n = gat ? 1 : 2; i < n; i++) {
           const da = i === 0 && azar() < 0.6, a = ang + (da ? 0 : (azar() - 0.5) * 0.14), L2 = da ? L : L + (azar() - 0.3) * 1.8, viva = (cuentaMg++) % (gat ? 3 : 2) === 0;
@@ -1039,7 +1039,7 @@
           if (fino && anda && lod === 2 && !pausa) { const lado = Math.cos(fi) >= 0 ? 1 : -1; if (lado !== g.pl) { g.pl = lado; const R = d.radio * 1.4, l = s >= 0 ? 0.4 : -0.4, c = Math.cos(g.a), sn = Math.sin(g.a); if (pisadas.length > 500) pisadas.splice(0, 60); pisadas.push({ x: wx + c * R * 0.9 - sn * l * R, y: wy + sn * R * 0.9 + c * l * R, a: g.a, s: R, t0: tiempo }); } } // la pisada del pie que acaba de apoyar
         }
         const st = {
-          ang: d.cat === 'inf' && e.obj && !anda ? g.t : g.a, angT: g.t, retro: d.arma ? retroceso(e, d.arma) : 0, hundido: hund, monta: d.monta ? (e.monta || 0) / d.monta : 1, herido: d.cat === 'inf' && e.vida < d.vida * 0.5,
+          ang: d.cat === 'inf' && e.obj && !anda ? g.t : g.a, angT: g.t, retro: d.arma ? retroceso(e, d.arma) : 0, marcha: (g.mar = (g.mar === undefined ? (anda ? 1 : 0) : g.mar + ((anda ? 1 : 0) - g.mar) * Math.min(1, dtS * 3))), hundido: hund, monta: d.monta ? (e.monta || 0) / d.monta : 1, herido: d.cat === 'inf' && e.vida < d.vida * 0.5,
           anda, tiempo, carga: e.carga / (d.carga || 1), cosecha: e.est === 'cosechar', raro: e.cargaTipo === 2,
         };
         if (partes) Object.assign(st, partes);
@@ -1153,9 +1153,9 @@
         if (medio && p.arma !== 'bomba') {
           const A = W.ARMAS[p.arma], dxT = p.tx - p.ox, dyT = p.ty - p.oy, LT = Math.hypot(dxT, dyT) || 1, fr = Math.min(1, Math.hypot(x - p.ox, y - p.oy) / LT), coh = p.arma === 'salva' || p.arma === 'cohete' || p.arma === 'coheteAire';
           if (A.indirecto || p.arma === 'granadaMano') { // tiro curvo: sube y baja; la sombra va por el suelo y el proyectil, arriba y más grande
-            const H = Math.min(3.2, LT * 0.22), alt = Math.sin(fr * Math.PI) * H, ai = Math.atan2(dyT - Math.cos(fr * Math.PI) * H * Math.PI, dxT), esc = (1 + alt / 2.2) * (p.arma === 'granadaMano' ? 0.5 : 1), py2 = sy - alt * z;
+            const H = Math.min(3.2, LT * 0.22), alt = Math.sin(fr * Math.PI) * H, ai = Math.atan2(dyT - Math.cos(fr * Math.PI) * H * Math.PI, dxT), esc = (1 + alt / 2.2) * (p.arma === 'granadaMano' ? 0.5 : 0.62), py2 = sy - alt * z;
             if (fr > 0.45 && A.area && visible(p.tx, p.ty)) { const k = (fr - 0.45) / 0.55, R = z * A.area * (1.25 - 0.45 * k); ctx.globalAlpha = 0.13 * k; ctx.fillStyle = P.tinta; ctx.beginPath(); ctx.ellipse(ox + p.tx * z, oy + p.ty * z, R, R * 0.7, 0, 0, TAU); ctx.fill(); } // la sombra que avisa dónde cae
-            ctx.globalAlpha = 0.22; ctx.fillStyle = P.tinta; ctx.beginPath(); ctx.ellipse(sx, sy, z * 0.18, z * 0.1, 0, 0, TAU); ctx.fill();
+            ctx.globalAlpha = 0.22; ctx.fillStyle = P.tinta; ctx.beginPath(); ctx.ellipse(sx, sy, z * 0.12, z * 0.07, 0, 0, TAU); ctx.fill();
             ctx.globalAlpha = 1; ctx.save(); ctx.translate(sx, py2); ctx.rotate(ai);
             if (coh) { ctx.fillStyle = '#e8912d'; ctx.beginPath(); ctx.moveTo(-z * 0.18 * esc, -z * 0.07 * esc); ctx.lineTo(-z * (0.36 + azar() * 0.23) * esc, 0); ctx.lineTo(-z * 0.18 * esc, z * 0.07 * esc); ctx.fill(); }
             ctx.fillStyle = P.tinta; ctx.beginPath(); ctx.ellipse(0, 0, Math.max(2, z * 0.19 * esc), Math.max(1, z * 0.07 * esc), 0, 0, TAU); ctx.fill(); ctx.restore();
@@ -1191,16 +1191,16 @@
             ctx.strokeStyle = P.tinta; ctx.globalAlpha = 0.55 * (1 - f) * (1 - f); ctx.lineWidth = 1;
             ctx.beginPath(); ctx.moveTo(ox + b.x1 * z, oy + b.y1 * z); ctx.lineTo(ox + b.x2 * z, oy + b.y2 * z); ctx.stroke();
           } else if (b.larga) { // trazadora nueva: un trazo corto; la viva, dorada y con resplandor; las demás, apenas un hilo oscuro
-            const L = Math.hypot(dx, dy) || 1, f0 = Math.max(0, f - b.larga / L), xa = ox + (b.x1 + dx * f0) * z, ya = oy + (b.y1 + dy * f0) * z, xb = ox + (b.x1 + dx * f) * z, yb = oy + (b.y1 + dy * f) * z;
+            const L = Math.hypot(dx, dy) || 1, f0 = Math.max(0, f - b.larga * 0.45 / L), xa = ox + (b.x1 + dx * f0) * z, ya = oy + (b.y1 + dy * f0) * z, xb = ox + (b.x1 + dx * f) * z, yb = oy + (b.y1 + dy * f) * z;
             if (!visible(b.x1 + dx * f, b.y1 + dy * f)) continue;
-            if (b.brillo) { ctx.globalAlpha = 0.28; ctx.strokeStyle = '#e8912d'; ctx.lineWidth = Math.max(3, z * 0.2); ctx.beginPath(); ctx.moveTo(xa, ya); ctx.lineTo(xb, yb); ctx.stroke(); }
-            ctx.globalAlpha = b.tenue ? 0.4 : 0.95; ctx.strokeStyle = b.tenue ? P.tinta : '#f2c45c'; ctx.lineWidth = b.fina ? 1 : Math.max(1.4, z * 0.08); ctx.beginPath(); ctx.moveTo(xa, ya); ctx.lineTo(xb, yb); ctx.stroke();
+            if (b.brillo) { ctx.globalAlpha = 0.28; ctx.strokeStyle = '#e8912d'; ctx.lineWidth = Math.max(2, z * 0.09); ctx.beginPath(); ctx.moveTo(xa, ya); ctx.lineTo(xb, yb); ctx.stroke(); }
+            ctx.globalAlpha = b.tenue ? 0.4 : 0.95; ctx.strokeStyle = b.tenue ? P.tinta : '#f2c45c'; ctx.lineWidth = b.fina ? 1 : Math.max(1, z * 0.035); ctx.beginPath(); ctx.moveTo(xa, ya); ctx.lineTo(xb, yb); ctx.stroke();
             if (b.humo && !pausa && azar() < 0.6) parte('humoN', b.x1 + dx * f, b.y1 + dy * f, (azar() - 0.5) * 0.2, (azar() - 0.5) * 0.2, 0.8 + azar() * 0.6, 0.07 + azar() * 0.05);
           } else { // un trazo que viaja: cabeza brillante y cola que se apaga
-            const L = Math.hypot(dx, dy) || 1, cola = Math.min(0.5, 1.1 / L), f0 = Math.max(0, f - cola), fm = Math.max(0, f - cola * 0.4);
-            ctx.strokeStyle = '#d9882a'; ctx.lineWidth = Math.max(1, z * 0.045); ctx.globalAlpha = 0.45;
+            const L = Math.hypot(dx, dy) || 1, cola = Math.min(0.3, 0.42 / L), f0 = Math.max(0, f - cola), fm = Math.max(0, f - cola * 0.25); // balas cortas y finas
+            ctx.strokeStyle = '#d9882a'; ctx.lineWidth = 1; ctx.globalAlpha = 0.35;
             ctx.beginPath(); ctx.moveTo(ox + (b.x1 + dx * f0) * z, oy + (b.y1 + dy * f0) * z); ctx.lineTo(ox + (b.x1 + dx * fm) * z, oy + (b.y1 + dy * fm) * z); ctx.stroke();
-            ctx.strokeStyle = '#f2c45c'; ctx.lineWidth = Math.max(1.2, z * 0.07); ctx.globalAlpha = 1;
+            ctx.strokeStyle = '#f2c45c'; ctx.lineWidth = Math.max(1, z * 0.028); ctx.globalAlpha = 1;
             ctx.beginPath(); ctx.moveTo(ox + (b.x1 + dx * fm) * z, oy + (b.y1 + dy * fm) * z); ctx.lineTo(ox + (b.x1 + dx * f) * z, oy + (b.y1 + dy * f) * z); ctx.stroke();
           }
         }
@@ -1934,7 +1934,7 @@
     // ---------- guía: para qué sirve cada cosa ----------
     const QUE = {
       patio: 'El centro de la base: desde él se encargan los edificios. Si pierdes todos, pierdes la partida.', central: 'Da energía a los edificios de su red.', refineria: 'Donde descargan las cosechadoras; trae una.', bomba: 'Da agua, que es el tope de tropa. Va junto al agua.',
-      cuartel: 'Produce la infantería.', fabrica: 'Produce los vehículos.', torreta: 'Defensa fija contra tierra y aire.', torreCanon: 'Defensa pesada de largo alcance contra blindados.', aerodromo: 'Produce y aloja hasta cinco aviones.',
+      cuartel: 'Produce la infantería.', fabrica: 'Produce los vehículos.', torreta: 'Defensa fija contra tierra y aire.', nidoMG: 'Nido de sacos con una ametralladora pesada: barata y sin consumo. Contra infantería y vehículos ligeros; no dispara al aire.', torreCanon: 'Defensa pesada de largo alcance contra blindados.', aerodromo: 'Produce y aloja hasta cinco aviones.',
       antiaerea: 'Defensa fija solo contra el aire: aviones y drones.', estacion: 'Sobre un campo de conocimiento da información rápido; aloja la inteligencia.', laboratorio: 'Da información en la base, sin campo, más despacio. Vale como estación.', obras: 'Produce las unidades civiles: ingeniero civil y excavadora.',
       deposito: 'Alarga tu red: crea una zona redonda con suministro donde también puedes construir. Va a 40 celdas o menos de un edificio ya conectado y se cablea solo hasta él; para llegar más lejos, encadena varios.', misilera: 'Fabrica, guarda y lanza misiles balísticos.', interceptor: 'Derriba los misiles enemigos que entran en su radio.', estDrones: 'Mantiene dos drones de reconocimiento vigilando a su alrededor. Mejorada lleva además bombarderos y kamikazes, y guarda las tecnologías del operador.', inteligencia: 'Entrena espías, aloja dos drones espía de largo alcance y permite el mapeo satelital.',
       bunker: 'Entran hasta 4 de infantería (clic derecho sobre él con la tropa seleccionada) y disparan desde dentro recibiendo solo la cuarta parte del daño. Para sacarlos: selecciona el búnker y clic derecho en el suelo. Si lo destruyen, salen heridos.', vigia: 'Sin armas y muy barata: ve a 16 celdas y descubre a los escondidos a 8. Se puede poner fuera de la red, pero necesita enlace de datos: un cable hasta tu red (se tiende solo a menos de 24 celdas) o cobertura de radio. Sin enlace no te enseña nada.', artFija: 'Nivel 2. Obús fijo con 20 celdas de alcance sobre lo que vea cualquiera de los tuyos; no dispara a menos de 6 celdas. Gasta munición: la repone por la red. Sin enlace de datos (red o radio) solo tira a lo que ve ella misma, a 8 celdas.',
