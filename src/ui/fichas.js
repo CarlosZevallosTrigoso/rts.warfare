@@ -394,7 +394,6 @@
     torreta(c, k, s, col, det) { k.cil(0.5, 0.5, 0.46, 0.45, col.horm); k.poli(oct(0.5, 0.5, 0.36, 8), 0, col.base); if (det) for (const [x, y] of oct(0.5, 0.5, 0.41, 4, 0.39)) k.punto(x, y, 0.025, col.osc); arma(c, k, s, col, 0.5, 0.5, 0.42, 'doble'); }, // un tambor de hormigón y, encima, la torre
     antiaerea(c, k, s, col, det) { for (const a of [0.79, 2.36, 3.93, 5.5]) k.linea([[0.5, 0.5], [0.5 + Math.cos(a) * 0.52, 0.5 + Math.sin(a) * 0.52]], col.osc, 2.4); for (const [x, y] of oct(0.5, 0.5, 0.52, 4, 0)) k.punto(x, y, 0.05, col.horm2); // las cuatro patas de la plataforma
       k.cil(0.5, 0.5, 0.36, 0.35, col.horm); k.cil(0.5, 0.5, 0.26, 0, col.base); arma(c, k, s, col, 0.5, 0.5, 0.34, 'aa'); if (det) { const a = k.on ? k.T * 4 + s.id : 0.5; k.cil(0.12, 0.14, 0.07, 0.3, col.luz); k.linea([[0.12 - Math.cos(a) * 0.1, 0.14 - Math.sin(a) * 0.1], [0.12 + Math.cos(a) * 0.1, 0.14 + Math.sin(a) * 0.1]], col.osc, 1.6); } }, // y su radar de tiro, que gira
-    torretaMuro(c, k, s, col, det) { k.caja(0.1, 0.1, 0.8, 0.8, 0.75, col.horm); for (const [x, y] of [[0.1, 0.1], [0.72, 0.1], [0.1, 0.72], [0.72, 0.72]]) k.caja(x, y, 0.18, 0.18, 0.12, col.horm2); k.poli(oct(0.5, 0.5, 0.26, 8), 0, col.base); arma(c, k, s, col, 0.5, 0.5, 0.36, 'doble'); }, // un torreón almenado sobre el muro
     torreCanon(c, k, s, col, det, vida) { k.poli(oct(1, 1, 0.94, 8), 0.14, col.horm, col.horm2); k.poli(oct(1, 1, 0.66, 8), 0.55, col.osc); k.poli(oct(1, 1, 0.5, 8), 0, col.base); // glacis de hormigón y, encima, la casamata
       if (det) { for (const [x, y] of oct(1, 1, 0.8, 4, 0.39)) k.caja(x - 0.07, y - 0.07, 0.14, 0.14, 0.12, col.horm2); k.caja(0.2, 1.55, 0.26, 0.2, 0.08, col.saco, '#8f8160'); }
       arma(c, k, s, col, 1, 1, 0.5, 'canon'); if (vida) k.hombre(1 - Math.cos(s.ang) * 0.72 + Math.sin(s.ang) * 0.2, 1 - Math.sin(s.ang) * 0.72 - Math.cos(s.ang) * 0.2, s.ang); },
@@ -517,7 +516,7 @@
     c.lineJoin = 'round'; c.lineCap = 'butt';
     if (lod && VOL[e.tipo]) { VOL[e.tipo](c, kitEdif(c, px, py, t, W.EDIF[e.tipo].tam, col, s), s, col, lod === 2, lod === 2 && !!s.fino); danos(c, cx, cy, t, col, s); return; } // en volúmenes: cada edificio con su silueta
 
-    if (e.tipo === 'torreta' || e.tipo === 'antiaerea' || e.tipo === 'torretaMuro') {
+    if (e.tipo === 'torreta' || e.tipo === 'antiaerea') {
       const R = t * 0.47, aa = e.tipo === 'antiaerea';
       c.fillStyle = lod ? col.osc : col.base; c.beginPath();
       for (let k = 0; k < 8; k++) { const a = (k + 0.5) / 8 * TAU; c.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); }

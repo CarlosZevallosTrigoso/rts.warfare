@@ -355,12 +355,12 @@
   <button type="button" id="tutorial">Tutorial guiado<small style="display:block;color:var(--suave);font-size:10px">ocho pasos, con el rival dormido hasta el final</small></button>
   <button type="button" id="continuar" hidden>Continuar la partida guardada</button>
   <button type="button" id="irDrone" onclick="location.href='drone/index.html'">drone.warfare<small style="display:block;color:var(--suave);font-size:10px">el otro juego: el mismo conflicto con lupa, infantería y drones</small></button>
-  <div id="version">versión 113</div>
+  <div id="version">versión 114</div>
 </div></div>
 <div id="guia" hidden><div class="caja"><div class="cab"><strong>Guía: para qué sirve cada cosa</strong><button type="button" id="cierraGuia">cerrar</button></div><div id="guiaTxt"></div></div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finVer" href="#" title="Vuelve a ver la partida entera, con todo el mapa a la vista y a la velocidad que quieras.">ver repetición</a><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 113' };
+globalThis.W = { VERSION: 'versión 114' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -5184,7 +5184,6 @@ globalThis.W = { VERSION: 'versión 113' };
     torreta(c, k, s, col, det) { k.cil(0.5, 0.5, 0.46, 0.45, col.horm); k.poli(oct(0.5, 0.5, 0.36, 8), 0, col.base); if (det) for (const [x, y] of oct(0.5, 0.5, 0.41, 4, 0.39)) k.punto(x, y, 0.025, col.osc); arma(c, k, s, col, 0.5, 0.5, 0.42, 'doble'); }, // un tambor de hormigón y, encima, la torre
     antiaerea(c, k, s, col, det) { for (const a of [0.79, 2.36, 3.93, 5.5]) k.linea([[0.5, 0.5], [0.5 + Math.cos(a) * 0.52, 0.5 + Math.sin(a) * 0.52]], col.osc, 2.4); for (const [x, y] of oct(0.5, 0.5, 0.52, 4, 0)) k.punto(x, y, 0.05, col.horm2); // las cuatro patas de la plataforma
       k.cil(0.5, 0.5, 0.36, 0.35, col.horm); k.cil(0.5, 0.5, 0.26, 0, col.base); arma(c, k, s, col, 0.5, 0.5, 0.34, 'aa'); if (det) { const a = k.on ? k.T * 4 + s.id : 0.5; k.cil(0.12, 0.14, 0.07, 0.3, col.luz); k.linea([[0.12 - Math.cos(a) * 0.1, 0.14 - Math.sin(a) * 0.1], [0.12 + Math.cos(a) * 0.1, 0.14 + Math.sin(a) * 0.1]], col.osc, 1.6); } }, // y su radar de tiro, que gira
-    torretaMuro(c, k, s, col, det) { k.caja(0.1, 0.1, 0.8, 0.8, 0.75, col.horm); for (const [x, y] of [[0.1, 0.1], [0.72, 0.1], [0.1, 0.72], [0.72, 0.72]]) k.caja(x, y, 0.18, 0.18, 0.12, col.horm2); k.poli(oct(0.5, 0.5, 0.26, 8), 0, col.base); arma(c, k, s, col, 0.5, 0.5, 0.36, 'doble'); }, // un torreón almenado sobre el muro
     torreCanon(c, k, s, col, det, vida) { k.poli(oct(1, 1, 0.94, 8), 0.14, col.horm, col.horm2); k.poli(oct(1, 1, 0.66, 8), 0.55, col.osc); k.poli(oct(1, 1, 0.5, 8), 0, col.base); // glacis de hormigón y, encima, la casamata
       if (det) { for (const [x, y] of oct(1, 1, 0.8, 4, 0.39)) k.caja(x - 0.07, y - 0.07, 0.14, 0.14, 0.12, col.horm2); k.caja(0.2, 1.55, 0.26, 0.2, 0.08, col.saco, '#8f8160'); }
       arma(c, k, s, col, 1, 1, 0.5, 'canon'); if (vida) k.hombre(1 - Math.cos(s.ang) * 0.72 + Math.sin(s.ang) * 0.2, 1 - Math.sin(s.ang) * 0.72 - Math.cos(s.ang) * 0.2, s.ang); },
@@ -5307,7 +5306,7 @@ globalThis.W = { VERSION: 'versión 113' };
     c.lineJoin = 'round'; c.lineCap = 'butt';
     if (lod && VOL[e.tipo]) { VOL[e.tipo](c, kitEdif(c, px, py, t, W.EDIF[e.tipo].tam, col, s), s, col, lod === 2, lod === 2 && !!s.fino); danos(c, cx, cy, t, col, s); return; } // en volúmenes: cada edificio con su silueta
 
-    if (e.tipo === 'torreta' || e.tipo === 'antiaerea' || e.tipo === 'torretaMuro') {
+    if (e.tipo === 'torreta' || e.tipo === 'antiaerea') {
       const R = t * 0.47, aa = e.tipo === 'antiaerea';
       c.fillStyle = lod ? col.osc : col.base; c.beginPath();
       for (let k = 0; k < 8; k++) { const a = (k + 0.5) / 8 * TAU; c.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); }
@@ -5755,7 +5754,7 @@ globalThis.W = { VERSION: 'versión 113' };
 
     // Volumen: la vista sigue siendo cenital, pero cada cosa tiene altura. Los edificios muestran su pared sur y el tejado
     // se dibuja desplazado hacia arriba; las unidades llevan un canto; la roca y el agua, un escalón.
-    const ALTO = { patio: 0.3, central: 0.36, refineria: 0.32, bomba: 0.2, cuartel: 0.26, extractor: 0.3, fabrica: 0.34, torreta: 0.22, torreCanon: 0.36, aerodromo: 0.08, antiaerea: 0.22, estacion: 0.26, deposito: 0.22, obras: 0.28, misilera: 0.12, interceptor: 0.24, torretaMuro: 0.34, camara: 0.3, estDrones: 0.14, laboratorio: 0.26, logistica: 0.16, avanzada: 0.2, inteligencia: 0.3, pistaAv: 0.04, almacen: 0.22, tanqueComb: 0.18, torreRadio: 0.5, mina: 0.3, radar: 0.3, fundicion: 0.34, eolica: 0.55, hidro: 0.26, bunker: 0.14, vigia: 0.6, artFija: 0.14, hospital: 0.28 };
+    const ALTO = { patio: 0.3, central: 0.36, refineria: 0.32, bomba: 0.2, cuartel: 0.26, extractor: 0.3, fabrica: 0.34, torreta: 0.22, torreCanon: 0.36, aerodromo: 0.08, antiaerea: 0.22, estacion: 0.26, deposito: 0.22, obras: 0.28, misilera: 0.12, interceptor: 0.24, camara: 0.3, estDrones: 0.14, laboratorio: 0.26, logistica: 0.16, avanzada: 0.2, inteligencia: 0.3, pistaAv: 0.04, almacen: 0.22, tanqueComb: 0.18, torreRadio: 0.5, mina: 0.3, radar: 0.3, fundicion: 0.34, eolica: 0.55, hidro: 0.26, bunker: 0.14, vigia: 0.6, artFija: 0.14, hospital: 0.28 };
     function entEn(wx, wy, holgura) { // holgura: margen extra (en celdas) para acertar con el dedo
       let mejor = null, md = Infinity;
       for (const e of m.ents) {
@@ -6509,7 +6508,7 @@ globalThis.W = { VERSION: 'versión 113' };
         if (e.tipo === 'patio') est.activo = Je.obras.some((o) => !o.listo);
         else if (e.tipo === 'fabrica') est.activo = e.cola.length > 0;
         else if (EDIF[e.tipo].arma) { est.ang = giro(e).t; est.retro = retroceso(e, EDIF[e.tipo].arma); }
-        const vol = !!W.EDIF_VOL[e.tipo], h = lod && !vol ? ALTO[e.tipo] * z : 0, redondo = e.tipo === 'torreta' || e.tipo === 'antiaerea' || e.tipo === 'torretaMuro'; // altura en píxeles
+        const vol = !!W.EDIF_VOL[e.tipo], h = lod && !vol ? ALTO[e.tipo] * z : 0, redondo = e.tipo === 'torreta' || e.tipo === 'antiaerea'; // altura en píxeles
         if (vol) { est.sv = [svx * sl, svy * sl]; est.sombra = sombraCol; est.fino = z >= 40; } // en volúmenes: cada cuerpo echa su propia sombra
         else if (lod) { // sombra: cae hacia donde manda el sol, más larga cuanto más alto el edificio
           const sx = SOX + h * 0.6 * svx * sl, sy = SOY + h * 0.6 * svy * sl;
