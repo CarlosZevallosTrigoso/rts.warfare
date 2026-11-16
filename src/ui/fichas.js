@@ -344,6 +344,141 @@
     c.restore();
   };
 
+  // ---------- edificios en volúmenes ----------
+  // Cada edificio es un conjunto de cuerpos de distinta altura, que se leen por su sombra (s.sv: hacia dónde cae; s.sombra: su color).
+  // Todo va en celdas, con el origen en la esquina del edificio. De cerca (s.fino) hay vida alrededor: gente, vehículos, material.
+  function kitEdif(c, px, py, t, tam, col, s) {
+    const u = t / tam, X = (v) => px + v * u, Y = (v) => py + v * u, lw = Math.max(1, u * 0.035), T = s.tiempo / 1000, on = !s.deficit, sv = s.sv || [0.7, 0.75], SH = s.sombra || 'rgba(0,0,0,0.17)', k = { u, X, Y, lw, T, on, tam };
+    const O = col.osc, PIEL = '#e9dcc6';
+    k.caja = (x, y, w, h, a, fill, st) => { if (a) { const dx = a * u * 0.32 * sv[0], dy = a * u * 0.32 * sv[1], P = [[X(x), Y(y)], [X(x + w), Y(y)], [X(x + w), Y(y + h)], [X(x), Y(y + h)]], b = dx >= 0 ? (dy >= 0 ? 0 : 3) : dy >= 0 ? 1 : 2, q = (i) => P[(b + i) % 4];
+        c.fillStyle = SH; c.beginPath(); c.moveTo(q(0)[0], q(0)[1]); c.lineTo(q(1)[0], q(1)[1]); c.lineTo(q(1)[0] + dx, q(1)[1] + dy); c.lineTo(q(2)[0] + dx, q(2)[1] + dy); c.lineTo(q(3)[0] + dx, q(3)[1] + dy); c.lineTo(q(3)[0], q(3)[1]); c.closePath(); c.fill(); }
+      c.fillStyle = fill; c.strokeStyle = st || O; c.lineWidth = lw; c.beginPath(); c.rect(X(x), Y(y), w * u, h * u); c.fill(); c.stroke(); };
+    k.dosAguas = (x, y, w, h, a, hor, f1, f2) => { k.caja(x, y, w, h, a, f1 || col.base); c.fillStyle = f2 || col.claro || col.luz; if (hor) c.fillRect(X(x) + lw / 2, Y(y) + lw / 2, w * u - lw, h * u / 2 - lw / 2); else c.fillRect(X(x) + lw / 2, Y(y) + lw / 2, w * u / 2 - lw / 2, h * u - lw);
+      c.strokeStyle = O; c.lineWidth = lw; c.beginPath(); if (hor) { c.moveTo(X(x), Y(y + h / 2)); c.lineTo(X(x + w), Y(y + h / 2)); } else { c.moveTo(X(x + w / 2), Y(y)); c.lineTo(X(x + w / 2), Y(y + h)); } c.stroke(); };
+    k.cil = (x, y, r, a, fill, st) => { if (a) { const d = a * u * 0.32; c.strokeStyle = SH; c.lineCap = 'round'; c.lineWidth = 2 * r * u; c.beginPath(); c.moveTo(X(x), Y(y)); c.lineTo(X(x) + d * sv[0], Y(y) + d * sv[1]); c.stroke(); c.lineCap = 'butt'; }
+      c.fillStyle = fill; c.strokeStyle = st || O; c.lineWidth = lw; c.beginPath(); c.arc(X(x), Y(y), r * u, 0, TAU); c.fill(); c.stroke(); };
+    k.poli = (pts, a, fill, st) => { const tr = (dx, dy) => { c.beginPath(); pts.forEach(([x, y], i) => (i ? c.lineTo(X(x) + dx, Y(y) + dy) : c.moveTo(X(x) + dx, Y(y) + dy))); c.closePath(); }; if (a) { c.fillStyle = SH; tr(a * u * 0.32 * sv[0], a * u * 0.32 * sv[1]); c.fill(); } tr(0, 0); c.fillStyle = fill; c.fill(); if (st !== null) { c.strokeStyle = st || O; c.lineWidth = lw; c.stroke(); } };
+    k.linea = (pts, cl, w, dash, off) => { c.strokeStyle = cl; c.lineWidth = (w || 1) * lw; if (dash) { c.setLineDash(dash.map((v) => v * u)); c.lineDashOffset = (off || 0) * u; } c.beginPath(); pts.forEach(([x, y], i) => (i ? c.lineTo(X(x), Y(y)) : c.moveTo(X(x), Y(y)))); c.stroke(); if (dash) { c.setLineDash([]); c.lineDashOffset = 0; } };
+    k.sombraL = (x0, y0, x1, y1, a, w) => { const d = a * u * 0.32; c.strokeStyle = SH; c.lineWidth = (w || 2) * lw; c.beginPath(); c.moveTo(X(x0) + d * sv[0], Y(y0) + d * sv[1]); c.lineTo(X(x1) + d * sv[0], Y(y1) + d * sv[1]); c.stroke(); }; // la sombra de algo fino y alto: un mástil, un brazo
+    k.rect = (x, y, w, h, fill) => { c.fillStyle = fill; c.fillRect(X(x), Y(y), w * u, h * u); };
+    k.punto = (x, y, r, fill) => { c.fillStyle = fill; c.beginPath(); c.arc(X(x), Y(y), Math.max(0.8, r * u), 0, TAU); c.fill(); };
+    k.aro = (x, y, r, cl, w, a0, a1) => { c.strokeStyle = cl; c.lineWidth = (w || 1) * lw; c.beginPath(); c.arc(X(x), Y(y), r * u, a0 || 0, a1 === undefined ? TAU : a1); c.stroke(); };
+    k.humo = (x, y, g, cl, al) => { c.fillStyle = cl || col.humo; for (let i = 0; i < 4; i++) { const f = (T * 0.35 + i / 4 + s.id * 0.13) % 1; c.globalAlpha = (al || 0.45) * (1 - f); c.beginPath(); c.arc(X(x) + f * u * 2.2 * g, Y(y) - f * u * 3 * g, u * g * (0.6 + f * 1.4), 0, TAU); c.fill(); } c.globalAlpha = 1; };
+    k.baliza = (x, y, cl, vel) => k.punto(x, y, 0.045, !on ? col.humo : Math.sin(T * 4 * (vel || 1) + s.id) > 0 ? cl : 'rgba(0,0,0,0.25)');
+    k.fuego = (x, y, r) => { const f = 0.78 + 0.22 * Math.sin(T * 17 + s.id); k.punto(x, y, r * f, col.fuego); k.punto(x, y, r * f * 0.45, '#f6d36b'); };
+    k.hombre = (x, y, a, cl) => { c.fillStyle = cl || O; c.beginPath(); c.ellipse(X(x), Y(y), Math.max(1.2, 0.055 * u), Math.max(1.6, 0.1 * u), a || 0, 0, TAU); c.fill(); k.punto(x, y, 0.036, PIEL); };
+    k.en = (pts, f) => { let L = 0; const seg = pts.map((p, i) => { const q = pts[(i + 1) % pts.length], l = Math.hypot(q[0] - p[0], q[1] - p[1]); L += l; return l; }); let d = (((f % 1) + 1) % 1) * L; for (let i = 0; i < pts.length; i++) { if (d <= seg[i]) { const p = pts[i], q = pts[(i + 1) % pts.length], g = seg[i] ? d / seg[i] : 0; return { x: p[0] + (q[0] - p[0]) * g, y: p[1] + (q[1] - p[1]) * g, a: Math.atan2(q[1] - p[1], q[0] - p[0]) }; } d -= seg[i]; } return { x: pts[0][0], y: pts[0][1], a: 0 }; };
+    k.anda = (pts, n, vel, cl) => { for (let i = 0; i < n; i++) { const p = k.en(pts, T * (vel || 0.04) + i / n + s.id * 0.07); k.hombre(p.x, p.y, p.a, cl); } };
+    k.carro = (x, y, a, l, w, fill, cab) => { c.save(); c.translate(X(x), Y(y)); c.rotate(a); c.fillStyle = SH; c.fillRect(-l * u / 2 + u * 0.03, -w * u / 2 + u * 0.03, l * u, w * u); c.fillStyle = fill; c.strokeStyle = O; c.lineWidth = Math.max(0.8, lw * 0.8); c.beginPath(); c.rect(-l * u / 2, -w * u / 2, l * u, w * u); c.fill(); c.stroke(); if (cab) { c.fillStyle = cab; c.fillRect(l * u * 0.18, -w * u * 0.36, l * u * 0.24, w * u * 0.72); } c.restore(); };
+    k.blindado = (x, y, a) => { c.save(); c.translate(X(x), Y(y)); c.rotate(a); c.fillStyle = O; c.fillRect(-0.2 * u, -0.14 * u, 0.4 * u, 0.28 * u); c.fillStyle = col.base; c.fillRect(-0.18 * u, -0.1 * u, 0.36 * u, 0.2 * u); c.fillStyle = col.luz; c.beginPath(); c.arc(0, 0, 0.07 * u, 0, TAU); c.fill(); c.fillStyle = O; c.fillRect(0.05 * u, -0.015 * u, 0.2 * u, 0.03 * u); c.restore(); };
+    k.grua = (x, y, L, a) => { const ca = Math.cos(a), sa = Math.sin(a); k.sombraL(x - ca * L * 0.35, y - sa * L * 0.35, x + ca * L, y + sa * L, 1, 2.4); c.strokeStyle = O; c.lineWidth = lw * 3.4; c.beginPath(); c.moveTo(X(x), Y(y)); c.lineTo(X(x - ca * L * 0.35), Y(y - sa * L * 0.35)); c.stroke(); k.linea([[x, y], [x + ca * L, y + sa * L]], O, 2.4); k.linea([[x, y], [x + ca * L, y + sa * L]], '#e0b83a', 1.1); k.punto(x + ca * L * 0.8, y + sa * L * 0.8, 0.04, col.tinta); k.caja(x - 0.09, y - 0.09, 0.18, 0.18, 0, '#e0b83a'); };
+    k.aspas = (x, y, r, a, n, cl, w) => { c.strokeStyle = cl; c.lineWidth = (w || 1.4) * lw; c.beginPath(); for (let i = 0; i < n; i++) { const b = a + i * TAU / n; c.moveTo(X(x), Y(y)); c.lineTo(X(x) + Math.cos(b) * r * u, Y(y) + Math.sin(b) * r * u); } c.stroke(); };
+    k.bandera = (x, y, cl) => { const o = Math.sin(T * 5 + s.id) * 0.03; k.sombraL(x, y + 0.08, x, y + 0.08, 0.7, 1.4); c.fillStyle = cl || col.base; c.strokeStyle = O; c.lineWidth = 1; c.beginPath(); c.moveTo(X(x), Y(y)); c.lineTo(X(x + 0.3), Y(y + 0.06 + o)); c.lineTo(X(x), Y(y + 0.16)); c.closePath(); c.fill(); c.stroke(); k.punto(x, y + 0.08, 0.035, col.tinta); };
+    k.cruz = (x, y, g, cl) => { c.fillStyle = cl || '#c0392b'; c.fillRect(X(x - g * 0.16), Y(y - g * 0.5), g * 0.32 * u, g * u); c.fillRect(X(x - g * 0.5), Y(y - g * 0.16), g * u, g * 0.32 * u); };
+    k.pista = (x, y, r, fill, cl) => { c.fillStyle = fill; c.beginPath(); c.arc(X(x), Y(y), r * u, 0, TAU); c.fill(); k.aro(x, y, r, cl, 1.4); k.linea([[x - r * 0.33, y - r * 0.42], [x - r * 0.33, y + r * 0.42]], cl, 1.4); k.linea([[x + r * 0.33, y - r * 0.42], [x + r * 0.33, y + r * 0.42]], cl, 1.4); k.linea([[x - r * 0.33, y], [x + r * 0.33, y]], cl, 1.4); }; // la H de los helicópteros, a ras de suelo
+    k.deposito = (x, y, r, a, fill) => { k.cil(x, y, r, a, fill); k.aro(x, y, r * 0.66, col.claro || O, 1); k.aro(x, y, r, O, 1.5, 2.2, 3.6); k.punto(x, y, 0.05, O); };
+    return k;
+  }
+  const VOL = W.EDIF_VOL = {
+    patio(c, k, s, col, det, vida) { const C = col.claro, H2 = col.horm2;
+      k.caja(1.95, 1.25, 0.8, 0.95, 0.3, C); k.caja(0.25, 0.65, 1.75, 1.55, 0.5, col.base); k.caja(0.42, 1.6, 0.5, 0.38, 0.12, col.osc);
+      if (det) { for (let i = 0; i < 4; i++) k.rect(1.12 + i * 0.2, 1.5, 0.1, 0.5, C); k.linea([[2.05, 1.45], [2.65, 1.45]], col.osc, 1); k.linea([[2.05, 1.75], [2.65, 1.75]], col.osc, 1); }
+      k.cil(0.72, 1.05, 0.3, 0.9, col.luz); k.cil(0.72, 1.05, 0.17, 0, C); k.baliza(0.72, 1.05, col.mal); // torre de mando
+      k.cil(1.55, 0.98, 0.14, 0.25, col.horm); k.aspas(1.55, 0.98, 0.13, k.T * (k.on ? 1.2 : 0), 2, col.osc, 1.6); // antena que gira
+      if (det) { k.caja(2.08, 2.38, 0.2, 0.2, 0.1, H2); k.caja(2.32, 2.44, 0.16, 0.16, 0.08, H2); k.caja(2.14, 2.62, 0.26, 0.14, 0.06, col.saco); }
+      if (vida) { k.carro(1.3, 2.62, 0, 0.5, 0.26, col.base, col.osc); k.anda([[0.4, 2.42], [1.9, 2.42], [1.9, 2.5], [0.4, 2.5]], 2, 0.035); k.bandera(0.3, 0.2); }
+      k.grua(2.38, 0.62, 0.95, s.activo ? k.T * 0.5 : -0.8); },
+    refineria(c, k, s, col, det, vida) { const tub = [[0.72, 0.72], [1.78, 0.72], [2.55, 0.72], [2.55, 1.6]];
+      k.linea(tub, col.horm2, 3); k.linea(tub, col.osc, 1); k.linea([[1.5, 0.72], [1.5, 2.3]], col.horm2, 3); k.linea([[1.5, 0.72], [1.5, 2.3]], col.osc, 1, [0.08, 0.06], k.on ? -k.T * 0.3 : 0);
+      k.deposito(0.72, 0.72, 0.46, 0.6, col.luz); k.deposito(1.78, 0.72, 0.46, 0.6, col.luz);
+      k.dosAguas(0.22, 1.4, 0.72, 1.35, 0.35, false); k.poli([[1.1, 2.3], [1.9, 2.3], [1.9, 2.95], [1.1, 2.95]], 0, s.descarga ? col.mineral : col.horm, col.horm2); k.linea([[1.12, 2.33], [1.88, 2.33]], '#e0b83a', 2, [0.08, 0.08]); // muelle de descarga
+      k.cil(2.55, 1.6, 0.17, 1.5, col.osc); k.cil(2.55, 1.6, 0.09, 0, col.claro); // columna de destilación
+      k.cil(2.5, 2.6, 0.1, 1.2, col.osc); if (k.on) { k.fuego(2.5, 2.6, 0.12); if (det) k.humo(2.5, 2.6, 0.05); } // antorcha
+      if (vida) k.anda([[2.05, 1.2], [2.05, 2.8], [2.15, 2.8], [2.15, 1.2]], 2, 0.03); },
+    fabrica(c, k, s, col, det, vida) {
+      k.poli([[1.0, 1.9], [2.0, 1.9], [2.0, 2.92], [1.0, 2.92]], 0, col.horm, col.horm2); // explanada
+      if (s.activo) { const f = (k.T * 0.22) % 1; k.blindado(1.5, 1.85 + f * 0.9, Math.PI / 2); }
+      k.caja(2.3, 0.55, 0.5, 1.2, 0.28, col.osc); if (det) { k.cil(2.55, 1.5, 0.14, 0, col.horm); k.aspas(2.55, 1.5, 0.12, k.T * (k.on ? 6 : 0), 4, col.osc, 1.4); }
+      for (let i = 0; i < 4; i++) { k.caja(0.2 + i * 0.52, 0.3, 0.52, 1.62, i === 3 ? 0.5 : 0, col.base); k.rect(0.23 + i * 0.52, 0.34, 0.15, 1.54, col.claro); } // nave en diente de sierra
+      k.rect(1.1, 1.84, 0.8, 0.09, s.activo ? col.tinta : col.osc); for (const y of [0.8, 1.12]) { k.cil(2.55, y, 0.09, 1.1, col.osc); if (s.activo && det) k.humo(2.55, y, 0.05); }
+      if (vida) { k.blindado(0.5, 2.4, -Math.PI / 2); for (const [x, y] of [[2.3, 2.3], [2.55, 2.36], [2.34, 2.56]]) k.caja(x, y, 0.18, 0.16, 0.06, col.saco); const p = k.en([[2.2, 2.82], [0.4, 2.82]], k.T * 0.05); k.carro(p.x, p.y, p.a, 0.26, 0.16, '#e0b83a', col.osc); k.anda([[0.3, 2.05], [0.9, 2.05], [0.9, 2.15], [0.3, 2.15]], 1, 0.05); } },
+    cuartel(c, k, s, col, det, vida) {
+      k.dosAguas(0.15, 0.18, 1.12, 0.42, 0.25, true); k.dosAguas(0.15, 0.74, 1.12, 0.42, 0.25, true); k.caja(1.4, 0.18, 0.46, 0.98, 0.38, col.osc); if (det) { k.rect(1.48, 0.28, 0.3, 0.12, col.claro); k.baliza(1.63, 1.02, col.fuego, 0.5); }
+      k.caja(0.18, 1.5, 0.24, 0.24, 0.3, col.claro); k.bandera(1.6, 1.36);
+      if (vida) { const o = Math.sin(k.T * 0.6) * 0.18; for (let i = 0; i < 4; i++) k.hombre(0.72 + o + i * 0.18, 1.62, Math.PI / 2); k.hombre(1.5 + o * 0.3, 1.78, 0, col.base); } },
+    central(c, k, s, col, det) {
+      k.dosAguas(0.15, 1.0, 1.15, 0.82, 0.4, true);
+      for (const x of [0.48, 1.3]) { k.cil(x, 0.48, 0.36, 0.8, col.horm); k.cil(x, 0.48, 0.22, 0, '#9aa0a6'); if (k.on && det) k.humo(x, 0.48, 0.1, '#ffffff', 0.9); } // torres de refrigeración
+      k.caja(1.42, 1.1, 0.42, 0.6, 0.15, col.osc); for (let i = 0; i < 3; i++) k.baliza(1.52 + i * 0.11, 1.25 + i * 0.12, k.on ? '#f6d36b' : col.mal, 1 + i * 0.3); if (!k.on) k.punto(1.63, 1.55, 0.08, col.mal); },
+    hospital(c, k, s, col, det, vida) {
+      k.poli([[0.7, 0.15], [1.3, 0.15], [1.3, 0.7], [1.85, 0.7], [1.85, 1.3], [1.3, 1.3], [1.3, 1.85], [0.7, 1.85], [0.7, 1.3], [0.15, 1.3], [0.15, 0.7], [0.7, 0.7]], 0.35, '#f2f0ea'); k.cruz(1, 1, 0.62, s.deficit ? col.humo : '#c0392b');
+      k.caja(1.42, 1.42, 0.44, 0.34, 0.14, col.claro); if (vida) { k.carro(0.42, 1.62, 0, 0.34, 0.18, '#f2f0ea', '#c0392b'); const p = k.en([[1.4, 1.9], [1.8, 1.9]], k.T * 0.05); k.hombre(p.x, p.y, p.a, '#ffffff'); } },
+    eolica(c, k, s, col) { const a = k.on ? k.T * 3 + s.id : 0.4; k.cil(0.5, 0.62, 0.12, 0, col.horm); k.sombraL(0.5, 0.62, 0.5, 0.62, 2.2, 2.2); for (let i = 0; i < 3; i++) { const b = a + i * TAU / 3; k.sombraL(0.5, 0.45, 0.5 + Math.cos(b) * 0.42, 0.45 + Math.sin(b) * 0.42, 1.4, 2.2); }
+      k.aspas(0.5, 0.45, 0.42, a, 3, col.luz, 2.6); k.aspas(0.5, 0.45, 0.42, a, 3, col.osc, 0.8); k.cil(0.5, 0.45, 0.07, 0, col.base); },
+    hidro(c, k, s, col, det) {
+      k.rect(0.1, 0.1, 1.8, 0.62, col.agua); c.strokeStyle = col.horm2; c.lineWidth = k.u * 0.2; c.beginPath(); c.arc(k.X(1), k.Y(0.05), 0.95 * k.u, 0.35, Math.PI - 0.35); c.stroke(); k.aro(1, 0.05, 0.95, col.osc, 1, 0.35, Math.PI - 0.35); // la presa
+      for (const x of [0.7, 1, 1.3]) k.linea([[x, 1.02], [x, 1.3]], col.agua, 3, [0.07, 0.05], k.on ? -k.T * 0.5 : 0); // el agua que cae a las turbinas
+      k.dosAguas(0.45, 1.25, 1.1, 0.55, 0.35, true); k.caja(1.62, 1.4, 0.26, 0.3, 0.14, col.osc); k.baliza(1.75, 1.55, k.on ? '#f6d36b' : col.mal); },
+    bomba(c, k, s, col, det) {
+      k.linea([[1, 1], [1, 1.95]], col.horm2, 4); k.linea([[1, 1], [1.95, 1]], col.horm2, 4); k.linea([[1, 1], [1, 1.95]], col.osc, 1, [0.08, 0.06], k.on ? -k.T * 0.4 : 0); k.linea([[1, 1], [1.95, 1]], col.osc, 1, [0.08, 0.06], k.on ? -k.T * 0.4 : 0);
+      k.cil(1, 1, 0.56, 0.3, col.agua); c.save(); c.translate(k.X(1), k.Y(1)); c.rotate(s.deficit ? 0.4 : k.T * 4 + s.id); c.strokeStyle = col.luz; c.lineWidth = k.lw * 1.6; c.beginPath(); for (let i = 0; i < 3; i++) { const a = i / 3 * TAU; c.moveTo(0, 0); c.quadraticCurveTo(Math.cos(a + 0.6) * k.u * 0.28, Math.sin(a + 0.6) * k.u * 0.28, Math.cos(a) * k.u * 0.44, Math.sin(a) * k.u * 0.44); } c.stroke(); c.restore(); k.punto(1, 1, 0.1, col.osc);
+      k.caja(0.15, 0.15, 0.5, 0.42, 0.28, col.base); if (det) k.rect(0.2, 0.2, 0.4, 0.1, col.claro); },
+    extractor(c, k, s, col, det) { const bal = s.deficit ? 0.2 : Math.sin(k.T * 4 + s.id) * 0.32, ca = Math.cos(bal), sa = Math.sin(bal), px = 1.2, py = 1.12;
+      k.caja(0.15, 0.2, 0.5, 0.42, 0.22, col.base); k.linea([[1.5, 0.55], [0.8, 1.0]], col.horm2, 3); k.deposito(1.52, 0.52, 0.32, 0.45, col.luz);
+      k.punto(0.6, 1.24, 0.13, col.tinta); k.sombraL(px - ca * 0.68, py - sa * 0.68, px + ca * 0.4, py + sa * 0.4, 0.8, 3); k.linea([[1.0, 1.72], [px, py], [1.4, 1.72]], col.osc, 2.4); // boca del pozo y caballete
+      k.linea([[px - ca * 0.68, py - sa * 0.68], [px + ca * 0.4, py + sa * 0.4]], col.osc, 3.4); k.linea([[px - ca * 0.68, py - sa * 0.68], [px + ca * 0.4, py + sa * 0.4]], col.luz, 1.6); k.punto(px - ca * 0.68, py - sa * 0.68, 0.12, col.osc); k.caja(px + ca * 0.4 - 0.1, py + sa * 0.4 - 0.1, 0.2, 0.2, 0, col.osc); }, // el balancín cabecea al bombear
+    aerodromo(c, k, s, col, det) {
+      c.save(); c.translate(k.X(1.5), k.Y(1.5)); c.rotate(-0.5); c.fillStyle = col.horm2; c.fillRect(-k.u * 1.3, -k.u * 0.34, k.u * 2.6, k.u * 0.68); c.strokeStyle = col.luz; c.lineWidth = k.lw * 1.4; c.setLineDash([k.u * 0.2, k.u * 0.15]); c.beginPath(); c.moveTo(-k.u * 1.15, 0); c.lineTo(k.u * 1.15, 0); c.stroke(); c.setLineDash([]); c.restore(); // la pista, a ras de suelo
+      k.dosAguas(0.2, 0.2, 0.9, 0.55, 0.3, true); k.cil(2.62, 2.5, 0.15, 0.9, col.luz); k.cil(2.62, 2.5, 0.08, 0, col.claro); k.baliza(2.62, 2.5, col.mal);
+      if (det) { const o = Math.sin(k.T * 4 + s.id) * 0.08; c.fillStyle = col.fuego; c.beginPath(); c.moveTo(k.X(0.4), k.Y(2.5)); c.lineTo(k.X(0.4 - 0.4), k.Y(2.58 + o)); c.lineTo(k.X(0.4), k.Y(2.7)); c.closePath(); c.fill(); k.punto(0.4, 2.6, 0.04, col.tinta); for (const f of [-1, 1]) k.baliza(1.5 + f * 1.1, 1.5 - f * 0.62, '#f6d36b', 2); } },
+    estacion(c, k, s, col, det) { const tinta = s.deficit ? col.mal : col.osc;
+      k.caja(0.15, 1.45, 0.5, 0.36, 0.22, col.base); k.cil(1.05, 0.95, 0.56, 0.4, col.luz); k.aro(1.05, 0.95, 0.3, tinta, 1); k.punto(1.05, 0.95, 0.07, tinta); // el plato
+      if (!s.deficit) { const a = k.T * 2 + s.id, f = (k.T * 0.5 + s.id * 0.2) % 1; k.linea([[1.05, 0.95], [1.05 + Math.cos(a) * 0.56, 0.95 + Math.sin(a) * 0.56]], col.osc, 1.6); c.globalAlpha = 1 - f; k.aro(1.05, 0.95, 0.56 + f * 0.36, col.osc, 1); c.globalAlpha = 1; }
+      if (det) { k.sombraL(1.75, 1.7, 1.75, 1.7, 1.2, 1.6); k.punto(1.75, 1.7, 0.05, col.tinta); k.baliza(1.75, 1.7, col.mal); } },
+    obras(c, k, s, col, det, vida) {
+      k.dosAguas(0.15, 0.18, 0.95, 0.6, 0.3, true); k.cil(0.5, 1.45, 0.22, 0.14, '#e0b83a'); k.punto(0.5, 1.45, 0.08, col.osc); // nave y rollo de cable
+      if (det) { k.caja(1.4, 0.25, 0.22, 0.22, 0.1, col.horm2); k.caja(1.66, 0.3, 0.18, 0.18, 0.08, col.horm2); k.caja(1.45, 0.52, 0.3, 0.14, 0.06, col.saco); }
+      if (vida) k.anda([[0.9, 1.0], [1.7, 1.0], [1.7, 1.08], [0.9, 1.08]], 1, 0.05, '#e0b83a'); k.grua(1.35, 1.45, 0.52, Math.sin(k.T * 0.3 + s.id) * 1.2 - 1); },
+    misilera(c, k, s, col, det) {
+      k.caja(0.25, 0.25, 2.5, 2.5, 0.1, col.horm, col.horm2); k.caja(2.2, 2.25, 0.45, 0.4, 0.25, col.base);
+      for (const [x, y, ab] of [[0.85, 0.9, 0], [2.1, 0.9, 0], [1.4, 2.0, 1]]) { k.cil(x, y, 0.48, 0, col.tinta); c.fillStyle = ab ? col.luz : col.osc; c.strokeStyle = col.claro; c.lineWidth = k.lw; c.beginPath(); c.arc(k.X(x), k.Y(y), 0.48 * k.u, ab ? 0.5 : 0, ab ? Math.PI + 0.5 : TAU); c.fill(); c.stroke(); if (ab) k.punto(x, y, 0.2, s.deficit ? col.humo : col.mal); } }, // tres silos; el del centro, entreabierto
+    interceptor(c, k, s, col, det) {
+      k.caja(0.25, 1.0, 0.78, 0.78, 0.28, col.osc); for (const [x, y] of [[0.45, 1.2], [0.82, 1.2], [0.45, 1.57], [0.82, 1.57]]) k.punto(x, y, 0.1, col.tinta); // la lanzadera de cuatro tubos
+      k.cil(1.36, 0.68, 0.2, 0.5, col.horm); c.save(); c.translate(k.X(1.36), k.Y(0.68)); c.rotate(s.deficit ? 0.6 : k.T * 3 + s.id); c.strokeStyle = col.osc; c.lineWidth = k.lw * 3; c.beginPath(); c.arc(0, 0, 0.42 * k.u, -0.9, 0.9); c.stroke(); c.strokeStyle = col.luz; c.lineWidth = k.lw * 1.4; c.beginPath(); c.arc(0, 0, 0.42 * k.u, -0.9, 0.9); c.moveTo(0, 0); c.lineTo(0.42 * k.u, 0); c.stroke(); c.restore(); },
+    inteligencia(c, k, s, col, det) { const a = s.deficit ? -0.6 : -0.6 + Math.sin(k.T * 0.7 + s.id) * 0.5;
+      k.caja(0.18, 0.95, 1.64, 0.88, 0.42, col.base); if (det) for (let i = 0; i < 5; i++) k.rect(0.3 + i * 0.3, 1.6, 0.18, 0.1, col.claro);
+      k.cil(0.7, 0.62, 0.42, 0.55, col.luz); k.aro(0.7, 0.62, 0.24, col.osc, 1); k.linea([[0.7, 0.62], [0.7 + Math.cos(a) * 0.42, 0.62 + Math.sin(a) * 0.42]], col.osc, 1.6); k.punto(0.7 + Math.cos(a) * 0.42, 0.62 + Math.sin(a) * 0.42, 0.05, s.deficit ? col.humo : col.mal); // la parabólica barre el cielo
+      k.sombraL(1.5, 0.5, 1.5, 0.5, 1.4, 1.6); k.punto(1.5, 0.5, 0.05, col.tinta); k.baliza(1.5, 0.5, col.mal); },
+    laboratorio(c, k, s, col, det) {
+      k.caja(0.18, 0.55, 1.05, 1.25, 0.35, col.base); if (det) for (let i = 0; i < 3; i++) k.rect(0.3, 0.7 + i * 0.36, 0.8, 0.14, col.claro);
+      k.cil(1.52, 0.62, 0.32, 0.4, col.claro); k.aro(1.52, 0.62, 0.16, col.osc, 1); k.cil(1.52, 1.45, 0.24, 0.3, s.deficit ? col.humo : col.agua); // cúpula y depósito
+      if (!s.deficit) { const f = (k.T + s.id * 0.3) % 1; k.punto(1.46 + 0.1 * Math.sin(s.id), 1.52 - f * 0.16, 0.03 + f * 0.02, col.luz); } },
+    logistica(c, k, s, col, det, vida) { k.pista(0.72, 1.24, 0.48, col.horm, col.luz); k.dosAguas(1.25, 0.15, 0.6, 0.5, 0.25, false); for (const [x, y] of [[1.3, 0.85], [1.58, 0.9], [1.4, 1.15]]) k.caja(x, y, 0.24, 0.22, 0.12, col.saco, '#8f8160');
+      if (vida) k.anda([[1.25, 1.5], [1.8, 1.5], [1.8, 1.6], [1.25, 1.6]], 1, 0.05); },
+    avanzada(c, k, s, col, det, vida) { k.pista(0.72, 1.24, 0.48, col.horm, col.luz); k.dosAguas(1.15, 0.18, 0.7, 0.62, 0.22, true, '#dedbd2', '#f2f0ea'); k.cruz(1.5, 0.49, 0.36, s.deficit ? col.humo : col.mal);
+      k.bandera(0.2, 0.2); if (vida) k.anda([[1.3, 1.1], [1.8, 1.1], [1.8, 1.7], [1.3, 1.7]], 2, 0.04); },
+    pistaAv(c, k, s, col, det) { k.pista(0.72, 1.24, 0.48, col.horm, col.luz); k.deposito(1.5, 0.5, 0.26, 0.3, col.luz); if (det) { const o = Math.sin(k.T * 4 + s.id) * 0.06; c.fillStyle = col.fuego; c.beginPath(); c.moveTo(k.X(1.7), k.Y(1.5)); c.lineTo(k.X(1.4), k.Y(1.56 + o)); c.lineTo(k.X(1.7), k.Y(1.66)); c.closePath(); c.fill(); k.punto(1.7, 1.58, 0.04, col.tinta); } },
+    estDrones(c, k, s, col) { k.pista(0.48, 0.52, 0.3, col.horm, col.luz); k.caja(0.06, 0.06, 0.24, 0.2, 0.18, col.base); k.sombraL(0.86, 0.14, 0.86, 0.14, 1, 1.4); k.punto(0.86, 0.14, 0.06, s.deficit ? col.mal : col.luz); k.baliza(0.86, 0.14, '#f6d36b'); },
+    almacen(c, k, s, col, det, vida) { k.dosAguas(0.18, 0.2, 1.64, 1.05, 0.38, true); if (det) for (let i = 0; i < 4; i++) k.caja(0.25 + i * 0.3, 1.42, 0.22, 0.22, 0.1, i % 2 ? col.horm2 : col.saco, '#8f8160'); k.rect(0.8, 1.2, 0.4, 0.07, col.osc);
+      if (vida) { const p = k.en([[0.3, 1.8], [1.7, 1.8]], k.T * 0.06); k.carro(p.x, p.y, p.a, 0.26, 0.16, '#e0b83a', col.osc); } },
+    tanqueComb(c, k, s, col, det) { k.linea([[0.12, 0.42], [1.88, 0.42], [1.88, 1.6], [0.12, 1.6], [0.12, 0.42]], col.horm2, 2.4); k.linea([[0.58, 1.0], [1.42, 1.0]], col.horm2, 3); k.linea([[1.0, 1.0], [1.0, 1.9]], col.horm2, 3); k.deposito(0.58, 1.0, 0.4, 0.5, col.luz); k.deposito(1.42, 1.0, 0.4, 0.5, col.luz); if (det) k.punto(1.0, 1.75, 0.07, '#c0392b'); },
+    torreRadio(c, k, s, col, det) { const on = k.on; for (const [x, y] of [[0.14, 0.86], [0.86, 0.86], [0.5, 0.12]]) { k.linea([[0.5, 0.56], [x, y]], col.horm2, 0.8); k.punto(x, y, 0.035, col.osc); } // tirantes
+      k.sombraL(0.5, 0.56, 0.5, 0.56, 2.6, 1.8); k.caja(0.42, 0.48, 0.16, 0.16, 0, col.luz); if (on) for (const r of [0.2, 0.32]) { const f = (k.T * 0.6 + r) % 1; c.globalAlpha = 1 - f; k.aro(0.5, 0.56, r + f * 0.1, col.osc, 1); } c.globalAlpha = 1; k.punto(0.5, 0.56, 0.05, on ? col.mal : col.humo); },
+    vigia(c, k, s, col) { const a = k.T * 0.9 + s.id; c.fillStyle = col.fuego; c.globalAlpha = 0.4; c.beginPath(); c.moveTo(k.X(0.5), k.Y(0.5)); c.arc(k.X(0.5), k.Y(0.5), 0.48 * k.u, a - 0.3, a + 0.3); c.closePath(); c.fill(); c.globalAlpha = 1; // el foco barre
+      k.caja(0.3, 0.3, 0.4, 0.4, 1.3, col.luz); k.linea([[0.3, 0.3], [0.7, 0.7]], col.osc, 0.8); k.linea([[0.7, 0.3], [0.3, 0.7]], col.osc, 0.8); k.punto(0.5 + Math.cos(a) * 0.14, 0.5 + Math.sin(a) * 0.14, 0.06, col.fuego); },
+    fundicion(c, k, s, col, det) { k.dosAguas(0.18, 0.75, 1.64, 0.85, 0.4, true); k.caja(0.3, 0.3, 0.6, 0.5, 0.3, col.osc); k.cil(1.5, 0.4, 0.13, 1.3, col.osc); if (k.on && det) k.humo(1.5, 0.4, 0.07);
+      c.fillStyle = s.deficit ? col.humo : col.fuego; c.beginPath(); c.arc(k.X(0.6), k.Y(1.6), 0.24 * k.u, Math.PI, 0); c.closePath(); c.fill(); if (k.on) k.punto(0.6, 1.56, 0.08 + 0.02 * Math.sin(k.T * 11), '#f6d36b'); // la boca del horno, al rojo
+      if (det) for (const y of [1.68, 1.8]) k.rect(1.15, y, 0.5, 0.08, col.luz); },
+    radar(c, k, s, col) { const a = s.deficit ? 0.6 : k.T * 1.6; k.cil(1, 1, 0.62, 0.35, col.osc); c.fillStyle = col.luz; c.globalAlpha = 0.35; c.beginPath(); c.moveTo(k.X(1), k.Y(1)); c.arc(k.X(1), k.Y(1), 0.6 * k.u, a - 0.5, a); c.closePath(); c.fill(); c.globalAlpha = 1;
+      k.linea([[1, 1], [1 + Math.cos(a) * 0.6, 1 + Math.sin(a) * 0.6]], col.luz, 1.6); k.aro(1, 1, 0.36, col.luz, 1); k.punto(1, 1, 0.1, col.luz); k.caja(0.12, 1.5, 0.4, 0.34, 0.2, col.base); },
+    mina(c, k, s, col, det) { const a = s.deficit ? 0 : k.T * 4 + s.id;
+      k.caja(0.15, 0.2, 0.6, 0.5, 0.25, col.base); k.cil(0.72, 1.28, 0.3, 0, col.tinta); k.linea([[0.72, 1.28], [1.36, 0.6]], col.osc, 2.4); k.linea([[1.0, 1.64], [1.36, 0.6], [1.68, 1.64]], col.osc, 2.4); // la boca del pozo y el castillete
+      k.sombraL(1.0, 1.64, 1.36, 0.6, 1.2, 2); k.cil(1.36, 0.6, 0.2, 0, col.luz); k.linea([[1.36 + Math.cos(a) * 0.2, 0.6 + Math.sin(a) * 0.2], [1.36 - Math.cos(a) * 0.2, 0.6 - Math.sin(a) * 0.2]], col.osc, 1.4); k.linea([[1.36 - Math.sin(a) * 0.2, 0.6 + Math.cos(a) * 0.2], [1.36 + Math.sin(a) * 0.2, 0.6 - Math.cos(a) * 0.2]], col.osc, 1.4);
+      if (det) for (const [x, y, r] of [[0.3, 1.7, 0.14], [0.5, 1.78, 0.1], [0.38, 1.56, 0.09]]) k.cil(x, y, r, 0.1, col.mineral, col.osc); },
+    deposito(c, k, s, col, det) { for (const [x, y, w, h, a] of [[0.1, 0.12, 0.36, 0.34, 0.3], [0.52, 0.14, 0.34, 0.3, 0.2], [0.12, 0.54, 0.34, 0.32, 0.2]]) { k.caja(x, y, w, h, a, col.saco, '#8f8160'); if (det) k.linea([[x, y + h / 2], [x + w, y + h / 2]], '#8f8160', 1); }
+      k.poli([[0.7, 0.54], [0.86, 0.7], [0.7, 0.86], [0.54, 0.7]], 0, s.deficit ? col.mal : col.base); }, // el rombo de la red: encendido si está conectado
+  };
+
   // ---------- edificios ----------
   // (px, py) esquina, t = lado en píxeles.
   // s = { tiempo, id, vida (0..1), deficit, activo, descarga, ang, retro }
@@ -395,6 +530,7 @@
     }
 
     if (lod === 0) { c.fillStyle = col.base; c.fillRect(px + 1, py + 1, t - 2, t - 2); return; }
+    if (VOL[e.tipo]) { VOL[e.tipo](c, kitEdif(c, px, py, t, W.EDIF[e.tipo].tam, col, s), s, col, lod === 2, lod === 2 && !!s.fino); danos(c, cx, cy, t, col, s); return; } // en volúmenes: cada edificio con su silueta
 
     // Placa: borde oscuro y cuerpo del color del bando.
     const b = Math.max(1.5, t * 0.045);

@@ -122,10 +122,11 @@
     function ponerTema(t) {
       tema = t; P = PALETAS[t]; document.body.dataset.tema = t;
       try { localStorage.setItem('rts.tema', t); } catch (e) { /* no pasa nada */ }
-      const comun = { luz: P.llano, suelo: P.llano, mineral: P.mineral, raro: P.raro, humo: P.roca, fuego: '#e8912d', mal: P.mal, agua: '#4f86b0', tinta: P.tinta };
+      const osc = t === 'oscura', comun = { horm: osc ? '#5b5850' : '#d3cfc6', horm2: osc ? '#77736a' : '#b3aea3', saco: osc ? '#7a6f55' : '#c9b990', luz: P.llano, suelo: P.llano, mineral: P.mineral, raro: P.raro, humo: P.roca, fuego: '#e8912d', mal: P.mal, agua: '#4f86b0', tinta: P.tinta };
       const tono = (h, f) => { const c = hex(h); return 'rgb(' + Math.round(c[0] * f) + ',' + Math.round(c[1] * f) + ',' + Math.round(c[2] * f) + ')'; };
       const lado = (c) => ({ base: c, osc: c, luz: c, suelo: c, mineral: c, raro: c, humo: c, fuego: 'rgba(0,0,0,0)', mal: c, agua: c, tinta: c }); // paleta de un solo tono: el canto de las fichas
-      COL = { yo: Object.assign({ base: P.yo, osc: P.yoOsc, pared: tono(P.yoOsc, 0.68) }, comun), rival: Object.assign({ base: P.rival, osc: P.rivalOsc, pared: tono(P.rivalOsc, 0.68) }, comun) };
+      const claro = (h) => { const c = hex(h); return 'rgb(' + c.map((v) => Math.round(v + (255 - v) * 0.3)).join(',') + ')'; };
+      COL = { yo: Object.assign({ base: P.yo, osc: P.yoOsc, claro: claro(P.yo), pared: tono(P.yoOsc, 0.68) }, comun), rival: Object.assign({ base: P.rival, osc: P.rivalOsc, claro: claro(P.rival), pared: tono(P.rivalOsc, 0.68) }, comun) };
       COL.yoLado = lado(COL.yo.pared); COL.rivalLado = lado(COL.rival.pared);
       COL.caminoBorde = tono(P.camino, tema === 'clara' ? 0.82 : 1.3); COL.puente = tono(P.camino, tema === 'clara' ? 0.5 : 1.7);
       COL.rocaCara = tono(P.roca, tema === 'clara' ? 0.62 : 0.55); COL.rocaLuz = tono(P.roca, tema === 'clara' ? 1.35 : 1.3); COL.copa = tono(P.bosque, tema === 'clara' ? 0.74 : 1.5);
@@ -905,13 +906,13 @@
         if (e.tipo === 'patio') est.activo = Je.obras.some((o) => !o.listo);
         else if (e.tipo === 'fabrica') est.activo = e.cola.length > 0;
         else if (EDIF[e.tipo].arma) { est.ang = giro(e).t; est.retro = retroceso(e, EDIF[e.tipo].arma); }
-        const h = lod ? ALTO[e.tipo] * z : 0, redondo = e.tipo === 'torreta' || e.tipo === 'antiaerea' || e.tipo === 'torretaMuro'; // altura en píxeles
-        if (lod) { // sombra: cae hacia el sureste, más larga cuanto más alto el edificio
+        const vol = !!W.EDIF_VOL[e.tipo], h = lod && !vol ? ALTO[e.tipo] * z : 0, redondo = e.tipo === 'torreta' || e.tipo === 'antiaerea' || e.tipo === 'torretaMuro'; // altura en píxeles
+        if (vol) { est.sv = [svx * sl, svy * sl]; est.sombra = sombraCol; est.fino = z >= 40; } // en volúmenes: cada cuerpo echa su propia sombra
+        else if (lod) { // sombra: cae hacia donde manda el sol, más larga cuanto más alto el edificio
           const sx = SOX + h * 0.6 * svx * sl, sy = SOY + h * 0.6 * svy * sl;
           ctx.fillStyle = sombraCol; ctx.beginPath();
           if (redondo) { const R = t * 0.47, cx = px + t / 2, cy = py + t / 2, n = Math.hypot(sx, sy) || 1, nx = -sy / n * R, ny = sx / n * R; ctx.arc(cx + sx, cy + sy, R, 0, TAU); ctx.moveTo(cx + nx, cy + ny); ctx.lineTo(cx + sx + nx, cy + sy + ny); ctx.lineTo(cx + sx - nx, cy + sy - ny); ctx.lineTo(cx - nx, cy - ny); }
-          else { const x0 = px + 1, x1 = px + t, y0 = py + 1, y1 = py + t; ctx.rect(x0 + sx, y0 + sy, x1 - x0, y1 - y0); // la sombra del tejado y, entre ella y el edificio, las de sus cuatro esquinas
-            for (const [ax, ay, bx, by] of [[x0, y0, x1, y1], [x1, y0, x0, y1]]) { ctx.moveTo(ax, ay); ctx.lineTo(ax + sx, ay + sy); ctx.lineTo(bx + sx, by + sy); ctx.lineTo(bx, by); } }
+          else { const Q = [[px + 1, py + 1], [px + t, py + 1], [px + t, py + t], [px + 1, py + t]], b = sx >= 0 ? (sy >= 0 ? 0 : 3) : sy >= 0 ? 1 : 2, q = (i) => Q[(b + i) % 4]; ctx.moveTo(q(0)[0], q(0)[1]); ctx.lineTo(q(1)[0], q(1)[1]); ctx.lineTo(q(1)[0] + sx, q(1)[1] + sy); ctx.lineTo(q(2)[0] + sx, q(2)[1] + sy); ctx.lineTo(q(3)[0] + sx, q(3)[1] + sy); ctx.lineTo(q(3)[0], q(3)[1]); } // el tejado y su sombra, en un solo contorno
           ctx.closePath(); ctx.fill();
         }
         const edadObra = e.nace > 0 ? (m.t - e.nace + alfa) / 30 : 1; // recién colocado: se levanta de abajo arriba
