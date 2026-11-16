@@ -122,7 +122,7 @@
     function ponerTema(t) {
       tema = t; P = PALETAS[t]; document.body.dataset.tema = t;
       try { localStorage.setItem('rts.tema', t); } catch (e) { /* no pasa nada */ }
-      const osc = t === 'oscura', comun = { horm: osc ? '#5b5850' : '#d3cfc6', horm2: osc ? '#77736a' : '#b3aea3', saco: osc ? '#7a6f55' : '#c9b990', luz: P.llano, suelo: P.llano, mineral: P.mineral, raro: P.raro, humo: P.roca, fuego: '#e8912d', mal: P.mal, agua: '#4f86b0', tinta: P.tinta };
+      const osc = t === 'oscura', comun = { tierra: osc ? '#4a4538' : '#e6dfcf', horm: osc ? '#5b5850' : '#d3cfc6', horm2: osc ? '#77736a' : '#b3aea3', saco: osc ? '#7a6f55' : '#c9b990', luz: P.llano, suelo: P.llano, mineral: P.mineral, raro: P.raro, humo: P.roca, fuego: '#e8912d', mal: P.mal, agua: '#4f86b0', tinta: P.tinta };
       const tono = (h, f) => { const c = hex(h); return 'rgb(' + Math.round(c[0] * f) + ',' + Math.round(c[1] * f) + ',' + Math.round(c[2] * f) + ')'; };
       const lado = (c) => ({ base: c, osc: c, luz: c, suelo: c, mineral: c, raro: c, humo: c, fuego: 'rgba(0,0,0,0)', mal: c, agua: c, tinta: c }); // paleta de un solo tono: el canto de las fichas
       const claro = (h) => { const c = hex(h); return 'rgb(' + c.map((v) => Math.round(v + (255 - v) * 0.3)).join(',') + ')'; };

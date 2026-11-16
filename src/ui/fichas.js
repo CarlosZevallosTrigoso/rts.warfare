@@ -379,7 +379,36 @@
     k.deposito = (x, y, r, a, fill) => { k.cil(x, y, r, a, fill); k.aro(x, y, r * 0.66, col.claro || O, 1); k.aro(x, y, r, O, 1.5, 2.2, 3.6); k.punto(x, y, 0.05, O); };
     return k;
   }
+  // Las defensas y la cámara, en volúmenes. arma(): la pieza que gira (s.ang), con su retroceso (s.retro), su sombra y su fogonazo.
+  function arma(c, k, s, col, x, y, R, cl) { const r = R * k.u, rec = s.retro * r * 0.35, sv = s.sv || [0.7, 0.75], d = k.u * 0.12;
+    const tubos = cl === 'aa' ? [[-0.4, 0.1, 1.7], [-0.16, 0.1, 1.7], [0.08, 0.1, 1.7], [0.32, 0.1, 1.7]] : cl === 'doble' ? [[-0.36, 0.26, 1.25], [0.1, 0.26, 1.25]] : cl === 'obus' ? [[-0.09, 0.18, 1.9]] : [[-0.2, 0.4, 1.75]], largo = tubos[0][2];
+    c.save(); c.translate(k.X(x) + d * sv[0], k.Y(y) + d * sv[1]); c.rotate(s.ang); c.fillStyle = s.sombra || 'rgba(0,0,0,0.17)'; for (const [ty, th, tl] of tubos) c.fillRect(r * 0.1 - rec, r * ty, r * tl, r * th); c.restore(); // la sombra de los tubos
+    c.save(); c.translate(k.X(x), k.Y(y)); c.rotate(s.ang); c.fillStyle = s.deficit ? col.humo : col.osc; for (const [ty, th, tl] of tubos) c.fillRect(r * 0.1 - rec, r * ty, r * tl, r * th);
+    if (cl === 'canon') c.fillRect(r * 1.6 - rec, -r * 0.3, r * 0.32, r * 0.6); if (cl === 'obus') { c.fillRect(-r * 0.75, -r * 0.06, r * 0.7, r * 0.12); c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.rect(-r * 0.3, -r * 0.26, r * 0.5, r * 0.52); c.fill(); c.stroke(); }
+    else { c.fillStyle = col.claro || col.luz; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); if (cl === 'aa') c.rect(-r * 0.4, -r * 0.5, r * 0.6, r); else c.arc(0, 0, r * (cl === 'canon' ? 0.52 : 0.42), 0, TAU); c.fill(); c.stroke(); if (cl !== 'aa') { c.fillStyle = col.osc; c.fillRect(-r * 0.12, -r * 0.12, r * 0.24, r * 0.24); } }
+    if (s.retro > 0.6) { c.fillStyle = col.fuego; c.beginPath(); c.arc(r * (largo + 0.35), cl === 'doble' ? 0 : 0, r * (cl === 'canon' ? 0.5 : 0.34), 0, TAU); c.fill(); } c.restore(); }
+  const oct = (x, y, R, n, a0) => { const p = []; for (let i = 0; i < n; i++) { const a = (i + 0.5) / n * TAU + (a0 || 0); p.push([x + Math.cos(a) * R, y + Math.sin(a) * R]); } return p; };
+  const sacos = (c, k, x, y, R, n, hueco) => { for (let i = 0; i < n; i++) { if (i === hueco) continue; const a = i / n * TAU + 0.2; c.save(); c.translate(k.X(x + Math.cos(a) * R), k.Y(y + Math.sin(a) * R)); c.rotate(a + Math.PI / 2); c.fillStyle = 'rgba(0,0,0,0.14)'; c.beginPath(); c.ellipse(k.u * 0.025, k.u * 0.025, R * k.u * 0.3, R * k.u * 0.17, 0, 0, TAU); c.fill(); c.restore(); }
+    for (let i = 0; i < n; i++) { if (i === hueco) continue; const a = i / n * TAU + 0.2; c.save(); c.translate(k.X(x + Math.cos(a) * R), k.Y(y + Math.sin(a) * R)); c.rotate(a + Math.PI / 2); c.fillStyle = '#c9b990'; c.strokeStyle = '#8f8160'; c.lineWidth = 1; c.beginPath(); c.ellipse(0, 0, R * k.u * 0.3, R * k.u * 0.17, 0, 0, TAU); c.fill(); c.stroke(); c.restore(); } };
   const VOL = W.EDIF_VOL = {
+    torreta(c, k, s, col, det) { k.cil(0.5, 0.5, 0.46, 0.45, col.horm); k.poli(oct(0.5, 0.5, 0.36, 8), 0, col.base); if (det) for (const [x, y] of oct(0.5, 0.5, 0.41, 4, 0.39)) k.punto(x, y, 0.025, col.osc); arma(c, k, s, col, 0.5, 0.5, 0.42, 'doble'); }, // un tambor de hormigón y, encima, la torre
+    antiaerea(c, k, s, col, det) { for (const a of [0.79, 2.36, 3.93, 5.5]) k.linea([[0.5, 0.5], [0.5 + Math.cos(a) * 0.52, 0.5 + Math.sin(a) * 0.52]], col.osc, 2.4); for (const [x, y] of oct(0.5, 0.5, 0.52, 4, 0)) k.punto(x, y, 0.05, col.horm2); // las cuatro patas de la plataforma
+      k.cil(0.5, 0.5, 0.36, 0.35, col.horm); k.cil(0.5, 0.5, 0.26, 0, col.base); arma(c, k, s, col, 0.5, 0.5, 0.34, 'aa'); if (det) { const a = k.on ? k.T * 4 + s.id : 0.5; k.cil(0.12, 0.14, 0.07, 0.3, col.luz); k.linea([[0.12 - Math.cos(a) * 0.1, 0.14 - Math.sin(a) * 0.1], [0.12 + Math.cos(a) * 0.1, 0.14 + Math.sin(a) * 0.1]], col.osc, 1.6); } }, // y su radar de tiro, que gira
+    torretaMuro(c, k, s, col, det) { k.caja(0.1, 0.1, 0.8, 0.8, 0.75, col.horm); for (const [x, y] of [[0.1, 0.1], [0.72, 0.1], [0.1, 0.72], [0.72, 0.72]]) k.caja(x, y, 0.18, 0.18, 0.12, col.horm2); k.poli(oct(0.5, 0.5, 0.26, 8), 0, col.base); arma(c, k, s, col, 0.5, 0.5, 0.36, 'doble'); }, // un torreón almenado sobre el muro
+    torreCanon(c, k, s, col, det, vida) { k.poli(oct(1, 1, 0.94, 8), 0.14, col.horm, col.horm2); k.poli(oct(1, 1, 0.66, 8), 0.55, col.osc); k.poli(oct(1, 1, 0.5, 8), 0, col.base); // glacis de hormigón y, encima, la casamata
+      if (det) { for (const [x, y] of oct(1, 1, 0.8, 4, 0.39)) k.caja(x - 0.07, y - 0.07, 0.14, 0.14, 0.12, col.horm2); k.caja(0.2, 1.55, 0.26, 0.2, 0.08, col.saco, '#8f8160'); }
+      arma(c, k, s, col, 1, 1, 0.5, 'canon'); if (vida) k.hombre(1 - Math.cos(s.ang) * 0.72 + Math.sin(s.ang) * 0.2, 1 - Math.sin(s.ang) * 0.72 - Math.cos(s.ang) * 0.2, s.ang); },
+    artFija(c, k, s, col, det, vida) { c.fillStyle = col.tierra || '#e6dfcf'; c.beginPath(); c.arc(k.X(1), k.Y(1), 0.74 * k.u, 0, TAU); c.fill(); sacos(c, k, 1, 1, 0.82, 16, 6); k.cil(1, 1, 0.3, 0, col.base); // un pozo de tierra rodeado de sacos, con su entrada
+      const ca = Math.cos(s.ang), sa = Math.sin(s.ang); for (const q of [-0.45, 0.45]) k.linea([[1, 1], [1 - Math.cos(s.ang + q) * 0.6, 1 - Math.sin(s.ang + q) * 0.6]], col.osc, 2.2); // el mástil, abierto en dos
+      arma(c, k, s, col, 1, 1, 0.42, 'obus'); if (det) for (const [x, y] of [[0.36, 1.42], [0.52, 1.5]]) k.caja(x, y, 0.14, 0.12, 0.06, col.saco, '#8f8160');
+      if (vida) { k.hombre(1 - ca * 0.3 + sa * 0.28, 1 - sa * 0.3 - ca * 0.28, s.ang); k.hombre(1 - ca * 0.3 - sa * 0.28, 1 - sa * 0.3 + ca * 0.28, s.ang); } },
+    bunker(c, k, s, col, det) { c.fillStyle = col.tierra || '#e6dfcf'; c.beginPath(); c.ellipse(k.X(0.5), k.Y(0.52), 0.49 * k.u, 0.47 * k.u, 0, 0, TAU); c.fill(); k.poli(oct(0.5, 0.5, 0.43, 6, 0.26), 0.28, col.horm, col.horm2); k.poli(oct(0.5, 0.5, 0.29, 6, 0.26), 0, col.base); // un montículo y la casamata baja
+      c.fillStyle = '#1b1b1b'; for (const [x, y, w, h] of [[0.42, 0.1, 0.16, 0.05], [0.08, 0.44, 0.05, 0.12], [0.87, 0.44, 0.05, 0.12]]) c.fillRect(k.X(x), k.Y(y), w * k.u, h * k.u); k.rect(0.42, 0.8, 0.16, 0.12, '#1b1b1b'); // troneras y la puerta
+      if (det) { sacos(c, k, 0.3, 0.92, 0.2, 1, -1); sacos(c, k, 0.7, 0.92, 0.2, 1, -1); k.poli(oct(0.5, 0.5, 0.08, 4, 0.39), 0, col.osc); } },
+    camara(c, k, s, col, det) { const a = s.deficit ? 0.7 : Math.sin(k.T * 1.5 + s.id) * 1.6;
+      if (det && k.on) { c.fillStyle = col.mal; c.globalAlpha = 0.1; c.beginPath(); c.moveTo(k.X(0.5), k.Y(0.5)); c.arc(k.X(0.5), k.Y(0.5), 0.9 * k.u, a - 0.45, a + 0.45); c.closePath(); c.fill(); c.globalAlpha = 1; } // lo que está mirando
+      k.caja(0.4, 0.4, 0.2, 0.2, 0, col.horm); k.sombraL(0.5, 0.5, 0.5, 0.5, 2, 1.6); c.save(); c.translate(k.X(0.5), k.Y(0.5)); c.rotate(a); c.fillStyle = 'rgba(0,0,0,0.15)'; c.fillRect(-k.u * 0.08 + k.u * 0.14, -k.u * 0.1 + k.u * 0.14, k.u * 0.34, k.u * 0.2);
+      c.fillStyle = col.luz; c.strokeStyle = col.osc; c.lineWidth = k.lw; c.fillRect(-k.u * 0.08, -k.u * 0.1, k.u * 0.34, k.u * 0.2); c.strokeRect(-k.u * 0.08, -k.u * 0.1, k.u * 0.34, k.u * 0.2); c.fillStyle = s.deficit ? col.humo : col.mal; c.beginPath(); c.arc(k.u * 0.26, 0, k.u * 0.06, 0, TAU); c.fill(); c.restore(); }, // un poste alto con su cámara, que barre de lado a lado
     patio(c, k, s, col, det, vida) { const C = col.claro, H2 = col.horm2;
       k.caja(1.95, 1.25, 0.8, 0.95, 0.3, C); k.caja(0.25, 0.65, 1.75, 1.55, 0.5, col.base); k.caja(0.42, 1.6, 0.5, 0.38, 0.12, col.osc);
       if (det) { for (let i = 0; i < 4; i++) k.rect(1.12 + i * 0.2, 1.5, 0.1, 0.5, C); k.linea([[2.05, 1.45], [2.65, 1.45]], col.osc, 1); k.linea([[2.05, 1.75], [2.65, 1.75]], col.osc, 1); }
@@ -486,6 +515,7 @@
     const X = (f) => px + f * t, Y = (f) => py + f * t, cx = X(0.5), cy = Y(0.5);
     const lw = Math.max(1, t * 0.035);
     c.lineJoin = 'round'; c.lineCap = 'butt';
+    if (lod && VOL[e.tipo]) { VOL[e.tipo](c, kitEdif(c, px, py, t, W.EDIF[e.tipo].tam, col, s), s, col, lod === 2, lod === 2 && !!s.fino); danos(c, cx, cy, t, col, s); return; } // en volúmenes: cada edificio con su silueta
 
     if (e.tipo === 'torreta' || e.tipo === 'antiaerea' || e.tipo === 'torretaMuro') {
       const R = t * 0.47, aa = e.tipo === 'antiaerea';
@@ -530,7 +560,6 @@
     }
 
     if (lod === 0) { c.fillStyle = col.base; c.fillRect(px + 1, py + 1, t - 2, t - 2); return; }
-    if (VOL[e.tipo]) { VOL[e.tipo](c, kitEdif(c, px, py, t, W.EDIF[e.tipo].tam, col, s), s, col, lod === 2, lod === 2 && !!s.fino); danos(c, cx, cy, t, col, s); return; } // en volúmenes: cada edificio con su silueta
 
     // Placa: borde oscuro y cuerpo del color del bando.
     const b = Math.max(1.5, t * 0.045);
