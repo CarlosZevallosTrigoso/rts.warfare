@@ -1446,6 +1446,23 @@ prueba('mortero y asalto: el mortero tira por alto y sin montar no dispara; al d
   assert.ok(Math.abs((v1 - a1.vida) - (v1 - a2.vida) * W.UNID.asalto.escudo) < 1e-9 && a1.vida > a2.vida, 'de frente recibe la mitad que por la espalda');
 });
 
+prueba('comando: no se le ve quieto ni andando por el bosque; pone una carga en un edificio enemigo y estalla pasada la mecha', () => {
+  const m = W.crearMundo(4242, { N: 128 }), N = m.N, D = W.UNID.comando;
+  m.logistica = false; // sin la demora de la radio: aquí se prueba la carga, no las comunicaciones
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const cel = (x, y) => y * N + x;
+  for (let y = 40; y < 80; y++) for (let x = 30; x < 100; x++) { const i = cel(x, y); if (m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  const cm = W.crearUnidad(m, 0, 'comando', cel(50, 50)), ed = W.crearEdificio(m, 1, 'almacen', 56, 49), v0 = ed.vida;
+  for (let i = 0; i < 5; i++) W.tick(m); assert.ok(W.oculta(m, cm), 'quieto, no se le ve');
+  assert.ok(W.cargable(cm, ed) && !W.cargable(cm, W.crearUnidad(m, 1, 'tanque', cel(70, 70))), 'solo edificios enemigos');
+  W.orden(m, { t: 'carga', j: 0, ids: [cm.id], obj: ed.id }); for (let i = 0; i < 30; i++) W.tick(m); assert.ok(cm.orden === 'carga' && !W.oculta(m, cm), 'andando en campo abierto sí se le ve');
+  let puesta = -1; for (let i = 0; i < 600 && puesta < 0; i++) { W.tick(m); if (m.cargas && m.cargas.length) puesta = m.t; }
+  assert.ok(puesta > 0 && ed.vida === v0 && cm.orden === 'nada' && cm.recarga > 0, 'coloca la carga y queda libre; aún no ha estallado');
+  for (let i = 0; i < D.mecha + 2; i++) W.tick(m);
+  assert.ok(ed.vida <= v0 - D.cargaDano + 1e-9 || ed.vida <= 0, 'pasada la mecha, estalla y daña el edificio'); assert.ok(!m.cargas.length, 'la carga se gasta');
+  const i0 = cel(Math.floor(cm.x), Math.floor(cm.y)); m.mapa.terreno[i0] = 3; cm.v = 0.05; cm.orden = 'mover'; assert.ok(W.oculta(m, cm), 'por el bosque, aunque ande');
+});
+
 prueba('torreta ametralladora: barata, sin consumo, contra tierra y nunca contra el aire', () => {
   const d = W.EDIF.nidoMG, A = W.ARMAS[d.arma];
   assert.ok(d && A, 'existe, con su arma'); assert.ok(A.vs.ligero === 1 && !A.vs.aire, 'no dispara al aire'); assert.ok(d.energia === 0 && d.costo < W.EDIF.torreta.costo, 'barata y sin consumo'); assert.ok(W.MUN[d.arma] > 0, 'tiene munición definida');

@@ -392,6 +392,7 @@
         else if (c.estDrones && (c.operador || 0) + J.colas.operador.n < 2 && soldados.length >= 8) entrena('operador', 500);
         else if ((c.mortero || 0) + J.colas.mortero.n < 2 && soldados.length >= 10) entrena('mortero', 600); // fuego indirecto propio, contra trincheras y defensas
         else if ((c.asalto || 0) + J.colas.asalto.n < 2 && soldados.length >= 8) entrena('asalto', 500);
+        else if (J.nivel >= 3 && (c.comando || 0) + J.colas.comando.n < 1 && soldados.length >= 10) entrena('comando', 800); // un saboteador
         else if ((c.cazadron || 0) + J.colas.cazadron.n < 1 && soldados.length >= 8) entrena('cazadron', 500); // un inhibidor que va con el grueso: los fusiles ya no derriban drones
         else if ((c.manpad || 0) + J.colas.manpad.n < 2 && soldados.length >= 10) entrena('manpad', 600);
       }
@@ -405,6 +406,12 @@
           if (d0 < md && m.niebla[j][Math.floor(ey) * m.N + Math.floor(ex)] === 2) { md = d0; b = e; }
         }
         if (b) W.orden(m, { t: 'hackear', j, ids: [u.id], obj: b.id });
+      }
+      for (const u of m.ents) { // el comando: a por el edificio enemigo a la vista que tenga más cerca
+        if (u.edif || u.j !== j || u.tipo !== 'comando' || u.orden !== 'nada' || u.recarga > 0 || u.vida <= 0) continue;
+        let b = null, md = 60;
+        for (const e of m.ents) { if (!e.edif || e.j === j || e.vida <= 0 || e.infra) continue; const d0 = Math.hypot(e.cx - u.x, e.cy - u.y); if (d0 < md && m.niebla[j][Math.floor(e.cy) * m.N + Math.floor(e.cx)] === 2) { md = d0; b = e; } }
+        if (b) W.orden(m, { t: 'carga', j, ids: [u.id], obj: b.id });
       }
       const civil = sinArma.find((u) => u.tipo === 'civil');
       if (civil && civil.orden === 'nada' && !civil.auto && tk % 10 === 6) W.orden(m, { t: 'autoCivil', j, ids: [civil.id], on: true });

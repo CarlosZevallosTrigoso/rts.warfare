@@ -782,6 +782,31 @@
     }
   }
   // ¿Se puede hackear? Vehículos de tierra y edificios enemigos (no la infantería, ni los aviones, ni caminos o líneas).
+  // La carga de demolición del comando: llega al pie del edificio, la coloca y, pasada la mecha, estalla.
+  const cargable = (u, o) => !!o && o.vida > 0 && o.j !== u.j && !o.infra && !!o.edif;
+  W.cargable = cargable;
+  function tickCarga(m, u) {
+    const o = m.porId.get(u.hackObj), d = UNID[u.tipo];
+    const fin = () => { u.orden = 'nada'; u.hackObj = 0; u.canal = 0; u.ruta = null; };
+    if (!cargable(u, o)) { fin(); return; }
+    if (dist(u.x, u.y, o) > 1.3) {
+      u.canal = 0;
+      if (u.fallo) { u.fallo = false; fin(); return; }
+      if (!u.pend && !u.ruta) pedirRuta(m, u, posX(o), posY(o), o.tam / 2 + 0.9);
+      avanzar(m, u); return;
+    }
+    u.ruta = null; u.pend = null; u.v = 0; u.ang = Math.atan2(posY(o) - u.y, posX(o) - u.x);
+    if (u.recarga > 0) return; // aún prepara la siguiente
+    u.canal = (u.canal || 0) + 1;
+    if (u.canal < d.cargaT) return;
+    (m.cargas || (m.cargas = [])).push({ obj: o.id, x: Math.max(o.x, Math.min(o.x + o.tam, u.x)), y: Math.max(o.y, Math.min(o.y + o.tam, u.y)), t: m.t + d.mecha, j: u.j, dano: d.cargaDano });
+    m.efectos.push({ tipo: 'carga', x1: u.x, y1: u.y, j: u.j, de: o.j, t: m.t }); u.recarga = d.cargaRecarga; fin();
+  }
+  function tickCargas(m) {
+    for (let k = m.cargas.length - 1; k >= 0; k--) { const q = m.cargas[k]; if (m.t < q.t) continue; m.cargas.splice(k, 1);
+      const o = m.porId.get(q.obj); if (o && o.vida > 0) o.vida -= q.dano;
+      m.efectos.push({ tipo: 'impacto', x1: q.x, y1: q.y, x2: q.x, y2: q.y, j: q.j, t: m.t, arma: 'mina', acierto: true }); }
+  }
   const hackeable = (u, o) => !!o && o.vida > 0 && o.j !== u.j && !o.infra && (o.edif || (UNID[o.tipo].cat === 'veh' && !UNID[o.tipo].aire));
   W.hackeable = hackeable;
   // El hacker con orden: se acerca hasta tener el blanco a su alcance, teclea un par de segundos y lo apaga. Cuesta información.
@@ -1492,6 +1517,11 @@
         m.efectos.push({ tipo: 'lanzamiento', x1: e.cx, y1: e.cy, x2: cmd.x, y2: cmd.y, j: cmd.j, clase: cmd.tipo, t: m.t });
         return;
       }
+      case 'carga': { // los comandos elegidos van a poner una carga al pie de ese edificio enemigo
+        const o = m.porId.get(cmd.obj);
+        for (const u of propias(m, cmd)) if (UNID[u.tipo].comando && cargable(u, o)) { limpiar(u); u.obj = 0; u.ruta = null; u.pend = null; u.guardia = false; u.orden = 'carga'; u.hackObj = o.id; u.canal = 0; }
+        break;
+      }
       case 'hackear': { // los hackers elegidos van por ese vehículo o edificio enemigo
         const o = m.porId.get(cmd.obj);
         for (const u of propias(m, cmd)) if (UNID[u.tipo].hackea && hackeable(u, o)) { limpiar(u); u.obj = 0; u.ruta = null; u.pend = null; u.guardia = false; u.orden = 'hackear'; u.hackObj = o.id; u.canal = 0; }
@@ -1999,6 +2029,7 @@
     if (e.edif || m.t - (e.camT === undefined ? -999 : e.camT) < 20) return false; // (una cámara enemiga cerca la descubre)
     const d = UNID[e.tipo];
     if (d.espia) return true; // el espía pasa inadvertido también en movimiento
+    if (d.comando && m.mapa.terreno[Math.floor(e.y) * m.N + Math.floor(e.x)] === T.BOSQUE) return true; // el comando, también andando, si va por el bosque
     if (e.orden !== 'nada' || e.v > 0.001 || m.t - (e.tDisparo === undefined ? -999 : e.tDisparo) < 60) return false;
     return d.cat === 'inf' && (d.sigilo || m.mapa.terreno[Math.floor(e.y) * m.N + Math.floor(e.x)] === T.BOSQUE);
   }
@@ -2461,6 +2492,7 @@
       if (u.orden === 'entubar') { tickEntubar(m, u); return; }
       if (u.orden === 'despejar') { tickDespejar(m, u); return; }
       if (u.orden === 'hackear') { tickHackear(m, u); return; }
+      if (u.orden === 'carga') { tickCarga(m, u); return; }
       if (u.orden === 'murar') { tickMurar(m, u); return; }
       if (u.orden === 'zapar') { tickZapar(m, u); return; }
       if (u.orden === 'recuperar') { tickRecuperar(m, u); return; }
@@ -2902,6 +2934,7 @@
     tickProduccion(m, 0); tickProduccion(m, 1);
     if (m.t % 5 === 3) tickControl(m);
     if (m.t % 5 === 1) tickInhibir(m);
+    if (m.cargas && m.cargas.length) tickCargas(m);
     for (let k = 0, n = m.ents.length; k < n; k++) {
       const e = m.ents[k];
       if (!e.edif) { if (e.orden === 'nada' && !e.guardia && !m.jug[e.j].esIA && UNID[e.tipo].cat === 'inf' && (UNID[e.tipo].arma || UNID[e.tipo].cura) && !e.bunk && !e.sube && !e.retirando && m.mapa.terreno[Math.floor(e.y) * m.N + Math.floor(e.x)] === T.BOSQUE) { e.guardia = true; e.embosc = true; } else if (e.embosc && !e.guardia) e.embosc = false; // emboscada: el infante parado en el bosque no sale de él sin orden (solo los del jugador: la IA mueve a los suyos a cada rato)

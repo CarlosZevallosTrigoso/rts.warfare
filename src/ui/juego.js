@@ -894,6 +894,7 @@
           }
         }
         W.fichaEdificio(ctx, e, px, py - h, t, lod, col, est);
+        if (m.cargas && lod) for (const q of m.cargas) if (q.obj === e.id && (q.j === YO || rep)) { const qx = ox + q.x * z, qy = oy + q.y * z; ctx.fillStyle = '#e0b83a'; ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.fillRect(qx - z * 0.11, qy - z * 0.08, z * 0.22, z * 0.16); ctx.strokeRect(qx - z * 0.11, qy - z * 0.08, z * 0.22, z * 0.16); if ((m.t >> 2) & 1) { ctx.fillStyle = P.mal; ctx.beginPath(); ctx.arc(qx, qy, Math.max(1.5, z * 0.05), 0, TAU); ctx.fill(); } } // una carga puesta (solo la ve quien la puso): parpadea hasta que estalla
         if (e.nivelE > 1 && lod) { ctx.fillStyle = P.bien; for (let k = 1; k < e.nivelE; k++) { ctx.beginPath(); ctx.arc(px + t - 5 - (k - 1) * 7, py - h + 5, 2.6, 0, TAU); ctx.fill(); } } // edificio mejorado: un punto verde por nivel ganado
         if (edadObra < 1) { ctx.restore(); ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.setLineDash([4, 3]); ctx.strokeRect(px + 1.5, py + 1.5, t - 3, t - 3); ctx.setLineDash([]); }
       };
@@ -1648,6 +1649,8 @@
           if (d.j === YO) { son.obraLista(); aviso('Has capturado ' + que); } else if (visible(d.x2, d.y2) || m.puestos.some((p) => p.x === d.x2 && p.y === d.y2)) aviso('El rival ha capturado ' + que);
         } else if (d.tipo === 'despliega') {
           if (d.j === YO) { son.colocar(); aviso('Patio desplegado: ya puedes construir a su alrededor'); }
+        } else if (d.tipo === 'carga') { // una carga de demolición recién colocada
+          if (d.j === YO) { aviso('Carga colocada: estalla en unos segundos'); son.orden(); }
         } else if (d.tipo === 'inhibido') { // un dron que cae al perder el enlace
           if (visible(d.x2, d.y2)) for (let i = 0; i < 6; i++) parte('chispa', d.x2, d.y2, (azar() - 0.5) * 3, (azar() - 0.5) * 3, 0.3, 0);
           if (d.j === YO) aviso('Un inhibidor enemigo ha tumbado uno de tus drones');
@@ -1956,6 +1959,7 @@
       francotirador: 'Mata infantería desde muy lejos; se esconde.', gatling: 'Equipo de dos: tarda en montar, y montada tritura infantería y aviones bajos.', hacker: 'Toma el control de un vehículo enemigo durante medio minuto (lo manejas como tuyo) o apaga un edificio; cuesta información.', operador: 'Lleva tres drones: vuela uno y los otros dos son repuestos; cuando se le acaban hay que reponerlos junto a una estación de drones, un puesto logístico, un puesto de avanzada o un camión de suministro. El dron vuelve solo a cambiar la batería y a repararse. Parado, despliega un dron de reconocimiento, y puede mandarlo en misión a vigilar un punto a 45 celdas (tecla O): lo que vea lo ve tu artillería. Con las tecnologías de la estación de drones lleva también kamikazes y un bombardero, que atacan en la zona de la misión.', espia: 'Pasa inadvertido aunque se mueva. Junto a un edificio enemigo ves lo que produce el rival y ganas información.', dronEspia: 'Vuela muy lejos y mucho rato desde su central; no ataca.',
       tanque: 'El vehículo de combate básico.', artilleria: 'Dispara muy lejos, en área, a lo que vea cualquiera de los tuyos.', pesado: 'Tanque lento, muy duro y de gran pegada.', blindado: 'Rápido, con ametralladora: contra infantería.', antiaereoMovil: 'Antiaérea sobre ruedas para acompañar al ejército.',
       mortero: 'Equipo de dos: tarda en montar y tira por encima de bosques y edificios. La trinchera no cubre de su fuego. No puede tirar de cerca.', asalto: 'Escudo y subfusil: aguanta el doble de frente y a quemarropa ni la trinchera ni el búnker cubren al enemigo. Alcance muy corto.',
+      comando: 'Fuerzas especiales, sin arma. Quieto no se le ve, y por el bosque tampoco aunque ande. Clic derecho sobre un edificio enemigo: le pone una carga que estalla a los pocos segundos.',
       cazadron: 'Va desarmado, con un inhibidor a la espalda: el dron enemigo que entra en su radio pierde el enlace y cae.', manpad: 'Misil de hombro contra helicópteros y aviones. No sirve contra tierra ni contra drones.',
       radioOp: 'Lleva la radio a pie: da cobertura a 15 celdas a su alrededor, para que la tropa que acompaña vea y obedezca sin retraso lejos de tus torres.', vehRadio: 'Radio sobre ruedas: cobertura a 36 celdas. Sin armas; llévalo detrás del ejército.', dronRadio: 'Repetidor volante: cobertura a 30 celdas donde lo mandes patrullar, mientras le dure el combustible; luego vuelve a repostar a la central de inteligencia.',
       transporte: 'Lleva infantería dentro, rápido.', lanzacohetes: 'Salvas de cohetes a mucha distancia, sobre una zona.', mando: 'Los tuyos a su alrededor ven en redondo y giran más rápido; interfiere drones enemigos. Gasta información.', comandoDrones: 'Lleva drones de reconocimiento, bombarderos y kamikazes que atacan solos.',
@@ -2542,6 +2546,7 @@
         const ids = us.map((u) => u.id), o = entEn(wx, wy), c = Math.floor(wy) * N + Math.floor(wx);
         if (o && o.j !== YO) {
           { const cd = us.filter((u) => UNID[u.tipo].drones && W.dronesDe(m, u).fpv).map((u) => u.id); if (cd.length) { W.orden(m, { t: 'dronObj', j: YO, ids: cd, obj: o.id }); marca(wx, wy, P.mal); son.orden(); if (cd.length === us.length) return; } }
+          { const cm = us.filter((u) => UNID[u.tipo].comando).map((u) => u.id); if (cm.length) { if (W.cargable(us.find((u) => UNID[u.tipo].comando), o)) { W.orden(m, { t: 'carga', j: YO, ids: cm, obj: o.id }); marca(wx, wy, P.mal); son.orden(); } else aviso('El comando solo pone cargas en edificios'); if (cm.length === us.length) return; } }
           { const hk = us.filter((u) => UNID[u.tipo].hackea).map((u) => u.id); if (hk.length) { if (W.hackeable(us.find((u) => UNID[u.tipo].hackea), o)) { W.orden(m, { t: 'hackear', j: YO, ids: hk, obj: o.id }); marca(wx, wy, P.mal); son.orden(); } else aviso('El hacker solo puede con vehículos y edificios'); if (hk.length === us.length) return; } }
           if (!us.some((u) => UNID[u.tipo].arma && W.puedeAtacar(u, o))) aviso(UNID[o.tipo] && UNID[o.tipo].aire ? 'Estas unidades no alcanzan a los aviones' : 'Estas unidades no pueden atacar eso');
           W.orden(m, { t: 'atacar', j: YO, ids, obj: o.id, enc }); marca(wx, wy, P.mal); return;

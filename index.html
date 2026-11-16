@@ -355,12 +355,12 @@
   <button type="button" id="tutorial">Tutorial guiado<small style="display:block;color:var(--suave);font-size:10px">ocho pasos, con el rival dormido hasta el final</small></button>
   <button type="button" id="continuar" hidden>Continuar la partida guardada</button>
   <button type="button" id="irDrone" onclick="location.href='drone/index.html'">drone.warfare<small style="display:block;color:var(--suave);font-size:10px">el otro juego: el mismo conflicto con lupa, infantería y drones</small></button>
-  <div id="version">versión 118</div>
+  <div id="version">versión 119</div>
 </div></div>
 <div id="guia" hidden><div class="caja"><div class="cab"><strong>Guía: para qué sirve cada cosa</strong><button type="button" id="cierraGuia">cerrar</button></div><div id="guiaTxt"></div></div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finVer" href="#" title="Vuelve a ver la partida entera, con todo el mapa a la vista y a la velocidad que quieras.">ver repetición</a><a id="finLog" href="#" title="Descarga el registro de la partida: la semilla, las opciones y todas las órdenes de los dos bandos, con su instante. Sirve para reproducirla y analizar cómo jugó la IA.">descargar registro</a><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 118' };
+globalThis.W = { VERSION: 'versión 119' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -531,6 +531,8 @@ globalThis.W = { VERSION: 'versión 118' };
     // Mortero: equipo de dos con fuego indirecto; se monta como la gatling y su tiro cae desde arriba (la trinchera no cubre). Asalto: escudo (frena lo que llega de frente) y subfusil, que a quemarropa no respeta trinchera ni búnker.
     mortero:     { nombre: 'Mortero', cat: 'inf', vida: 90, vel: 0.05, costo: 320, tiempo: 220, blindaje: 'ligero', arma: 'mortero', vision: 6.5, radio: 0.16, req: ['cuartel'], agua: 2, giro: 0.12, acel: 0.015, nivel: 2, monta: 50, arco: 0.5 },
     asalto:      { nombre: 'Asalto', cat: 'inf', vida: 120, vel: 0.06, costo: 240, tiempo: 170, blindaje: 'ligero', arma: 'subfusil', vision: 6, radio: 0.115, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, arco: 0.5, cono: 1.4, escudo: 0.5 },
+    // Comando: va desarmado y no se le ve quieto ni, aun andando, dentro del bosque. Coloca una carga con mecha al pie de un edificio enemigo (cargaT ticks de colocarla, mecha hasta que estalla, cargaDano de daño) y tarda en preparar la siguiente.
+    comando:     { nombre: 'Comando', cat: 'inf', vida: 60, vel: 0.075, costo: 500, tiempo: 300, blindaje: 'ligero', arma: null, vision: 8, radio: 0.105, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, nivel: 3, sigilo: true, comando: true, cargaT: 50, mecha: 120, cargaDano: 700, cargaRecarga: 500 },
     cazadron:    { nombre: 'Cazadrones', cat: 'inf', vida: 50, vel: 0.065, costo: 220, tiempo: 160, blindaje: 'ligero', arma: null, vision: 7, radio: 0.105, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, inhibe: 4.5 },
     manpad:      { nombre: 'Antiaéreo portátil', cat: 'inf', vida: 55, vel: 0.06, costo: 260, tiempo: 180, blindaje: 'ligero', arma: 'misilHombro', vision: 8, radio: 0.11, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, arco: 0.5, cono: 1.4 },
     radioOp:     { enlace: true, radioCom: 15, nombre: 'Radioperador', cat: 'inf', vida: 45, vel: 0.075, costo: 140, tiempo: 100, blindaje: 'ligero', arma: 'pistola', vision: 7, radio: 0.105, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, arco: 0.5, cono: 1.4 },
@@ -1785,6 +1787,31 @@ globalThis.W = { VERSION: 'versión 118' };
     }
   }
   // ¿Se puede hackear? Vehículos de tierra y edificios enemigos (no la infantería, ni los aviones, ni caminos o líneas).
+  // La carga de demolición del comando: llega al pie del edificio, la coloca y, pasada la mecha, estalla.
+  const cargable = (u, o) => !!o && o.vida > 0 && o.j !== u.j && !o.infra && !!o.edif;
+  W.cargable = cargable;
+  function tickCarga(m, u) {
+    const o = m.porId.get(u.hackObj), d = UNID[u.tipo];
+    const fin = () => { u.orden = 'nada'; u.hackObj = 0; u.canal = 0; u.ruta = null; };
+    if (!cargable(u, o)) { fin(); return; }
+    if (dist(u.x, u.y, o) > 1.3) {
+      u.canal = 0;
+      if (u.fallo) { u.fallo = false; fin(); return; }
+      if (!u.pend && !u.ruta) pedirRuta(m, u, posX(o), posY(o), o.tam / 2 + 0.9);
+      avanzar(m, u); return;
+    }
+    u.ruta = null; u.pend = null; u.v = 0; u.ang = Math.atan2(posY(o) - u.y, posX(o) - u.x);
+    if (u.recarga > 0) return; // aún prepara la siguiente
+    u.canal = (u.canal || 0) + 1;
+    if (u.canal < d.cargaT) return;
+    (m.cargas || (m.cargas = [])).push({ obj: o.id, x: Math.max(o.x, Math.min(o.x + o.tam, u.x)), y: Math.max(o.y, Math.min(o.y + o.tam, u.y)), t: m.t + d.mecha, j: u.j, dano: d.cargaDano });
+    m.efectos.push({ tipo: 'carga', x1: u.x, y1: u.y, j: u.j, de: o.j, t: m.t }); u.recarga = d.cargaRecarga; fin();
+  }
+  function tickCargas(m) {
+    for (let k = m.cargas.length - 1; k >= 0; k--) { const q = m.cargas[k]; if (m.t < q.t) continue; m.cargas.splice(k, 1);
+      const o = m.porId.get(q.obj); if (o && o.vida > 0) o.vida -= q.dano;
+      m.efectos.push({ tipo: 'impacto', x1: q.x, y1: q.y, x2: q.x, y2: q.y, j: q.j, t: m.t, arma: 'mina', acierto: true }); }
+  }
   const hackeable = (u, o) => !!o && o.vida > 0 && o.j !== u.j && !o.infra && (o.edif || (UNID[o.tipo].cat === 'veh' && !UNID[o.tipo].aire));
   W.hackeable = hackeable;
   // El hacker con orden: se acerca hasta tener el blanco a su alcance, teclea un par de segundos y lo apaga. Cuesta información.
@@ -2495,6 +2522,11 @@ globalThis.W = { VERSION: 'versión 118' };
         m.efectos.push({ tipo: 'lanzamiento', x1: e.cx, y1: e.cy, x2: cmd.x, y2: cmd.y, j: cmd.j, clase: cmd.tipo, t: m.t });
         return;
       }
+      case 'carga': { // los comandos elegidos van a poner una carga al pie de ese edificio enemigo
+        const o = m.porId.get(cmd.obj);
+        for (const u of propias(m, cmd)) if (UNID[u.tipo].comando && cargable(u, o)) { limpiar(u); u.obj = 0; u.ruta = null; u.pend = null; u.guardia = false; u.orden = 'carga'; u.hackObj = o.id; u.canal = 0; }
+        break;
+      }
       case 'hackear': { // los hackers elegidos van por ese vehículo o edificio enemigo
         const o = m.porId.get(cmd.obj);
         for (const u of propias(m, cmd)) if (UNID[u.tipo].hackea && hackeable(u, o)) { limpiar(u); u.obj = 0; u.ruta = null; u.pend = null; u.guardia = false; u.orden = 'hackear'; u.hackObj = o.id; u.canal = 0; }
@@ -3002,6 +3034,7 @@ globalThis.W = { VERSION: 'versión 118' };
     if (e.edif || m.t - (e.camT === undefined ? -999 : e.camT) < 20) return false; // (una cámara enemiga cerca la descubre)
     const d = UNID[e.tipo];
     if (d.espia) return true; // el espía pasa inadvertido también en movimiento
+    if (d.comando && m.mapa.terreno[Math.floor(e.y) * m.N + Math.floor(e.x)] === T.BOSQUE) return true; // el comando, también andando, si va por el bosque
     if (e.orden !== 'nada' || e.v > 0.001 || m.t - (e.tDisparo === undefined ? -999 : e.tDisparo) < 60) return false;
     return d.cat === 'inf' && (d.sigilo || m.mapa.terreno[Math.floor(e.y) * m.N + Math.floor(e.x)] === T.BOSQUE);
   }
@@ -3464,6 +3497,7 @@ globalThis.W = { VERSION: 'versión 118' };
       if (u.orden === 'entubar') { tickEntubar(m, u); return; }
       if (u.orden === 'despejar') { tickDespejar(m, u); return; }
       if (u.orden === 'hackear') { tickHackear(m, u); return; }
+      if (u.orden === 'carga') { tickCarga(m, u); return; }
       if (u.orden === 'murar') { tickMurar(m, u); return; }
       if (u.orden === 'zapar') { tickZapar(m, u); return; }
       if (u.orden === 'recuperar') { tickRecuperar(m, u); return; }
@@ -3905,6 +3939,7 @@ globalThis.W = { VERSION: 'versión 118' };
     tickProduccion(m, 0); tickProduccion(m, 1);
     if (m.t % 5 === 3) tickControl(m);
     if (m.t % 5 === 1) tickInhibir(m);
+    if (m.cargas && m.cargas.length) tickCargas(m);
     for (let k = 0, n = m.ents.length; k < n; k++) {
       const e = m.ents[k];
       if (!e.edif) { if (e.orden === 'nada' && !e.guardia && !m.jug[e.j].esIA && UNID[e.tipo].cat === 'inf' && (UNID[e.tipo].arma || UNID[e.tipo].cura) && !e.bunk && !e.sube && !e.retirando && m.mapa.terreno[Math.floor(e.y) * m.N + Math.floor(e.x)] === T.BOSQUE) { e.guardia = true; e.embosc = true; } else if (e.embosc && !e.guardia) e.embosc = false; // emboscada: el infante parado en el bosque no sale de él sin orden (solo los del jugador: la IA mueve a los suyos a cada rato)
@@ -4421,6 +4456,7 @@ globalThis.W = { VERSION: 'versión 118' };
         else if (c.estDrones && (c.operador || 0) + J.colas.operador.n < 2 && soldados.length >= 8) entrena('operador', 500);
         else if ((c.mortero || 0) + J.colas.mortero.n < 2 && soldados.length >= 10) entrena('mortero', 600); // fuego indirecto propio, contra trincheras y defensas
         else if ((c.asalto || 0) + J.colas.asalto.n < 2 && soldados.length >= 8) entrena('asalto', 500);
+        else if (J.nivel >= 3 && (c.comando || 0) + J.colas.comando.n < 1 && soldados.length >= 10) entrena('comando', 800); // un saboteador
         else if ((c.cazadron || 0) + J.colas.cazadron.n < 1 && soldados.length >= 8) entrena('cazadron', 500); // un inhibidor que va con el grueso: los fusiles ya no derriban drones
         else if ((c.manpad || 0) + J.colas.manpad.n < 2 && soldados.length >= 10) entrena('manpad', 600);
       }
@@ -4434,6 +4470,12 @@ globalThis.W = { VERSION: 'versión 118' };
           if (d0 < md && m.niebla[j][Math.floor(ey) * m.N + Math.floor(ex)] === 2) { md = d0; b = e; }
         }
         if (b) W.orden(m, { t: 'hackear', j, ids: [u.id], obj: b.id });
+      }
+      for (const u of m.ents) { // el comando: a por el edificio enemigo a la vista que tenga más cerca
+        if (u.edif || u.j !== j || u.tipo !== 'comando' || u.orden !== 'nada' || u.recarga > 0 || u.vida <= 0) continue;
+        let b = null, md = 60;
+        for (const e of m.ents) { if (!e.edif || e.j === j || e.vida <= 0 || e.infra) continue; const d0 = Math.hypot(e.cx - u.x, e.cy - u.y); if (d0 < md && m.niebla[j][Math.floor(e.cy) * m.N + Math.floor(e.cx)] === 2) { md = d0; b = e; } }
+        if (b) W.orden(m, { t: 'carga', j, ids: [u.id], obj: b.id });
       }
       const civil = sinArma.find((u) => u.tipo === 'civil');
       if (civil && civil.orden === 'nada' && !civil.auto && tk % 10 === 6) W.orden(m, { t: 'autoCivil', j, ids: [civil.id], on: true });
@@ -4920,6 +4962,7 @@ globalThis.W = { VERSION: 'versión 118' };
         c.fillStyle = col.luz; c.fillRect(R * 0.75, R * 0.2, R * 0.6, R * 0.5); c.lineWidth = 1; c.strokeRect(R * 0.75, R * 0.2, R * 0.6, R * 0.5);
       } else if (gra) { // una granada en la mano adelantada y la bolsa al costado
         c.fillStyle = col.osc; c.beginPath(); c.arc(R * 1.15, R * 0.35, R * 0.3, 0, TAU); c.fill(); c.fillRect(-R * 0.5, R * 0.55, R * 0.7, R * 0.4);
+      } else if (u.tipo === 'comando') { c.fillStyle = '#e0b83a'; c.strokeStyle = col.tinta || '#1a1a1a'; c.lineWidth = 1; c.beginPath(); c.rect(R * 0.55, R * 0.34, R * 0.5, R * 0.32); c.fill(); c.stroke(); // sin arma: la carga, en las manos
       } else if (esp) { // sin arma: un maletín fino al costado
         c.fillStyle = col.osc; c.fillRect(R * 0.55, R * 0.45, R * 0.55, R * 0.3);
       } else if (expl) { // pistola corta
@@ -4960,6 +5003,7 @@ globalThis.W = { VERSION: 'versión 118' };
       if (e.fino && lod === 2 && !esp && !civ) { c.strokeStyle = col.osc; c.lineWidth = Math.max(1, R * 0.12); c.beginPath(); c.arc(R * 0.08, 0, R * 0.42, -0.55, 0.55); c.stroke(); } // el frente del casco
       if (cerca && !esp && !civ && !med && !expl) { c.fillStyle = col.osc; c.fillRect(R * 0.4, -R * 0.12, R * 0.16, R * 0.24); if (fino) { c.beginPath(); c.arc(R * 0.04, -R * 0.42, R * 0.1, 0, TAU); c.arc(R * 0.04, R * 0.42, R * 0.1, 0, TAU); c.fill(); } } // visor y, de cerca, los cascos
       c.restore();
+      if (u.tipo === 'comando' && lod) { c.fillStyle = '#34453a'; c.beginPath(); c.arc(hx, 0, r * 1.4 * 0.3, 0, TAU); c.fill(); if (lod === 2) { c.strokeStyle = '#34453a'; c.lineWidth = 1.2; c.beginPath(); for (let i = 0; i < 9; i++) { const a = i / 9 * TAU + 0.3; c.moveTo(hx + Math.cos(a) * r * 0.36, Math.sin(a) * r * 0.36); c.lineTo(hx + Math.cos(a) * r * 0.74, Math.sin(a) * r * 0.74); } c.stroke(); } } // capucha de camuflaje
       if (u.tipo === 'asalto' && lod && !(e.te > 0.5)) { const R = r * 1.4; c.strokeStyle = col.osc; c.lineWidth = Math.max(1.5, R * 0.34); c.lineCap = 'round'; c.beginPath(); c.arc(R * 0.5, -R * 0.25, R * 0.95, -1.25, 0.35); c.stroke(); if (lod === 2) { c.strokeStyle = col.claro || col.luz; c.lineWidth = Math.max(1, R * 0.16); c.beginPath(); c.arc(R * 0.5, -R * 0.25, R * 0.95, -1.15, 0.25); c.stroke(); } c.lineCap = 'butt'; } // el escudo, por delante
     } else if (u.tipo === 'tanque' || pesado) {
       const L = r * 1.4, w = r;
@@ -6550,6 +6594,7 @@ globalThis.W = { VERSION: 'versión 118' };
           }
         }
         W.fichaEdificio(ctx, e, px, py - h, t, lod, col, est);
+        if (m.cargas && lod) for (const q of m.cargas) if (q.obj === e.id && (q.j === YO || rep)) { const qx = ox + q.x * z, qy = oy + q.y * z; ctx.fillStyle = '#e0b83a'; ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.fillRect(qx - z * 0.11, qy - z * 0.08, z * 0.22, z * 0.16); ctx.strokeRect(qx - z * 0.11, qy - z * 0.08, z * 0.22, z * 0.16); if ((m.t >> 2) & 1) { ctx.fillStyle = P.mal; ctx.beginPath(); ctx.arc(qx, qy, Math.max(1.5, z * 0.05), 0, TAU); ctx.fill(); } } // una carga puesta (solo la ve quien la puso): parpadea hasta que estalla
         if (e.nivelE > 1 && lod) { ctx.fillStyle = P.bien; for (let k = 1; k < e.nivelE; k++) { ctx.beginPath(); ctx.arc(px + t - 5 - (k - 1) * 7, py - h + 5, 2.6, 0, TAU); ctx.fill(); } } // edificio mejorado: un punto verde por nivel ganado
         if (edadObra < 1) { ctx.restore(); ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.setLineDash([4, 3]); ctx.strokeRect(px + 1.5, py + 1.5, t - 3, t - 3); ctx.setLineDash([]); }
       };
@@ -7304,6 +7349,8 @@ globalThis.W = { VERSION: 'versión 118' };
           if (d.j === YO) { son.obraLista(); aviso('Has capturado ' + que); } else if (visible(d.x2, d.y2) || m.puestos.some((p) => p.x === d.x2 && p.y === d.y2)) aviso('El rival ha capturado ' + que);
         } else if (d.tipo === 'despliega') {
           if (d.j === YO) { son.colocar(); aviso('Patio desplegado: ya puedes construir a su alrededor'); }
+        } else if (d.tipo === 'carga') { // una carga de demolición recién colocada
+          if (d.j === YO) { aviso('Carga colocada: estalla en unos segundos'); son.orden(); }
         } else if (d.tipo === 'inhibido') { // un dron que cae al perder el enlace
           if (visible(d.x2, d.y2)) for (let i = 0; i < 6; i++) parte('chispa', d.x2, d.y2, (azar() - 0.5) * 3, (azar() - 0.5) * 3, 0.3, 0);
           if (d.j === YO) aviso('Un inhibidor enemigo ha tumbado uno de tus drones');
@@ -7612,6 +7659,7 @@ globalThis.W = { VERSION: 'versión 118' };
       francotirador: 'Mata infantería desde muy lejos; se esconde.', gatling: 'Equipo de dos: tarda en montar, y montada tritura infantería y aviones bajos.', hacker: 'Toma el control de un vehículo enemigo durante medio minuto (lo manejas como tuyo) o apaga un edificio; cuesta información.', operador: 'Lleva tres drones: vuela uno y los otros dos son repuestos; cuando se le acaban hay que reponerlos junto a una estación de drones, un puesto logístico, un puesto de avanzada o un camión de suministro. El dron vuelve solo a cambiar la batería y a repararse. Parado, despliega un dron de reconocimiento, y puede mandarlo en misión a vigilar un punto a 45 celdas (tecla O): lo que vea lo ve tu artillería. Con las tecnologías de la estación de drones lleva también kamikazes y un bombardero, que atacan en la zona de la misión.', espia: 'Pasa inadvertido aunque se mueva. Junto a un edificio enemigo ves lo que produce el rival y ganas información.', dronEspia: 'Vuela muy lejos y mucho rato desde su central; no ataca.',
       tanque: 'El vehículo de combate básico.', artilleria: 'Dispara muy lejos, en área, a lo que vea cualquiera de los tuyos.', pesado: 'Tanque lento, muy duro y de gran pegada.', blindado: 'Rápido, con ametralladora: contra infantería.', antiaereoMovil: 'Antiaérea sobre ruedas para acompañar al ejército.',
       mortero: 'Equipo de dos: tarda en montar y tira por encima de bosques y edificios. La trinchera no cubre de su fuego. No puede tirar de cerca.', asalto: 'Escudo y subfusil: aguanta el doble de frente y a quemarropa ni la trinchera ni el búnker cubren al enemigo. Alcance muy corto.',
+      comando: 'Fuerzas especiales, sin arma. Quieto no se le ve, y por el bosque tampoco aunque ande. Clic derecho sobre un edificio enemigo: le pone una carga que estalla a los pocos segundos.',
       cazadron: 'Va desarmado, con un inhibidor a la espalda: el dron enemigo que entra en su radio pierde el enlace y cae.', manpad: 'Misil de hombro contra helicópteros y aviones. No sirve contra tierra ni contra drones.',
       radioOp: 'Lleva la radio a pie: da cobertura a 15 celdas a su alrededor, para que la tropa que acompaña vea y obedezca sin retraso lejos de tus torres.', vehRadio: 'Radio sobre ruedas: cobertura a 36 celdas. Sin armas; llévalo detrás del ejército.', dronRadio: 'Repetidor volante: cobertura a 30 celdas donde lo mandes patrullar, mientras le dure el combustible; luego vuelve a repostar a la central de inteligencia.',
       transporte: 'Lleva infantería dentro, rápido.', lanzacohetes: 'Salvas de cohetes a mucha distancia, sobre una zona.', mando: 'Los tuyos a su alrededor ven en redondo y giran más rápido; interfiere drones enemigos. Gasta información.', comandoDrones: 'Lleva drones de reconocimiento, bombarderos y kamikazes que atacan solos.',
@@ -8198,6 +8246,7 @@ globalThis.W = { VERSION: 'versión 118' };
         const ids = us.map((u) => u.id), o = entEn(wx, wy), c = Math.floor(wy) * N + Math.floor(wx);
         if (o && o.j !== YO) {
           { const cd = us.filter((u) => UNID[u.tipo].drones && W.dronesDe(m, u).fpv).map((u) => u.id); if (cd.length) { W.orden(m, { t: 'dronObj', j: YO, ids: cd, obj: o.id }); marca(wx, wy, P.mal); son.orden(); if (cd.length === us.length) return; } }
+          { const cm = us.filter((u) => UNID[u.tipo].comando).map((u) => u.id); if (cm.length) { if (W.cargable(us.find((u) => UNID[u.tipo].comando), o)) { W.orden(m, { t: 'carga', j: YO, ids: cm, obj: o.id }); marca(wx, wy, P.mal); son.orden(); } else aviso('El comando solo pone cargas en edificios'); if (cm.length === us.length) return; } }
           { const hk = us.filter((u) => UNID[u.tipo].hackea).map((u) => u.id); if (hk.length) { if (W.hackeable(us.find((u) => UNID[u.tipo].hackea), o)) { W.orden(m, { t: 'hackear', j: YO, ids: hk, obj: o.id }); marca(wx, wy, P.mal); son.orden(); } else aviso('El hacker solo puede con vehículos y edificios'); if (hk.length === us.length) return; } }
           if (!us.some((u) => UNID[u.tipo].arma && W.puedeAtacar(u, o))) aviso(UNID[o.tipo] && UNID[o.tipo].aire ? 'Estas unidades no alcanzan a los aviones' : 'Estas unidades no pueden atacar eso');
           W.orden(m, { t: 'atacar', j: YO, ids, obj: o.id, enc }); marca(wx, wy, P.mal); return;

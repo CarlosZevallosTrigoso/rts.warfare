@@ -105,6 +105,7 @@
         c.fillStyle = col.luz; c.fillRect(R * 0.75, R * 0.2, R * 0.6, R * 0.5); c.lineWidth = 1; c.strokeRect(R * 0.75, R * 0.2, R * 0.6, R * 0.5);
       } else if (gra) { // una granada en la mano adelantada y la bolsa al costado
         c.fillStyle = col.osc; c.beginPath(); c.arc(R * 1.15, R * 0.35, R * 0.3, 0, TAU); c.fill(); c.fillRect(-R * 0.5, R * 0.55, R * 0.7, R * 0.4);
+      } else if (u.tipo === 'comando') { c.fillStyle = '#e0b83a'; c.strokeStyle = col.tinta || '#1a1a1a'; c.lineWidth = 1; c.beginPath(); c.rect(R * 0.55, R * 0.34, R * 0.5, R * 0.32); c.fill(); c.stroke(); // sin arma: la carga, en las manos
       } else if (esp) { // sin arma: un maletín fino al costado
         c.fillStyle = col.osc; c.fillRect(R * 0.55, R * 0.45, R * 0.55, R * 0.3);
       } else if (expl) { // pistola corta
@@ -145,6 +146,7 @@
       if (e.fino && lod === 2 && !esp && !civ) { c.strokeStyle = col.osc; c.lineWidth = Math.max(1, R * 0.12); c.beginPath(); c.arc(R * 0.08, 0, R * 0.42, -0.55, 0.55); c.stroke(); } // el frente del casco
       if (cerca && !esp && !civ && !med && !expl) { c.fillStyle = col.osc; c.fillRect(R * 0.4, -R * 0.12, R * 0.16, R * 0.24); if (fino) { c.beginPath(); c.arc(R * 0.04, -R * 0.42, R * 0.1, 0, TAU); c.arc(R * 0.04, R * 0.42, R * 0.1, 0, TAU); c.fill(); } } // visor y, de cerca, los cascos
       c.restore();
+      if (u.tipo === 'comando' && lod) { c.fillStyle = '#34453a'; c.beginPath(); c.arc(hx, 0, r * 1.4 * 0.3, 0, TAU); c.fill(); if (lod === 2) { c.strokeStyle = '#34453a'; c.lineWidth = 1.2; c.beginPath(); for (let i = 0; i < 9; i++) { const a = i / 9 * TAU + 0.3; c.moveTo(hx + Math.cos(a) * r * 0.36, Math.sin(a) * r * 0.36); c.lineTo(hx + Math.cos(a) * r * 0.74, Math.sin(a) * r * 0.74); } c.stroke(); } } // capucha de camuflaje
       if (u.tipo === 'asalto' && lod && !(e.te > 0.5)) { const R = r * 1.4; c.strokeStyle = col.osc; c.lineWidth = Math.max(1.5, R * 0.34); c.lineCap = 'round'; c.beginPath(); c.arc(R * 0.5, -R * 0.25, R * 0.95, -1.25, 0.35); c.stroke(); if (lod === 2) { c.strokeStyle = col.claro || col.luz; c.lineWidth = Math.max(1, R * 0.16); c.beginPath(); c.arc(R * 0.5, -R * 0.25, R * 0.95, -1.15, 0.25); c.stroke(); } c.lineCap = 'butt'; } // el escudo, por delante
     } else if (u.tipo === 'tanque' || pesado) {
       const L = r * 1.4, w = r;
