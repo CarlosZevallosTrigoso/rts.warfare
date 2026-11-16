@@ -152,21 +152,24 @@
     mando:       { nombre: 'Vehículo de mando', cat: 'veh', vida: 300, vel: 0.08, costo: 1200, pet: 60, tiempo: 420, blindaje: 'pesado', arma: null, vision: 8, radio: 0.24, req: ['fabrica'], agua: 2, giro: 0.1, acel: 0.005, nivel: 3, mando: 7, radioCom: 30, enlace: true },
     caza:        { nombre: 'Caza',        cat: 'aire', aire: true, vida: 160, vel: 0.22, costo: 900, pet: 120, tiempo: 360, blindaje: 'aire', arma: 'misil', vision: 9, radio: 0.25, req: ['aerodromo'], agua: 1, giro: 0.16, acel: 0.012, nivel: 2, fuel: 1800, arco: 0.3, radioVuelo: 70, pasada: true },
     bombardero:  { nombre: 'Bombardero',  cat: 'aire', aire: true, vida: 260, vel: 0.15, costo: 1600, pet: 200, raros: 40, tiempo: 520, blindaje: 'aire', arma: 'bomba', vision: 8, radio: 0.38, req: ['aerodromo'], agua: 2, giro: 0.09, acel: 0.008, nivel: 3, fuel: 2400, radioVuelo: 90, pasada: true },
-    dron:        { nombre: 'Dron', cat: 'aire', aire: true, vida: 50, vel: 0.16, costo: 250, info: 40, tiempo: 200, blindaje: 'aire', arma: null, vision: 12, radio: 0.14, req: ['aerodromo'], agua: 0, giro: 0.2, acel: 0.01, nivel: 2, fuel: 4200, radioVuelo: 110, cono: Math.PI },
+    dron:        { nombre: 'Dron', cat: 'aire', aire: true, vida: 50, vel: 0.16, costo: 250, info: 40, tiempo: 200, blindaje: 'dron', arma: null, vision: 12, radio: 0.14, req: ['aerodromo'], agua: 0, giro: 0.2, acel: 0.01, nivel: 2, fuel: 4200, radioVuelo: 110, cono: Math.PI },
     // Drones pequeños (mini): no se fabrican ni se mandan uno a uno; los saca y los lleva su portador (estación, operador o comando de drones).
     // rec: da vueltas alrededor del portador, viendo. fpv: kamikaze de un solo uso contra vehículos y edificios. bomba: suelta una granada y vuelve a recargar.
-    dronRec:     { nombre: 'Dron de reconocimiento', cat: 'aire', aire: true, mini: true, lugar: 'ninguno', vida: 22, vel: 0.2, costo: 40, tiempo: 1, blindaje: 'aire', arma: null, vision: 8, radio: 0.12, req: [], agua: 0, giro: 0.5, acel: 0.05, cono: Math.PI },
-    dronFpv:     { nombre: 'Dron kamikaze', cat: 'aire', aire: true, mini: true, lugar: 'ninguno', vida: 14, vel: 0.3, costo: 40, tiempo: 1, blindaje: 'aire', arma: null, vision: 3, radio: 0.11, req: [], agua: 0, giro: 0.5, acel: 0.05, cono: Math.PI },
-    dronBomba:   { nombre: 'Dron bombardero', cat: 'aire', aire: true, mini: true, lugar: 'ninguno', vida: 28, vel: 0.17, costo: 50, tiempo: 1, blindaje: 'aire', arma: null, vision: 5, radio: 0.13, req: [], agua: 0, giro: 0.5, acel: 0.05, cono: Math.PI },
+    dronRec:     { nombre: 'Dron de reconocimiento', cat: 'aire', aire: true, mini: true, lugar: 'ninguno', vida: 22, vel: 0.2, costo: 40, tiempo: 1, blindaje: 'dron', arma: null, vision: 8, radio: 0.12, req: [], agua: 0, giro: 0.5, acel: 0.05, cono: Math.PI },
+    dronFpv:     { nombre: 'Dron kamikaze', cat: 'aire', aire: true, mini: true, lugar: 'ninguno', vida: 14, vel: 0.3, costo: 40, tiempo: 1, blindaje: 'dron', arma: null, vision: 3, radio: 0.11, req: [], agua: 0, giro: 0.5, acel: 0.05, cono: Math.PI },
+    dronBomba:   { nombre: 'Dron bombardero', cat: 'aire', aire: true, mini: true, lugar: 'ninguno', vida: 28, vel: 0.17, costo: 50, tiempo: 1, blindaje: 'dron', arma: null, vision: 5, radio: 0.13, req: [], agua: 0, giro: 0.5, acel: 0.05, cono: Math.PI },
     // Portadores. drones: cuántos de cada clase mantiene en el aire. radioDron: hasta dónde llegan desde él.
     // Espía: sin arma y oculto aunque se mueva (solo se le ve de muy cerca o con cámaras). Junto a edificios enemigos, ves lo que produce el rival y gana información.
     espia:       { enlace: true, nombre: 'Espía', cat: 'inf', lugar: 'inteligencia', vida: 35, vel: 0.07, costo: 400, info: 60, tiempo: 300, blindaje: 'ligero', arma: null, vision: 10, radio: 0.105, req: ['inteligencia'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, espia: true, cono: Math.PI },
     // Dron espía: vuela muy lejos y mucho rato desde su central; no ataca.
     // Radio móvil: llevan la cobertura de radio con el ejército (a pie, 15 celdas; el vehículo, 36; el dron, 30 mientras le dure el combustible).
+    // Cazadrones: va desarmado con un inhibidor a la espalda; el dron enemigo que entra en su radio (inhibe) pierde el enlace y cae. Antiaéreo portátil: un misil de hombro contra helicópteros y aviones.
+    cazadron:    { nombre: 'Cazadrones', cat: 'inf', vida: 50, vel: 0.065, costo: 220, tiempo: 160, blindaje: 'ligero', arma: null, vision: 7, radio: 0.105, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, inhibe: 4.5 },
+    manpad:      { nombre: 'Antiaéreo portátil', cat: 'inf', vida: 55, vel: 0.06, costo: 260, tiempo: 180, blindaje: 'ligero', arma: 'misilHombro', vision: 8, radio: 0.11, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, arco: 0.5, cono: 1.4 },
     radioOp:     { enlace: true, radioCom: 15, nombre: 'Radioperador', cat: 'inf', vida: 45, vel: 0.075, costo: 140, tiempo: 100, blindaje: 'ligero', arma: 'pistola', vision: 7, radio: 0.105, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, arco: 0.5, cono: 1.4 },
     vehRadio:    { enlace: true, radioCom: 36, nombre: 'Vehículo de radio', cat: 'veh', vida: 220, vel: 0.09, costo: 500, pet: 20, tiempo: 240, blindaje: 'ligero', arma: null, vision: 7, radio: 0.22, req: ['fabrica'], agua: 2, giro: 0.1, acel: 0.006 },
-    dronRadio:   { radioCom: 30, nombre: 'Dron de radio', cat: 'aire', aire: true, lugar: 'inteligencia', vida: 60, vel: 0.2, costo: 400, tiempo: 240, blindaje: 'aire', arma: null, vision: 8, radio: 0.15, req: ['inteligencia'], agua: 0, giro: 0.2, acel: 0.01, nivel: 2, fuel: 9000, radioVuelo: 220, cono: Math.PI },
-    dronEspia:   { nombre: 'Dron espía', cat: 'aire', aire: true, lugar: 'inteligencia', vida: 60, vel: 0.2, costo: 500, info: 80, tiempo: 300, blindaje: 'aire', arma: null, vision: 14, radio: 0.15, req: ['inteligencia'], agua: 0, giro: 0.2, acel: 0.01, nivel: 2, fuel: 9000, radioVuelo: 220, cono: Math.PI },
+    dronRadio:   { radioCom: 30, nombre: 'Dron de radio', cat: 'aire', aire: true, lugar: 'inteligencia', vida: 60, vel: 0.2, costo: 400, tiempo: 240, blindaje: 'dron', arma: null, vision: 8, radio: 0.15, req: ['inteligencia'], agua: 0, giro: 0.2, acel: 0.01, nivel: 2, fuel: 9000, radioVuelo: 220, cono: Math.PI },
+    dronEspia:   { nombre: 'Dron espía', cat: 'aire', aire: true, lugar: 'inteligencia', vida: 60, vel: 0.2, costo: 500, info: 80, tiempo: 300, blindaje: 'dron', arma: null, vision: 14, radio: 0.15, req: ['inteligencia'], agua: 0, giro: 0.2, acel: 0.01, nivel: 2, fuel: 9000, radioVuelo: 220, cono: Math.PI },
     operador:    { misionDron: 45, dronStock: 3, fpvStock: 4, nombre: 'Operador de drones', cat: 'inf', vida: 45, vel: 0.06, costo: 150, tiempo: 120, blindaje: 'ligero', arma: null, vision: 6, radio: 0.105, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, drones: { rec: 1 }, radioDron: 12, quieto: true },
     comandoDrones: { nombre: 'Comando de drones', cat: 'veh', vida: 260, vel: 0.085, costo: 900, pet: 60, tiempo: 360, blindaje: 'pesado', arma: null, vision: 7, radio: 0.24, req: ['fabrica'], agua: 2, giro: 0.1, acel: 0.006, nivel: 2, drones: { rec: 3, bomba: 2, fpv: 5 }, radioDron: 25 },
     helicoptero: { enPista: true, nombre: 'Helicóptero', cat: 'aire', aire: true, vida: 180, vel: 0.13, costo: 1400, pet: 150, tiempo: 460, blindaje: 'aire', arma: 'coheteAire', vision: 8, radio: 0.27, req: ['aerodromo'], agua: 2, giro: 0.2, acel: 0.01, nivel: 3, fuel: 2000, radioVuelo: 45, arco: 0.3 },
@@ -185,14 +188,16 @@
     canonPesado: { alcance: 6, dano: 90, recarga: 60, vuelo: 0.9, vs: { ligero: 0.5, pesado: 1.1, edificio: 1.1 } },
     obusFijo: { indirecto: true, alcance: 20, alcanceMin: 6, area: 1.6, dano: 90, recarga: 160, vuelo: 0.4, vs: { ligero: 1, pesado: 0.75, edificio: 1.3 } }, // la artillería fija: tira sobre lo que vea cualquiera de los suyos
     canonTorre:  { alcance: 8, dano: 75, recarga: 60, vuelo: 1.0, vs: { ligero: 0.5, pesado: 1.2, edificio: 0.6 } },
-    bateria: { alcance: 6.5, dano: 30, recarga: 30, vuelo: 1.1, vs: { ligero: 0.8, pesado: 1,    edificio: 0.5, aire: 0.8 } },
-    flak:    { alcance: 9,   dano: 34, recarga: 22, vuelo: 1.3, vs: { aire: 1 } },
-    flakMovil: { alcance: 8, dano: 26, recarga: 22, vuelo: 1.3, vs: { aire: 1 } },
+    bateria: { alcance: 6.5, dano: 30, recarga: 30, vuelo: 1.1, vs: { ligero: 0.8, pesado: 1,    edificio: 0.5, aire: 0.8, dron: 0.5 } },
+    flak:    { alcance: 9,   dano: 34, recarga: 22, vuelo: 1.3, vs: { aire: 1, dron: 1 } },
+    flakMovil: { alcance: 8, dano: 26, recarga: 22, vuelo: 1.3, vs: { aire: 1, dron: 1 } },
     rifle:   { alcance: 9,   dano: 70, recarga: 90, vs: { ligero: 1,   pesado: 0.05, edificio: 0.02 } },
     // rafaga: cohetes por salva; caen repartidos alrededor del blanco.
     salva:   { indirecto: true, rafaga: 4, alcance: 14, alcanceMin: 5, area: 2, dano: 50, recarga: 220, vuelo: 0.5, vs: { ligero: 1, pesado: 0.8, edificio: 1.2 } },
     coheteAire: { alcance: 5.5, dano: 50, recarga: 55, vuelo: 0.7, vs: { ligero: 0.4, pesado: 1.3, edificio: 0.6 } },
     pistola: { alcance: 3,   dano: 4,  recarga: 18, vs: { ligero: 1,   pesado: 0.1,  edificio: 0.1 } },
+    // Blindaje 'dron': los drones. Las armas de la infantería no les hacen nada; solo los derriban la antiaérea, la batería de la torreta, el caza y, sin disparar, los inhibidores.
+    misilHombro: { alcance: 7.5, dano: 95, recarga: 130, vuelo: 1.0, vs: { aire: 1 } }, // el del antiaéreo portátil: helicópteros y aviones; a un dron no lo puede fijar
     ametrFija: { alcance: 5.5, dano: 6, recarga: 5, vs: { ligero: 1, pesado: 0.15, edificio: 0.1 } }, // la de la torreta ametralladora: nada contra el aire
     ametralladora: { alcance: 4.5, dano: 6, recarga: 5, vs: { ligero: 1, pesado: 0.15, edificio: 0.15, aire: 0.25 } },
     fpv:     { dano: 150, area: 0.9, vs: { ligero: 0.5, pesado: 1, edificio: 0.5 } }, // el dron kamikaze al estrellarse
@@ -200,7 +205,7 @@
     granadaMano: { alcance: 4.5, alcanceMin: 1, area: 1.1, dano: 38, recarga: 70, vuelo: 0.3, vs: { ligero: 0.8, pesado: 0.75, edificio: 0.4 } }, // la del granadero
     granada: { dano: 42, area: 1.2, vs: { ligero: 1, pesado: 0.25, edificio: 0.15 } }, // lo que suelta el dron bombardero
     gatling: { alcance: 5.5, dano: 5, recarga: 2, vs: { ligero: 1, pesado: 0.2, edificio: 0.2, aire: 0.5 } }, // diez tiros por segundo: tritura infantería y aviones bajos
-    misil:   { alcance: 6,   dano: 40, recarga: 14, vuelo: 1.0, vs: { ligero: 0.6, pesado: 0.6, edificio: 0.3, aire: 1.3 } },
+    misil:   { alcance: 6,   dano: 40, recarga: 14, vuelo: 1.0, vs: { ligero: 0.6, pesado: 0.6, edificio: 0.3, aire: 1.3, dron: 1 } },
     bomba:   { omni: true, alcance: 1.6, area: 1.7, dano: 190, recarga: 90, vuelo: 0.12, vs: { ligero: 1, pesado: 1, edificio: 1.4 } },
   };
 
@@ -240,7 +245,7 @@
   };
   W.MURO_N = [null, W.MUROS.alambrada, W.MUROS.muro, W.MUROS.reforzado, W.MUROS.puerta];
   // Munición que lleva encima cada arma (disparos; una salva cuenta como uno). Los edificios con arma guardan cuatro veces más.
-  W.MUN = { obusFijo: 10, fusil: 100, canon: 30, cohete: 12, obus: 14, canonPesado: 24, canonTorre: 30, bateria: 50, flak: 70, flakMovil: 70, rifle: 16, salva: 6, pistola: 60, ametralladora: 300, ametrFija: 400, gatling: 700, granadaMano: 12, misil: 40 };
+  W.MUN = { obusFijo: 10, fusil: 100, canon: 30, cohete: 12, obus: 14, canonPesado: 24, canonTorre: 30, bateria: 50, flak: 70, flakMovil: 70, rifle: 16, salva: 6, pistola: 60, ametralladora: 300, ametrFija: 400, misilHombro: 6, gatling: 700, granadaMano: 12, misil: 40 };
   W.munDe = (tipo, edif) => { const a = (edif ? W.EDIF[tipo] : W.UNID[tipo]).arma; return a ? (W.MUN[a] || 60) * (edif ? 4 : 1) : 0; };
   // Misiles balísticos. alcance en celdas desde la misilera (0 = todo el mapa); vel en celdas por tick; aguante: impactos de interceptor que resiste.
   W.MISILES = {

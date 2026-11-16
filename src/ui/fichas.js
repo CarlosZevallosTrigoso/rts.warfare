@@ -31,7 +31,7 @@
   // e = { ang, angT, retro (0..1), anda, tiempo, carga (0..1), cosecha }
   // y, para el movimiento: vehículos { fI, fD, rod, dir, fino, hx, hy }; infantería { pies: [{x, y}, {x, y}] (en R), hombro, cabeza, inc (en R), resp, fino, rodilla (0..1), te (0..1, cuerpo a tierra) }
   W.fichaUnidad = function (c, u, r, lod, col, e) {
-    const inf = W.UNID[u.tipo].cat === 'inf', at = u.tipo === 'antitanque', pesado = u.tipo === 'pesado', expl = u.tipo === 'explorador', ing = u.tipo === 'ingeniero', med = u.tipo === 'medico', civ = u.tipo === 'civil', hk = u.tipo === 'hacker', op = u.tipo === 'operador', rad = u.tipo === 'radioOp', franco = u.tipo === 'francotirador', esp = u.tipo === 'espia', gra = u.tipo === 'granadero';
+    const inf = W.UNID[u.tipo].cat === 'inf', at = u.tipo === 'antitanque' || u.tipo === 'manpad', pesado = u.tipo === 'pesado', expl = u.tipo === 'explorador', ing = u.tipo === 'ingeniero', med = u.tipo === 'medico', civ = u.tipo === 'civil', hk = u.tipo === 'hacker', op = u.tipo === 'operador' || u.tipo === 'cazadron', rad = u.tipo === 'radioOp', franco = u.tipo === 'francotirador', esp = u.tipo === 'espia', gra = u.tipo === 'granadero';
     if (lod === 0) {
       c.fillStyle = col.base; c.beginPath();
       if (inf) c.arc(0, 0, r, 0, TAU);
@@ -110,6 +110,8 @@
       if (cerca && te <= 0.5) { c.fillStyle = col.osc; if (fino) { rr(c, tx - fondo - R * 0.36, -ancho * 0.46, R * 0.42, ancho * 0.92, R * 0.1); c.fill(); } else c.fillRect(tx - fondo - R * 0.36, -ancho * 0.46, R * 0.42, ancho * 0.92); // mochila
         if (fino) { c.strokeStyle = col.luz; c.globalAlpha = 0.55; c.lineWidth = 1; c.beginPath(); for (const q of [-0.2, 0.2]) { c.moveTo(tx - fondo - R * 0.3, ancho * q); c.lineTo(tx - fondo + R * 0.04, ancho * q); } c.stroke(); c.globalAlpha = 1; } }
       if (expl) { c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.moveTo(-R * 0.7, -R * 0.3); c.lineTo(-R * 1.7, -R * 0.9); c.stroke(); } // antena de la radio
+      if (u.tipo === 'cazadron' && lod) { c.fillStyle = col.tinta || '#1a1a1a'; c.fillRect(tx - fondo - R * 0.5, -R * 0.42, R * 0.5, R * 0.84); c.strokeStyle = col.tinta || '#1a1a1a'; c.lineWidth = Math.max(1, R * 0.07); c.beginPath(); for (const y of [-0.3, 0, 0.3]) { c.moveTo(tx - fondo - R * 0.3, R * y); c.lineTo(tx - fondo - R * 1.3, R * y * 2.2); } c.stroke(); if (cerca) { c.fillStyle = col.fuego; c.beginPath(); c.arc(tx - fondo - R * 0.25, 0, R * 0.1, 0, TAU); c.fill(); } } // el inhibidor a la espalda, con sus antenas
+      if (u.tipo === 'manpad' && cerca) { c.fillStyle = col.luz; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.rect(R * 1.25 - e.retro * R * 0.3 + ax, R * 0.2 + ay, R * 0.35, R * 0.6); c.fill(); c.stroke(); } // la cabeza buscadora del misil
       if (fino && !at && !ing && !rad && !op && !hk && !civ && !med && !gra && !esp && !expl && !franco) { // de cerca, los brazos: del hombro a la empuñadura y al guardamanos
         const k = -e.retro * 0.3 * R, x1 = R * 0.5 + k + ax, x2 = R * 1.05 + k + ax, y1 = R * 0.5 + ay, br = () => { c.beginPath(); c.moveTo(tx, ancho * 0.86); c.quadraticCurveTo(tx + R * 0.3 + ax * 0.5, ancho * 0.86 + R * 0.1 * (1 + te * 3), x1, y1); c.moveTo(tx, -ancho * 0.86); c.quadraticCurveTo(tx + R * 0.72 + ax * 0.6, -ancho * (0.7 + te * 0.9), x2, y1); };
         c.strokeStyle = col.osc; c.lineWidth = Math.max(1.6, R * 0.27); br(); c.stroke(); c.strokeStyle = col.base; c.lineWidth = Math.max(1, R * 0.17); br(); c.stroke();

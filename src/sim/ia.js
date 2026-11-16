@@ -390,6 +390,8 @@
         if ((c.gatling || 0) + J.colas.gatling.n < 2 && (c.infanteria || 0) >= 8) entrena('gatling', 500);
         else if ((c.hacker || 0) + J.colas.hacker.n < 1 && soldados.length >= 10) entrena('hacker', 500);
         else if (c.estDrones && (c.operador || 0) + J.colas.operador.n < 2 && soldados.length >= 8) entrena('operador', 500);
+        else if ((c.cazadron || 0) + J.colas.cazadron.n < 1 && soldados.length >= 8) entrena('cazadron', 500); // un inhibidor que va con el grueso: los fusiles ya no derriban drones
+        else if ((c.manpad || 0) + J.colas.manpad.n < 2 && soldados.length >= 10) entrena('manpad', 600);
       }
       // El hacker apaga la torre o el vehículo armado enemigo que tenga más cerca y a la vista.
       if (tk % 5 === 4) for (const u of sinArma) {
@@ -520,7 +522,7 @@
       if (na >= 4) for (const u of sinArma) if (u.tipo === 'camionSum' && (!u.sumi || Math.hypot(u.sumi.x - tx, u.sumi.y - ty) > 14)) { const cc = W.cercaLibre(m, tx, ty, true); W.orden(m, { t: 'mover', j, ids: [u.id], x: (cc % m.N) + 0.5, y: ((cc / m.N) | 0) + 0.5 }); } // el camión de suministro, detrás de la oleada
       for (const u of sinArma) if (u.tipo === 'operador' && u.sinDron && u.orden === 'nada') { const b = m.ents.find((e) => e.edif && e.j === j && (e.tipo === 'estDrones' || e.tipo === 'logistica') && e.vida > 0); if (b && Math.hypot(u.x - b.cx, u.y - b.cy) > 4) { const cc = W.cercaLibre(m, b.cx, b.cy + b.tam / 2 + 1.5); W.orden(m, { t: 'mover', j, ids: [u.id], x: (cc % m.N) + 0.5, y: ((cc / m.N) | 0) + 0.5 }); } } // el operador sin drones vuelve a reponer
       if (objetivo) for (const u of sinArma) if (u.tipo === 'operador' && !u.sinDron && u.orden === 'nada' && !u.dronMis && Math.hypot(u.x - tx, u.y - ty) <= 8 && Math.hypot(objetivo.cx - u.x, objetivo.cy - u.y) <= UNID.operador.misionDron) W.orden(m, { t: 'dronMision', j, ids: [u.id], x: objetivo.cx, y: objetivo.cy }); // el operador, en su sitio y con el objetivo a tiro: dron en misión sobre él
-      for (const u of sinArma) if ((u.tipo === 'hacker' || (u.tipo === 'operador' && !u.sinDron)) && u.orden === 'nada' && Math.hypot(u.x - tx, u.y - ty) > 8) { const cc = W.cercaLibre(m, tx, ty); W.orden(m, { t: 'mover', j, ids: [u.id], x: (cc % m.N) + 0.5, y: ((cc / m.N) | 0) + 0.5 }); }
+      for (const u of sinArma) if ((u.tipo === 'hacker' || u.tipo === 'cazadron' || (u.tipo === 'operador' && !u.sinDron)) && u.orden === 'nada' && Math.hypot(u.x - tx, u.y - ty) > 8) { const cc = W.cercaLibre(m, tx, ty); W.orden(m, { t: 'mover', j, ids: [u.id], x: (cc % m.N) + 0.5, y: ((cc / m.N) | 0) + 0.5 }); }
     }
     if (tk % 5 === 2) { // sin munición lejos de casa: deja la oleada y vuelve a reponer (allí entra otra vez en la reserva)
       const ids = []; for (const u of soldados) if (u.mun === 0 && ia.atacantes.has(u.id)) { ia.atacantes.delete(u.id); if (ia.espera) ia.espera.delete(u.id); ia.reunidos.delete(u.id); ids.push(u.id); }

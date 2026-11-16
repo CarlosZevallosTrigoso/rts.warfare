@@ -1412,6 +1412,25 @@ prueba('tanda 3: misilera (Scud, Minuteman, Sarmat) e interceptor', () => {
   assert.equal(W.huella(copia), W.huella(m));
 });
 
+prueba('drones: las armas de la infantería no los derriban; sí la antiaérea; el inhibidor del cazadrones los hace caer', () => {
+  const m = W.crearMundo(4242, { N: 128 }), N = m.N;
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const cel = (x, y) => y * N + x;
+  for (let y = 40; y < 80; y++) for (let x = 30; x < 100; x++) { const i = cel(x, y); if (m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  for (const t of ['dron', 'dronRec', 'dronFpv', 'dronBomba', 'dronRadio', 'dronEspia']) assert.strictEqual(W.UNID[t].blindaje, 'dron', t + ' lleva blindaje de dron');
+  for (const a of ['fusil', 'pistola', 'ametralladora', 'ametrFija', 'gatling', 'rifle', 'cohete', 'granadaMano', 'misilHombro']) assert.ok(!W.ARMAS[a].vs.dron, a + ' no puede con un dron');
+  for (const a of ['flak', 'flakMovil', 'bateria', 'misil']) assert.ok(W.ARMAS[a].vs.dron > 0, a + ' sí derriba drones');
+  assert.ok(W.ARMAS.fusil.vs.aire > 0 && W.ARMAS.misilHombro.vs.aire > 0, 'a helicópteros y aviones se les sigue disparando');
+  const sol = W.crearUnidad(m, 0, 'infanteria', cel(50, 50)), ajeno = W.crearUnidad(m, 1, 'dron', cel(52, 50)), heli = W.crearUnidad(m, 1, 'helicoptero', cel(53, 51));
+  assert.ok(!W.puedeAtacar(sol, ajeno) && W.puedeAtacar(sol, heli), 'el fusilero no puede con el dron y sí con el helicóptero');
+  for (let i = 0; i < 6; i++) W.tick(m); assert.ok(ajeno.vida > 0, 'sin inhibidor, el dron sigue volando');
+  const caz = W.crearUnidad(m, 0, 'cazadron', cel(Math.floor(ajeno.x), Math.floor(ajeno.y) + 1)), propio = W.crearUnidad(m, 0, 'dron', cel(Math.floor(ajeno.x) + 1, Math.floor(ajeno.y)));
+  for (let i = 0; i < 6; i++) W.tick(m);
+  assert.ok(ajeno.vida <= 0 || !m.porId.get(ajeno.id), 'el dron enemigo cae dentro del radio'); assert.ok(propio.vida > 0 && caz.vida > 0, 'el propio no');
+  const lejos = W.crearUnidad(m, 1, 'dron', cel(Math.floor(caz.x) + 12, Math.floor(caz.y))); lejos.guardia = true; W.tick(m);
+  assert.ok(lejos.vida > 0, 'fuera del radio no cae');
+});
+
 prueba('torreta ametralladora: barata, sin consumo, contra tierra y nunca contra el aire', () => {
   const d = W.EDIF.nidoMG, A = W.ARMAS[d.arma];
   assert.ok(d && A, 'existe, con su arma'); assert.ok(A.vs.ligero === 1 && !A.vs.aire, 'no dispara al aire'); assert.ok(d.energia === 0 && d.costo < W.EDIF.torreta.costo, 'barata y sin consumo'); assert.ok(W.MUN[d.arma] > 0, 'tiene munición definida');

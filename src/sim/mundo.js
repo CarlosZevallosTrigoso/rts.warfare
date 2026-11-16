@@ -2883,6 +2883,12 @@
   };
 
   // ---------- tick ----------
+  function tickInhibir(m) { // los inhibidores: el dron enemigo guiado por radio que entra en su radio pierde el enlace y cae (el de fibra, no)
+    let inh = null; for (const u of m.ents) if (!u.edif && u.vida > 0 && UNID[u.tipo].inhibe) (inh || (inh = [])).push(u);
+    if (!inh) return;
+    for (const e of m.ents) { if (e.edif || e.vida <= 0) continue; const d = UNID[e.tipo]; if (d.blindaje !== 'dron' || d.fibra) continue;
+      for (const u of inh) if (u.j !== e.j && Math.hypot(u.x - e.x, u.y - e.y) <= UNID[u.tipo].inhibe) { e.vida = 0; m.efectos.push({ tipo: 'inhibido', x2: e.x, y2: e.y, j: e.j, de: u.j, t: m.t }); break; } }
+  }
   W.tick = function (m) {
     if (m.ganador >= 0) return;
     const cmds = m.cola; m.cola = [];
@@ -2894,6 +2900,7 @@
     procesarRutas(m);
     tickProduccion(m, 0); tickProduccion(m, 1);
     if (m.t % 5 === 3) tickControl(m);
+    if (m.t % 5 === 1) tickInhibir(m);
     for (let k = 0, n = m.ents.length; k < n; k++) {
       const e = m.ents[k];
       if (!e.edif) { if (e.orden === 'nada' && !e.guardia && !m.jug[e.j].esIA && UNID[e.tipo].cat === 'inf' && (UNID[e.tipo].arma || UNID[e.tipo].cura) && !e.bunk && !e.sube && !e.retirando && m.mapa.terreno[Math.floor(e.y) * m.N + Math.floor(e.x)] === T.BOSQUE) { e.guardia = true; e.embosc = true; } else if (e.embosc && !e.guardia) e.embosc = false; // emboscada: el infante parado en el bosque no sale de él sin orden (solo los del jugador: la IA mueve a los suyos a cada rato)
