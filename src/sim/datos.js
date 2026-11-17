@@ -135,6 +135,8 @@
     // Taller de campaña: parado, repara los vehículos que tenga a 4 celdas aunque no haya suministro; y recupera vehículos destruidos (propios o enemigos) a mitad de precio.
     tallerMovil: { nombre: 'Taller de campaña', cat: 'veh', vida: 320, vel: 0.07, costo: 700, pet: 40, tiempo: 300, blindaje: 'pesado', arma: null, vision: 5, radio: 0.27, req: ['fabrica'], agua: 1, giro: 0.1, acel: 0.005, nivel: 2, taller: 4, recupera: true },
     ambulancia:  { nombre: 'Ambulancia', cat: 'veh', lugar: 'hospital', vida: 180, vel: 0.11, costo: 250, pet: 10, tiempo: 160, blindaje: 'ligero', arma: null, vision: 5, radio: 0.22, req: ['hospital'], agua: 1, giro: 0.12, acel: 0.008, ambu: { carga: 400, cura: 5, radio: 2.2 } },
+    // Moto de suministro: el abastecimiento del principio. Sale del cuartel, lleva poca carga y va sola (auto) adonde haya tropa propia sin suministro; recarga en un cuartel, un patio o un puesto logístico.
+    motoSum:     { nombre: 'Moto de suministro', cat: 'veh', lugar: 'cuartel', vida: 70, vel: 0.14, costo: 120, pet: 5, tiempo: 90, blindaje: 'ligero', arma: null, vision: 5, radio: 0.14, req: ['cuartel'], agua: 1, giro: 0.2, acel: 0.012, suministro: { carga: 300, radio: 5, recarga: 20, auto: true, bases: ['cuartel', 'patio', 'logistica'] } },
     camionSum:   { nombre: 'Camión de suministro', cat: 'veh', lugar: 'logistica', vida: 220, vel: 0.085, costo: 350, pet: 20, tiempo: 200, blindaje: 'ligero', arma: null, vision: 5, radio: 0.24, req: ['logistica'], agua: 1, giro: 0.1, acel: 0.006, suministro: { carga: 1200, radio: 8, recarga: 80 } },
     heliSum:     { nombre: 'Helicóptero de suministro', cat: 'aire', aire: true, lugar: 'logistica', vida: 130, vel: 0.17, costo: 700, pet: 60, tiempo: 300, blindaje: 'aire', arma: null, vision: 6, radio: 0.24, req: ['logistica'], agua: 1, giro: 0.2, acel: 0.01, nivel: 2, fuel: 5000, radioVuelo: 140, cono: Math.PI, suministro: { carga: 600, radio: 8, recarga: 60 } },
     avanzadaMovil: { nombre: 'Puesto móvil', cat: 'veh', vida: 400, vel: 0.06, costo: 1200, pet: 80, tiempo: 400, blindaje: 'pesado', arma: null, vision: 6, radio: 0.28, req: ['logistica'], agua: 2, giro: 0.08, acel: 0.004, despliega: 'avanzada' },
@@ -186,7 +188,7 @@
   // indirecto: tira por encima; le basta con que cualquier unidad propia vea el blanco (hace de observador).
   // alcanceMin: no puede disparar más cerca que eso. area: radio de la explosión (daña a todo enemigo dentro).
   // atras: apoyo y segunda línea. Nunca se adelantan a las unidades de combate: van detrás del frente y, si se quedan delante, esperan o se repliegan.
-  for (const k of ['medico', 'ingeniero', 'radioOp', 'operador', 'hacker', 'cazadron', 'mando', 'vehRadio', 'comandoDrones', 'tallerMovil', 'camionSum', 'mortero', 'artilleria', 'francotirador', 'manpad', 'lanzacohetes', 'antiaereoMovil']) W.UNID[k].atras = true;
+  for (const k of ['medico', 'ingeniero', 'radioOp', 'operador', 'hacker', 'cazadron', 'mando', 'vehRadio', 'comandoDrones', 'tallerMovil', 'camionSum', 'motoSum', 'mortero', 'artilleria', 'francotirador', 'manpad', 'lanzacohetes', 'antiaereoMovil']) W.UNID[k].atras = true;
 
   W.ARMAS = {
     fusil:   { alcance: 4,   dano: 8,  recarga: 16, vs: { ligero: 1,   pesado: 0.25, edificio: 0.3, aire: 0.4 } },

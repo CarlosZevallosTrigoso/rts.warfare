@@ -174,6 +174,7 @@ prueba('contraataque, disparo en marcha, curación y atropello', () => {
   m = nuevo(); franja(m);
   t = W.crearUnidad(m, 0, 'tanque', en(m, 40, 64));
   const victima = W.crearUnidad(m, 1, 'infanteria', en(m, 46, 64)), amigo = W.crearUnidad(m, 0, 'infanteria', en(m, 44, 64));
+  victima.guardia = true; // (fija en su puesto: suelta y sola ante un tanque, se retiraría)
   W.orden(m, { t: 'mover', j: 0, ids: [t.id], x: 52.5, y: 64.5 });
   let herida = false;
   for (let i = 0; i < 110; i++) { W.tick(m); if (m.porId.has(victima.id) && victima.vida < 30 && victima.vida > 0) herida = true; }
@@ -770,6 +771,7 @@ prueba('fase 1c: explorador, blindado ligero, ingeniero, antiaéreo móvil y dro
   const inf = mudo(W.crearUnidad(m, 1, 'infanteria', cel(63, 42)));
   avanza(120);
   assert.ok(!m.porId.has(inf.id) && bl.ang === 0, 'debía acabar pronto con el soldado, girando solo la torreta');
+  bl.guardia = true; // (fijo: suelto y solo ante un tanque, se retiraría)
   const tq = mudo(W.crearUnidad(m, 1, 'tanque', cel(63, 40)));
   avanza(200);
   assert.ok(tq.vida > tq.vidaMax * 0.8, 'la ametralladora apenas araña un tanque: ' + tq.vida);
@@ -1485,6 +1487,19 @@ prueba('criterio de combate: en inferioridad no persigue y se repliega con los s
   W.orden(m, { t: 'amover', j: 0, ids: [med.id, ...fus.map((u) => u.id)], x: 79.5, y: 70.5 });
   let delante = 0; for (let i = 0; i < 500; i++) { W.tick(m); m.niebla[0].fill(2); en.recarga = 99999; fus.forEach((u) => { u.vida = u.vidaMax; }); const dm = Math.hypot(med.x - en.x, med.y - en.y); if (dm < 9 && fus.every((u) => Math.hypot(u.x - en.x, u.y - en.y) > dm + 1.5)) delante++; }
   assert.ok(delante < 60, 'el médico no va por delante de los fusileros (' + delante + ' ticks adelantado)'); assert.ok(W.UNID.medico.atras && W.UNID.mortero.atras && !W.UNID.tanque.atras, 'apoyo y segunda línea están marcados');
+});
+
+prueba('moto de suministro: sale del cuartel, va sola adonde hay tropa sin abastecer y le repone la munición', () => {
+  const m = W.crearMundo(4242, { N: 128, logistica: true }), N = m.N, D = W.UNID.motoSum;
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  assert.ok(D.lugar === 'cuartel' && D.req.length === 1 && D.req[0] === 'cuartel' && D.suministro.auto && D.suministro.carga < W.UNID.camionSum.suministro.carga && D.costo < W.UNID.camionSum.costo && D.atras, 'barata, del cuartel, automática, con poca carga y de apoyo');
+  const cel = (x, y) => y * N + x; let lejos = null;
+  for (let y = 10; y < N - 10 && !lejos; y++) for (let x = 10; x < N - 10 && !lejos; x++) { let bien = !m.cob[0][cel(x, y)]; for (let dy = -4; dy <= 4 && bien; dy++) for (let dx = -4; dx <= 4; dx++) { const i = cel(x + dx, y + dy); if (m.mapa.terreno[i] !== 0 || m.ocup[i] || m.cob[0][i]) { bien = false; break; } } if (bien) lejos = { x, y }; }
+  assert.ok(lejos, 'hay un llano fuera de la red');
+  const sol = W.crearUnidad(m, 0, 'infanteria', cel(lejos.x, lejos.y)); sol.guardia = true; sol.mun = 0;
+  const moto = W.crearUnidad(m, 0, 'motoSum', cel(lejos.x - 3, lejos.y + 2));
+  let fue = false; for (let i = 0; i < 900 && sol.mun < W.munDe('infanteria'); i++) { W.tick(m); if (moto.sumi && moto.sumi.auto) fue = true; }
+  assert.ok(fue, 'la moto se pone en marcha sola'); assert.ok(sol.mun >= W.munDe('infanteria'), 'y le repone la munición (' + sol.mun + ')');
 });
 
 prueba('torreta ametralladora: barata, sin consumo, contra tierra y nunca contra el aire', () => {

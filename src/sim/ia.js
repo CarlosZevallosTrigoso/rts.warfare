@@ -387,7 +387,8 @@
       if (c.fabrica && J.nivel >= 2 && !ahorra && !urgente && tk % 10 === 4 && !(c.tallerMovil || 0) && !J.colas.tallerMovil.n && soldados.length >= 12) entrena('tallerMovil', 800); // un taller de campaña
       // Infantería especial: dos gatling para sostener el punto de reunión, un hacker y dos operadores de drones.
       if (c.cuartel && !ahorra && !urgente && tk % 5 === 3) {
-        if ((c.gatling || 0) + J.colas.gatling.n < 2 && (c.infanteria || 0) >= 8) entrena('gatling', 500);
+        if (!c.logistica && (c.motoSum || 0) + J.colas.motoSum.n < 1 && soldados.length >= 5) entrena('motoSum', 300); // una moto de suministro mientras no haya puesto logístico
+        else if ((c.gatling || 0) + J.colas.gatling.n < 2 && (c.infanteria || 0) >= 8) entrena('gatling', 500);
         else if ((c.hacker || 0) + J.colas.hacker.n < 1 && soldados.length >= 10) entrena('hacker', 500);
         else if (c.estDrones && (c.operador || 0) + J.colas.operador.n < 2 && soldados.length >= 8) entrena('operador', 500);
         else if ((c.mortero || 0) + J.colas.mortero.n < 2 && soldados.length >= 10) entrena('mortero', 600); // fuego indirecto propio, contra trincheras y defensas
@@ -541,7 +542,7 @@
 
     if (J.alerta && m.t - J.alerta.t < 100) { // defensa: acude la reserva ociosa
       const ids = reserva.filter((u) => u.orden === 'nada' && !u.obj).map((u) => u.id);
-      if (ids.length) W.orden(m, { t: 'amover', j, ids, x: J.alerta.x, y: J.alerta.y });
+      if (ids.length) W.orden(m, { t: 'amover', j, ids, x: J.alerta.x, y: J.alerta.y, forma: 'linea' });
     } else {
       const ids = reserva.filter((u) => u.orden === 'nada' && !u.obj && !ia.reunidos.has(u.id)).map((u) => u.id);
       if (ids.length) { W.orden(m, { t: 'amover', j, ids, x: rx, y: ry, rumbo: Math.atan2(dy, dx) }); for (const id of ids) ia.reunidos.add(id); } // esperan encarados al rival
@@ -554,7 +555,7 @@
       const ox = objetivo.cx - patio.cx, oy = objetivo.cy - patio.cy, od = Math.hypot(ox, oy) || 1, lim = (v) => Math.max(4, Math.min(m.N - 4, v));
       if (reserva.length >= ia.oleada) {
         if (!ia.espera.size || !ia.punto) { const c = W.cercaLibre(m, lim(objetivo.cx - (ox / od) * Math.min(26, od * 0.5)), lim(objetivo.cy - (oy / od) * Math.min(26, od * 0.5))); ia.punto = { x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 }; ia.tOla = m.t; }
-        W.orden(m, { t: 'amover', j, ids: reserva.map((u) => u.id), x: ia.punto.x, y: ia.punto.y });
+        W.orden(m, { t: 'amover', j, ids: reserva.map((u) => u.id), x: ia.punto.x, y: ia.punto.y, forma: 'columna' }); // en columna y al paso del más lento: la infantería no se queda atrás, sola
         for (const u of reserva) { ia.atacantes.add(u.id); ia.espera.add(u.id); }
         const tope = Math.round((m.t > 48000 ? 28 : 18) * E.oleada); // pasados 40 minutos, oleadas mayores para romper el empate
         ia.oleada = Math.min(ia.oleada + 2, tope);
@@ -564,12 +565,12 @@
         for (const u of grupo) if (Math.hypot(u.x - ia.punto.x, u.y - ia.punto.y) < 12) cerca++;
         if (cerca >= Math.max(3, grupo.length * 0.7) || m.t - ia.tOla > od / 0.045 + 1500) { // (el plazo da tiempo a que llegue la infantería a pie desde su base) // ya están: al asalto. La mitad de frente; la otra rodea por un costado (que alterna) y entra por el flanco.
           const frente = grupo.filter((u, i) => i % 2 === 0), flanco = grupo.filter((u, i) => i % 2 === 1);
-          if (frente.length) W.orden(m, { t: 'amover', j, ids: frente.map((u) => u.id), x: objetivo.cx, y: objetivo.cy });
+          if (frente.length) W.orden(m, { t: 'amover', j, ids: frente.map((u) => u.id), x: objetivo.cx, y: objetivo.cy, forma: 'linea' });
           if (flanco.length) {
             const c = W.cercaLibre(m, lim(objetivo.cx - (ox / od) * 10 - (oy / od) * 16 * ia.lado), lim(objetivo.cy - (oy / od) * 10 + (ox / od) * 16 * ia.lado));
             const ids = flanco.map((u) => u.id);
-            W.orden(m, { t: 'amover', j, ids, x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 });
-            W.orden(m, { t: 'amover', j, ids, x: objetivo.cx, y: objetivo.cy, enc: true });
+            W.orden(m, { t: 'amover', j, ids, x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5, forma: 'columna' });
+            W.orden(m, { t: 'amover', j, ids, x: objetivo.cx, y: objetivo.cy, enc: true, forma: 'linea' });
             ia.lado = -ia.lado;
           }
           ia.espera.clear();
@@ -578,8 +579,10 @@
           if (ids.length) W.orden(m, { t: 'amover', j, ids, x: ia.punto.x, y: ia.punto.y });
         }
       }
+      // Los que han quedado sueltos de una oleada: si son un puñado, no vuelven a entrar de uno en uno; pasan a la reserva y saldrán con la siguiente.
       const ociosos = soldados.filter((u) => ia.atacantes.has(u.id) && !ia.espera.has(u.id) && u.orden === 'nada' && !u.obj).map((u) => u.id);
-      if (ociosos.length) W.orden(m, { t: 'amover', j, ids: ociosos, x: objetivo.cx, y: objetivo.cy });
+      if (ociosos.length >= 4) W.orden(m, { t: 'amover', j, ids: ociosos, x: objetivo.cx, y: objetivo.cy, forma: 'linea' });
+      else for (const id of ociosos) ia.atacantes.delete(id);
     }
   };
 })();

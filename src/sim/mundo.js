@@ -535,8 +535,14 @@
       if (u.edif || u.vida <= 0) continue;
       const cfg = UNID[u.tipo].suministro; if (!cfg) continue;
       if (u.sumC === undefined) u.sumC = cfg.carga;
-      const s = u.sumi, J = m.jug[u.j], aire = UNID[u.tipo].aire;
-      if (!s) { u.sumiN = 0; continue; }
+      let s = u.sumi; const J = m.jug[u.j], aire = UNID[u.tipo].aire;
+      if (!s && cfg.auto && u.orden === 'nada' && !u.pend) { // la moto, sin encargo: va adonde más falta haga (tropa propia fuera de la red y sin suministro cerca)
+        let b = null, mv = 0; for (const o of m.ents) { if (o.edif || o.j !== u.j || o.vida <= 0 || o === u || UNID[o.tipo].aire || UNID[o.tipo].suministro || !(o.sinSum > 0)) continue; const dd = Math.hypot(o.x - u.x, o.y - u.y); if (dd > 70) continue; const v = o.sinSum - dd; if (!b || v > mv) { b = o; mv = v; } }
+        if (b) { const c = W.cercaLibre(m, b.x, b.y, true); u.sumi = { x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5, est: 'ida', auto: true }; asignar(m, u, { t: 'mover', x: u.sumi.x, y: u.sumi.y }); }
+      }
+      if (!u.sumi) { u.sumiN = 0; continue; }
+      s = u.sumi;
+      if (u.sumi.auto && u.sumi.est === 'puesto' && (u.sumi.q = (u.sumi.q || 0) + 1) > 4 && !(u.sumiAt > 0) && u.sumC > 0) { u.sumi = null; u.sumiN = 0; continue; } // ya no abastece a nadie ahí: queda libre para el siguiente
       if (s.est === 'puesto') { u.sumC = Math.max(0, u.sumC - ECON.sumiBase - ECON.sumiUnidad * (u.sumiN || 0)); u.sumiAt = u.sumiN || 0; } // lo gastado en el ciclo anterior
       u.sumiN = 0;
       const parado = u.orden === 'nada' && !u.pend;
@@ -545,7 +551,7 @@
         else if (parado) { if (Math.hypot(u.x - s.x, u.y - s.y) < 3.5) s.est = 'puesto'; else if ((s.n = (s.n || 0) + 1) > 6) { s.x = u.x; s.y = u.y; s.est = 'puesto'; } else asignar(m, u, { t: 'mover', x: s.x, y: s.y }); } // (si no consigue llegar, se planta donde está)
       } else if (s.est === 'puesto') {
         if (u.sumC <= 0 || (aire && u.repostando)) {
-          let base = null, md = Infinity; for (const b of m.ents) { if (b.tipo !== 'logistica' || b.j !== u.j || b.vida <= 0) continue; const d0 = Math.hypot(b.cx - u.x, b.cy - u.y); if (d0 < md) { md = d0; base = b; } }
+          let base = null, md = Infinity; for (const b of m.ents) { if (!b.edif || (cfg.bases ? !cfg.bases.includes(b.tipo) : b.tipo !== 'logistica') || b.j !== u.j || b.vida <= 0) continue; const d0 = Math.hypot(b.cx - u.x, b.cy - u.y); if (d0 < md) { md = d0; base = b; } }
           if (base) { s.est = 'vuelta'; s.base = base.id; s.n = 0; m.efectos.push({ tipo: 'sumiVacio', x1: u.x, y1: u.y, j: u.j, t: m.t }); if (!aire) { const c = W.cercaLibre(m, base.cx, base.cy + base.tam / 2 + 1.5, true); asignar(m, u, { t: 'mover', x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 }); } }
         } else pts.push({ x: u.x, y: u.y, r2: cfg.radio * cfg.radio, j: u.j, u });
       } else if (s.est === 'vuelta') {
@@ -557,7 +563,7 @@
         if (!s.pagado) { if (J.minerales < cfg.recarga && !J.dios) continue; if (!J.dios) J.minerales -= cfg.recarga; s.pagado = true; } // la recarga se paga; sin minerales, espera
         const base = m.porId.get(s.base); if (base && (base.sinLuz || base.hack > m.t)) continue; // el puesto apagado no carga
         u.sumC = Math.min(cfg.carga, u.sumC + ECON.sumiCarga);
-        if (u.sumC >= cfg.carga && !(aire && u.repostando)) { s.est = 'ida'; s.n = 0; asignar(m, u, { t: 'mover', x: s.x, y: s.y }); }
+        if (u.sumC >= cfg.carga && !(aire && u.repostando)) { if (s.auto) u.sumi = null; else { s.est = 'ida'; s.n = 0; asignar(m, u, { t: 'mover', x: s.x, y: s.y }); } } // (la moto, cargada, queda libre para ir adonde haga falta)
       }
     }
     return pts;
@@ -2957,9 +2963,13 @@
       if (!(d.atras ? u.amen < 6 && (u.adel || u.bal < ECON.critInf) : u.bal < ECON.critRet)) continue;
       const yo = d.arma ? d.costo * u.vida / u.vidaMax : 0; let mk = -1, mv = 0;
       for (let dy = -R - 1; dy <= R + 1; dy++) { const y = by + dy; if (y < 0 || y >= nb) continue; for (let dx = -R - 1; dx <= R + 1; dx++) { const x = bx + dx; if (x < 0 || x >= nb || (!dx && !dy)) continue; const k = y * nb + x, v = Fp[k] - Fe[k]; if (v > mv) { mv = v; mk = k; } } }
-      if (mk < 0 || mv <= yo * 0.5) continue; // nadie con quien juntarse: aguanta donde está
-      const c = W.cercaLibre(m, ((mk % nb) + 0.5) * B, (((mk / nb) | 0) + 0.5) * B);
-      limpiar(u); u.obj = 0; u.replT = m.t; asignar(m, u, { t: 'mover', x: (c % N) + 0.5, y: ((c / N) | 0) + 0.5 }); m.efectos.push({ tipo: 'retira', x1: u.x, y1: u.y, j: u.j, t: m.t });
+      let c;
+      if (mk < 0 || mv <= yo * 0.5) { // nadie cerca con quien juntarse: si está lejos de casa, se vuelve al patio más próximo; si ya está en casa, aguanta
+        let t = null, md = Infinity; for (const e of m.ents) if (e.edif && e.j === u.j && e.tipo === 'patio' && e.vida > 0) { const dd = Math.hypot(e.cx - u.x, e.cy - u.y); if (dd < md) { md = dd; t = e; } }
+        if (!t || md < 16) continue;
+        c = W.cercaLibre(m, t.cx, t.y + t.tam + 1.5); u.replT = m.t + 300; // (y no se lo replantea en un rato)
+      } else c = W.cercaLibre(m, ((mk % nb) + 0.5) * B, (((mk / nb) | 0) + 0.5) * B);
+      limpiar(u); u.obj = 0; if (!(u.replT > m.t)) u.replT = m.t; asignar(m, u, { t: 'mover', x: (c % N) + 0.5, y: ((c / N) | 0) + 0.5 }); m.efectos.push({ tipo: 'retira', x1: u.x, y1: u.y, j: u.j, t: m.t });
     }
   }
   W.cauto = cauto;

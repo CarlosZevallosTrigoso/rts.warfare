@@ -211,6 +211,12 @@
       c.fillStyle = '#f2f0ea'; c.fillRect(-L * 0.9, -w * 0.82, L * 1.35, w * 1.64);
       c.fillStyle = col.base; c.fillRect(L * 0.52, -w * 0.75, L * 0.4, w * 1.5);
       c.fillStyle = '#c0392b'; c.fillRect(-L * 0.38, -w * 0.5, L * 0.3, w * 1.0); c.fillRect(-L * 0.62, -w * 0.18, L * 0.78, w * 0.36);
+    } else if (u.tipo === 'motoSum') { // una moto con su conductor y dos alforjas
+      const L = r * 1.5, w = r * 0.5; c.fillStyle = col.osc; c.fillRect(L * 0.55, -w * 0.22, L * 0.42, w * 0.44); c.fillRect(-L * 0.95, -w * 0.26, L * 0.42, w * 0.52); // ruedas, una tras otra
+      c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.moveTo(L * 0.7, 0); c.lineTo(L * 0.3, -w * 0.4); c.lineTo(-L * 0.7, -w * 0.34); c.lineTo(-L * 0.7, w * 0.34); c.lineTo(L * 0.3, w * 0.4); c.closePath(); c.fill(); c.stroke(); // el cuerpo
+      c.strokeStyle = col.osc; c.lineWidth = Math.max(1, r * 0.14); c.beginPath(); c.moveTo(L * 0.42, -w * 1.0); c.lineTo(L * 0.42, w * 1.0); c.stroke(); // manillar
+      c.fillStyle = col.saco || '#c9b990'; c.strokeStyle = '#8f8160'; c.lineWidth = 1; for (const q of [-1, 1]) { c.beginPath(); c.rect(-L * 0.72, q * w * 0.95 - w * 0.4, L * 0.5, w * 0.8); c.fill(); c.stroke(); } // alforjas
+      if (lod === 2) { c.fillStyle = col.osc; c.beginPath(); c.ellipse(-L * 0.02, 0, L * 0.2, w * 0.95, 0, 0, TAU); c.fill(); c.fillStyle = col.luz; c.strokeStyle = col.osc; c.beginPath(); c.arc(L * 0.06, 0, w * 0.52, 0, TAU); c.fill(); c.stroke(); } // el conductor
     } else if (u.tipo === 'camionSum') { // camión de caja abierta con tres cajones
       const L = r * 1.3, w = r * 0.72;
       if (lod === 2) ruedas(c, col, e, lod, [-L * 0.82, L * 0.4], w * 0.88, L * 0.4, w * 0.28);
