@@ -1517,6 +1517,13 @@ prueba('ultra-real: pocos tiros tumban a un infante, que queda herido; curado se
   const tq = W.crearUnidad(m, 0, 'tanque', cel(60, 70)), v0 = tq.vida; W.herir(m, tq, A.fusil, 1, null, 65, 70); W.herir(m, tq, A.ametralladora, 1, null, 65, 70); assert.strictEqual(tq.vida, v0, 'el fusil y la ametralladora no le hacen nada a un tanque');
   let k = 0; while (tq.vida > 0 && k < 10) { W.herir(m, tq, A.canon, 1, null, 65, 70); k++; } assert.ok(k <= 3, 'un cañón lo deja fuera en ' + k + ' impactos');
   const ed = m.ents.find((e) => e.edif && e.j === 0 && e.tipo === 'patio'), e0 = ed.vida; W.herir(m, ed, A.fusil, 1); assert.strictEqual(ed.vida, e0, 'ni a un edificio'); W.herir(m, ed, A.canon, 1); assert.ok(ed.vida < e0, 'el cañón sí');
+  // Primeros auxilios: sin enemigo a la vista, un compañero libre llega al caído y le renueva el plazo (una sola vez).
+  const s3 = W.crearUnidad(m, 0, 'infanteria', cel(80, 50)); s3.guardia = true; while (!s3.herido) W.herir(m, s3, A.fusil, 1, null, 85, 50); const h0 = s3.herido;
+  const ami = W.crearUnidad(m, 0, 'infanteria', cel(83, 51)); for (let i = 0; i < 300 && !s3.aux; i++) W.tick(m);
+  assert.ok(s3.aux && s3.herido > h0 && m.porId.get(s3.id), 'el compañero llega y le da otro plazo'); ami.vida = 0;
+  // Bajo fuego, la infantería apenas avanza.
+  const lento = W.crearUnidad(m, 0, 'infanteria', cel(40, 44)), libre = W.crearUnidad(m, 0, 'infanteria', cel(40, 46)); W.orden(m, { t: 'mover', j: 0, ids: [lento.id, libre.id], x: 60.5, y: 45.5 });
+  for (let i = 0; i < 100; i++) { W.tick(m); lento.tDano = m.t; } assert.ok(lento.x - 40.5 < (libre.x - 40.5) * 0.7, 'clavada por el fuego avanza mucho menos (' + (lento.x - 40.5).toFixed(1) + ' frente a ' + (libre.x - 40.5).toFixed(1) + ')');
   W.orden(m, { t: 'actitud', j: 0, v: 1 }); W.tick(m); assert.ok(m.jug[0].decidido && !m.jug[0].aToda, 'actitud decidida'); W.orden(m, { t: 'actitud', j: 0, v: 2 }); W.tick(m); assert.ok(m.jug[0].aToda && !m.jug[0].decidido, 'a toda costa');
 });
 

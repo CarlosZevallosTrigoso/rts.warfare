@@ -1834,7 +1834,7 @@
       return false;
     }
     if (!d.aire && !pisa(c) && pisa(Math.floor(u.y) * N + Math.floor(u.x))) { replantear(); return false; } // alguien construyó en el punto de paso
-    const vel = d.vel * (d.cat === 'veh' && m.jug[u.j].mejoras.motores ? 1.15 : 1);
+    const vel = d.vel * (d.cat === 'veh' && m.jug[u.j].mejoras.motores ? 1.15 : 1) * (m.ultra && d.cat === 'inf' && m.t - (u.tDano === undefined ? -999 : u.tDano) < 60 ? ECON.ultra.clavado : 1); // (ultra-real: bajo fuego, la infantería apenas avanza)
     const terr = m.mapa.terreno[Math.floor(u.y) * N + Math.floor(u.x)];
     let freno = 1; // alambrada enemiga: a la infantería la frena mucho; un vehículo la aplasta al pasar
     if (m.muro && !d.aire) { const ca = Math.floor(u.y) * N + Math.floor(u.x); if (m.muro[ca] === 1 && m.muroJ[ca] - 1 !== u.j) { if (d.cat === 'veh') quitarMuro(m, ca); else freno = 0.3; } }
@@ -2475,7 +2475,7 @@
   }
   function tickUnidad(m, u) {
     if (u.herido) { // herido: no hace nada; si lo curan lo bastante, se levanta; si nadie llega a tiempo, muere
-      u.v = 0; if (u.vida >= u.vidaMax * ECON.ultra.heridoAlta) { u.herido = 0; m.efectos.push({ tipo: 'alta', x1: u.x, y1: u.y, j: u.j, t: m.t }); } else if (m.t - u.herido > ECON.ultra.heridoT) { u.herido = 0; u.vida = 0; } return;
+      u.v = 0; if (u.vida >= u.vidaMax * ECON.ultra.heridoAlta) { u.herido = 0; u.aux = false; u.auxPor = 0; m.efectos.push({ tipo: 'alta', x1: u.x, y1: u.y, j: u.j, t: m.t }); } else if (m.t - u.herido > ECON.ultra.heridoT) { u.herido = 0; u.vida = 0; } return;
     }
     if (u.inmovil && u.vida >= u.vidaMax * 0.9) u.inmovil = false; // reparado, vuelve a andar
     const d = UNID[u.tipo];
@@ -2577,7 +2577,7 @@
         const listo = apuntar(m, u, o, true);
         if (listo && u.recarga <= 0 && dd >= (arma.alcanceMin || 0)) disparar(m, u, o, arma); // demasiado cerca, la artillería no puede tirar
         else if (!listo && u.orden !== 'atacar' && enTrinchera(m, u)) u.obj = 0; // fuera del arco de la trinchera: no puede responder
-      } else if (u.guardia || u.retirando || (u.orden === 'nada' && !u.protege && !u.acude && cauto(m, u))) {
+      } else if (u.guardia || u.retirando || (u.orden === 'nada' && !u.protege && !u.acude && cauto(m, u)) || (m.ultra && u.sinInf && u.orden !== 'atacar' && !m.jug[u.j].aToda && d.cat === 'veh' && d.blindaje === 'pesado' && enBosque(m, o))) { // (ultra-real: un blindado sin infantería no entra al bosque tras nadie)
         u.obj = 0; // en guardia, reparándose o en inferioridad, no persigue
       } else if (u.orden !== 'atacar' && dd > alc + (m.t - u.tRep < 240 ? 14 : 4)) { // al agresor lo persigue más lejos
         u.obj = 0; u.ruta = null; // se alejó demasiado: lo suelta
@@ -2968,11 +2968,12 @@
     const N = m.N, B = ECON.critBloque, nb = Math.ceil(N / B), R = ECON.critAlcance;
     if (!m.fuerza || m.fuerza[0].length !== nb * nb) m.fuerza = [new Float32Array(nb * nb), new Float32Array(nb * nb)];
     const F = m.fuerza; F[0].fill(0); F[1].fill(0);
-    const comb = [[], []];
+    const comb = [[], []], caidos = [[], []];
     for (const e of m.ents) {
       if (e.vida <= 0 || e.j > 1) continue;
       if (e.edif) { const d = EDIF[e.tipo]; if (d && d.arma) F[e.j][((e.cy / B) | 0) * nb + ((e.cx / B) | 0)] += d.costo * e.vida / (e.vidaMax || d.vida); continue; }
-      const d = UNID[e.tipo]; if (!d.arma || d.mini || e.enTierra || e.herido) continue;
+      if (e.herido) { caidos[e.j].push(e); continue; }
+      const d = UNID[e.tipo]; if (!d.arma || d.mini || e.enTierra) continue;
       F[e.j][((e.y / B) | 0) * nb + ((e.x / B) | 0)] += d.costo * e.vida / e.vidaMax; if (!d.aire) comb[e.j].push(e);
     }
     for (const u of m.ents) {
@@ -2984,6 +2985,11 @@
       if (d.atras && ene > 0) { // ¿quién tiene más cerca al enemigo, ella o las de combate?
         let en = null, md = 10; for (const e of comb[1 - u.j]) { const dd = Math.hypot(e.x - u.x, e.y - u.y); if (dd < md && nie[Math.floor(e.y) * N + Math.floor(e.x)] === 2) { md = dd; en = e; } }
         if (en) { u.amen = md; let delante = false, cerca = false; for (const o of comb[u.j]) { if (o === u || UNID[o.tipo].atras) continue; const du = Math.hypot(o.x - u.x, o.y - u.y); if (du > 14) continue; cerca = true; if (Math.hypot(o.x - en.x, o.y - en.y) < md - 0.5) { delante = true; break; } } u.adel = cerca && !delante; }
+      }
+      if (m.ultra && d.cat === 'veh' && d.blindaje === 'pesado') { u.sinInf = true; for (const o of comb[u.j]) if (UNID[o.tipo].cat === 'inf' && Math.hypot(o.x - u.x, o.y - u.y) <= 6) { u.sinInf = false; break; } } // ¿lleva infantería cerca? (sin ella, un blindado no se mete en el bosque)
+      if (caidos[u.j].length && d.cat === 'inf' && !d.monta && !u.herido && u.orden === 'nada' && !u.guardia && !u.bunk && ene <= 0) { // primeros auxilios: sin enemigo a la vista, el que está libre va al compañero caído y le da otro plazo
+        let w = null, md = 6; for (const o of caidos[u.j]) { if (o.aux || (o.auxPor && o.auxPor !== u.id)) continue; const dd = Math.hypot(o.x - u.x, o.y - u.y); if (dd < md) { md = dd; w = o; } }
+        if (w) { if (md <= 1.3) { w.herido = m.t; w.aux = true; w.auxPor = 0; m.efectos.push({ tipo: 'alta', x1: w.x, y1: w.y, j: w.j, t: m.t }); } else { w.auxPor = u.id; const c = W.cercaLibre(m, w.x, w.y); asignar(m, u, { t: 'mover', x: (c % N) + 0.5, y: ((c / N) | 0) + 0.5 }); } continue; }
       }
       // El repliegue: por su cuenta (sin orden, o en marcha de ataque), quien está en clara inferioridad, o el apoyo que tiene al enemigo encima, se va con los suyos.
       if (m.jug[u.j].aToda || m.jug[u.j].decidido || u.herido || u.guardia || u.bunk || u.retirando || u.protege || u.acude || u.vigila || u.cava > 0 || (u.orden !== 'nada' && u.orden !== 'amover') || ene <= 0 || m.t - (u.replT === undefined ? -999 : u.replT) < 100 || enTrinchera(m, u)) continue;
