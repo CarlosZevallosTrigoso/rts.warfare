@@ -726,7 +726,7 @@
       else { if (p.pts.length === 1) orbita(2.5, q.x, q.y); else if (ir(q.x, q.y, d.vel) <= 0.4) p.i = (p.i + 1) % p.pts.length; return; }
     }
     if (u.rol === 'rec') { if (parado && mis) orbita(3.5, mis.x, mis.y); else orbita(parado ? cfg.radioDron * 0.55 : 2.2); return; } // en misión, da vueltas sobre el punto lejano
-    const o = u.obj ? m.porId.get(u.obj) : null, vivo = o && o.vida > 0;
+    const o = u.obj ? m.porId.get(u.obj) : null, vivo = o && o.vida > 0 && !o.herido;
     if (u.rol === 'fpv') {
       if (!vivo || (Math.hypot(posX(o) - bx, posY(o) - by) > cfg.radioDron + 3 && !(mis && Math.hypot(posX(o) - mis.x, posY(o) - mis.y) <= ECON.dronMisRadio + 3))) { u.vida = 0; return; } // sin blanco: se pierde
       if (ir(posX(o), posY(o), d.vel) <= (o.edif ? o.tam * 0.5 : 0.35)) {
@@ -2118,8 +2118,8 @@
     b.vida -= ur * fl * arma.dano * (mult || 1) * arma.vs[b.edif ? 'edificio' : UNID[b.tipo].blindaje] * (arma.asalto ? 1 : b.bunk ? ECON.bunkerDano : enTrinchera(m, b) ? (arma.sobre ? 1 : ECON.trinchera) : 1) * (enBosque(m, b) && UNID[b.tipo].cat === 'inf' ? ECON.bosqueCubre : 1);
     b.tDano = m.t; b.agresor = de;
     if (m.ultra && !b.edif && UNID[b.tipo].cat === 'inf') {
-      if (b.vida <= 0 && !b.bunk && !b.sube) { // cae herido: fuera de combate, a la espera de que lo recojan
-        b.vida = 1; b.herido = m.t; limpiar(b); b.obj = 0; b.orden = 'nada'; b.ruta = null; b.pend = null; b.v = 0; b.guardia = false; m.efectos.push({ tipo: 'herido', x1: b.x, y1: b.y, j: b.j, t: m.t }); return;
+      if (b.vida <= 0 && !b.herido && !b.bunk && !b.sube) { // cae herido: fuera de combate, a la espera de que lo recojan
+        b.vida = 1; b.herido = m.t; b.recarga = 0; limpiar(b); b.obj = 0; b.orden = 'nada'; b.ruta = null; b.pend = null; b.v = 0; b.guardia = false; m.efectos.push({ tipo: 'herido', x1: b.x, y1: b.y, j: b.j, t: m.t }); return;
       }
       const J = m.jug[b.j]; // bajo fuego y al descubierto, por su cuenta: a cubierto
       if (b.vida > 0 && !J.aToda && (b.orden === 'nada' || (b.orden === 'amover' && !J.decidido)) && !b.guardia && !b.bunk && !UNID[b.tipo].monta && !b.cava && m.t - (b.cubT === undefined ? -999 : b.cubT) > 200 && !enBosque(m, b) && !enTrinchera(m, b)) {
@@ -2292,7 +2292,7 @@
     if (e.recarga > 0) e.recarga--;
     if (e.sinLuz) { e.obj = 0; return; } // su red no le da energía: apagada
     let o = e.obj ? m.porId.get(e.obj) : null;
-    if (o && (o.vida <= 0 || dist(e.cx, e.cy, o) > alc || (arma.alcanceMin && dist(e.cx, e.cy, o) < arma.alcanceMin))) { o = null; e.obj = 0; }
+    if (o && (o.vida <= 0 || o.herido || dist(e.cx, e.cy, o) > alc || (arma.alcanceMin && dist(e.cx, e.cy, o) < arma.alcanceMin))) { o = null; e.obj = 0; }
     if (!o && (m.t + e.id) % 5 === 0) { o = buscarEnemigo(m, e, e.cx, e.cy, alc); if (o) e.obj = o.id; }
     if (o && apuntar(m, e, o) && e.recarga <= 0) disparar(m, e, o, arma);
   }
@@ -2552,7 +2552,7 @@
       return;
     }
     let o = u.obj ? m.porId.get(u.obj) : null;
-    if (u.obj && (!o || o.vida <= 0 || o.enTierra)) { o = null; u.obj = 0; u.ruta = null; if (u.orden === 'atacar') u.orden = 'nada'; }
+    if (u.obj && (!o || o.vida <= 0 || o.herido || o.enTierra)) { /* al caído se le deja: ya está fuera de combate */ o = null; u.obj = 0; u.ruta = null; if (u.orden === 'atacar') u.orden = 'nada'; }
     if (o && d.aire && u.casa) { // no persigue más allá de su radio de vuelo
       const casa = m.porId.get(u.casa);
       if (casa && Math.hypot(posX(o) - casa.cx, posY(o) - casa.cy) > d.radioVuelo + alc) { o = null; u.obj = 0; u.ruta = null; if (u.orden === 'atacar') u.orden = 'nada'; }
@@ -2989,7 +2989,7 @@
       if (m.ultra && d.cat === 'veh' && d.blindaje === 'pesado') { u.sinInf = true; for (const o of comb[u.j]) if (UNID[o.tipo].cat === 'inf' && Math.hypot(o.x - u.x, o.y - u.y) <= 6) { u.sinInf = false; break; } } // ¿lleva infantería cerca? (sin ella, un blindado no se mete en el bosque)
       if (caidos[u.j].length && d.cat === 'inf' && !d.monta && !u.herido && u.orden === 'nada' && !u.guardia && !u.bunk && ene <= 0) { // primeros auxilios: sin enemigo a la vista, el que está libre va al compañero caído y le da otro plazo
         let w = null, md = 6; for (const o of caidos[u.j]) { if (o.aux || (o.auxPor && o.auxPor !== u.id)) continue; const dd = Math.hypot(o.x - u.x, o.y - u.y); if (dd < md) { md = dd; w = o; } }
-        if (w) { if (md <= 1.3) { w.herido = m.t; w.aux = true; w.auxPor = 0; m.efectos.push({ tipo: 'alta', x1: w.x, y1: w.y, j: w.j, t: m.t }); } else { w.auxPor = u.id; const c = W.cercaLibre(m, w.x, w.y); asignar(m, u, { t: 'mover', x: (c % N) + 0.5, y: ((c / N) | 0) + 0.5 }); } continue; }
+        if (w) { if (md <= 1.3) { w.herido = Math.min(m.t, w.herido + (ECON.ultra.heridoT >> 1)); w.aux = true; w.auxPor = 0; m.efectos.push({ tipo: 'alta', x1: w.x, y1: w.y, j: w.j, t: m.t }); } else { w.auxPor = u.id; const c = W.cercaLibre(m, w.x, w.y); asignar(m, u, { t: 'mover', x: (c % N) + 0.5, y: ((c / N) | 0) + 0.5 }); } continue; }
       }
       // El repliegue: por su cuenta (sin orden, o en marcha de ataque), quien está en clara inferioridad, o el apoyo que tiene al enemigo encima, se va con los suyos.
       if (m.jug[u.j].aToda || m.jug[u.j].decidido || u.herido || u.guardia || u.bunk || u.retirando || u.protege || u.acude || u.vigila || u.cava > 0 || (u.orden !== 'nada' && u.orden !== 'amover') || ene <= 0 || m.t - (u.replT === undefined ? -999 : u.replT) < 100 || enTrinchera(m, u)) continue;

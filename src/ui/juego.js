@@ -1041,7 +1041,7 @@
           if (fino && anda && lod === 2 && !pausa) { const lado = Math.cos(fi) >= 0 ? 1 : -1; if (lado !== g.pl) { g.pl = lado; const R = d.radio * 1.4, l = s >= 0 ? 0.4 : -0.4, c = Math.cos(g.a), sn = Math.sin(g.a); if (pisadas.length > 500) pisadas.splice(0, 60); pisadas.push({ x: wx + c * R * 0.9 - sn * l * R, y: wy + sn * R * 0.9 + c * l * R, a: g.a, s: R, t0: tiempo }); } } // la pisada del pie que acaba de apoyar
         }
         const st = {
-          ang: d.cat === 'inf' && e.obj && !anda ? g.t : g.a, angT: g.t, retro: d.arma ? retroceso(e, d.arma) : 0, marcha: (g.mar = (g.mar === undefined ? (anda ? 1 : 0) : g.mar + ((anda ? 1 : 0) - g.mar) * Math.min(1, dtS * 3))), hundido: hund, monta: d.monta ? (e.monta || 0) / d.monta : 1, herido: d.cat === 'inf' && e.vida < d.vida * 0.5,
+          ang: d.cat === 'inf' && e.obj && !anda ? g.t : g.a, angT: g.t, retro: d.arma && !e.herido ? retroceso(e, d.arma) : 0, marcha: (g.mar = (g.mar === undefined ? (anda ? 1 : 0) : g.mar + ((anda ? 1 : 0) - g.mar) * Math.min(1, dtS * 3))), hundido: hund, monta: d.monta ? (e.monta || 0) / d.monta : 1, herido: d.cat === 'inf' && e.vida < d.vida * 0.5,
           anda, tiempo, carga: e.carga / (d.carga || 1), cosecha: e.est === 'cosechar', raro: e.cargaTipo === 2,
         };
         if (partes) Object.assign(st, partes);
