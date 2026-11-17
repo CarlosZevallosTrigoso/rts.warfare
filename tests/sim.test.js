@@ -1502,6 +1502,24 @@ prueba('moto de suministro: sale del cuartel, va sola adonde hay tropa sin abast
   assert.ok(fue, 'la moto se pone en marcha sola'); assert.ok(sol.mun >= W.munDe('infanteria'), 'y le repone la munición (' + sol.mun + ')');
 });
 
+prueba('ultra-real: pocos tiros tumban a un infante, que queda herido; curado se salva y si no, muere; las armas ligeras no pueden con tanques ni edificios', () => {
+  const m = W.crearMundo(4242, { N: 128, ultra: true }), N = m.N, U = W.ECON.ultra, A = W.ARMAS; m.logistica = false;
+  assert.ok(m.ultra && !W.crearMundo(4242, { N: 128 }).ultra, 'el modo es una opción de la partida');
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const cel = (x, y) => y * N + x; for (let y = 40; y < 80; y++) for (let x = 30; x < 100; x++) { const i = cel(x, y); if (m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  const s1 = W.crearUnidad(m, 0, 'infanteria', cel(50, 50)); s1.guardia = true; let n = 0; while (!s1.herido && n < 10) { W.herir(m, s1, A.fusil, 1, null, 55, 50); n++; }
+  assert.ok(n <= 3 && s1.herido && s1.vida > 0, 'cae herido con ' + n + ' impactos de fusil, no muerto');
+  const tir = W.crearUnidad(m, 1, 'infanteria', cel(53, 50)); assert.ok(!W.puedeAtacar(tir, s1), 'al herido no se le dispara'); tir.vida = 0;
+  for (let i = 0; i < U.heridoT + 5; i++) W.tick(m); assert.ok(!m.porId.get(s1.id), 'sin que nadie lo recoja, muere');
+  const s2 = W.crearUnidad(m, 0, 'infanteria', cel(50, 60)); s2.guardia = true; while (!s2.herido) W.herir(m, s2, A.fusil, 1, null, 55, 60);
+  const med = W.crearUnidad(m, 0, 'medico', cel(52, 61)); for (let i = 0; i < U.heridoT - 100 && s2.herido; i++) W.tick(m);
+  assert.ok(m.porId.get(s2.id) && !s2.herido && s2.vida >= s2.vidaMax * U.heridoAlta, 'con un médico al lado, se levanta'); med.vida = 0;
+  const tq = W.crearUnidad(m, 0, 'tanque', cel(60, 70)), v0 = tq.vida; W.herir(m, tq, A.fusil, 1, null, 65, 70); W.herir(m, tq, A.ametralladora, 1, null, 65, 70); assert.strictEqual(tq.vida, v0, 'el fusil y la ametralladora no le hacen nada a un tanque');
+  let k = 0; while (tq.vida > 0 && k < 10) { W.herir(m, tq, A.canon, 1, null, 65, 70); k++; } assert.ok(k <= 3, 'un cañón lo deja fuera en ' + k + ' impactos');
+  const ed = m.ents.find((e) => e.edif && e.j === 0 && e.tipo === 'patio'), e0 = ed.vida; W.herir(m, ed, A.fusil, 1); assert.strictEqual(ed.vida, e0, 'ni a un edificio'); W.herir(m, ed, A.canon, 1); assert.ok(ed.vida < e0, 'el cañón sí');
+  W.orden(m, { t: 'actitud', j: 0, v: 1 }); W.tick(m); assert.ok(m.jug[0].decidido && !m.jug[0].aToda, 'actitud decidida'); W.orden(m, { t: 'actitud', j: 0, v: 2 }); W.tick(m); assert.ok(m.jug[0].aToda && !m.jug[0].decidido, 'a toda costa');
+});
+
 prueba('torreta ametralladora: barata, sin consumo, contra tierra y nunca contra el aire', () => {
   const d = W.EDIF.nidoMG, A = W.ARMAS[d.arma];
   assert.ok(d && A, 'existe, con su arma'); assert.ok(A.vs.ligero === 1 && !A.vs.aire, 'no dispara al aire'); assert.ok(d.energia === 0 && d.costo < W.EDIF.torreta.costo, 'barata y sin consumo'); assert.ok(W.MUN[d.arma] > 0, 'tiene munición definida');

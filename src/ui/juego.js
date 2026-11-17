@@ -18,7 +18,7 @@
     const $ = (id) => document.getElementById(id);
     const params = new URLSearchParams(location.search);
     try { if (localStorage.getItem('rts.tema') === 'oscura') document.body.dataset.tema = 'oscura'; } catch (e) { /* tema por defecto */ }
-    const op = { n: '512', min: '2500', ia: 'normal', est: 'azar', red: 'si', map: 'azar' };
+    const op = { n: '512', min: '2500', ia: 'normal', est: 'azar', red: 'si', map: 'azar', real: 'no' };
     for (const k in op) {
       const cont = $('op-' + k), v = params.get(k);
       if (v && cont.querySelector('[data-v="' + CSS.escape(v) + '"]')) op[k] = v;
@@ -31,12 +31,12 @@
     const empezar = () => {
       let semilla = parseInt($('op-s').value, 10);
       if (!Number.isFinite(semilla) || semilla < 0) semilla = Math.floor(Date.now() % 1000000);
-      const q = 's=' + semilla + '&n=' + op.n + '&min=' + op.min + '&ia=' + op.ia + '&est=' + op.est + '&red=' + op.red + '&map=' + op.map + (tut ? '&tut=1' : '');
+      const q = 's=' + semilla + '&n=' + op.n + '&min=' + op.min + '&ia=' + op.ia + '&est=' + op.est + '&red=' + op.red + '&map=' + op.map + '&real=' + op.real + (tut ? '&tut=1' : '');
       try { history.replaceState(null, '', location.pathname + '?' + q); } catch (e) { /* en file:// puede no dejar */ }
       $('menu').hidden = true;
       let rep = null; // ?rep=1: se vuelve a ver la partida apuntada en esta pestaña
       if (params.get('rep')) { try { const g = JSON.parse(sessionStorage.getItem('rts.rep')); if (g && g.q === q && Array.isArray(g.c)) rep = g; } catch (e) { /* sin repetición: partida normal */ } }
-      W.jugar({ semilla, N: +op.n, inicio: +op.min, ia: op.ia, estilo: op.est, red: op.red, mapa: op.map, consulta: q, repeticion: rep, tutorial: tut && !rep });
+      W.jugar({ semilla, N: +op.n, inicio: +op.min, ia: op.ia, estilo: op.est, red: op.red, real: op.real, mapa: op.map, consulta: q, repeticion: rep, tutorial: tut && !rep });
     };
     $('empezar').addEventListener('click', () => { tut = false; empezar(); });
     $('tutorial').addEventListener('click', () => { tut = true; op.n = '256'; op.min = '6000'; op.ia = 'tranquilo'; op.red = 'si'; op.map = 'clasico'; $('op-s').value = '2026'; empezar(); });
@@ -65,7 +65,7 @@
     const $ = (id) => document.getElementById(id);
     const semilla = op.semilla;
     const cargado = op.guardado || null; // partida guardada: el mundo y la IA vienen ya hechos
-    const m = cargado ? cargado.m : W.crearMundo(semilla, { N: op.N, inicio: op.inicio, logistica: op.red !== 'no', mapa: op.mapa }), estilos = Object.keys(W.ESTILOS_IA);
+    const m = cargado ? cargado.m : W.crearMundo(semilla, { N: op.N, inicio: op.inicio, logistica: op.red !== 'no', mapa: op.mapa, ultra: op.real === 'si' }), estilos = Object.keys(W.ESTILOS_IA);
     const rep = op.repeticion ? op.repeticion.c : null, repFin = op.repeticion ? op.repeticion.fin : 0; // repetición: las órdenes apuntadas de una partida; se reproducen solas, sin rival que piense ni jugador que mande
     if (rep) m.soloRep = true; else if (!cargado) m.registro = [];
     let repI = 0, repVel = 1, repAvisado = false;
@@ -1030,6 +1030,7 @@
         let partes = null; const hund = d.cat === 'inf' && W.enTrinchera(m, e);
         let tumbado = false; if (d.cat === 'inf' && lod && suprT.size) { const h = suprT.get(e.id); if (h) { if (h > tiempo) tumbado = !hund && !anda; else suprT.delete(e.id); } } // le están tirando: cuerpo a tierra (solo si está quieto)
         if (d.cat === 'inf' && lod) {
+          if (e.herido) tumbado = true; // herido: en el suelo
           const kp = 1 - Math.exp(-dtS * 9); g.te = (g.te || 0) + ((tumbado ? 1 : 0) - (g.te || 0)) * kp; g.ro = (g.ro || 0) + ((!anda && e.obj && d.arma && !tumbado && !hund ? 1 : 0) - (g.ro || 0)) * kp; // las posturas se funden: cuerpo a tierra, rodilla en tierra al disparar parado
           if (anda && !pausa) g.paso = (g.paso || 0) + e.v * (dtCuadro / 50);
           const fi = (g.paso || 0) * 15, s = Math.sin(fi), amp = (g.amp = (g.amp || 0) + ((anda ? 1 : 0) - (g.amp || 0)) * (1 - Math.exp(-dtS * 12)));
@@ -1062,6 +1063,8 @@
           ctx.restore();
           if (fv < 0.3) { ctx.fillStyle = P.roca; for (let k = 0; k < 3; k++) { const f = (tiempo * 0.0006 + k / 3 + e.id * 0.37) % 1; ctx.globalAlpha = 0.4 * (1 - f); ctx.beginPath(); ctx.arc(-ca * r * 0.5 + f * r * 0.9, -sa * r * 0.5 - f * r * 1.6, r * (0.18 + f * 0.35), 0, TAU); ctx.fill(); } ctx.globalAlpha = 1; } // muy tocado: echa humo
         }
+        if (e.herido && lod) { ctx.fillStyle = '#c0392b'; const q = Math.max(2, z * 0.07); ctx.fillRect(-q * 0.35, -r * 2.2 - q, q * 0.7, q * 2); ctx.fillRect(-q, -r * 2.2 - q * 0.35, q * 2, q * 0.7); } // herido: una cruz roja encima, hasta que lo recojan o muera
+        if (e.inmovil && lod) { ctx.strokeStyle = '#c0392b'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-r * 0.5, -r * 2.0); ctx.lineTo(r * 0.5, -r * 1.4); ctx.moveTo(r * 0.5, -r * 2.0); ctx.lineTo(-r * 0.5, -r * 1.4); ctx.stroke(); } // inmovilizado: un aspa
         if (luzD < 1 && lod) { // de noche: los faros de los vehículos, la linterna del infante (de cerca) y el resplandor de quien dispara
           if (d.cat === 'veh' && !d.aire && lod === 2) luces.push([px, py, g.a, 0, r]); else if (d.cat === 'inf' && fino && !st.hundido) luces.push([px, py, st.ang, 1, r]);
           if (st.retro > 0.5) luces.push([px, py, d.cat === 'inf' ? st.ang : g.t, 2, r]);
@@ -1651,6 +1654,8 @@
           if (d.j === YO) { son.colocar(); aviso('Patio desplegado: ya puedes construir a su alrededor'); }
         } else if (d.tipo === 'carga') { // una carga de demolición recién colocada
           if (d.j === YO) { aviso('Carga colocada: estalla en unos segundos'); son.orden(); }
+        } else if (d.tipo === 'herido' || d.tipo === 'alta' || d.tipo === 'inmovil') { // (ultra-real)
+          if (d.j === YO && d.tipo === 'inmovil') aviso('Un vehículo tuyo ha quedado inmovilizado');
         } else if (d.tipo === 'inhibido') { // un dron que cae al perder el enlace
           if (visible(d.x2, d.y2)) for (let i = 0; i < 6; i++) parte('chispa', d.x2, d.y2, (azar() - 0.5) * 3, (azar() - 0.5) * 3, 0.3, 0);
           if (d.j === YO) aviso('Un inhibidor enemigo ha tumbado uno de tus drones');
@@ -2793,7 +2798,7 @@
         case 'KeyV': elegirEdificios('fabrica'); break;
         case 'KeyX': elegirEdificios('aerodromo'); break;
         case 'KeyG': { const ids = unidadesSel().map((u) => u.id); if (ids.length) { W.orden(m, { t: 'guardia', j: YO, ids }); son.orden(); } break; }
-        case 'KeyC': if (ev.shiftKey) { W.orden(m, { t: 'aToda', j: YO }); aviso(J.aToda ? 'Criterio activado: las unidades miden fuerzas antes de meterse' : 'A toda costa: las unidades atacan sin medir fuerzas'); break; }
+        case 'KeyC': if (ev.shiftKey) { const v = J.aToda ? 0 : J.decidido ? 2 : 1; W.orden(m, { t: 'actitud', j: YO, v }); aviso(['Prudente: miden fuerzas, esperan a los suyos y se repliegan', 'Decidido: cumplen la orden sin esperar, pero se cubren', 'A toda costa: van sin medir nada'][v]); break; }
           W.orden(m, { t: 'colmena', j: YO }); aviso(J.colmena ? 'Colmena desactivada: nadie acude solo' : 'Colmena activada'); break;
         case 'KeyF': ponerForma(FORMAS[(FORMAS.indexOf(fA()) + 1) % FORMAS.length]); break;
         case 'KeyO': if (conMision().length) modo = 'dronMis'; break;

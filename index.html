@@ -200,7 +200,7 @@
       <div>un edificio destruido deja una ruina que frena mucho a los vehículos; construye encima el mismo edificio y recuperas la mitad, o despéjala con un ingeniero civil (clic derecho). Las explosiones grandes dejan cráteres que frenan a los vehículos y rompen cables</div>
       <div>los edificios tienden solos su cable hasta la red (24 celdas); <kbd>J</kbd> con un ingeniero civil: conectar a mano lo que quede más lejos · <kbd>K</kbd> con la excavadora: camino militar</div>
       <div><kbd>Supr</kbd> demoler el edificio seleccionado</div>
-      <div><kbd>G</kbd> guardia: la unidad queda fija · <kbd>C</kbd> colmena sí/no · <kbd>Mayús</kbd>+<kbd>C</kbd> a toda costa sí/no</div>
+      <div><kbd>G</kbd> guardia: la unidad queda fija · <kbd>C</kbd> colmena sí/no · <kbd>Mayús</kbd>+<kbd>C</kbd> actitud: prudente, decidido, a toda costa</div>
       <div><kbd>Z</kbd> atrincherarse (infantería quieta): recibe menos daño</div>
       <div>tras mover, otro clic cerca (cualquier botón): hacia dónde mirar</div>
       <div>bosque: cubre a la infantería y frena a los vehículos</div>
@@ -350,17 +350,19 @@
     <button type="button" data-v="aereo">aéreo<small>aviación</small></button><button type="button" data-v="defensivo">defensivo<small>torres, ataca tarde</small></button><button type="button" data-v="asalto">de asalto<small>ataca pronto</small></button></div></div>
   <div><h2>Infraestructura</h2><div class="ops" id="op-red">
     <button type="button" data-v="si">completa<small>red: suministro, energía y territorio</small></button><button type="button" data-v="no">clásica<small>sin red</small></button></div></div>
+  <div><h2>Realismo</h2><div class="ops" id="op-real">
+    <button type="button" data-v="no">normal<small>el juego de siempre</small></button><button type="button" data-v="si">ultra-real<small>experimental: pocos tiros matan, hay heridos y hay que cubrirse</small></button></div></div>
   <div><h2>Semilla del mapa</h2><input id="op-s" inputmode="numeric" placeholder="al azar" autocomplete="off"></div>
   <button type="button" id="empezar">Empezar</button>
   <button type="button" id="tutorial">Tutorial guiado<small style="display:block;color:var(--suave);font-size:10px">ocho pasos, con el rival dormido hasta el final</small></button>
   <button type="button" id="continuar" hidden>Continuar la partida guardada</button>
   <button type="button" id="irDrone" onclick="location.href='drone/index.html'">drone.warfare<small style="display:block;color:var(--suave);font-size:10px">el otro juego: el mismo conflicto con lupa, infantería y drones</small></button>
-  <div id="version">versión 121</div>
+  <div id="version">versión 122</div>
 </div></div>
 <div id="guia" hidden><div class="caja"><div class="cab"><strong>Guía: para qué sirve cada cosa</strong><button type="button" id="cierraGuia">cerrar</button></div><div id="guiaTxt"></div></div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finVer" href="#" title="Vuelve a ver la partida entera, con todo el mapa a la vista y a la velocidad que quieras.">ver repetición</a><a id="finLog" href="#" title="Descarga el registro de la partida: la semilla, las opciones y todas las órdenes de los dos bandos, con su instante. Sirve para reproducirla y analizar cómo jugó la IA.">descargar registro</a><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 121' };
+globalThis.W = { VERSION: 'versión 122' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -584,6 +586,7 @@ globalThis.W = { VERSION: 'versión 121' };
     misil:   { alcance: 6,   dano: 40, recarga: 14, vuelo: 1.0, vs: { ligero: 0.6, pesado: 0.6, edificio: 0.3, aire: 1.3, dron: 1 } },
     bomba:   { omni: true, alcance: 1.6, area: 1.7, dano: 190, recarga: 90, vuelo: 0.12, vs: { ligero: 1, pesado: 1, edificio: 1.4 } },
   };
+  for (const k of ['fusil', 'pistola', 'subfusil', 'ametralladora', 'ametrFija', 'gatling', 'rifle']) W.ARMAS[k].ligera = true; // armas ligeras: en ultra-real no pueden con blindados ni con edificios
 
   // Tecnología. lugar: edificio donde se investiga (uno a la vez por tipo de edificio). nivel: nivel mínimo.
   // sube: nivel que otorga. Los efectos de cada mejora están en mundo.js (buscar "mejoras.").
@@ -643,6 +646,10 @@ globalThis.W = { VERSION: 'versión 121' };
     misilesMax: 10, mejoraMax: 3, mejoraCosto: 0.6, mejoraBono: 0.5, // mejora de un edificio: hasta nivel 3; cada nivel cuesta el 60 % del edificio por el nivel que tiene y rinde un 50 % más
     // Criterio de combate: cada segundo la unidad compara la fuerza propia y la enemiga que ve en torno a sí (bloques de critBloque celdas, critAlcance bloques a cada lado).
     // Por debajo de critInf no avanza ni persigue por su cuenta; por debajo de critRet se repliega hacia los suyos. En marcha de ataque, espera a los demás hasta critEspera ticks.
+    // Modo ultra-real (m.ultra): la infantería cae con muy pocos impactos (inf), lo que penetra un vehículo lo deja fuera en uno o dos (penetra) y a veces lo inmoviliza (inmovil, en %);
+    // las armas ligeras no hacen nada a blindados ni a edificios. Quien cae queda herido: fuera de combate hasta heridoT ticks; si lo curan hasta heridoAlta de su vida, se salva; si no, muere.
+    // Bajo fuego, el infante suelto busca bosque a cubre celdas; y el criterio de combate es más prudente (critInf, critRet).
+    ultra: { inf: 4, penetra: 3, inmovil: 30, heridoT: 1200, heridoAlta: 0.25, cubre: 4, critInf: 0.9, critRet: 0.5 },
     critInf: 0.6, critRet: 0.3, critEspera: 300, critBloque: 4, critAlcance: 2,
     inicio: 2500, petInicio: 150, cosecha: 5, descarga: 25, colaMax: 9, separacionColocar: 3, goteoCada: 5, vistaInicial: 22, obrasMax: 8, curaUnidad: 0.01, curaEdificio: 0.0025, curaCosto: 0.15, venta: 0.5, trinchera: 0.45, arco: 0.14, arcoTrinchera: 1.05, visAd: 1.3, visLado: 0.75, visAt: 0.3, cono: 1.05, periferia: 1.83, flanco: 1.25, espalda: 1.5, bosqueVeh: 0.6, bosqueCubre: 0.7, reposta: 12, retiroBajo: 0.3, retiroAlto: 0.9, huida: 300, dia: 9600, diaLuz: 6000, nocheVis: 0.7, caminoVel: 1.6, tramoLargo: 4, enlace: 5, cobNodo: 14, cobEdif: 6, lineaVel: 0.12, lineaCelda: 3, sinSum: 400, sinSumRecarga: 1.5, abastDura: 1500, heliRepone: 300, cobAvanzada: 10, hospitalCura: 2, dronFpv: 40, dronBomba: 15, dronRepone: 200, dronFpvCada: 60, hackInfo: 25, hackVeh: 240, hackCtrl: 600, hackCtrlInfo: 60, hackCtrlRecarga: 400, /* el hacker toma el control de un vehículo durante hackCtrl ticks (30 s); cuesta más y tarda más en poder repetirlo */ hackEdif: 300, hackRecarga: 200, hackCanal: 40, trazaVel: 0.45, caminoLlano: 4, caminoBosque: 12, caminoAgua: 30, mandoCada: 40, mandoGiro: 1.5, captura: 600, capturaRadio: 2, antenaRadio: 12, depositoCada: 8, tallerRadio: 4, ocultaVe: 2.5, chatarra: 0.25, reparaRadio: 8, reparaVeh: 0.5, curaMedico: 0.35, reparaEdif: 0.8, rangos: [2, 5, 10], rangoDano: 0.1, rangoVida: 0.1, cupoAviones: 5, pasada: 7, orbita: 3.5, fuelCae: 80, cavar: 80, aplasta: 10, bonoProd: 0.5, bonoMax: 2.5 };
   // Pelotones: paquetes de unidades que se encargan de una vez y actúan juntas. Cada miembro se fabrica donde le toca
@@ -1064,6 +1071,7 @@ globalThis.W = { VERSION: 'versión 121' };
       for (let k = 0; k < 2; k++) crearUnidad(m, j, 'infanteria', W.cercaLibre(m, b.x + (3 + k) * haciaCentro, b.y - 3 * haciaCentro));
     }
     if (op.clima === false) m.sinClima = true;
+    if (op.ultra) m.ultra = true; // modo ultra-real
     if (m.logistica !== false) for (const J of m.jug) J.acero = ECON.aceroInicio; // el acero solo existe en la partida con infraestructura
     // Los alrededores de cada base ya se conocen al empezar: ahí están el agua, el campo y el primer yacimiento.
     for (let j = 0; j < 2; j++) {
@@ -2742,7 +2750,8 @@ globalThis.W = { VERSION: 'versión 121' };
         }
         return;
       case 'colmena': J.colmena = !J.colmena; return;
-      case 'aToda': J.aToda = cmd.on !== undefined ? !!cmd.on : !J.aToda; return; // a toda costa: las unidades dejan de medir fuerzas antes de meterse
+      case 'actitud': J.aToda = cmd.v === 2; J.decidido = cmd.v === 1; return; // 0 prudente, 1 decidido, 2 a toda costa
+      case 'aToda': J.aToda = cmd.on !== undefined ? !!cmd.on : !J.aToda; if (J.aToda) J.decidido = false; return; // a toda costa: las unidades dejan de medir fuerzas antes de meterse
       case 'vender': { // demoler un edificio propio: devuelve parte de su costo, según la vida que le quede
         const e = m.porId.get(cmd.id);
         if (!e || !e.edif || e.j !== cmd.j || e.tipo === 'patio' || e.vida <= 0) return;
@@ -2830,6 +2839,7 @@ globalThis.W = { VERSION: 'versión 121' };
   // ---------- movimiento ----------
   // Avanza hacia el siguiente punto de la ruta: primero gira, luego acelera, y frena al llegar.
   function avanzar(m, u) {
+    if (u.inmovil) { u.v = 0; return false; } // inmovilizado: no se mueve hasta que lo reparen
     if (!u.ruta) { u.v = 0; return false; }
     if (u.ri >= u.ruta.length) { u.ruta = null; u.v = 0; return true; }
     const N = m.N, d = UNID[u.tipo], c = u.ruta[u.ri];
@@ -3001,7 +3011,7 @@ globalThis.W = { VERSION: 'versión 121' };
 
   // ---------- combate ----------
   // ¿Puede esta arma dañar a ese blanco? (los cañones no alcanzan a los aviones; la antiaérea solo a ellos)
-  function puede(arma, b) { return !!arma && !b.enTierra && arma.vs[b.edif ? 'edificio' : UNID[b.tipo].blindaje] > 0; } // al avión posado lo cubre su aeródromo
+  function puede(arma, b) { return !!arma && !b.enTierra && !b.herido && arma.vs[b.edif ? 'edificio' : UNID[b.tipo].blindaje] > 0; } // al avión posado lo cubre su aeródromo
   W.puedeAtacar = (a, b) => puede(ARMAS[a.edif ? EDIF[a.tipo].arma : UNID[a.tipo].arma], b);
   // ---------- frente, torreta y visión dirigida ----------
   const difAng = (a, b) => ((a - b + Math.PI) % TAU + TAU) % TAU - Math.PI;
@@ -3118,8 +3128,27 @@ globalThis.W = { VERSION: 'versión 121' };
     let fl = 1;
     if (ox !== undefined && !b.edif && UNID[b.tipo].cat === 'veh') { const s = W.sector(m, b, { x: ox, y: oy }); fl = s === 2 ? ECON.espalda : s === 1 ? ECON.flanco : 1; if (s && m.t - (b.tFlanco === undefined ? -99 : b.tFlanco) > 25) { b.tFlanco = m.t; m.efectos.push({ tipo: 'flanco', x1: b.x, y1: b.y, s, j: b.j, t: m.t }); } }
     if (ox !== undefined && !b.edif && UNID[b.tipo].escudo && W.sector(m, b, { x: ox, y: oy }) === 0) fl = UNID[b.tipo].escudo; // el escudo: lo que llega de frente pega la mitad
-    b.vida -= fl * arma.dano * (mult || 1) * arma.vs[b.edif ? 'edificio' : UNID[b.tipo].blindaje] * (arma.asalto ? 1 : b.bunk ? ECON.bunkerDano : enTrinchera(m, b) ? (arma.sobre ? 1 : ECON.trinchera) : 1) * (enBosque(m, b) && UNID[b.tipo].cat === 'inf' ? ECON.bosqueCubre : 1);
+    let ur = 1;
+    if (m.ultra) { const U = ECON.ultra;
+      if (b.edif) { if (arma.ligera) return; } // a un edificio solo lo tumban los explosivos
+      else { const db = UNID[b.tipo];
+        if (db.cat === 'inf') ur = U.inf;
+        else if (db.cat === 'veh') { if (arma.ligera) { if (db.blindaje === 'pesado') return; } else { ur = U.penetra; if (!b.inmovil && ((b.id * 2654435761 + m.t * 40503) >>> 0) % 100 < U.inmovil) { b.inmovil = true; m.efectos.push({ tipo: 'inmovil', x1: b.x, y1: b.y, j: b.j, t: m.t }); } } }
+      } }
+    b.vida -= ur * fl * arma.dano * (mult || 1) * arma.vs[b.edif ? 'edificio' : UNID[b.tipo].blindaje] * (arma.asalto ? 1 : b.bunk ? ECON.bunkerDano : enTrinchera(m, b) ? (arma.sobre ? 1 : ECON.trinchera) : 1) * (enBosque(m, b) && UNID[b.tipo].cat === 'inf' ? ECON.bosqueCubre : 1);
     b.tDano = m.t; b.agresor = de;
+    if (m.ultra && !b.edif && UNID[b.tipo].cat === 'inf') {
+      if (b.vida <= 0 && !b.bunk && !b.sube) { // cae herido: fuera de combate, a la espera de que lo recojan
+        b.vida = 1; b.herido = m.t; limpiar(b); b.obj = 0; b.orden = 'nada'; b.ruta = null; b.pend = null; b.v = 0; b.guardia = false; m.efectos.push({ tipo: 'herido', x1: b.x, y1: b.y, j: b.j, t: m.t }); return;
+      }
+      const J = m.jug[b.j]; // bajo fuego y al descubierto, por su cuenta: a cubierto
+      if (b.vida > 0 && !J.aToda && (b.orden === 'nada' || (b.orden === 'amover' && !J.decidido)) && !b.guardia && !b.bunk && !UNID[b.tipo].monta && !b.cava && m.t - (b.cubT === undefined ? -999 : b.cubT) > 200 && !enBosque(m, b) && !enTrinchera(m, b)) {
+        b.cubT = m.t; const N = m.N, R = ECON.ultra.cubre, bx = Math.floor(b.x), by = Math.floor(b.y); let mc = -1, mv = Infinity;
+        for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) { const x = bx + dx, y = by + dy; if (x < 1 || y < 1 || x >= N - 1 || y >= N - 1) continue; const i = y * N + x; if (m.mapa.terreno[i] !== T.BOSQUE || m.ocup[i]) continue;
+          const v = Math.hypot(dx, dy) - (ox !== undefined ? 0.3 * Math.hypot(x - ox, y - oy) : 0); if (v < mv) { mv = v; mc = i; } }
+        if (mc >= 0) { limpiar(b); b.obj = 0; asignar(m, b, { t: 'mover', x: (mc % N) + 0.5, y: ((mc / N) | 0) + 0.5 }); m.efectos.push({ tipo: 'retira', x1: b.x, y1: b.y, j: b.j, t: m.t }); }
+      }
+    }
     if (b.vida <= 0 && !b.contada) { // veteranía: la baja se la apunta quien disparó
       b.contada = true;
       const a = de ? m.porId.get(de) : null;
@@ -3465,6 +3494,10 @@ globalThis.W = { VERSION: 'versión 121' };
     return m.t - u.espT < ECON.critEspera;
   }
   function tickUnidad(m, u) {
+    if (u.herido) { // herido: no hace nada; si lo curan lo bastante, se levanta; si nadie llega a tiempo, muere
+      u.v = 0; if (u.vida >= u.vidaMax * ECON.ultra.heridoAlta) { u.herido = 0; m.efectos.push({ tipo: 'alta', x1: u.x, y1: u.y, j: u.j, t: m.t }); } else if (m.t - u.herido > ECON.ultra.heridoT) { u.herido = 0; u.vida = 0; } return;
+    }
+    if (u.inmovil && u.vida >= u.vidaMax * 0.9) u.inmovil = false; // reparado, vuelve a andar
     const d = UNID[u.tipo];
     u.px = u.x; u.py = u.y;
     if (u.recarga > 0) u.recarga--;
@@ -3949,7 +3982,8 @@ globalThis.W = { VERSION: 'versión 121' };
   // ---------- criterio de combate ----------
   // Cada segundo: un mapa grueso de fuerza por bando (coste por vida, solo lo armado) y, para cada unidad de tierra, su balance local (u.bal: lo propio entre lo enemigo que ve)
   // y, si es de apoyo o de segunda línea, si se ha quedado por delante de las de combate (u.adel) y a qué distancia tiene al enemigo (u.amen).
-  const cauto = (m, u) => !m.jug[u.j].aToda && (u.bal < ECON.critInf || u.adel);
+  const cInf = (m) => (m.ultra ? ECON.ultra.critInf : ECON.critInf), cRet = (m) => (m.ultra ? ECON.ultra.critRet : ECON.critRet);
+  const cauto = (m, u) => !m.jug[u.j].aToda && !m.jug[u.j].decidido && (u.bal < cInf(m) || u.adel); // (decidido: cumple la orden sin esperar ni replegarse, pero se cubre)
   function tickCriterio(m) {
     const N = m.N, B = ECON.critBloque, nb = Math.ceil(N / B), R = ECON.critAlcance;
     if (!m.fuerza || m.fuerza[0].length !== nb * nb) m.fuerza = [new Float32Array(nb * nb), new Float32Array(nb * nb)];
@@ -3958,7 +3992,7 @@ globalThis.W = { VERSION: 'versión 121' };
     for (const e of m.ents) {
       if (e.vida <= 0 || e.j > 1) continue;
       if (e.edif) { const d = EDIF[e.tipo]; if (d && d.arma) F[e.j][((e.cy / B) | 0) * nb + ((e.cx / B) | 0)] += d.costo * e.vida / (e.vidaMax || d.vida); continue; }
-      const d = UNID[e.tipo]; if (!d.arma || d.mini || e.enTierra) continue;
+      const d = UNID[e.tipo]; if (!d.arma || d.mini || e.enTierra || e.herido) continue;
       F[e.j][((e.y / B) | 0) * nb + ((e.x / B) | 0)] += d.costo * e.vida / e.vidaMax; if (!d.aire) comb[e.j].push(e);
     }
     for (const u of m.ents) {
@@ -3972,8 +4006,8 @@ globalThis.W = { VERSION: 'versión 121' };
         if (en) { u.amen = md; let delante = false, cerca = false; for (const o of comb[u.j]) { if (o === u || UNID[o.tipo].atras) continue; const du = Math.hypot(o.x - u.x, o.y - u.y); if (du > 14) continue; cerca = true; if (Math.hypot(o.x - en.x, o.y - en.y) < md - 0.5) { delante = true; break; } } u.adel = cerca && !delante; }
       }
       // El repliegue: por su cuenta (sin orden, o en marcha de ataque), quien está en clara inferioridad, o el apoyo que tiene al enemigo encima, se va con los suyos.
-      if (m.jug[u.j].aToda || u.guardia || u.bunk || u.retirando || u.protege || u.acude || u.vigila || u.cava > 0 || (u.orden !== 'nada' && u.orden !== 'amover') || ene <= 0 || m.t - (u.replT === undefined ? -999 : u.replT) < 100 || enTrinchera(m, u)) continue;
-      if (!(d.atras ? u.amen < 6 && (u.adel || u.bal < ECON.critInf) : u.bal < ECON.critRet)) continue;
+      if (m.jug[u.j].aToda || m.jug[u.j].decidido || u.herido || u.guardia || u.bunk || u.retirando || u.protege || u.acude || u.vigila || u.cava > 0 || (u.orden !== 'nada' && u.orden !== 'amover') || ene <= 0 || m.t - (u.replT === undefined ? -999 : u.replT) < 100 || enTrinchera(m, u)) continue;
+      if (!(d.atras ? u.amen < 6 && (u.adel || u.bal < cInf(m)) : u.bal < cRet(m))) continue;
       const yo = d.arma ? d.costo * u.vida / u.vidaMax : 0; let mk = -1, mv = 0;
       for (let dy = -R - 1; dy <= R + 1; dy++) { const y = by + dy; if (y < 0 || y >= nb) continue; for (let dx = -R - 1; dx <= R + 1; dx++) { const x = bx + dx; if (x < 0 || x >= nb || (!dx && !dy)) continue; const k = y * nb + x, v = Fp[k] - Fe[k]; if (v > mv) { mv = v; mk = k; } } }
       let c;
@@ -5797,7 +5831,7 @@ globalThis.W = { VERSION: 'versión 121' };
     const $ = (id) => document.getElementById(id);
     const params = new URLSearchParams(location.search);
     try { if (localStorage.getItem('rts.tema') === 'oscura') document.body.dataset.tema = 'oscura'; } catch (e) { /* tema por defecto */ }
-    const op = { n: '512', min: '2500', ia: 'normal', est: 'azar', red: 'si', map: 'azar' };
+    const op = { n: '512', min: '2500', ia: 'normal', est: 'azar', red: 'si', map: 'azar', real: 'no' };
     for (const k in op) {
       const cont = $('op-' + k), v = params.get(k);
       if (v && cont.querySelector('[data-v="' + CSS.escape(v) + '"]')) op[k] = v;
@@ -5810,12 +5844,12 @@ globalThis.W = { VERSION: 'versión 121' };
     const empezar = () => {
       let semilla = parseInt($('op-s').value, 10);
       if (!Number.isFinite(semilla) || semilla < 0) semilla = Math.floor(Date.now() % 1000000);
-      const q = 's=' + semilla + '&n=' + op.n + '&min=' + op.min + '&ia=' + op.ia + '&est=' + op.est + '&red=' + op.red + '&map=' + op.map + (tut ? '&tut=1' : '');
+      const q = 's=' + semilla + '&n=' + op.n + '&min=' + op.min + '&ia=' + op.ia + '&est=' + op.est + '&red=' + op.red + '&map=' + op.map + '&real=' + op.real + (tut ? '&tut=1' : '');
       try { history.replaceState(null, '', location.pathname + '?' + q); } catch (e) { /* en file:// puede no dejar */ }
       $('menu').hidden = true;
       let rep = null; // ?rep=1: se vuelve a ver la partida apuntada en esta pestaña
       if (params.get('rep')) { try { const g = JSON.parse(sessionStorage.getItem('rts.rep')); if (g && g.q === q && Array.isArray(g.c)) rep = g; } catch (e) { /* sin repetición: partida normal */ } }
-      W.jugar({ semilla, N: +op.n, inicio: +op.min, ia: op.ia, estilo: op.est, red: op.red, mapa: op.map, consulta: q, repeticion: rep, tutorial: tut && !rep });
+      W.jugar({ semilla, N: +op.n, inicio: +op.min, ia: op.ia, estilo: op.est, red: op.red, real: op.real, mapa: op.map, consulta: q, repeticion: rep, tutorial: tut && !rep });
     };
     $('empezar').addEventListener('click', () => { tut = false; empezar(); });
     $('tutorial').addEventListener('click', () => { tut = true; op.n = '256'; op.min = '6000'; op.ia = 'tranquilo'; op.red = 'si'; op.map = 'clasico'; $('op-s').value = '2026'; empezar(); });
@@ -5844,7 +5878,7 @@ globalThis.W = { VERSION: 'versión 121' };
     const $ = (id) => document.getElementById(id);
     const semilla = op.semilla;
     const cargado = op.guardado || null; // partida guardada: el mundo y la IA vienen ya hechos
-    const m = cargado ? cargado.m : W.crearMundo(semilla, { N: op.N, inicio: op.inicio, logistica: op.red !== 'no', mapa: op.mapa }), estilos = Object.keys(W.ESTILOS_IA);
+    const m = cargado ? cargado.m : W.crearMundo(semilla, { N: op.N, inicio: op.inicio, logistica: op.red !== 'no', mapa: op.mapa, ultra: op.real === 'si' }), estilos = Object.keys(W.ESTILOS_IA);
     const rep = op.repeticion ? op.repeticion.c : null, repFin = op.repeticion ? op.repeticion.fin : 0; // repetición: las órdenes apuntadas de una partida; se reproducen solas, sin rival que piense ni jugador que mande
     if (rep) m.soloRep = true; else if (!cargado) m.registro = [];
     let repI = 0, repVel = 1, repAvisado = false;
@@ -6809,6 +6843,7 @@ globalThis.W = { VERSION: 'versión 121' };
         let partes = null; const hund = d.cat === 'inf' && W.enTrinchera(m, e);
         let tumbado = false; if (d.cat === 'inf' && lod && suprT.size) { const h = suprT.get(e.id); if (h) { if (h > tiempo) tumbado = !hund && !anda; else suprT.delete(e.id); } } // le están tirando: cuerpo a tierra (solo si está quieto)
         if (d.cat === 'inf' && lod) {
+          if (e.herido) tumbado = true; // herido: en el suelo
           const kp = 1 - Math.exp(-dtS * 9); g.te = (g.te || 0) + ((tumbado ? 1 : 0) - (g.te || 0)) * kp; g.ro = (g.ro || 0) + ((!anda && e.obj && d.arma && !tumbado && !hund ? 1 : 0) - (g.ro || 0)) * kp; // las posturas se funden: cuerpo a tierra, rodilla en tierra al disparar parado
           if (anda && !pausa) g.paso = (g.paso || 0) + e.v * (dtCuadro / 50);
           const fi = (g.paso || 0) * 15, s = Math.sin(fi), amp = (g.amp = (g.amp || 0) + ((anda ? 1 : 0) - (g.amp || 0)) * (1 - Math.exp(-dtS * 12)));
@@ -6841,6 +6876,8 @@ globalThis.W = { VERSION: 'versión 121' };
           ctx.restore();
           if (fv < 0.3) { ctx.fillStyle = P.roca; for (let k = 0; k < 3; k++) { const f = (tiempo * 0.0006 + k / 3 + e.id * 0.37) % 1; ctx.globalAlpha = 0.4 * (1 - f); ctx.beginPath(); ctx.arc(-ca * r * 0.5 + f * r * 0.9, -sa * r * 0.5 - f * r * 1.6, r * (0.18 + f * 0.35), 0, TAU); ctx.fill(); } ctx.globalAlpha = 1; } // muy tocado: echa humo
         }
+        if (e.herido && lod) { ctx.fillStyle = '#c0392b'; const q = Math.max(2, z * 0.07); ctx.fillRect(-q * 0.35, -r * 2.2 - q, q * 0.7, q * 2); ctx.fillRect(-q, -r * 2.2 - q * 0.35, q * 2, q * 0.7); } // herido: una cruz roja encima, hasta que lo recojan o muera
+        if (e.inmovil && lod) { ctx.strokeStyle = '#c0392b'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-r * 0.5, -r * 2.0); ctx.lineTo(r * 0.5, -r * 1.4); ctx.moveTo(r * 0.5, -r * 2.0); ctx.lineTo(-r * 0.5, -r * 1.4); ctx.stroke(); } // inmovilizado: un aspa
         if (luzD < 1 && lod) { // de noche: los faros de los vehículos, la linterna del infante (de cerca) y el resplandor de quien dispara
           if (d.cat === 'veh' && !d.aire && lod === 2) luces.push([px, py, g.a, 0, r]); else if (d.cat === 'inf' && fino && !st.hundido) luces.push([px, py, st.ang, 1, r]);
           if (st.retro > 0.5) luces.push([px, py, d.cat === 'inf' ? st.ang : g.t, 2, r]);
@@ -7430,6 +7467,8 @@ globalThis.W = { VERSION: 'versión 121' };
           if (d.j === YO) { son.colocar(); aviso('Patio desplegado: ya puedes construir a su alrededor'); }
         } else if (d.tipo === 'carga') { // una carga de demolición recién colocada
           if (d.j === YO) { aviso('Carga colocada: estalla en unos segundos'); son.orden(); }
+        } else if (d.tipo === 'herido' || d.tipo === 'alta' || d.tipo === 'inmovil') { // (ultra-real)
+          if (d.j === YO && d.tipo === 'inmovil') aviso('Un vehículo tuyo ha quedado inmovilizado');
         } else if (d.tipo === 'inhibido') { // un dron que cae al perder el enlace
           if (visible(d.x2, d.y2)) for (let i = 0; i < 6; i++) parte('chispa', d.x2, d.y2, (azar() - 0.5) * 3, (azar() - 0.5) * 3, 0.3, 0);
           if (d.j === YO) aviso('Un inhibidor enemigo ha tumbado uno de tus drones');
@@ -8572,7 +8611,7 @@ globalThis.W = { VERSION: 'versión 121' };
         case 'KeyV': elegirEdificios('fabrica'); break;
         case 'KeyX': elegirEdificios('aerodromo'); break;
         case 'KeyG': { const ids = unidadesSel().map((u) => u.id); if (ids.length) { W.orden(m, { t: 'guardia', j: YO, ids }); son.orden(); } break; }
-        case 'KeyC': if (ev.shiftKey) { W.orden(m, { t: 'aToda', j: YO }); aviso(J.aToda ? 'Criterio activado: las unidades miden fuerzas antes de meterse' : 'A toda costa: las unidades atacan sin medir fuerzas'); break; }
+        case 'KeyC': if (ev.shiftKey) { const v = J.aToda ? 0 : J.decidido ? 2 : 1; W.orden(m, { t: 'actitud', j: YO, v }); aviso(['Prudente: miden fuerzas, esperan a los suyos y se repliegan', 'Decidido: cumplen la orden sin esperar, pero se cubren', 'A toda costa: van sin medir nada'][v]); break; }
           W.orden(m, { t: 'colmena', j: YO }); aviso(J.colmena ? 'Colmena desactivada: nadie acude solo' : 'Colmena activada'); break;
         case 'KeyF': ponerForma(FORMAS[(FORMAS.indexOf(fA()) + 1) % FORMAS.length]); break;
         case 'KeyO': if (conMision().length) modo = 'dronMis'; break;

@@ -51,6 +51,7 @@
       for (let k = 0; k < 2; k++) crearUnidad(m, j, 'infanteria', W.cercaLibre(m, b.x + (3 + k) * haciaCentro, b.y - 3 * haciaCentro));
     }
     if (op.clima === false) m.sinClima = true;
+    if (op.ultra) m.ultra = true; // modo ultra-real
     if (m.logistica !== false) for (const J of m.jug) J.acero = ECON.aceroInicio; // el acero solo existe en la partida con infraestructura
     // Los alrededores de cada base ya se conocen al empezar: ahí están el agua, el campo y el primer yacimiento.
     for (let j = 0; j < 2; j++) {
@@ -1729,7 +1730,8 @@
         }
         return;
       case 'colmena': J.colmena = !J.colmena; return;
-      case 'aToda': J.aToda = cmd.on !== undefined ? !!cmd.on : !J.aToda; return; // a toda costa: las unidades dejan de medir fuerzas antes de meterse
+      case 'actitud': J.aToda = cmd.v === 2; J.decidido = cmd.v === 1; return; // 0 prudente, 1 decidido, 2 a toda costa
+      case 'aToda': J.aToda = cmd.on !== undefined ? !!cmd.on : !J.aToda; if (J.aToda) J.decidido = false; return; // a toda costa: las unidades dejan de medir fuerzas antes de meterse
       case 'vender': { // demoler un edificio propio: devuelve parte de su costo, según la vida que le quede
         const e = m.porId.get(cmd.id);
         if (!e || !e.edif || e.j !== cmd.j || e.tipo === 'patio' || e.vida <= 0) return;
@@ -1817,6 +1819,7 @@
   // ---------- movimiento ----------
   // Avanza hacia el siguiente punto de la ruta: primero gira, luego acelera, y frena al llegar.
   function avanzar(m, u) {
+    if (u.inmovil) { u.v = 0; return false; } // inmovilizado: no se mueve hasta que lo reparen
     if (!u.ruta) { u.v = 0; return false; }
     if (u.ri >= u.ruta.length) { u.ruta = null; u.v = 0; return true; }
     const N = m.N, d = UNID[u.tipo], c = u.ruta[u.ri];
@@ -1988,7 +1991,7 @@
 
   // ---------- combate ----------
   // ¿Puede esta arma dañar a ese blanco? (los cañones no alcanzan a los aviones; la antiaérea solo a ellos)
-  function puede(arma, b) { return !!arma && !b.enTierra && arma.vs[b.edif ? 'edificio' : UNID[b.tipo].blindaje] > 0; } // al avión posado lo cubre su aeródromo
+  function puede(arma, b) { return !!arma && !b.enTierra && !b.herido && arma.vs[b.edif ? 'edificio' : UNID[b.tipo].blindaje] > 0; } // al avión posado lo cubre su aeródromo
   W.puedeAtacar = (a, b) => puede(ARMAS[a.edif ? EDIF[a.tipo].arma : UNID[a.tipo].arma], b);
   // ---------- frente, torreta y visión dirigida ----------
   const difAng = (a, b) => ((a - b + Math.PI) % TAU + TAU) % TAU - Math.PI;
@@ -2105,8 +2108,27 @@
     let fl = 1;
     if (ox !== undefined && !b.edif && UNID[b.tipo].cat === 'veh') { const s = W.sector(m, b, { x: ox, y: oy }); fl = s === 2 ? ECON.espalda : s === 1 ? ECON.flanco : 1; if (s && m.t - (b.tFlanco === undefined ? -99 : b.tFlanco) > 25) { b.tFlanco = m.t; m.efectos.push({ tipo: 'flanco', x1: b.x, y1: b.y, s, j: b.j, t: m.t }); } }
     if (ox !== undefined && !b.edif && UNID[b.tipo].escudo && W.sector(m, b, { x: ox, y: oy }) === 0) fl = UNID[b.tipo].escudo; // el escudo: lo que llega de frente pega la mitad
-    b.vida -= fl * arma.dano * (mult || 1) * arma.vs[b.edif ? 'edificio' : UNID[b.tipo].blindaje] * (arma.asalto ? 1 : b.bunk ? ECON.bunkerDano : enTrinchera(m, b) ? (arma.sobre ? 1 : ECON.trinchera) : 1) * (enBosque(m, b) && UNID[b.tipo].cat === 'inf' ? ECON.bosqueCubre : 1);
+    let ur = 1;
+    if (m.ultra) { const U = ECON.ultra;
+      if (b.edif) { if (arma.ligera) return; } // a un edificio solo lo tumban los explosivos
+      else { const db = UNID[b.tipo];
+        if (db.cat === 'inf') ur = U.inf;
+        else if (db.cat === 'veh') { if (arma.ligera) { if (db.blindaje === 'pesado') return; } else { ur = U.penetra; if (!b.inmovil && ((b.id * 2654435761 + m.t * 40503) >>> 0) % 100 < U.inmovil) { b.inmovil = true; m.efectos.push({ tipo: 'inmovil', x1: b.x, y1: b.y, j: b.j, t: m.t }); } } }
+      } }
+    b.vida -= ur * fl * arma.dano * (mult || 1) * arma.vs[b.edif ? 'edificio' : UNID[b.tipo].blindaje] * (arma.asalto ? 1 : b.bunk ? ECON.bunkerDano : enTrinchera(m, b) ? (arma.sobre ? 1 : ECON.trinchera) : 1) * (enBosque(m, b) && UNID[b.tipo].cat === 'inf' ? ECON.bosqueCubre : 1);
     b.tDano = m.t; b.agresor = de;
+    if (m.ultra && !b.edif && UNID[b.tipo].cat === 'inf') {
+      if (b.vida <= 0 && !b.bunk && !b.sube) { // cae herido: fuera de combate, a la espera de que lo recojan
+        b.vida = 1; b.herido = m.t; limpiar(b); b.obj = 0; b.orden = 'nada'; b.ruta = null; b.pend = null; b.v = 0; b.guardia = false; m.efectos.push({ tipo: 'herido', x1: b.x, y1: b.y, j: b.j, t: m.t }); return;
+      }
+      const J = m.jug[b.j]; // bajo fuego y al descubierto, por su cuenta: a cubierto
+      if (b.vida > 0 && !J.aToda && (b.orden === 'nada' || (b.orden === 'amover' && !J.decidido)) && !b.guardia && !b.bunk && !UNID[b.tipo].monta && !b.cava && m.t - (b.cubT === undefined ? -999 : b.cubT) > 200 && !enBosque(m, b) && !enTrinchera(m, b)) {
+        b.cubT = m.t; const N = m.N, R = ECON.ultra.cubre, bx = Math.floor(b.x), by = Math.floor(b.y); let mc = -1, mv = Infinity;
+        for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) { const x = bx + dx, y = by + dy; if (x < 1 || y < 1 || x >= N - 1 || y >= N - 1) continue; const i = y * N + x; if (m.mapa.terreno[i] !== T.BOSQUE || m.ocup[i]) continue;
+          const v = Math.hypot(dx, dy) - (ox !== undefined ? 0.3 * Math.hypot(x - ox, y - oy) : 0); if (v < mv) { mv = v; mc = i; } }
+        if (mc >= 0) { limpiar(b); b.obj = 0; asignar(m, b, { t: 'mover', x: (mc % N) + 0.5, y: ((mc / N) | 0) + 0.5 }); m.efectos.push({ tipo: 'retira', x1: b.x, y1: b.y, j: b.j, t: m.t }); }
+      }
+    }
     if (b.vida <= 0 && !b.contada) { // veteranía: la baja se la apunta quien disparó
       b.contada = true;
       const a = de ? m.porId.get(de) : null;
@@ -2452,6 +2474,10 @@
     return m.t - u.espT < ECON.critEspera;
   }
   function tickUnidad(m, u) {
+    if (u.herido) { // herido: no hace nada; si lo curan lo bastante, se levanta; si nadie llega a tiempo, muere
+      u.v = 0; if (u.vida >= u.vidaMax * ECON.ultra.heridoAlta) { u.herido = 0; m.efectos.push({ tipo: 'alta', x1: u.x, y1: u.y, j: u.j, t: m.t }); } else if (m.t - u.herido > ECON.ultra.heridoT) { u.herido = 0; u.vida = 0; } return;
+    }
+    if (u.inmovil && u.vida >= u.vidaMax * 0.9) u.inmovil = false; // reparado, vuelve a andar
     const d = UNID[u.tipo];
     u.px = u.x; u.py = u.y;
     if (u.recarga > 0) u.recarga--;
@@ -2936,7 +2962,8 @@
   // ---------- criterio de combate ----------
   // Cada segundo: un mapa grueso de fuerza por bando (coste por vida, solo lo armado) y, para cada unidad de tierra, su balance local (u.bal: lo propio entre lo enemigo que ve)
   // y, si es de apoyo o de segunda línea, si se ha quedado por delante de las de combate (u.adel) y a qué distancia tiene al enemigo (u.amen).
-  const cauto = (m, u) => !m.jug[u.j].aToda && (u.bal < ECON.critInf || u.adel);
+  const cInf = (m) => (m.ultra ? ECON.ultra.critInf : ECON.critInf), cRet = (m) => (m.ultra ? ECON.ultra.critRet : ECON.critRet);
+  const cauto = (m, u) => !m.jug[u.j].aToda && !m.jug[u.j].decidido && (u.bal < cInf(m) || u.adel); // (decidido: cumple la orden sin esperar ni replegarse, pero se cubre)
   function tickCriterio(m) {
     const N = m.N, B = ECON.critBloque, nb = Math.ceil(N / B), R = ECON.critAlcance;
     if (!m.fuerza || m.fuerza[0].length !== nb * nb) m.fuerza = [new Float32Array(nb * nb), new Float32Array(nb * nb)];
@@ -2945,7 +2972,7 @@
     for (const e of m.ents) {
       if (e.vida <= 0 || e.j > 1) continue;
       if (e.edif) { const d = EDIF[e.tipo]; if (d && d.arma) F[e.j][((e.cy / B) | 0) * nb + ((e.cx / B) | 0)] += d.costo * e.vida / (e.vidaMax || d.vida); continue; }
-      const d = UNID[e.tipo]; if (!d.arma || d.mini || e.enTierra) continue;
+      const d = UNID[e.tipo]; if (!d.arma || d.mini || e.enTierra || e.herido) continue;
       F[e.j][((e.y / B) | 0) * nb + ((e.x / B) | 0)] += d.costo * e.vida / e.vidaMax; if (!d.aire) comb[e.j].push(e);
     }
     for (const u of m.ents) {
@@ -2959,8 +2986,8 @@
         if (en) { u.amen = md; let delante = false, cerca = false; for (const o of comb[u.j]) { if (o === u || UNID[o.tipo].atras) continue; const du = Math.hypot(o.x - u.x, o.y - u.y); if (du > 14) continue; cerca = true; if (Math.hypot(o.x - en.x, o.y - en.y) < md - 0.5) { delante = true; break; } } u.adel = cerca && !delante; }
       }
       // El repliegue: por su cuenta (sin orden, o en marcha de ataque), quien está en clara inferioridad, o el apoyo que tiene al enemigo encima, se va con los suyos.
-      if (m.jug[u.j].aToda || u.guardia || u.bunk || u.retirando || u.protege || u.acude || u.vigila || u.cava > 0 || (u.orden !== 'nada' && u.orden !== 'amover') || ene <= 0 || m.t - (u.replT === undefined ? -999 : u.replT) < 100 || enTrinchera(m, u)) continue;
-      if (!(d.atras ? u.amen < 6 && (u.adel || u.bal < ECON.critInf) : u.bal < ECON.critRet)) continue;
+      if (m.jug[u.j].aToda || m.jug[u.j].decidido || u.herido || u.guardia || u.bunk || u.retirando || u.protege || u.acude || u.vigila || u.cava > 0 || (u.orden !== 'nada' && u.orden !== 'amover') || ene <= 0 || m.t - (u.replT === undefined ? -999 : u.replT) < 100 || enTrinchera(m, u)) continue;
+      if (!(d.atras ? u.amen < 6 && (u.adel || u.bal < cInf(m)) : u.bal < cRet(m))) continue;
       const yo = d.arma ? d.costo * u.vida / u.vidaMax : 0; let mk = -1, mv = 0;
       for (let dy = -R - 1; dy <= R + 1; dy++) { const y = by + dy; if (y < 0 || y >= nb) continue; for (let dx = -R - 1; dx <= R + 1; dx++) { const x = bx + dx; if (x < 0 || x >= nb || (!dx && !dy)) continue; const k = y * nb + x, v = Fp[k] - Fe[k]; if (v > mv) { mv = v; mk = k; } } }
       let c;
