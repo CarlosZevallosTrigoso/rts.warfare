@@ -1502,6 +1502,23 @@ prueba('moto de suministro: sale del cuartel, va sola adonde hay tropa sin abast
   assert.ok(fue, 'la moto se pone en marcha sola'); assert.ok(sol.mun >= W.munDe('infanteria'), 'y le repone la munición (' + sol.mun + ')');
 });
 
+prueba('ultra-real: el caído en plena marcha se queda quieto del todo y no admite órdenes', () => {
+  const m = W.crearMundo(4242, { N: 128, ultra: true });
+  for (const e of m.ents) if (!e.edif) e.vida = 0;
+  W.tick(m);
+  for (let y = 50; y < 70; y++) for (let x = 50; x < 80; x++) { m.mapa.terreno[y * 128 + x] = 0; m.paso[y * 128 + x] = 1; }
+  const u = W.crearUnidad(m, 0, 'infanteria', 60 * 128 + 55);
+  W.orden(m, { t: 'mover', j: 0, ids: [u.id], x: 75.5, y: 60.5 });
+  for (let i = 0; i < 40; i++) W.tick(m);
+  assert.ok(Math.hypot(u.x - u.px, u.y - u.py) > 0, 'debería ir andando');
+  u.vida = 1; u.herido = m.t; u.orden = 'nada'; u.ruta = null;
+  W.tick(m);
+  assert.strictEqual(Math.hypot(u.x - u.px, u.y - u.py), 0, 'el herido conserva un paso a medias (vibra en pantalla)');
+  W.orden(m, { t: 'mover', j: 0, ids: [u.id], x: 75.5, y: 60.5 });
+  for (let i = 0; i < 5; i++) W.tick(m);
+  assert.strictEqual(u.orden, 'nada', 'el herido aceptó una orden');
+});
+
 prueba('ultra-real: pocos tiros tumban a un infante, que queda herido; curado se salva y si no, muere; las armas ligeras no pueden con tanques ni edificios', () => {
   const m = W.crearMundo(4242, { N: 128, ultra: true }), N = m.N, U = W.ECON.ultra, A = W.ARMAS; m.logistica = false;
   assert.ok(m.ultra && !W.crearMundo(4242, { N: 128 }).ultra, 'el modo es una opción de la partida');

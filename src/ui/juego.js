@@ -100,7 +100,7 @@
     const cTerr = document.createElement('canvas'); cTerr.width = cTerr.height = N;
     const xTerr = cTerr.getContext('2d');
     const cRed = document.createElement('canvas'); cRed.width = cRed.height = N; // la cobertura de la red propia, para la vista de la red
-    const xRed = cRed.getContext('2d'), conRed = m.logistica !== false; let verRed = false, redVista = -1;
+    const xRed = cRed.getContext('2d'), conRed = m.logistica !== false; let verRed = false, redVista = -1, verAlc = false;
     function pintarRed() {
       const f = W.cobertura(m, YO), img = xRed.createImageData(N, N), d = img.data, c = hex(P.yo);
       for (let i = 0; i < N * N; i++) if (f[i]) { d[i * 4] = c[0]; d[i * 4 + 1] = c[1]; d[i * 4 + 2] = c[2]; d[i * 4 + 3] = 46; }
@@ -1420,6 +1420,27 @@
           }
           ctx.globalAlpha = 1;
         }
+        { // alcance de las defensas: al colocar una (con su alcance mínimo, si lo tiene) y, con la vista de alcances, el de todas las propias, los inhibidores y lo seleccionado
+          const dc = modo === 'colocar' && raton.dentro ? EDIF[tipoColocar] : null, Ac = dc && dc.arma ? W.ARMAS[dc.arma] : null;
+          if (Ac || verAlc) {
+            ctx.strokeStyle = P.tinta; ctx.fillStyle = P.tinta; ctx.lineWidth = 1; ctx.setLineDash([5, 5]);
+            if (verAlc) {
+              ctx.beginPath();
+              for (const e of m.ents) { if (e.j !== YO || e.vida <= 0) continue; let rA = 0, x, y;
+                if (e.edif) { const d = EDIF[e.tipo]; if (!d.arma) continue; rA = W.alcance(m, e, W.ARMAS[d.arma]); x = e.cx; y = e.cy; }
+                else { const d = UNID[e.tipo]; if (d.inhibe) rA = d.inhibe; else if (d.arma && !d.mini && sel.has(e.id)) rA = W.alcance(m, e, W.ARMAS[d.arma]); else continue; x = e.x; y = e.y; }
+                const sx = ox + x * z, sy = oy + y * z, rr2 = rA * z; if (sx + rr2 < 0 || sy + rr2 < 0 || sx - rr2 > lienzo.width || sy - rr2 > lienzo.height) continue;
+                ctx.moveTo(sx + rr2, sy); ctx.arc(sx, sy, rr2, 0, TAU);
+              }
+              ctx.globalAlpha = 0.05; ctx.fill(); ctx.globalAlpha = 0.5; ctx.stroke();
+            }
+            if (Ac) { const p = esquinaColocar(tipoColocar), sx = ox + (p.x + dc.tam / 2) * z, sy = oy + (p.y + dc.tam / 2) * z;
+              ctx.beginPath(); ctx.arc(sx, sy, Ac.alcance * z, 0, TAU); ctx.globalAlpha = 0.07; ctx.fill(); ctx.globalAlpha = 0.7; ctx.stroke();
+              if (Ac.alcanceMin) { ctx.setLineDash([2, 4]); ctx.beginPath(); ctx.arc(sx, sy, Ac.alcanceMin * z, 0, TAU); ctx.stroke(); }
+            }
+            ctx.setLineDash([]); ctx.globalAlpha = 1;
+          }
+        }
         { // alcance del radar: al colocarlo y con uno seleccionado
           ctx.strokeStyle = P.mal; ctx.globalAlpha = 0.5; ctx.lineWidth = 1; ctx.setLineDash([3, 6]);
           if (modo === 'colocar' && tipoColocar === 'radar' && raton.dentro) { ctx.beginPath(); ctx.arc(raton.x, raton.y, EDIF.radar.radar * z, 0, TAU); ctx.stroke(); }
@@ -1692,6 +1713,8 @@
           if (enVista) flotar(d.x1, d.y1, d.s === 2 ? 'espalda +50 %' : 'costado +25 %', d.j === YO ? P.mal : P.bien);
         } else if (d.tipo === 'ascenso') {
           if (d.j === YO) { flotar(d.x1, d.y1, 'veterano ' + '▲'.repeat(d.rango), P.tinta); if (n++ < 6) son.unidadLista(); }
+        } else if (d.tipo === 'misFin') {
+          if (d.j === YO) { flotar(d.x1, d.y1, 'misión de dron cancelada', P.mal); if (!d.dicho) { d.dicho = true; aviso('El operador se ha movido: su dron vuelve y la misión se cancela'); } }
         } else if (d.tipo === 'retira') {
           if (d.j === YO) flotar(d.x1, d.y1, 'se retira a reparar', P.suave || P.tinta);
         } else if (d.tipo === 'huye') {
@@ -2005,6 +2028,7 @@
     $('dronDespl').addEventListener('click', () => { const ps = portadores(); if (!ps.length) return; W.orden(m, { t: 'drones', j: YO, ids: ps.map((e) => e.id), on: true }); son.orden(); aviso('Drones desplegados'); });
     $('dronMis').addEventListener('click', () => { const om = conMision(); if (!om.length) return; if (om.some((u) => u.dronMis)) { W.orden(m, { t: 'dronMision', j: YO, ids: om.map((u) => u.id) }); aviso('Drones de vuelta con su operador'); } else { modo = 'dronMis'; aviso('Elige el punto que vigilará el dron (hasta 45 celdas del operador)'); } });
     $('dronAtk').addEventListener('click', () => { const us = conDrones(); if (us.length) W.orden(m, { t: 'dronAtk', j: YO, ids: us.map((u) => u.id), on: us.some((u) => u.dronAtk === false) }); });
+    $('verAlcance').addEventListener('click', () => { verAlc = !verAlc; });
     $('verRed').addEventListener('click', () => { if (conRed) verRed = !verRed; else aviso('Partida clásica: sin red'); });
     $('verFlujos').addEventListener('click', () => { if (conRed) { verFlujos = !verFlujos; flujoC = null; } else aviso('Partida clásica: sin red'); });
     $('retiro').addEventListener('click', () => { const us = paraRetiro(); if (us.length) W.orden(m, { t: 'retiro', j: YO, ids: us.map((u) => u.id), on: !us.every((u) => u.retira) }); });
@@ -2420,6 +2444,7 @@
       { const us = conDrones(), bd = $('dronAtk'); bd.hidden = !us.length; if (us.length) { const t = 'Drones de ataque: ' + (us.every((u) => u.dronAtk !== false) ? 'sí' : us.some((u) => u.dronAtk !== false) ? 'algunos' : 'no'); if (bd.textContent !== t) bd.textContent = t; } }
       if (conRed) muestraFlujos();
       { const bf = $('verFlujos'), t = 'ver flujos: ' + (verFlujos ? 'sí' : 'no'); if (bf.textContent !== t) { bf.textContent = t; bf.classList.toggle('on', verFlujos); } bf.hidden = !conRed; }
+      { const ba = $('verAlcance'), t = 'ver alcances: ' + (verAlc ? 'sí' : 'no'); if (ba.textContent !== t) { ba.textContent = t; ba.classList.toggle('on', verAlc); } }
       { const bv = $('verRed'), t = 'ver la red: ' + (verRed ? 'sí' : 'no'); if (bv.textContent !== t) { bv.textContent = t; bv.classList.toggle('on', verRed); } bv.hidden = !conRed; }
       { const us = paraRetiro(), br = $('retiro'); br.hidden = !us.length;
         if (us.length) { const t = 'Retirada automática: ' + (us.every((u) => u.retira) ? 'sí' : us.some((u) => u.retira) ? 'algunas' : 'no'); if (br.textContent !== t) br.textContent = t; } }

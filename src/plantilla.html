@@ -109,7 +109,7 @@
   #ayuda kbd { font: inherit; color: var(--tinta); }
   #formas { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; }
   #formas .grupo { justify-content: center; }
-  #vender, #trinchera, #retiro, #desplegar, #descargar, #trazar, #conectar, #dronAtk, #verRed, #verFlujos, #mejorar { justify-content: center; margin-top: 4px; }
+  #vender, #trinchera, #retiro, #desplegar, #descargar, #trazar, #conectar, #dronAtk, #verRed, #verFlujos, #verAlcance, #mejorar { justify-content: center; margin-top: 4px; }
   .chip.debe { border-style: dashed; opacity: .6; }
   /* Táctil: botonera sobre el mapa para lo que con teclado son teclas, y controles más grandes. */
   #tactil { position: fixed; left: 150px; right: 244px; bottom: 8px; z-index: 3; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; align-items: flex-end; pointer-events: none; }
@@ -289,6 +289,7 @@
     <canvas id="mini" width="208" height="208"></canvas>
     <button type="button" id="verRed" class="grupo" title="Sombrea tu cobertura: ahí tus unidades tienen suministro y ahí puedes construir. En rojo, las líneas que no llegan a tu red. Tecla L.">ver la red: no</button>
     <button type="button" id="verFlujos" class="grupo" title="Muestra por dónde corre la energía y el petróleo, cuánto da y pide cada red, y dónde se corta. Verde: fluye. Naranja: la red no da para todos. Rojo: cortado o sin patio. Tecla I.">ver flujos</button>
+    <button type="button" id="verAlcance" class="grupo" title="Dibuja el alcance de todas tus torretas y defensas, el radio de tus inhibidores y el de las unidades seleccionadas. Al colocar una defensa se ve siempre el suyo.">ver alcances: no</button>
     <div id="panel">
     <div id="vacio" class="tenue">Selecciona un edificio para ver lo que produce.<br><kbd>B</kbd> patio · <kbd>Q</kbd> cuarteles · <kbd>V</kbd> fábricas · <kbd>X</kbd> aeródromos</div>
     <section id="secPel" hidden></section>
