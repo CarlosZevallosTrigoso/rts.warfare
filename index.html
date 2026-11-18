@@ -358,12 +358,12 @@
   <button type="button" id="tutorial">Tutorial guiado<small style="display:block;color:var(--suave);font-size:10px">ocho pasos, con el rival dormido hasta el final</small></button>
   <button type="button" id="continuar" hidden>Continuar la partida guardada</button>
   <button type="button" id="irDrone" onclick="location.href='drone/index.html'">drone.warfare<small style="display:block;color:var(--suave);font-size:10px">el otro juego: el mismo conflicto con lupa, infantería y drones</small></button>
-  <div id="version">versión 125</div>
+  <div id="version">versión 126</div>
 </div></div>
 <div id="guia" hidden><div class="caja"><div class="cab"><strong>Guía: para qué sirve cada cosa</strong><button type="button" id="cierraGuia">cerrar</button></div><div id="guiaTxt"></div></div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finVer" href="#" title="Vuelve a ver la partida entera, con todo el mapa a la vista y a la velocidad que quieras.">ver repetición</a><a id="finLog" href="#" title="Descarga el registro de la partida: la semilla, las opciones y todas las órdenes de los dos bandos, con su instante. Sirve para reproducirla y analizar cómo jugó la IA.">descargar registro</a><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 125' };
+globalThis.W = { VERSION: 'versión 126' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -7842,6 +7842,10 @@ globalThis.W = { VERSION: 'versión 125' };
     const ZAPA = { minar: 'minar: clic donde va la mina (Mayús: seguir poniendo)', desminar: 'desminar: clic en la zona a limpiar', ponton: 'pontón: clic en el agua que quieres cruzar', volar: 'volar: clic en un camino, puente o pontón' };
     let zapaQue = 'minar';
     $('zapa').addEventListener('click', (ev) => { const b = ev.target.closest('[data-z]'); if (!b || !zapadores().length) return; zapaQue = b.dataset.z; modo = 'zapar'; });
+    function misionEn(wx, wy) { // el punto elegido para la misión de dron (vale con cualquiera de los dos botones del ratón)
+      const om = conMision().filter((u) => Math.hypot(wx - u.x, wy - u.y) <= UNID[u.tipo].misionDron);
+      if (om.length) { W.orden(m, { t: 'dronMision', j: YO, ids: om.map((u) => u.id), x: wx, y: wy }); marca(wx, wy, P.yo); son.orden(); modo = null; aviso('Dron en camino al punto: el operador se queda plantado'); } else aviso('Demasiado lejos: el dron llega a 45 celdas de su operador');
+    }
     const conMision = () => unidadesSel().filter((u) => u.j === YO && UNID[u.tipo].misionDron);
     const portadores = () => [...sel].map((id) => m.porId.get(id)).filter((e) => e && e.j === YO && e.vida > 0 && (e.edif ? EDIF[e.tipo] : UNID[e.tipo]) && (e.edif ? EDIF[e.tipo] : UNID[e.tipo]).drones);
     $('dronLlama').addEventListener('click', () => { const ps = portadores(); if (!ps.length) return; W.orden(m, { t: 'drones', j: YO, ids: ps.map((e) => e.id), on: false }); son.orden(); aviso('Drones de vuelta: se quedan posados hasta que los despliegues'); });
@@ -8260,7 +8264,7 @@ globalThis.W = { VERSION: 'versión 125' };
       pintarForma();
       $('zapa').hidden = !zapadores().length; $('escolta').hidden = !armadas().length;
       { const ps = portadores(), bl = $('dronLlama'), bd = $('dronDespl'), rec = ps.some((e) => e.drLlama), fue = ps.some((e) => !e.drLlama); bl.hidden = !ps.length; bd.hidden = !ps.length; bl.classList.toggle('listo', ps.length > 0 && !fue); bd.classList.toggle('listo', ps.length > 0 && !rec); }
-      { const om = conMision(), bm = $('dronMis'); bm.hidden = !om.length; if (om.length) { const tx = om.some((u) => u.dronMis) ? 'Misión de dron: en curso' : 'Misión de dron'; if (bm.textContent !== tx) bm.textContent = tx; bm.classList.toggle('listo', om.some((u) => u.dronMis)); } }
+      { const om = conMision(), bm = $('dronMis'); bm.hidden = !om.length; if (om.length) { const tx = om.some((u) => u.dronMis) ? 'Misión de dron: en curso (clic para recoger)' : modo === 'dronMis' ? 'Misión de dron: marca el punto en el mapa' : 'Misión de dron'; if (bm.textContent !== tx) bm.textContent = tx; bm.classList.toggle('listo', modo === 'dronMis' || om.some((u) => u.dronMis)); } }
       { const us = conDrones(), bd = $('dronAtk'); bd.hidden = !us.length; if (us.length) { const t = 'Drones de ataque: ' + (us.every((u) => u.dronAtk !== false) ? 'sí' : us.some((u) => u.dronAtk !== false) ? 'algunos' : 'no'); if (bd.textContent !== t) bd.textContent = t; } }
       if (conRed) muestraFlujos();
       { const bf = $('verFlujos'), t = 'ver flujos: ' + (verFlujos ? 'sí' : 'no'); if (bf.textContent !== t) { bf.textContent = t; bf.classList.toggle('on', verFlujos); } bf.hidden = !conRed; }
@@ -8314,8 +8318,7 @@ globalThis.W = { VERSION: 'versión 125' };
           return;
         }
         if (modo === 'dronMis') {
-          const om = conMision().filter((u) => Math.hypot(wx - u.x, wy - u.y) <= UNID[u.tipo].misionDron);
-          if (om.length) { W.orden(m, { t: 'dronMision', j: YO, ids: om.map((u) => u.id), x: wx, y: wy }); marca(wx, wy, P.yo); son.orden(); modo = null; } else aviso('Demasiado lejos: el dron llega a 45 celdas de su operador');
+          misionEn(wx, wy);
           return;
         }
         if (modo === 'barrido') { W.orden(m, { t: 'intel', j: YO, clave: barridoClave, x: wx, y: wy }); son.orden(); modo = null; return; }
@@ -8466,6 +8469,7 @@ globalThis.W = { VERSION: 'versión 125' };
         const fue = raton.arrastre;
         raton.der = false; raton.arrastre = false;
         if (!fue && modo === 'patrulla') { cerrarPatrulla(); return; }
+        if (!fue && modo === 'dronMis') { misionEn(aMundoX(raton.x), aMundoY(raton.y)); return; }
         if (!fue) ordenar(aMundoX(raton.x), aMundoY(raton.y), ev.shiftKey);
         return;
       }

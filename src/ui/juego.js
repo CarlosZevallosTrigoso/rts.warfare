@@ -2022,6 +2022,10 @@
     const ZAPA = { minar: 'minar: clic donde va la mina (Mayús: seguir poniendo)', desminar: 'desminar: clic en la zona a limpiar', ponton: 'pontón: clic en el agua que quieres cruzar', volar: 'volar: clic en un camino, puente o pontón' };
     let zapaQue = 'minar';
     $('zapa').addEventListener('click', (ev) => { const b = ev.target.closest('[data-z]'); if (!b || !zapadores().length) return; zapaQue = b.dataset.z; modo = 'zapar'; });
+    function misionEn(wx, wy) { // el punto elegido para la misión de dron (vale con cualquiera de los dos botones del ratón)
+      const om = conMision().filter((u) => Math.hypot(wx - u.x, wy - u.y) <= UNID[u.tipo].misionDron);
+      if (om.length) { W.orden(m, { t: 'dronMision', j: YO, ids: om.map((u) => u.id), x: wx, y: wy }); marca(wx, wy, P.yo); son.orden(); modo = null; aviso('Dron en camino al punto: el operador se queda plantado'); } else aviso('Demasiado lejos: el dron llega a 45 celdas de su operador');
+    }
     const conMision = () => unidadesSel().filter((u) => u.j === YO && UNID[u.tipo].misionDron);
     const portadores = () => [...sel].map((id) => m.porId.get(id)).filter((e) => e && e.j === YO && e.vida > 0 && (e.edif ? EDIF[e.tipo] : UNID[e.tipo]) && (e.edif ? EDIF[e.tipo] : UNID[e.tipo]).drones);
     $('dronLlama').addEventListener('click', () => { const ps = portadores(); if (!ps.length) return; W.orden(m, { t: 'drones', j: YO, ids: ps.map((e) => e.id), on: false }); son.orden(); aviso('Drones de vuelta: se quedan posados hasta que los despliegues'); });
@@ -2440,7 +2444,7 @@
       pintarForma();
       $('zapa').hidden = !zapadores().length; $('escolta').hidden = !armadas().length;
       { const ps = portadores(), bl = $('dronLlama'), bd = $('dronDespl'), rec = ps.some((e) => e.drLlama), fue = ps.some((e) => !e.drLlama); bl.hidden = !ps.length; bd.hidden = !ps.length; bl.classList.toggle('listo', ps.length > 0 && !fue); bd.classList.toggle('listo', ps.length > 0 && !rec); }
-      { const om = conMision(), bm = $('dronMis'); bm.hidden = !om.length; if (om.length) { const tx = om.some((u) => u.dronMis) ? 'Misión de dron: en curso' : 'Misión de dron'; if (bm.textContent !== tx) bm.textContent = tx; bm.classList.toggle('listo', om.some((u) => u.dronMis)); } }
+      { const om = conMision(), bm = $('dronMis'); bm.hidden = !om.length; if (om.length) { const tx = om.some((u) => u.dronMis) ? 'Misión de dron: en curso (clic para recoger)' : modo === 'dronMis' ? 'Misión de dron: marca el punto en el mapa' : 'Misión de dron'; if (bm.textContent !== tx) bm.textContent = tx; bm.classList.toggle('listo', modo === 'dronMis' || om.some((u) => u.dronMis)); } }
       { const us = conDrones(), bd = $('dronAtk'); bd.hidden = !us.length; if (us.length) { const t = 'Drones de ataque: ' + (us.every((u) => u.dronAtk !== false) ? 'sí' : us.some((u) => u.dronAtk !== false) ? 'algunos' : 'no'); if (bd.textContent !== t) bd.textContent = t; } }
       if (conRed) muestraFlujos();
       { const bf = $('verFlujos'), t = 'ver flujos: ' + (verFlujos ? 'sí' : 'no'); if (bf.textContent !== t) { bf.textContent = t; bf.classList.toggle('on', verFlujos); } bf.hidden = !conRed; }
@@ -2494,8 +2498,7 @@
           return;
         }
         if (modo === 'dronMis') {
-          const om = conMision().filter((u) => Math.hypot(wx - u.x, wy - u.y) <= UNID[u.tipo].misionDron);
-          if (om.length) { W.orden(m, { t: 'dronMision', j: YO, ids: om.map((u) => u.id), x: wx, y: wy }); marca(wx, wy, P.yo); son.orden(); modo = null; } else aviso('Demasiado lejos: el dron llega a 45 celdas de su operador');
+          misionEn(wx, wy);
           return;
         }
         if (modo === 'barrido') { W.orden(m, { t: 'intel', j: YO, clave: barridoClave, x: wx, y: wy }); son.orden(); modo = null; return; }
@@ -2646,6 +2649,7 @@
         const fue = raton.arrastre;
         raton.der = false; raton.arrastre = false;
         if (!fue && modo === 'patrulla') { cerrarPatrulla(); return; }
+        if (!fue && modo === 'dronMis') { misionEn(aMundoX(raton.x), aMundoY(raton.y)); return; }
         if (!fue) ordenar(aMundoX(raton.x), aMundoY(raton.y), ev.shiftKey);
         return;
       }
