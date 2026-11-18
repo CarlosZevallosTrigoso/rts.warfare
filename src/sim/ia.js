@@ -32,6 +32,59 @@
     return { j, estilo: e, plan: planDe(e), oleada: Math.max(3, Math.round((nivel === 'tranquilo' ? 12 : nivel === 'agresivo' ? 4 : 6) * ESTILOS[e].oleada)), atacantes: new Set(), reunidos: new Set(), capturan: new Set(), puesto: -1, tPuesto: 0, lado: 1, fallos: 0 };
   };
 
+  // ---------- La lógica de costes ----------
+  // En vez de proporciones fijas, compra lo que mejor le sale contra lo que ha visto del rival y contra lo que le está matando a los suyos.
+  const fichaDe = (t) => UNID[t] || EDIF[t];
+  const ARMA_DE = {}; // quién suele llevar cada arma (para deducir, de lo que mata a los suyos, qué tiene el rival)
+  for (const t of Object.keys(UNID)) { const d = UNID[t]; if (d.arma && !d.mini && !ARMA_DE[d.arma]) ARMA_DE[d.arma] = t; }
+  for (const t of Object.keys(EDIF)) { const d = EDIF[t]; if (d.arma && !ARMA_DE[d.arma]) ARMA_DE[d.arma] = t; }
+  const PREVIO = { infanteria: 400, tanque: 600, torreta: 350 }; // lo que supone del rival antes de verlo (en valor)
+  const C_INF = ['infanteria', 'granadero', 'antitanque', 'francotirador', 'gatling', 'mortero', 'asalto'], C_VEH = ['blindado', 'tanque', 'pesado', 'artilleria', 'lanzacohetes'];
+  W.IA_CANDIDATOS = C_INF.concat(C_VEH);
+  // La tabla de duelos: medida en la propia simulación (tools/duelos.js), el mismo valor en minerales de cada tipo contra cada tipo, a campo abierto y hasta el final.
+  // De 1 (arrasa sin perder nada) a -1 (lo pierde todo sin hacer daño). Hay que regenerarla cuando cambie el equilibrio de unidades o armas.
+  /* DUELOS */ const DUELO = {"infanteria":{"infanteria":0,"granadero":-0.85,"antitanque":0.86,"francotirador":0.23,"gatling":0.99,"mortero":0.24,"asalto":-0.57,"blindado":-0.8,"tanque":0.68,"pesado":0.73,"artilleria":-0.97,"lanzacohetes":-1,"torreta":-0.66,"nidoMG":-0.79,"torreCanon":-0.31},"granadero":{"infanteria":0.85,"granadero":0,"antitanque":0.88,"francotirador":-0.72,"gatling":1,"mortero":1,"asalto":0.96,"blindado":0.88,"tanque":0.95,"pesado":0.87,"artilleria":-0.45,"lanzacohetes":-1,"torreta":-0.74,"nidoMG":-0.84,"torreCanon":-0.82},"antitanque":{"infanteria":-0.86,"granadero":-0.88,"antitanque":0,"francotirador":-1,"gatling":-0.51,"mortero":-0.62,"asalto":-0.9,"blindado":-0.4,"tanque":0.8,"pesado":0.78,"artilleria":-0.67,"lanzacohetes":-0.63,"torreta":-0.71,"nidoMG":-0.36,"torreCanon":-0.59},"francotirador":{"infanteria":-0.23,"granadero":0.72,"antitanque":1,"francotirador":0,"gatling":1,"mortero":1,"asalto":-0.59,"blindado":-0.97,"tanque":-0.93,"pesado":-0.94,"artilleria":-0.92,"lanzacohetes":-0.95,"torreta":0.1,"nidoMG":0.08,"torreCanon":0.16},"gatling":{"infanteria":-0.99,"granadero":-1,"antitanque":0.51,"francotirador":-1,"gatling":0,"mortero":-1,"asalto":-0.99,"blindado":-0.98,"tanque":-0.37,"pesado":-0.59,"artilleria":-1,"lanzacohetes":-1,"torreta":-0.93,"nidoMG":0.67,"torreCanon":-0.9},"mortero":{"infanteria":-0.24,"granadero":-1,"antitanque":0.62,"francotirador":-1,"gatling":1,"mortero":0,"asalto":-0.64,"blindado":-0.53,"tanque":0.22,"pesado":-0.62,"artilleria":-1,"lanzacohetes":-0.85,"torreta":0.56,"nidoMG":0.58,"torreCanon":-0.08},"asalto":{"infanteria":0.57,"granadero":-0.96,"antitanque":0.9,"francotirador":0.59,"gatling":0.99,"mortero":0.64,"asalto":0,"blindado":-0.37,"tanque":0.84,"pesado":0.83,"artilleria":-0.99,"lanzacohetes":0.02,"torreta":-0.5,"nidoMG":-0.48,"torreCanon":-0.18},"blindado":{"infanteria":0.8,"granadero":-0.88,"antitanque":0.4,"francotirador":0.97,"gatling":0.98,"mortero":0.53,"asalto":0.37,"blindado":0,"tanque":-0.8,"pesado":-0.72,"artilleria":-0.69,"lanzacohetes":-0.32,"torreta":-0.92,"nidoMG":-0.56,"torreCanon":-0.93},"tanque":{"infanteria":-0.68,"granadero":-0.95,"antitanque":-0.8,"francotirador":0.93,"gatling":0.37,"mortero":-0.22,"asalto":-0.84,"blindado":0.8,"tanque":0,"pesado":0.05,"artilleria":0.35,"lanzacohetes":0.63,"torreta":-0.71,"nidoMG":0.5,"torreCanon":-0.74},"pesado":{"infanteria":-0.73,"granadero":-0.87,"antitanque":-0.78,"francotirador":0.94,"gatling":0.59,"mortero":0.62,"asalto":-0.83,"blindado":0.72,"tanque":-0.05,"pesado":0,"artilleria":0.56,"lanzacohetes":0.62,"torreta":0.44,"nidoMG":0.88,"torreCanon":-0.76},"artilleria":{"infanteria":0.97,"granadero":0.45,"antitanque":0.67,"francotirador":0.92,"gatling":1,"mortero":1,"asalto":0.99,"blindado":0.69,"tanque":-0.35,"pesado":-0.56,"artilleria":0,"lanzacohetes":-0.3,"torreta":0.33,"nidoMG":0.53,"torreCanon":1},"lanzacohetes":{"infanteria":1,"granadero":1,"antitanque":0.63,"francotirador":0.95,"gatling":1,"mortero":0.85,"asalto":-0.02,"blindado":0.32,"tanque":-0.63,"pesado":-0.62,"artilleria":0.3,"lanzacohetes":0,"torreta":0.33,"nidoMG":0.61,"torreCanon":0.5}}; /* FIN DUELOS */
+  W.IA_DUELO = DUELO;
+  // Lo que ha visto del rival (se olvida despacio) y lo que le está matando a los suyos: de ahí sale contra qué compra.
+  function iaObserva(m, ia) {
+    const j = ia.j, nie = m.niebla[j], N = m.N, ahora = {}, V = ia.visto || (ia.visto = {});
+    for (const e of m.ents) {
+      if (e.j === j || e.j > 1 || e.vida <= 0 || e.muro || e.infra) continue;
+      const d = e.edif ? EDIF[e.tipo] : UNID[e.tipo]; if (!d || !d.arma || d.mini || !d.costo) continue;
+      if (nie[Math.floor(e.edif ? e.cy : e.y) * N + Math.floor(e.edif ? e.cx : e.x)] !== 2) continue;
+      ahora[e.tipo] = (ahora[e.tipo] || 0) + 1;
+    }
+    for (const t in V) { V[t] *= 0.985; if (V[t] < 0.3) delete V[t]; }
+    for (const t in ahora) if (!(V[t] > ahora[t])) V[t] = ahora[t];
+    const pa = m.jug[j].cont ? m.jug[j].cont.porArma : {}, ant = ia.armaAnt || (ia.armaAnt = {}), D = ia.dano || (ia.dano = {});
+    for (const a in D) { D[a] *= 0.985; if (D[a] < 20) delete D[a]; }
+    for (const a in pa) { const dv = pa[a] - (ant[a] || 0); if (dv > 0) { D[a] = (D[a] || 0) + dv; ant[a] = pa[a]; } }
+    const am = {}; let tot = 0; // la amenaza, en valor por tipo
+    for (const t in PREVIO) am[t] = PREVIO[t] * 0.5;
+    for (const t in V) am[t] = (am[t] || 0) + V[t] * fichaDe(t).costo;
+    for (const a in D) { const t = ARMA_DE[a]; if (t) am[t] = (am[t] || 0) + D[a] * 0.5; }
+    for (const t in am) tot += am[t];
+    ia.amenaza = am; ia.amenazaT = tot;
+  }
+  // La nota de un candidato: lo que gana menos lo que pierde, promediado sobre lo que tiene el rival (y un 15 % de edificios, que no contestan).
+  function nota(ia, c) {
+    const am = ia.amenaza, D = DUELO[c]; if (!am || !D) return 0; let n = 0, tot = 0;
+    for (const t in am) if (D[t] !== undefined) { const w = EDIF[t] ? am[t] * 0.5 : am[t]; n += w * D[t]; tot += w; } /* (las defensas fijas pesan la mitad: solo cuentan al atacar) */
+    return tot ? n / tot : 0;
+  }
+  W.iaNota = nota;
+  // Qué comprar de una lista: reparte el gasto entre los candidatos según su nota (los mejores, más) y pide el que va más corto respecto a su parte.
+  function elige(m, ia, J, lista) {
+    const j = ia.j, c = J.cuenta, ok = [];
+    let apoyo = 0, total = 0; for (const t of C_INF.concat(C_VEH)) { const v = ((c[t] || 0) + J.colas[t].n) * UNID[t].costo; total += v; if (UNID[t].atras) apoyo += v; }
+    for (const t of lista) { const d = UNID[t]; if ((d.nivel || 1) > J.nivel || !W.tieneReq(m, j, d.req) || J.raros < (d.raros || 0) || (J.acero !== undefined && J.acero < (d.acero || 0))) continue; if (d.atras && (total < 1500 || apoyo > total * 0.3)) continue; /* el apoyo, nunca más de un tercio ni antes de tener línea */ ok.push(t); }
+    if (!ok.length) return null;
+    let mx = -Infinity, mn = Infinity; const ns = ok.map((t) => { const n = nota(ia, t); if (n > mx) mx = n; if (n < mn) mn = n; return n; });
+    const T = 0.3; let sp = 0, sv = 0; const ps = ns.map((n) => { const w = Math.exp((n - mx) / T); sp += w; return w; }), vs = ok.map((t) => { const v = ((c[t] || 0) + J.colas[t].n) * UNID[t].costo; sv += v; return v; });
+    let mejor = ok[0], md = -Infinity; for (let i = 0; i < ok.length; i++) { const dlt = ps[i] / sp - (sv ? vs[i] / sv : 0); if (dlt > md) { md = dlt; mejor = ok[i]; } }
+    return mejor;
+  }
+
   // Hasta dónde llegan los vehículos desde un punto (el bosque no lo cruzan): relleno por inundación sobre el paso de vehículos.
   function alcanceVehiculos(m, x, y) {
     const N = m.N, visto = new Uint8Array(N * N), cola = new Int32Array(N * N), ini = W.cercaLibre(m, x, y, true);
@@ -118,6 +171,7 @@
     J.esIA = true; // (lo usa la simulación: la IA conserva el alcance antiguo de líneas y depósitos)
     if (!J.vivo) return;
     const E = ESTILOS[ia.estilo];
+    if ((m.t + ia.j * 7) % 100 === 60 || !ia.amenaza) iaObserva(m, ia);
     const tk = (m.t + ia.j * 7) / 20; // cuántas veces ha pensado: las reglas que van cada cierto tiempo se cuentan con esto (con m.t, las del jugador 2 no caían nunca en su turno)
     let patio = null, objetivo = null, dObj = Infinity;
     const soldados = [], aviones = [], patios = [], moviles = [], sinArma = [];
@@ -272,15 +326,13 @@
       // Vehículo: pesado si hay nivel y raros; una artillería por cada cuatro tanques; si no, tanque.
       const c = J.cuenta, enFabrica = J.colas.tanque.n + J.colas.artilleria.n + J.colas.pesado.n + J.colas.blindado.n + J.colas.antiaereoMovil.n + J.colas.lanzacohetes.n + J.colas.mando.n + J.colas.patioMovil.n;
       let veh = (c.blindado || 0) < E.blindados && (c.tanque || 0) < Math.max(2, E.blindados) ? 'blindado' : 'tanque'; // blindados ligeros para empezar, según el estilo
-      if (J.nivel >= 3 && (c.lanzacohetes || 0) < 2 && (c.lanzacohetes || 0) * 5 < (c.tanque || 0) + (c.pesado || 0) && W.puedePagar(J, UNID.lanzacohetes)) veh = 'lanzacohetes';
-      else if (J.nivel >= 3 && !c.mando && J.info > 250 && soldados.length >= 8) veh = 'mando';
+      if (veh === 'tanque') veh = elige(m, ia, J, C_VEH) || 'tanque'; // lo que mejor le sale a cuenta contra lo que tiene el rival
+      if (J.nivel >= 3 && !c.mando && J.info > 250 && soldados.length >= 8) veh = 'mando';
       else if (m.logistica !== false && !c.vehRadio && !J.colas.vehRadio.n && soldados.length >= 8 && m.t > 6000) veh = 'vehRadio'; // la radio va con el ejército
       // Segunda base: un patio móvil cuando la economía lo permite y aún solo hay un patio.
       const paraBase = quiereBase && ia.tAhorro > 0;
       if (paraBase) veh = 'patioMovil'; // (solo cuando ahorra para la segunda base: si ahorra para subir de nivel, no compra vehículos)
       if (J.nivel >= 2 && (c.antiaereoMovil || 0) < 1 + Math.floor(((c.tanque || 0) + (c.pesado || 0)) / 8)) veh = 'antiaereoMovil'; // escolta antiaérea para las columnas
-      else if (J.nivel >= 3 && (c.pesado || 0) < 5 && W.puedePagar(J, UNID.pesado)) veh = 'pesado';
-      else if (J.nivel >= 2 && (c.artilleria || 0) * 4 < (c.tanque || 0)) veh = 'artilleria';
       if (J.acero !== undefined && J.acero < (UNID[veh].acero || 0)) veh = 'blindado'; // sin acero para lo pesado: blindados ligeros mientras la fundición trabaja
       // Aviación: cazas, un dron y, con nivel 3, helicópteros y bombarderos; uno a la vez. El estilo aéreo la compra antes que los tanques.
       let av = null;
@@ -294,14 +346,13 @@
       if (c.fabrica && !enFabrica && !(paraNivel && !paraBase) && dinero >= UNID[veh].costo + guardaAire && W.puedePagar(J, UNID[veh])) { W.orden(m, { t: 'entrenar', j, tipo: veh }); dinero -= UNID[veh].costo; }
       if (av && !ahorra && dinero >= UNID[av].costo + (E.aviones > 1 ? 0 : 600) && W.puedePagar(J, UNID[av])) { W.orden(m, { t: 'entrenar', j, tipo: av }); dinero -= UNID[av].costo; }
       // Infantería: un antitanque por cada dos fusileros desde el nivel 2.
-      let inf = J.nivel >= 2 && (c.antitanque || 0) * 2 < (c.infanteria || 0) ? 'antitanque' : J.nivel < 2 && (c.infanteria || 0) >= 4 && (c.granadero || 0) * 3 < (c.infanteria || 0) ? 'granadero' : 'infanteria'; // en nivel 1, un granadero por cada tres fusileros
+      let inf = elige(m, ia, J, C_INF) || 'infanteria'; // (antes: proporciones fijas de fusileros, granaderos y antitanques)
       if (!c.explorador && !J.colas.explorador.n && ((c.extractor || 0) < 2 || !c.estacion)) inf = 'explorador'; // uno para descubrir yacimientos
       else if (J.nivel >= 2 && (c.ingeniero || 0) + J.colas.ingeniero.n < (ia.estilo === 'defensivo' ? 2 : 1)) inf = 'ingeniero'; // repara la base él solo
       else if ((c.medico || 0) + J.colas.medico.n < 1 && (c.infanteria || 0) >= 6) inf = 'medico'; // uno, para la tropa que vuelve herida
-      else if (J.nivel >= 2 && (c.francotirador || 0) < 3 && (c.francotirador || 0) * 5 < (c.infanteria || 0)) inf = 'francotirador';
       const topeInf = E.infMax && (c.infanteria || 0) + (c.antitanque || 0) >= E.infMax && (inf === 'infanteria' || inf === 'antitanque');
       if (c.cuartel && !topeInf && !ahorra && inf === 'infanteria' && m.t > 9000 && !(J.colas.infanteria.n + J.colas.granadero.n + J.colas.medico.n) && dinero >= 1500 + guardaAire && !W.pelNo(m, j, W.PEL.fusileros.de)) { W.orden(m, { t: 'peloton', j, tipo: 'fusileros' }); dinero -= W.pelPrecio(W.PEL.fusileros.de).costo; } // con dinero de sobra, un pelotón de fusileros entero (con su granadero y su médico)
-      else if (c.cuartel && !topeInf && !(ahorra && soldados.length >= 6) && J.colas.infanteria.n + J.colas.granadero.n + J.colas.antitanque.n + J.colas.explorador.n + J.colas.ingeniero.n + J.colas.francotirador.n < 2 && dinero >= UNID[inf].costo + guardaAire && W.puedePagar(J, UNID[inf])) { W.orden(m, { t: 'entrenar', j, tipo: inf }); dinero -= UNID[inf].costo; }
+      else if (c.cuartel && !topeInf && !(ahorra && soldados.length >= 6) && J.colas.infanteria.n + J.colas.granadero.n + J.colas.antitanque.n + J.colas.explorador.n + J.colas.ingeniero.n + J.colas.francotirador.n + J.colas.gatling.n + J.colas.mortero.n + J.colas.asalto.n < 2 && dinero >= UNID[inf].costo + guardaAire && W.puedePagar(J, UNID[inf])) { W.orden(m, { t: 'entrenar', j, tipo: inf }); dinero -= UNID[inf].costo; }
     }
 
     // Tecnología: la primera pendiente de la lista que se pueda empezar y pagar sin dejar la caja vacía.

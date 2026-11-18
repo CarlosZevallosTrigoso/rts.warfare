@@ -17,6 +17,7 @@
       retiro: false, // retirada automática por defecto para las unidades nuevas
       colas: Object.fromEntries(Object.keys(UNID).map((t) => [t, { n: 0, prog: 0, sinAgua: false }])), // total encargado por tipo; las colas de verdad están en cada edificio (e.cola)
       alerta: null, cosechado: 0, bajas: 0, producidas: 0,
+      cont: nuevaCont(), // la contabilidad de la guerra: valor perdido y destruido, por tipo y por el arma que lo causó
       colmena: true, // inteligencia de colmena: las unidades piden y dan apoyo solas
       nivel: 1, mejoras: {}, inv: [], intercepta: -1, // tecnología: nivel, mejoras hechas, investigaciones en curso
       petroleo: ECON.petInicio, raros: 0, info: 0, aguaProd: 0, aguaUso: 0, extraido: 0,
@@ -2103,8 +2104,12 @@
   W.enBosque = enBosque;
   // ox, oy: de dónde viene el tiro. A un vehículo le duele más por los costados y más aún por la espalda.
   W.herir = (m, b, arma, mult, de, ox, oy) => herir(m, b, arma, mult, de, ox, oy); // (para las pruebas)
+  const nuevaCont = () => ({ perdido: 0, destruido: 0, pierde: {}, mata: {}, porArma: {} });
+  W.nuevaCont = nuevaCont;
+  const NOMBRE_ARMA = new Map(Object.keys(W.ARMAS).map((k) => [W.ARMAS[k], k]));
   function herir(m, b, arma, mult, de, ox, oy) {
     if (!puede(arma, b) || m.jug[b.j].tr.invulnerable) return; // ADMIN: invulnerables
+    b.porArma = NOMBRE_ARMA.get(arma) || 'otra'; // (para la contabilidad: qué arma le dio por última vez)
     let fl = 1;
     if (ox !== undefined && !b.edif && UNID[b.tipo].cat === 'veh') { const s = W.sector(m, b, { x: ox, y: oy }); fl = s === 2 ? ECON.espalda : s === 1 ? ECON.flanco : 1; if (s && m.t - (b.tFlanco === undefined ? -99 : b.tFlanco) > 25) { b.tFlanco = m.t; m.efectos.push({ tipo: 'flanco', x1: b.x, y1: b.y, s, j: b.j, t: m.t }); } }
     if (ox !== undefined && !b.edif && UNID[b.tipo].escudo && W.sector(m, b, { x: ox, y: oy }) === 0) fl = UNID[b.tipo].escudo; // el escudo: lo que llega de frente pega la mitad
@@ -3085,6 +3090,10 @@
       if (e.infra) { quitarTramo(m, e); m.efectos.push({ tipo: e.vendido ? 'venta' : 'muerte', x2: e.cx, y2: e.cy, edif: true, tam: 1, clase: 'camino', ang: 0, j: e.j, t: m.t }); continue; }
       if (e.retirado) continue; // el helicóptero que ya ha cumplido se va sin más
       m.jug[e.j].bajas++;
+      if (e.j <= 1 && !e.vendido) { // la contabilidad: lo que valía, a quién se le apunta y con qué arma cayó
+        const v = (e.edif ? EDIF[e.tipo] : UNID[e.tipo]).costo || 0, P = m.jug[e.j].cont || (m.jug[e.j].cont = nuevaCont()), G = m.jug[1 - e.j].cont || (m.jug[1 - e.j].cont = nuevaCont()), a = e.porArma || 'otra';
+        if (v > 0) { P.perdido += v; P.pierde[e.tipo] = (P.pierde[e.tipo] || 0) + v; P.porArma[a] = (P.porArma[a] || 0) + v; if (e.porArma) { G.destruido += v; G.mata[e.tipo] = (G.mata[e.tipo] || 0) + v; } }
+      }
       if (!e.edif && UNID[e.tipo].arma && !UNID[e.tipo].aire) { // ¿murió sola? (sin una compañera armada a seis celdas): la medida de si las unidades se mandan solas
         const J = m.jug[e.j]; let sola = true; for (const o of m.ents) if (o !== e && !o.edif && o.j === e.j && o.vida > 0 && UNID[o.tipo].arma && Math.hypot(o.x - e.x, o.y - e.y) <= 6) { sola = false; break; }
         J.tropas = (J.tropas || 0) + 1; if (sola) J.solas = (J.solas || 0) + 1;

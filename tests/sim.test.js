@@ -1502,6 +1502,26 @@ prueba('moto de suministro: sale del cuartel, va sola adonde hay tropa sin abast
   assert.ok(fue, 'la moto se pone en marcha sola'); assert.ok(sol.mun >= W.munDe('infanteria'), 'y le repone la munición (' + sol.mun + ')');
 });
 
+prueba('contabilidad: lo que cae se apunta por su valor, a quién y con qué arma', () => {
+  const m = W.crearMundo(4242, { N: 128 });
+  for (const e of m.ents) if (!e.edif) e.vida = 0;
+  W.tick(m);
+  const u = W.crearUnidad(m, 0, 'tanque', 60 * 128 + 55), P = m.jug[0].cont, G = m.jug[1].cont, v = W.UNID.tanque.costo, antes = P.perdido;
+  W.herir(m, u, W.ARMAS.canon, 100, 0);
+  W.tick(m);
+  assert.strictEqual(P.perdido - antes, v); assert.strictEqual(P.pierde.tanque, v); assert.strictEqual(P.porArma.canon, v);
+  assert.strictEqual(G.destruido, v); assert.strictEqual(G.mata.tanque, v);
+});
+
+prueba('IA de costes: la tabla de duelos cubre a todos los candidatos y la compra responde a lo que tiene el rival', () => {
+  const D = W.IA_DUELO;
+  for (const a of W.IA_CANDIDATOS) { assert.ok(D[a], 'sin fila: ' + a); for (const b of W.IA_CANDIDATOS) assert.ok(D[a][b] >= -1 && D[a][b] <= 1, 'sin dato: ' + a + ' contra ' + b); }
+  const nota = (am, c) => { let t = 0; for (const k in am) t += am[k]; return W.iaNota({ amenaza: am, amenazaT: t }, c); };
+  const mejor = (am) => W.IA_CANDIDATOS.slice().sort((x, y) => nota(am, y) - nota(am, x))[0];
+  assert.notStrictEqual(mejor({ tanque: 3000 }), mejor({ granadero: 3000 }), 'compra lo mismo contra tanques que contra granaderos');
+  assert.ok(nota({ tanque: 3000 }, 'antitanque') > nota({ tanque: 3000 }, 'francotirador'), 'contra tanques prefiere francotiradores a antitanques');
+});
+
 prueba('ultra-real: el caído en plena marcha se queda quieto del todo y no admite órdenes', () => {
   const m = W.crearMundo(4242, { N: 128, ultra: true });
   for (const e of m.ents) if (!e.edif) e.vida = 0;
