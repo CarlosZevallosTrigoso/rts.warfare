@@ -30,6 +30,44 @@
   // El contexto llega trasladado al centro de la unidad. r = radio en píxeles.
   // e = { ang, angT, retro (0..1), anda, tiempo, carga (0..1), cosecha }
   // y, para el movimiento: vehículos { fI, fD, rod, dir, fino, hx, hy }; infantería { pies: [{x, y}, {x, y}] (en R), hombro, cabeza, inc (en R), resp, fino, rodilla (0..1), te (0..1, cuerpo a tierra) }
+  // Los cuatro vehículos de la segunda tanda (camioneta artillada, vehículo de combate de infantería, cazacarros y guerra electrónica). El contexto ya está girado al rumbo del casco.
+  const VEH2 = {
+    camioneta(c, r, lod, col, e) { // camioneta con una ametralladora pesada en la caja y su tirador
+      const L = r * 1.5, w = r * 0.72, d = e.retro;
+      ruedas(c, col, e, lod, [-L * 0.62, L * 0.6], w * 0.6, L * 0.34, w * 0.3); c.translate(e.hx || 0, e.hy || 0);
+      c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.moveTo(-L, -w * 0.72); c.lineTo(L * 0.75, -w * 0.72); c.lineTo(L, -w * 0.45); c.lineTo(L, w * 0.45); c.lineTo(L * 0.75, w * 0.72); c.lineTo(-L, w * 0.72); c.closePath(); c.fill(); c.stroke();
+      c.fillStyle = col.osc; c.fillRect(L * 0.1, -w * 0.56, L * 0.42, w * 1.12); if (lod === 2) { c.fillStyle = col.claro || col.luz; c.fillRect(L * 0.44, -w * 0.48, L * 0.1, w * 0.96); c.strokeRect(-L * 0.9, -w * 0.56, L * 0.9, w * 1.12); } // cabina, parabrisas y caja
+      c.save(); c.translate(-L * 0.42, 0); c.rotate(e.angT - e.ang);
+      if (lod === 2) { c.fillStyle = col.base; c.strokeStyle = col.osc; rr(c, -r * 0.4, -r * 0.3, r * 0.28, r * 0.6, r * 0.12); c.fill(); c.stroke(); c.fillStyle = col.luz; c.beginPath(); c.arc(-r * 0.24, 0, r * 0.15, 0, TAU); c.fill(); c.stroke(); } // el tirador, de pie tras el arma
+      c.fillStyle = col.tinta || '#1a1a1a'; c.fillRect(-d * r * 0.12, -r * 0.05, r * 1.15, r * 0.1); c.fillRect(r * 0.1 - d * r * 0.12, -r * 0.13, r * 0.3, r * 0.26);
+      if (d > 0.5) { c.fillStyle = col.fuego; c.beginPath(); c.arc(r * 1.28, 0, r * 0.15, 0, TAU); c.fill(); } c.restore(); },
+    vci(c, r, lod, col, e) { // vehículo de combate de infantería: orugas, torre con cañón automático y portón trasero para la tropa
+      const L = r * 1.45, w = r * 0.95, d = e.retro;
+      orugas(c, col, e, lod, -L, L, w, w * 0.42); c.translate(e.hx || 0, e.hy || 0);
+      c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.moveTo(-L * 0.95, -w * 0.68); c.lineTo(L * 0.5, -w * 0.68); c.lineTo(L * 0.98, -w * 0.3); c.lineTo(L * 0.98, w * 0.3); c.lineTo(L * 0.5, w * 0.68); c.lineTo(-L * 0.95, w * 0.68); c.closePath(); c.fill(); c.stroke();
+      c.fillStyle = col.osc; c.fillRect(-L * 0.97, -w * 0.42, L * 0.1, w * 0.84); if (lod === 2) { for (const y of [-0.46, 0.14]) c.fillRect(-L * 0.78, w * y, L * 0.46, w * 0.32); c.beginPath(); for (let i = 0; i < 3; i++) { c.moveTo(L * (0.6 + i * 0.1), -w * 0.26); c.lineTo(L * (0.6 + i * 0.1), w * 0.26); } c.stroke(); } // portón, escotillas de la tropa y rejilla
+      c.save(); c.translate(L * 0.12, 0); c.rotate(e.angT - e.ang); c.fillStyle = col.osc; c.fillRect(r * 0.2 - d * r * 0.14, -r * 0.055, r * 1.3, r * 0.11);
+      c.fillStyle = col.claro || col.luz; c.strokeStyle = col.osc; c.beginPath(); c.moveTo(-r * 0.38, -r * 0.34); c.lineTo(r * 0.22, -r * 0.34); c.lineTo(r * 0.38, -r * 0.16); c.lineTo(r * 0.38, r * 0.16); c.lineTo(r * 0.22, r * 0.34); c.lineTo(-r * 0.38, r * 0.34); c.closePath(); c.fill(); c.stroke();
+      if (lod === 2) { c.fillStyle = col.osc; c.beginPath(); c.arc(-r * 0.1, r * 0.1, r * 0.1, 0, TAU); c.fill(); } if (d > 0.5) { c.fillStyle = col.fuego; c.beginPath(); c.arc(r * 1.6, 0, r * 0.15, 0, TAU); c.fill(); } c.restore(); },
+    cazacarros(c, r, lod, col, e) { // ocho ruedas, casco bajo y un lanzador doble de misiles sobre un brazo
+      const L = r * 1.5, w = r * 0.8, d = e.retro, alza = 1 - 0.25 * (e.marcha || 0);
+      ruedas(c, col, e, lod, [-L * 0.78, -L * 0.32, L * 0.16, L * 0.62], w * 0.6, L * 0.3, w * 0.28); c.translate(e.hx || 0, e.hy || 0);
+      c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.moveTo(-L * 0.95, -w * 0.7); c.lineTo(L * 0.55, -w * 0.7); c.lineTo(L, -w * 0.25); c.lineTo(L, w * 0.25); c.lineTo(L * 0.55, w * 0.7); c.lineTo(-L * 0.95, w * 0.7); c.closePath(); c.fill(); c.stroke();
+      if (lod === 2) { c.fillStyle = col.osc; c.fillRect(L * 0.42, -w * 0.4, L * 0.2, w * 0.8); c.beginPath(); for (let i = 0; i < 3; i++) { c.moveTo(-L * (0.85 - i * 0.1), -w * 0.4); c.lineTo(-L * (0.85 - i * 0.1), w * 0.4); } c.stroke(); } // parabrisas blindado y rejilla del motor
+      c.save(); c.translate(-L * 0.12, 0); c.rotate(e.angT - e.ang); c.fillStyle = col.osc; c.fillRect(-r * 0.22, -r * 0.13, r * 0.5, r * 0.26); // el brazo
+      for (const q of [-1, 1]) { c.fillStyle = col.claro || col.luz; c.strokeStyle = col.osc; c.beginPath(); c.rect(-r * 0.3 - d * r * 0.1, q * r * 0.31 - r * 0.17, r * 1.25 * alza, r * 0.34); c.fill(); c.stroke(); c.fillStyle = col.tinta || '#1a1a1a'; c.beginPath(); c.arc(-r * 0.3 + r * 1.25 * alza - r * 0.14 - d * r * 0.1, q * r * 0.31, r * 0.1, 0, TAU); c.fill(); } // los dos tubos; en marcha van recogidos
+      if (d > 0.5) { c.fillStyle = col.fuego; c.beginPath(); c.arc(-r * 0.5, 0, r * 0.3, 0, TAU); c.fill(); } c.restore(); }, // el rebufo sale por detrás
+    guerraE(c, r, lod, col, e) { // camión de guerra electrónica: cabina, caja y un mástil de antenas que se despliega al parar
+      const L = r * 1.5, w = r * 0.78, dp = 1 - (e.marcha || 0), T = (e.tiempo || 0) / 1000;
+      if (dp > 0.5 && lod === 2) { c.strokeStyle = col.osc; c.lineWidth = Math.max(1, r * 0.12); c.beginPath(); for (const x of [-0.8, 0.1]) for (const q of [-1, 1]) { c.moveTo(L * x, q * w * 0.7); c.lineTo(L * x, q * w * 1.15); } c.stroke(); } // los gatos, fuera
+      ruedas(c, col, e, lod, [-L * 0.72, -L * 0.3, L * 0.62], w * 0.62, L * 0.3, w * 0.28); c.translate(e.hx || 0, e.hy || 0);
+      c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.rect(-L, -w * 0.72, L * 1.3, w * 1.44); c.fill(); c.stroke(); // la caja
+      c.fillStyle = col.claro || col.luz; c.beginPath(); c.rect(L * 0.36, -w * 0.62, L * 0.6, w * 1.24); c.fill(); c.stroke(); c.fillStyle = col.osc; c.fillRect(L * 0.72, -w * 0.5, L * 0.12, w); // cabina y parabrisas
+      if (lod === 2) { c.fillStyle = col.luz; for (const x of [-0.86, -0.68]) c.fillRect(L * x, -w * 0.5, L * 0.1, w * 0.3); c.fillStyle = col.osc; c.fillRect(-L * 0.9, w * 0.2, L * 0.5, w * 0.34); } // equipos sobre el techo
+      const mx = -L * 0.2, R = r * (0.35 + 0.45 * dp); c.fillStyle = col.osc; c.beginPath(); c.arc(mx, 0, r * 0.2, 0, TAU); c.fill();
+      c.strokeStyle = col.tinta || '#1a1a1a'; c.lineWidth = Math.max(1, r * 0.07); c.beginPath(); for (let i = 0; i < 6; i++) { const a = i / 6 * TAU + T * 0.4 * dp; c.moveTo(mx, 0); c.lineTo(mx + Math.cos(a) * R, Math.sin(a) * R); } c.stroke(); // las antenas: recogidas en marcha, abiertas y girando al emitir
+      c.fillStyle = dp > 0.5 && Math.sin(T * 6) > 0 ? col.mal : col.tinta || '#1a1a1a'; c.beginPath(); c.arc(mx, 0, r * 0.08, 0, TAU); c.fill(); },
+  };
   W.fichaUnidad = function (c, u, r, lod, col, e) {
     const inf = W.UNID[u.tipo].cat === 'inf', at = u.tipo === 'antitanque' || u.tipo === 'manpad', pesado = u.tipo === 'pesado', expl = u.tipo === 'explorador', ing = u.tipo === 'ingeniero', med = u.tipo === 'medico', civ = u.tipo === 'civil', hk = u.tipo === 'hacker', op = u.tipo === 'operador' || u.tipo === 'cazadron', rad = u.tipo === 'radioOp', franco = u.tipo === 'francotirador', esp = u.tipo === 'espia', gra = u.tipo === 'granadero';
     if (lod === 0) {
@@ -155,6 +193,7 @@
       if (u.tipo === 'comando' && lod) { c.fillStyle = '#34453a'; c.beginPath(); c.arc(hx, 0, r * 1.4 * 0.3, 0, TAU); c.fill(); if (lod === 2) { c.strokeStyle = '#34453a'; c.lineWidth = 1.2; c.beginPath(); for (let i = 0; i < 9; i++) { const a = i / 9 * TAU + 0.3; c.moveTo(hx + Math.cos(a) * r * 0.36, Math.sin(a) * r * 0.36); c.lineTo(hx + Math.cos(a) * r * 0.74, Math.sin(a) * r * 0.74); } c.stroke(); } } // capucha de camuflaje
       if (u.tipo === 'emboscado' && lod && !e.hundido) { const R = r * 1.4; c.strokeStyle = '#4f5a3c'; c.lineCap = 'butt'; c.lineWidth = Math.max(2, R * 0.3); c.beginPath(); c.moveTo(-R * 1.0, -R * 0.52); c.lineTo(R * 0.35, -R * 0.52); c.stroke(); c.fillStyle = col.tinta || '#1a1a1a'; c.fillRect(-R * 1.05, -R * 0.7, R * 0.12, R * 0.36); } // el lanzacohetes, a la espalda
       if (u.tipo === 'asalto' && lod && !(e.te > 0.5)) { const R = r * 1.4; c.strokeStyle = col.osc; c.lineWidth = Math.max(1.5, R * 0.34); c.lineCap = 'round'; c.beginPath(); c.arc(R * 0.5, -R * 0.25, R * 0.95, -1.25, 0.35); c.stroke(); if (lod === 2) { c.strokeStyle = col.claro || col.luz; c.lineWidth = Math.max(1, R * 0.16); c.beginPath(); c.arc(R * 0.5, -R * 0.25, R * 0.95, -1.15, 0.25); c.stroke(); } c.lineCap = 'butt'; } // el escudo, por delante
+    } else if (VEH2[u.tipo]) { VEH2[u.tipo](c, r, lod, col, e);
     } else if (u.tipo === 'tanque' || pesado) {
       const L = r * 1.4, w = r;
       orugas(c, col, e, lod, -L, L, w, w * 0.44); c.translate(e.hx || 0, e.hy || 0); // el casco, sobre su tren de rodaje: cabecea y se ladea

@@ -338,6 +338,9 @@
       if (J.nivel >= 2 && (c.antiaereoMovil || 0) < 1 + Math.floor(((c.tanque || 0) + (c.pesado || 0)) / 8)) veh = 'antiaereoMovil'; // escolta antiaérea para las columnas
       else if (J.nivel >= 3 && (c.pesado || 0) < 5 && W.puedePagar(J, UNID.pesado)) veh = 'pesado';
       else if (J.nivel >= 2 && (c.artilleria || 0) * 4 < (c.tanque || 0)) veh = 'artilleria';
+      else if (J.nivel >= 3 && !c.guerraE && !J.colas.guerraE.n && soldados.length >= 12) veh = 'guerraE'; // una burbuja de guerra electrónica que acompaña a la oleada
+      else if (J.nivel >= 2 && (c.cazacarros || 0) < 1 + Math.floor(((c.tanque || 0) + (c.pesado || 0)) / 4)) veh = 'cazacarros'; // cazacarros, por detrás de los tanques
+      else if (J.nivel >= 2 && (c.vci || 0) * 3 < (c.tanque || 0)) veh = 'vci';
       if (J.acero !== undefined && J.acero < (UNID[veh].acero || 0)) veh = 'blindado'; // sin acero para lo pesado: blindados ligeros mientras la fundición trabaja
       // Aviación: cazas, un dron y, con nivel 3, helicópteros y bombarderos; uno a la vez. El estilo aéreo la compra antes que los tanques.
       let av = null;
@@ -445,7 +448,8 @@
       if (c.fabrica && J.nivel >= 2 && !ahorra && !urgente && tk % 10 === 4 && !(c.tallerMovil || 0) && !J.colas.tallerMovil.n && soldados.length >= 12) entrena('tallerMovil', 800); // un taller de campaña
       // Infantería especial: dos gatling para sostener el punto de reunión, un hacker y dos operadores de drones.
       if (c.cuartel && !ahorra && !urgente && tk % 5 === 3) {
-        if (!c.logistica && (c.motoSum || 0) + J.colas.motoSum.n < 1 && soldados.length >= 5) entrena('motoSum', 300); // una moto de suministro mientras no haya puesto logístico
+        if (!c.logistica && (c.motoSum || 0) + J.colas.motoSum.n < 1 && soldados.length >= 5) entrena('motoSum', 300);
+        else if (J.nivel < 2 && (c.camioneta || 0) + J.colas.camioneta.n < 2 && soldados.length >= 4) entrena('camioneta', 300); // camionetas artilladas mientras no hay fábrica grande // una moto de suministro mientras no haya puesto logístico
         else if ((c.gatling || 0) + J.colas.gatling.n < 2 && (c.infanteria || 0) >= 8) entrena('gatling', 500);
         else if ((c.hacker || 0) + J.colas.hacker.n < 1 && soldados.length >= 10) entrena('hacker', 500);
         else if (c.estDrones && (c.operador || 0) + J.colas.operador.n < 2 && soldados.length >= 8) entrena('operador', 500);
@@ -589,6 +593,7 @@
     if (tk % 5 === 1) { // hackers y operadores de drones: con la oleada, unos pasos por detrás; sin oleada, en el punto de reunión
       let ax = 0, ay = 0, na = 0; for (const u of soldados) if (ia.atacantes.has(u.id)) { ax += u.x; ay += u.y; na++; }
       const tx = na >= 4 ? ax / na - (dx / dd) * 4 : rx - (dx / dd) * 2, ty = na >= 4 ? ay / na - (dy / dd) * 4 : ry - (dy / dd) * 2;
+      if (na >= 4) for (const u of sinArma) if (u.tipo === 'guerraE' && u.orden === 'nada' && Math.hypot(u.x - tx, u.y - ty) > 6) { const cc = W.cercaLibre(m, tx, ty, true); W.orden(m, { t: 'mover', j, ids: [u.id], x: (cc % m.N) + 0.5, y: ((cc / m.N) | 0) + 0.5 }); } // la guerra electrónica, detrás de la oleada: allí para y despliega
       if (na >= 4) for (const u of sinArma) if (u.tipo === 'tallerMovil' && u.orden === 'nada' && Math.hypot(u.x - tx, u.y - ty) > 12) { const cc = W.cercaLibre(m, tx, ty, true); W.orden(m, { t: 'mover', j, ids: [u.id], x: (cc % m.N) + 0.5, y: ((cc / m.N) | 0) + 0.5 }); } // el taller de campaña, detrás de la oleada: repara y recupera cascos él solo
       if (na >= 4) for (const u of sinArma) if (u.tipo === 'camionSum' && (!u.sumi || Math.hypot(u.sumi.x - tx, u.sumi.y - ty) > 14)) { const cc = W.cercaLibre(m, tx, ty, true); W.orden(m, { t: 'mover', j, ids: [u.id], x: (cc % m.N) + 0.5, y: ((cc / m.N) | 0) + 0.5 }); } // el camión de suministro, detrás de la oleada
       for (const u of sinArma) if (u.tipo === 'operador' && u.sinDron && u.orden === 'nada') { const b = m.ents.find((e) => e.edif && e.j === j && (e.tipo === 'estDrones' || e.tipo === 'logistica') && e.vida > 0); if (b && Math.hypot(u.x - b.cx, u.y - b.cy) > 4) { const cc = W.cercaLibre(m, b.cx, b.cy + b.tam / 2 + 1.5); W.orden(m, { t: 'mover', j, ids: [u.id], x: (cc % m.N) + 0.5, y: ((cc / m.N) | 0) + 0.5 }); } } // el operador sin drones vuelve a reponer

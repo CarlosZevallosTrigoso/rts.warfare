@@ -153,6 +153,14 @@
     gatling:     { nombre: 'Gatling',     cat: 'inf', vida: 110, vel: 0.045, costo: 380, tiempo: 240, blindaje: 'ligero', arma: 'gatling', vision: 6.5, radio: 0.16, req: ['cuartel'], agua: 2, giro: 0.12, acel: 0.015, nivel: 2, monta: 60, arco: 0.5 },
     // Hacker: no combate. Por orden, apaga desde lejos un vehículo o un edificio enemigo durante unos segundos; cada hackeo cuesta información.
     hacker:      { nombre: 'Hacker',      cat: 'inf', vida: 45,  vel: 0.06, costo: 400, info: 30, tiempo: 240, blindaje: 'ligero', arma: null, vision: 8, radio: 0.105, req: ['estacion'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, hackea: true, alcanceHack: 9 },
+    // Camioneta artillada: barata, rápida y sin blindaje, con una ametralladora pesada en la caja. Sale del cuartel: el único vehículo de combate sin fábrica.
+    camioneta:   { nombre: 'Camioneta artillada', cat: 'veh', lugar: 'cuartel', vida: 120, vel: 0.17, costo: 220, pet: 10, tiempo: 120, blindaje: 'ligero', arma: 'ametrPesada', vision: 7, radio: 0.17, req: ['cuartel'], agua: 1, giro: 0.22, acel: 0.016, giroT: 0.35, cono: 1.6 },
+    // Vehículo de combate de infantería: lleva cuatro infantes bajo blindaje y pelea con un cañón automático.
+    vci:         { nombre: 'Vehículo de combate de infantería', cat: 'veh', vida: 280, vel: 0.12, costo: 750, acero: 30, pet: 40, tiempo: 300, blindaje: 'pesado', arma: 'canonAuto', vision: 7, radio: 0.23, req: ['fabrica'], agua: 2, giro: 0.12, acel: 0.007, nivel: 2, plazas: 4, giroT: 0.22, cono: 0.9 },
+    // Cazacarros: ocho ruedas, poco blindaje y misiles guiados que alcanzan más que el cañón de un tanque. Para disparar tiene que parar y alzar los tubos; recarga despacio.
+    cazacarros:  { nombre: 'Cazacarros', cat: 'veh', vida: 170, vel: 0.15, costo: 850, acero: 30, pet: 50, tiempo: 320, blindaje: 'ligero', arma: 'misilAT', vision: 8, radio: 0.22, req: ['fabrica'], agua: 2, giro: 0.16, acel: 0.01, nivel: 2, monta: 30, giroT: 0.2, cono: 0.7 },
+    // Guerra electrónica: camión desarmado. Parado un rato, despliega la burbuja: los drones enemigos guiados por radio que entran caen, y las radios y enlaces de datos enemigos dentro se cortan. Al emitir se delata.
+    guerraE:     { nombre: 'Guerra electrónica', cat: 'veh', vida: 160, vel: 0.11, costo: 1200, pet: 60, tiempo: 360, blindaje: 'ligero', arma: null, vision: 8, radio: 0.24, req: ['fabrica'], agua: 2, giro: 0.12, acel: 0.008, nivel: 3, burbuja: 10 },
     transporte:  { nombre: 'Transporte', cat: 'veh', vida: 260, vel: 0.13, costo: 500, pet: 30, tiempo: 220, blindaje: 'pesado', arma: null, vision: 7, radio: 0.24, req: ['fabrica'], agua: 1, giro: 0.14, acel: 0.008, nivel: 2, plazas: 6 },
     lanzacohetes: { nombre: 'Lanzacohetes', cat: 'veh', vida: 200, vel: 0.07, costo: 1300, acero: 60, pet: 90, raros: 50, tiempo: 480, blindaje: 'pesado', arma: 'salva', vision: 7, radio: 0.23, req: ['fabrica'], agua: 2, giro: 0.07, acel: 0.004, nivel: 3, arco: 0.1, cono: 0.7 },
     mando:       { nombre: 'Vehículo de mando', cat: 'veh', vida: 300, vel: 0.08, costo: 1200, pet: 60, tiempo: 420, blindaje: 'pesado', arma: null, vision: 8, radio: 0.24, req: ['fabrica'], agua: 2, giro: 0.1, acel: 0.005, nivel: 3, mando: 7, radioCom: 30, enlace: true },
@@ -200,10 +208,13 @@
   // indirecto: tira por encima; le basta con que cualquier unidad propia vea el blanco (hace de observador).
   // alcanceMin: no puede disparar más cerca que eso. area: radio de la explosión (daña a todo enemigo dentro).
   // atras: apoyo y segunda línea. Nunca se adelantan a las unidades de combate: van detrás del frente y, si se quedan delante, esperan o se repliegan.
-  for (const k of ['medico', 'ingeniero', 'radioOp', 'operador', 'hacker', 'cazadron', 'mando', 'vehRadio', 'comandoDrones', 'tallerMovil', 'camionSum', 'motoSum', 'mortero', 'artilleria', 'francotirador', 'manpad', 'lanzacohetes', 'antiaereoMovil']) W.UNID[k].atras = true;
+  for (const k of ['medico', 'ingeniero', 'radioOp', 'operador', 'hacker', 'cazadron', 'mando', 'vehRadio', 'comandoDrones', 'tallerMovil', 'camionSum', 'motoSum', 'mortero', 'artilleria', 'francotirador', 'manpad', 'lanzacohetes', 'antiaereoMovil', 'cazacarros', 'guerraE']) W.UNID[k].atras = true;
 
   W.ARMAS = {
     fusil:   { alcance: 4,   dano: 8,  recarga: 16, vs: { ligero: 1,   pesado: 0.12, edificio: 0.3, aire: 0.4 } }, // (contra blindaje, poco más que nada)
+    ametrPesada: { alcance: 5, dano: 9, recarga: 6, vs: { ligero: 1, pesado: 0.2, edificio: 0.25 } }, // la de la camioneta
+    canonAuto: { alcance: 5, dano: 14, recarga: 9, vuelo: 1.2, vs: { ligero: 1, pesado: 0.45, edificio: 0.5 } }, // el cañón automático del vehículo de combate de infantería
+    misilAT: { guiado: true, alcance: 8, dano: 120, recarga: 130, vuelo: 0.8, vs: { ligero: 0.4, pesado: 1.3, edificio: 0.6 } }, // el del cazacarros
     canon:   { alcance: 5,   dano: 40, recarga: 50, vuelo: 0.9, vs: { ligero: 0.7, pesado: 1,    edificio: 0.9 } }, // (con munición explosiva: también sirve contra infantería)
     cohete:  { alcance: 5,   dano: 45, recarga: 60, vuelo: 0.6, vs: { ligero: 0.3, pesado: 1.2,  edificio: 0.7, aire: 1.1 } },
     obus:    { indirecto: true, alcance: 11,  alcanceMin: 3, area: 1.4, dano: 70, recarga: 110, vuelo: 0.45, vs: { ligero: 1, pesado: 0.7, edificio: 1.3 } },
@@ -300,6 +311,7 @@
     // las armas ligeras no hacen nada a blindados ni a edificios. Quien cae queda herido: fuera de combate (nadie le dispara ni le hace daño) hasta heridoT ticks; si lo curan hasta heridoAlta de su vida, se salva; si no, muere.
     // Bajo fuego, el infante suelto busca bosque a cubre celdas; y el criterio de combate es más prudente (critInf, critRet).
     ultra: { inf: 4, penetra: 3, inmovil: 30, heridoT: 800, heridoAlta: 0.25, cubre: 4, clavado: 0.45, critInf: 0.9, critRet: 0.5 },
+    geDespliega: 60, // guerra electrónica: lo que tarda parada en desplegar la burbuja
     cavarHoyo: 100, reEnterrar: 40, emboscadaCalma: 200, enterradoDano: 0.3, detectaHoyo: 3, // emboscados: lo que tardan en cavar y en volver a meterse, la calma que esperan para volver al hoyo y cuánto les protege
     sinLaser: 0.45, laserDisp: 1.4, // el avión de ataque sin la marca del láser: menos daño y el fuego cae a un lado
     critInf: 0.6, critRet: 0.3, critEspera: 300, critBloque: 4, critAlcance: 2,

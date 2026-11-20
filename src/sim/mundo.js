@@ -320,7 +320,7 @@
   }
   // Cámaras: cada medio segundo descubren a los escondidos que tengan cerca y, si entra un enemigo, avisan (como mucho cada 15 s).
   // Enlace de datos: el edificio está unido a la red por cable (o por cercanía) o dentro de la cobertura de radio de su dueño.
-  W.enlazado = (m, e) => m.logistica === false || m.jug[e.j].dios || e.conRed !== false || !!(m.radioCob && m.radioCob[e.j][Math.floor(e.cy) * m.N + Math.floor(e.cx)]);
+  W.enlazado = (m, e) => m.logistica === false || m.jug[e.j].dios || (!enBurbuja(m, e.j, e.cx, e.cy) && (e.conRed !== false || !!(m.radioCob && m.radioCob[e.j][Math.floor(e.cy) * m.N + Math.floor(e.cx)])));
   function tickCamaras(m) {
     for (const e of m.ents) {
       if (!e.edif || e.infra || !EDIF[e.tipo].detecta || e.sinLuz || e.hack > m.t) continue;
@@ -1364,7 +1364,9 @@
     }
     m.ecos = hay ? ecos : null; m.ecosT = m.t;
   }
-  const sinRadio = (m, u) => !!m.radioCob && m.logistica !== false && !UNID[u.tipo].aire && !UNID[u.tipo].enlace && !m.jug[u.j].dios && !m.radioCob[u.j][Math.floor(u.y) * m.N + Math.floor(u.x)];
+  const enBurbuja = (m, j, x, y) => { if (!m.burbujas) return false; for (const b of m.burbujas) if (b.j !== j && Math.hypot(b.x - x, b.y - y) <= b.r) return true; return false; }; // dentro de la burbuja de guerra electrónica del rival
+  W.enBurbuja = enBurbuja;
+  const sinRadio = (m, u) => !!m.radioCob && m.logistica !== false && !UNID[u.tipo].aire && !m.jug[u.j].dios && (enBurbuja(m, u.j, u.x, u.y) || (!UNID[u.tipo].enlace && !m.radioCob[u.j][Math.floor(u.y) * m.N + Math.floor(u.x)]));
   W.sinRadio = sinRadio;
   function aplicar(m, cmd) {
     const J = m.jug[cmd.j];
@@ -3162,10 +3164,19 @@
   }
   W.cauto = cauto;
   function tickInhibir(m) { // los inhibidores: el dron enemigo guiado por radio que entra en su radio pierde el enlace y cae (el de fibra, no)
-    let inh = null; for (const u of m.ents) if (!u.edif && u.vida > 0 && UNID[u.tipo].inhibe) (inh || (inh = [])).push(u);
+    let inh = null, bur = null;
+    for (const u of m.ents) {
+      if (u.edif || u.vida <= 0) continue; const d = UNID[u.tipo];
+      if (d.inhibe) (inh || (inh = [])).push(u);
+      if (d.burbuja) { // guerra electrónica: parada un rato, despliega y emite
+        if (u.v < 0.001 && u.orden === 'nada' && !u.dentro) u.geT = (u.geT || 0) + 5; else u.geT = 0;
+        u.emite = u.geT >= ECON.geDespliega; if (u.emite) { (inh || (inh = [])).push(u); (bur || (bur = [])).push({ x: u.x, y: u.y, r: d.burbuja, j: u.j }); }
+      }
+    }
+    m.burbujas = bur; // las burbujas activas: cortan las radios y los enlaces de datos del rival que queden dentro
     if (!inh) return;
     for (const e of m.ents) { if (e.edif || e.vida <= 0) continue; const d = UNID[e.tipo]; if (d.blindaje !== 'dron' || d.fibra) continue;
-      for (const u of inh) if (u.j !== e.j && Math.hypot(u.x - e.x, u.y - e.y) <= UNID[u.tipo].inhibe) { e.vida = 0; m.efectos.push({ tipo: 'inhibido', x2: e.x, y2: e.y, j: e.j, de: u.j, t: m.t }); break; } }
+      for (const u of inh) if (u.j !== e.j && Math.hypot(u.x - e.x, u.y - e.y) <= (UNID[u.tipo].burbuja || UNID[u.tipo].inhibe)) { e.vida = 0; m.efectos.push({ tipo: 'inhibido', x2: e.x, y2: e.y, j: e.j, de: u.j, t: m.t }); break; } }
   }
   W.tick = function (m) {
     if (m.ganador >= 0) return;

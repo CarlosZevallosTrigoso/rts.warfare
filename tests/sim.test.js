@@ -1618,6 +1618,37 @@ prueba('guerrilla: el helicóptero ligero sale del helipuerto de operaciones esp
   assert.ok(h.vida <= h.vidaMax * 0.3, 'un misil del antiaéreo portátil lo deja casi derribado: ' + Math.round(h.vida));
 });
 
+prueba('vehículos: camioneta del cuartel, vehículo de combate de infantería con tropa, cazacarros de largo alcance y burbuja de guerra electrónica', () => {
+  const U = W.UNID;
+  assert.ok(W.lugarDe(U.camioneta) === 'cuartel' && !(U.camioneta.nivel > 1) && U.camioneta.vel > U.blindado.vel && U.camioneta.blindaje === 'ligero', 'la camioneta: nivel 1, del cuartel, rápida y sin blindaje');
+  assert.ok(U.vci.plazas === 4 && U.vci.arma && U.vci.blindaje === 'pesado', 'el VCI lleva cuatro y pelea');
+  assert.ok(W.ARMAS[U.cazacarros.arma].alcance > W.ARMAS.canon.alcance && W.ARMAS[U.cazacarros.arma].alcance > W.ARMAS.canonPesado.alcance && U.cazacarros.monta, 'el cazacarros tira más lejos que un tanque y tiene que parar');
+  const m = W.crearMundo(4242, { N: 128 }), N = m.N; m.sinClima = true;
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const cel = (x, y) => y * N + x;
+  for (let y = 30; y < 100; y++) for (let x = 20; x < 110; x++) { const i = cel(x, y); if (m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  m.terrenoV++;
+  const avanza = (n, hasta) => { for (let i = 0; i < n; i++) { W.tick(m); if (hasta && hasta()) return i; } return n; };
+  // el VCI: suben cuatro y dispara con ellos dentro
+  const v = W.crearUnidad(m, 0, 'vci', cel(40, 50)), inf = [0, 1, 2, 3, 4].map((k) => W.crearUnidad(m, 0, 'infanteria', cel(37 + k, 53)));
+  m.logistica = false; W.orden(m, { t: 'cargar', j: 0, ids: inf.map((u) => u.id), en: v.id }); avanza(200, () => v.pasajeros.length >= 4);
+  assert.strictEqual(v.pasajeros.length, 4, 'caben cuatro');
+  const malo = W.crearUnidad(m, 1, 'infanteria', cel(44, 50)); malo.guardia = true; malo.recarga = 99999; v.guardia = true;
+  avanza(300, () => malo.vida <= 0); assert.ok(malo.vida < malo.vidaMax, 'con la tropa dentro, el cañón automático dispara');
+  // el cazacarros alcanza a un tanque que no le llega
+  const cz = W.crearUnidad(m, 0, 'cazacarros', cel(40, 70)), tq = W.crearUnidad(m, 1, 'tanque', cel(47, 70)); cz.guardia = true; tq.guardia = true; m.jug[1].tr.invulnerable = false;
+  avanza(400, () => tq.vida <= 0);
+  assert.ok(tq.vida < tq.vidaMax * 0.6, 'el cazacarros castiga al tanque desde fuera de su alcance: ' + Math.round(tq.vida)); assert.strictEqual(cz.vida, cz.vidaMax, 'y el tanque no le llega');
+  // guerra electrónica: parada, despliega; el dron enemigo cae y la tropa enemiga dentro queda sin radio
+  m.logistica = true;
+  const ge = W.crearUnidad(m, 0, 'guerraE', cel(80, 50)), dr = W.crearUnidad(m, 1, 'dron', cel(86, 50)), ene = W.crearUnidad(m, 1, 'infanteria', cel(84, 53)); dr.guardia = true; ene.guardia = true; ene.recarga = 99999;
+  avanza(20); assert.ok(!ge.emite && dr.vida > 0, 'recién parada aún no emite');
+  avanza(W.ECON.geDespliega + 20);
+  assert.ok(ge.emite, 'parada un rato, emite'); assert.ok(dr.vida <= 0 || !m.porId.get(dr.id), 'el dron enemigo cae dentro de la burbuja');
+  assert.ok(W.enBurbuja(m, 1, ene.x, ene.y) && W.sinRadio(m, ene), 'la tropa enemiga dentro queda sin radio'); assert.ok(!W.enBurbuja(m, 0, ge.x + 1, ge.y), 'a los suyos no les afecta');
+  m.logistica = false; W.orden(m, { t: 'mover', j: 0, ids: [ge.id], x: 90.5, y: 60.5 }); avanza(15); assert.ok(!ge.emite, 'en marcha deja de emitir');
+});
+
 prueba('contabilidad: lo que cae se apunta por su valor, a quién y con qué arma', () => {
   const m = W.crearMundo(4242, { N: 128 });
   for (const e of m.ents) if (!e.edif) e.vida = 0;

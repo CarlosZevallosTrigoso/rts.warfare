@@ -231,6 +231,7 @@
         if (!e.edif && e.j === YO && e.bajas) t += ' · ' + e.bajas + (e.bajas === 1 ? ' baja' : ' bajas');
         if (e.arregla && e.j === YO) t += ' · reparando';
         if (!e.edif && UNID[e.tipo].plazas && e.j === YO) t += ' · ' + e.pasajeros.length + '/' + UNID[e.tipo].plazas + ' dentro';
+        if (!e.edif && UNID[e.tipo].burbuja) t += e.emite ? ' · emitiendo: burbuja activa' : ' · parada, despliega la burbuja';
         if (!e.edif && UNID[e.tipo].mando && e.j === YO) t += e.sinInfo ? ' · sin información: apagado' : ' · mando activo';
         if (!e.edif && e.j === YO && W.oculta(m, e)) t += ' · oculta';
         if (e.retirando) t += ' · se retira a reparar'; else if (e.huye > m.t) t += ' · huye';
@@ -269,7 +270,7 @@
     // La rodada de un vehículo: un trazo por cada lado, del punto anterior al actual (así las curvas salen seguidas). o: de oruga (trazo a rayas).
     function rodada(x0, y0, a0, x, y, ang, s, o) { if (suelo.length > 700) suelo.shift(); suelo.push({ k: 'rodada', x, y, x0, y0, a0, ang, s, o, b: conRed && W.clima(m) > 0, t0: performance.now(), dur: 22000 }); } // (b: con lluvia, la rodada es de barro)
     const pisadas = []; // las de la infantería, aparte: son muchas y cortas, y no deben echar de la lista a cráteres y rodadas
-    const ORUGA = new Set(['tanque', 'pesado', 'antiaereoMovil', 'artilleria', 'excavadora', 'lanzacohetes']);
+    const ORUGA = new Set(['tanque', 'pesado', 'antiaereoMovil', 'artilleria', 'excavadora', 'lanzacohetes', 'vci']);
     const muelleDe = (g, k, obj, rig, fr, dt) => { const v = (g[k + 'v'] || 0) + ((obj - (g[k] || 0)) * rig - (g[k + 'v'] || 0) * fr) * dt; g[k + 'v'] = v; return (g[k] = (g[k] || 0) + v * dt); }; // muelle amortiguado: lo que da el peso
     function marcaSuelo(k, x, y, s, ang, dur, clase) { if (suelo.length > 700) suelo.shift(); suelo.push({ k, x, y, s, ang, t0: performance.now(), dur, clase }); }
     function estallido(x, y, tam) { // tam: 1 impacto, 2 unidad, 3 edificio
@@ -1461,6 +1462,12 @@
           if (u.dronMis) { const qx = ox + u.dronMis.x * z, qy = oy + u.dronMis.y * z; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(qx, qy); ctx.stroke(); ctx.beginPath(); ctx.arc(qx, qy, W.ECON.dronMisRadio * z, 0, TAU); ctx.stroke(); }
         }
         ctx.setLineDash([]);
+        for (const u of m.ents) { // la burbuja de guerra electrónica: la tuya, con ondas; la del rival se ve siempre (al emitir se delata)
+          if (u.edif || !u.emite || u.vida <= 0) continue; const R = UNID[u.tipo].burbuja * z, cx = ox + u.x * z, cy = oy + u.y * z; if (cx + R < 0 || cy + R < 0 || cx - R > cw || cy - R > ch) continue;
+          if (u.j === YO) { ctx.strokeStyle = P.yo; ctx.lineWidth = 1; for (let k = 0; k < 3; k++) { const f = (tiempo * 0.00035 + k / 3) % 1; ctx.globalAlpha = 0.35 * (1 - f); ctx.beginPath(); ctx.arc(cx, cy, R * (0.15 + f * 0.85), 0, TAU); ctx.stroke(); } ctx.globalAlpha = 0.4; ctx.setLineDash([4, 6]); ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke(); ctx.setLineDash([]); }
+          else { ctx.strokeStyle = P.mal; ctx.globalAlpha = 0.5; ctx.lineWidth = 1.5; ctx.setLineDash([3, 5]); ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke(); ctx.setLineDash([]); }
+          ctx.globalAlpha = 1;
+        }
         for (const u of m.ents) { // el haz del láser de tus Delta: una línea roja fina que tiembla, y la marca sobre el blanco
           if (u.edif || u.j !== YO || !u.lsrOn || u.orden !== 'laser') continue; const o = m.porId.get(u.lsr); if (!o) continue;
           const ax = ox + u.x * z, ay = oy + u.y * z, bx = ox + (o.edif ? o.cx : o.x) * z, by = oy + (o.edif ? o.cy : o.y) * z, fl = 0.55 + 0.35 * Math.sin(tiempo * 0.031 + u.id);
@@ -1995,6 +2002,10 @@
       deposito: 'Alarga tu red: crea una zona redonda con suministro donde también puedes construir. Va a 40 celdas o menos de un edificio ya conectado y se cablea solo hasta él; para llegar más lejos, encadena varios.', misilera: 'Fabrica, guarda y lanza misiles balísticos.', interceptor: 'Derriba los misiles enemigos que entran en su radio.', estDrones: 'Mantiene dos drones de reconocimiento vigilando a su alrededor. Mejorada lleva además bombarderos y kamikazes, y guarda las tecnologías del operador.', inteligencia: 'Entrena espías, aloja dos drones espía de largo alcance y permite el mapeo satelital.',
       bunker: 'Entran hasta 4 de infantería (clic derecho sobre él con la tropa seleccionada) y disparan desde dentro recibiendo solo la cuarta parte del daño. Para sacarlos: selecciona el búnker y clic derecho en el suelo. Si lo destruyen, salen heridos.', vigia: 'Sin armas y muy barata: ve a 16 celdas y descubre a los escondidos a 8. Se puede poner fuera de la red, pero necesita enlace de datos: un cable hasta tu red (se tiende solo a menos de 24 celdas) o cobertura de radio. Sin enlace no te enseña nada.', artFija: 'Nivel 2. Obús fijo con 20 celdas de alcance sobre lo que vea cualquiera de los tuyos; no dispara a menos de 6 celdas. Gasta munición: la repone por la red. Sin enlace de datos (red o radio) solo tira a lo que ve ella misma, a 8 celdas.',
       opEsp: 'Operaciones especiales: de aquí sale la guerrilla. Moto transportadora, Delta y emboscados; con nivel 3, el comando y el helicóptero ligero (su helipuerto aloja dos). Nivel 2, pide cuartel.',
+      camioneta: 'Camioneta con una ametralladora pesada en la caja. Barata, muy rápida y sin blindaje: incursiones, escolta y cazar infantería al principio. Sale del cuartel; cualquier cosa con cañón la destroza.',
+      vci: 'Vehículo de combate de infantería: lleva cuatro infantes bajo blindaje (clic derecho sobre él para subir) y pelea con un cañón automático. Tritura infantería y blindados ligeros; un tanque o un antitanque lo destruyen con lo que lleve dentro.',
+      cazacarros: 'Ocho ruedas, poco blindaje y misiles guiados que alcanzan más que el cañón de un tanque. Para disparar para y alza los tubos; recarga despacio. Contra tanques, desde lejos; de cerca, la infantería lo destroza.',
+      guerraE: 'Camión desarmado. Parado unos segundos despliega la burbuja (10 celdas): los drones enemigos guiados por radio que entran caen, y las radios y enlaces de datos enemigos dentro se cortan (órdenes con retraso, artillería sin datos). Al emitir se delata: el rival ve la burbuja.',
       heliLigero: 'Helicóptero ligero de apoyo: rápido, barato y frágil. Ametralladora contra la infantería y cohetes ligeros contra vehículos y edificios; acompaña a un grupo pequeño. Sale del helipuerto de operaciones especiales (dos por edificio). El antiaéreo portátil lo derriba.',
       emboscado: 'Con la orden de vigilar zona (W), va a su puesto, cava un hoyo y se mete: el rival no lo ve. Cuando un enemigo de tierra entra en la zona, salen todos los de esa zona: subfusil contra la infantería, lanzacohetes contra vehículos y edificios. Con calma, vuelven al hoyo. Los descubren las cámaras y, de cerca, exploradores y drones de reconocimiento.',
       delta: 'Observador de operaciones especiales: subfusil, prismáticos (ve a 11 celdas) y puntero láser. Con «Marcar con láser» se planta y marca a un enemigo; tu avión de ataque libre acude y hace pasadas precisas mientras dure la marca. Quieto, no se le ve.',

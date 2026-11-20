@@ -363,12 +363,12 @@
   <button type="button" id="empezar">Empezar</button>
   <button type="button" id="tutorial">Tutorial guiado<small style="display:block;color:var(--suave);font-size:10px">ocho pasos, con el rival dormido hasta el final</small></button>
   <button type="button" id="continuar" hidden>Continuar la partida guardada</button>
-  <div id="version">versión 129</div>
+  <div id="version">versión 130</div>
 </div></div>
 <div id="guia" hidden><div class="caja"><div class="cab"><strong>Guía: para qué sirve cada cosa</strong><button type="button" id="cierraGuia">cerrar</button></div><div id="guiaTxt"></div></div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finVer" href="#" title="Vuelve a ver la partida entera, con todo el mapa a la vista y a la velocidad que quieras.">ver repetición</a><a id="finLog" href="#" title="Descarga el registro de la partida: la semilla, las opciones y todas las órdenes de los dos bandos, con su instante. Sirve para reproducirla y analizar cómo jugó la IA.">descargar registro</a><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 129' };
+globalThis.W = { VERSION: 'versión 130' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -525,6 +525,14 @@ globalThis.W = { VERSION: 'versión 129' };
     gatling:     { nombre: 'Gatling',     cat: 'inf', vida: 110, vel: 0.045, costo: 380, tiempo: 240, blindaje: 'ligero', arma: 'gatling', vision: 6.5, radio: 0.16, req: ['cuartel'], agua: 2, giro: 0.12, acel: 0.015, nivel: 2, monta: 60, arco: 0.5 },
     // Hacker: no combate. Por orden, apaga desde lejos un vehículo o un edificio enemigo durante unos segundos; cada hackeo cuesta información.
     hacker:      { nombre: 'Hacker',      cat: 'inf', vida: 45,  vel: 0.06, costo: 400, info: 30, tiempo: 240, blindaje: 'ligero', arma: null, vision: 8, radio: 0.105, req: ['estacion'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, hackea: true, alcanceHack: 9 },
+    // Camioneta artillada: barata, rápida y sin blindaje, con una ametralladora pesada en la caja. Sale del cuartel: el único vehículo de combate sin fábrica.
+    camioneta:   { nombre: 'Camioneta artillada', cat: 'veh', lugar: 'cuartel', vida: 120, vel: 0.17, costo: 220, pet: 10, tiempo: 120, blindaje: 'ligero', arma: 'ametrPesada', vision: 7, radio: 0.17, req: ['cuartel'], agua: 1, giro: 0.22, acel: 0.016, giroT: 0.35, cono: 1.6 },
+    // Vehículo de combate de infantería: lleva cuatro infantes bajo blindaje y pelea con un cañón automático.
+    vci:         { nombre: 'Vehículo de combate de infantería', cat: 'veh', vida: 280, vel: 0.12, costo: 750, acero: 30, pet: 40, tiempo: 300, blindaje: 'pesado', arma: 'canonAuto', vision: 7, radio: 0.23, req: ['fabrica'], agua: 2, giro: 0.12, acel: 0.007, nivel: 2, plazas: 4, giroT: 0.22, cono: 0.9 },
+    // Cazacarros: ocho ruedas, poco blindaje y misiles guiados que alcanzan más que el cañón de un tanque. Para disparar tiene que parar y alzar los tubos; recarga despacio.
+    cazacarros:  { nombre: 'Cazacarros', cat: 'veh', vida: 170, vel: 0.15, costo: 850, acero: 30, pet: 50, tiempo: 320, blindaje: 'ligero', arma: 'misilAT', vision: 8, radio: 0.22, req: ['fabrica'], agua: 2, giro: 0.16, acel: 0.01, nivel: 2, monta: 30, giroT: 0.2, cono: 0.7 },
+    // Guerra electrónica: camión desarmado. Parado un rato, despliega la burbuja: los drones enemigos guiados por radio que entran caen, y las radios y enlaces de datos enemigos dentro se cortan. Al emitir se delata.
+    guerraE:     { nombre: 'Guerra electrónica', cat: 'veh', vida: 160, vel: 0.11, costo: 1200, pet: 60, tiempo: 360, blindaje: 'ligero', arma: null, vision: 8, radio: 0.24, req: ['fabrica'], agua: 2, giro: 0.12, acel: 0.008, nivel: 3, burbuja: 10 },
     transporte:  { nombre: 'Transporte', cat: 'veh', vida: 260, vel: 0.13, costo: 500, pet: 30, tiempo: 220, blindaje: 'pesado', arma: null, vision: 7, radio: 0.24, req: ['fabrica'], agua: 1, giro: 0.14, acel: 0.008, nivel: 2, plazas: 6 },
     lanzacohetes: { nombre: 'Lanzacohetes', cat: 'veh', vida: 200, vel: 0.07, costo: 1300, acero: 60, pet: 90, raros: 50, tiempo: 480, blindaje: 'pesado', arma: 'salva', vision: 7, radio: 0.23, req: ['fabrica'], agua: 2, giro: 0.07, acel: 0.004, nivel: 3, arco: 0.1, cono: 0.7 },
     mando:       { nombre: 'Vehículo de mando', cat: 'veh', vida: 300, vel: 0.08, costo: 1200, pet: 60, tiempo: 420, blindaje: 'pesado', arma: null, vision: 8, radio: 0.24, req: ['fabrica'], agua: 2, giro: 0.1, acel: 0.005, nivel: 3, mando: 7, radioCom: 30, enlace: true },
@@ -572,10 +580,13 @@ globalThis.W = { VERSION: 'versión 129' };
   // indirecto: tira por encima; le basta con que cualquier unidad propia vea el blanco (hace de observador).
   // alcanceMin: no puede disparar más cerca que eso. area: radio de la explosión (daña a todo enemigo dentro).
   // atras: apoyo y segunda línea. Nunca se adelantan a las unidades de combate: van detrás del frente y, si se quedan delante, esperan o se repliegan.
-  for (const k of ['medico', 'ingeniero', 'radioOp', 'operador', 'hacker', 'cazadron', 'mando', 'vehRadio', 'comandoDrones', 'tallerMovil', 'camionSum', 'motoSum', 'mortero', 'artilleria', 'francotirador', 'manpad', 'lanzacohetes', 'antiaereoMovil']) W.UNID[k].atras = true;
+  for (const k of ['medico', 'ingeniero', 'radioOp', 'operador', 'hacker', 'cazadron', 'mando', 'vehRadio', 'comandoDrones', 'tallerMovil', 'camionSum', 'motoSum', 'mortero', 'artilleria', 'francotirador', 'manpad', 'lanzacohetes', 'antiaereoMovil', 'cazacarros', 'guerraE']) W.UNID[k].atras = true;
 
   W.ARMAS = {
     fusil:   { alcance: 4,   dano: 8,  recarga: 16, vs: { ligero: 1,   pesado: 0.12, edificio: 0.3, aire: 0.4 } }, // (contra blindaje, poco más que nada)
+    ametrPesada: { alcance: 5, dano: 9, recarga: 6, vs: { ligero: 1, pesado: 0.2, edificio: 0.25 } }, // la de la camioneta
+    canonAuto: { alcance: 5, dano: 14, recarga: 9, vuelo: 1.2, vs: { ligero: 1, pesado: 0.45, edificio: 0.5 } }, // el cañón automático del vehículo de combate de infantería
+    misilAT: { guiado: true, alcance: 8, dano: 120, recarga: 130, vuelo: 0.8, vs: { ligero: 0.4, pesado: 1.3, edificio: 0.6 } }, // el del cazacarros
     canon:   { alcance: 5,   dano: 40, recarga: 50, vuelo: 0.9, vs: { ligero: 0.7, pesado: 1,    edificio: 0.9 } }, // (con munición explosiva: también sirve contra infantería)
     cohete:  { alcance: 5,   dano: 45, recarga: 60, vuelo: 0.6, vs: { ligero: 0.3, pesado: 1.2,  edificio: 0.7, aire: 1.1 } },
     obus:    { indirecto: true, alcance: 11,  alcanceMin: 3, area: 1.4, dano: 70, recarga: 110, vuelo: 0.45, vs: { ligero: 1, pesado: 0.7, edificio: 1.3 } },
@@ -672,6 +683,7 @@ globalThis.W = { VERSION: 'versión 129' };
     // las armas ligeras no hacen nada a blindados ni a edificios. Quien cae queda herido: fuera de combate (nadie le dispara ni le hace daño) hasta heridoT ticks; si lo curan hasta heridoAlta de su vida, se salva; si no, muere.
     // Bajo fuego, el infante suelto busca bosque a cubre celdas; y el criterio de combate es más prudente (critInf, critRet).
     ultra: { inf: 4, penetra: 3, inmovil: 30, heridoT: 800, heridoAlta: 0.25, cubre: 4, clavado: 0.45, critInf: 0.9, critRet: 0.5 },
+    geDespliega: 60, // guerra electrónica: lo que tarda parada en desplegar la burbuja
     cavarHoyo: 100, reEnterrar: 40, emboscadaCalma: 200, enterradoDano: 0.3, detectaHoyo: 3, // emboscados: lo que tardan en cavar y en volver a meterse, la calma que esperan para volver al hoyo y cuánto les protege
     sinLaser: 0.45, laserDisp: 1.4, // el avión de ataque sin la marca del láser: menos daño y el fuego cae a un lado
     critInf: 0.6, critRet: 0.3, critEspera: 300, critBloque: 4, critAlcance: 2,
@@ -1364,7 +1376,7 @@ globalThis.W = { VERSION: 'versión 129' };
   }
   // Cámaras: cada medio segundo descubren a los escondidos que tengan cerca y, si entra un enemigo, avisan (como mucho cada 15 s).
   // Enlace de datos: el edificio está unido a la red por cable (o por cercanía) o dentro de la cobertura de radio de su dueño.
-  W.enlazado = (m, e) => m.logistica === false || m.jug[e.j].dios || e.conRed !== false || !!(m.radioCob && m.radioCob[e.j][Math.floor(e.cy) * m.N + Math.floor(e.cx)]);
+  W.enlazado = (m, e) => m.logistica === false || m.jug[e.j].dios || (!enBurbuja(m, e.j, e.cx, e.cy) && (e.conRed !== false || !!(m.radioCob && m.radioCob[e.j][Math.floor(e.cy) * m.N + Math.floor(e.cx)])));
   function tickCamaras(m) {
     for (const e of m.ents) {
       if (!e.edif || e.infra || !EDIF[e.tipo].detecta || e.sinLuz || e.hack > m.t) continue;
@@ -2408,7 +2420,9 @@ globalThis.W = { VERSION: 'versión 129' };
     }
     m.ecos = hay ? ecos : null; m.ecosT = m.t;
   }
-  const sinRadio = (m, u) => !!m.radioCob && m.logistica !== false && !UNID[u.tipo].aire && !UNID[u.tipo].enlace && !m.jug[u.j].dios && !m.radioCob[u.j][Math.floor(u.y) * m.N + Math.floor(u.x)];
+  const enBurbuja = (m, j, x, y) => { if (!m.burbujas) return false; for (const b of m.burbujas) if (b.j !== j && Math.hypot(b.x - x, b.y - y) <= b.r) return true; return false; }; // dentro de la burbuja de guerra electrónica del rival
+  W.enBurbuja = enBurbuja;
+  const sinRadio = (m, u) => !!m.radioCob && m.logistica !== false && !UNID[u.tipo].aire && !m.jug[u.j].dios && (enBurbuja(m, u.j, u.x, u.y) || (!UNID[u.tipo].enlace && !m.radioCob[u.j][Math.floor(u.y) * m.N + Math.floor(u.x)]));
   W.sinRadio = sinRadio;
   function aplicar(m, cmd) {
     const J = m.jug[cmd.j];
@@ -4206,10 +4220,19 @@ globalThis.W = { VERSION: 'versión 129' };
   }
   W.cauto = cauto;
   function tickInhibir(m) { // los inhibidores: el dron enemigo guiado por radio que entra en su radio pierde el enlace y cae (el de fibra, no)
-    let inh = null; for (const u of m.ents) if (!u.edif && u.vida > 0 && UNID[u.tipo].inhibe) (inh || (inh = [])).push(u);
+    let inh = null, bur = null;
+    for (const u of m.ents) {
+      if (u.edif || u.vida <= 0) continue; const d = UNID[u.tipo];
+      if (d.inhibe) (inh || (inh = [])).push(u);
+      if (d.burbuja) { // guerra electrónica: parada un rato, despliega y emite
+        if (u.v < 0.001 && u.orden === 'nada' && !u.dentro) u.geT = (u.geT || 0) + 5; else u.geT = 0;
+        u.emite = u.geT >= ECON.geDespliega; if (u.emite) { (inh || (inh = [])).push(u); (bur || (bur = [])).push({ x: u.x, y: u.y, r: d.burbuja, j: u.j }); }
+      }
+    }
+    m.burbujas = bur; // las burbujas activas: cortan las radios y los enlaces de datos del rival que queden dentro
     if (!inh) return;
     for (const e of m.ents) { if (e.edif || e.vida <= 0) continue; const d = UNID[e.tipo]; if (d.blindaje !== 'dron' || d.fibra) continue;
-      for (const u of inh) if (u.j !== e.j && Math.hypot(u.x - e.x, u.y - e.y) <= UNID[u.tipo].inhibe) { e.vida = 0; m.efectos.push({ tipo: 'inhibido', x2: e.x, y2: e.y, j: e.j, de: u.j, t: m.t }); break; } }
+      for (const u of inh) if (u.j !== e.j && Math.hypot(u.x - e.x, u.y - e.y) <= (UNID[u.tipo].burbuja || UNID[u.tipo].inhibe)) { e.vida = 0; m.efectos.push({ tipo: 'inhibido', x2: e.x, y2: e.y, j: e.j, de: u.j, t: m.t }); break; } }
   }
   W.tick = function (m) {
     if (m.ganador >= 0) return;
@@ -4696,6 +4719,9 @@ globalThis.W = { VERSION: 'versión 129' };
       if (J.nivel >= 2 && (c.antiaereoMovil || 0) < 1 + Math.floor(((c.tanque || 0) + (c.pesado || 0)) / 8)) veh = 'antiaereoMovil'; // escolta antiaérea para las columnas
       else if (J.nivel >= 3 && (c.pesado || 0) < 5 && W.puedePagar(J, UNID.pesado)) veh = 'pesado';
       else if (J.nivel >= 2 && (c.artilleria || 0) * 4 < (c.tanque || 0)) veh = 'artilleria';
+      else if (J.nivel >= 3 && !c.guerraE && !J.colas.guerraE.n && soldados.length >= 12) veh = 'guerraE'; // una burbuja de guerra electrónica que acompaña a la oleada
+      else if (J.nivel >= 2 && (c.cazacarros || 0) < 1 + Math.floor(((c.tanque || 0) + (c.pesado || 0)) / 4)) veh = 'cazacarros'; // cazacarros, por detrás de los tanques
+      else if (J.nivel >= 2 && (c.vci || 0) * 3 < (c.tanque || 0)) veh = 'vci';
       if (J.acero !== undefined && J.acero < (UNID[veh].acero || 0)) veh = 'blindado'; // sin acero para lo pesado: blindados ligeros mientras la fundición trabaja
       // Aviación: cazas, un dron y, con nivel 3, helicópteros y bombarderos; uno a la vez. El estilo aéreo la compra antes que los tanques.
       let av = null;
@@ -4803,7 +4829,8 @@ globalThis.W = { VERSION: 'versión 129' };
       if (c.fabrica && J.nivel >= 2 && !ahorra && !urgente && tk % 10 === 4 && !(c.tallerMovil || 0) && !J.colas.tallerMovil.n && soldados.length >= 12) entrena('tallerMovil', 800); // un taller de campaña
       // Infantería especial: dos gatling para sostener el punto de reunión, un hacker y dos operadores de drones.
       if (c.cuartel && !ahorra && !urgente && tk % 5 === 3) {
-        if (!c.logistica && (c.motoSum || 0) + J.colas.motoSum.n < 1 && soldados.length >= 5) entrena('motoSum', 300); // una moto de suministro mientras no haya puesto logístico
+        if (!c.logistica && (c.motoSum || 0) + J.colas.motoSum.n < 1 && soldados.length >= 5) entrena('motoSum', 300);
+        else if (J.nivel < 2 && (c.camioneta || 0) + J.colas.camioneta.n < 2 && soldados.length >= 4) entrena('camioneta', 300); // camionetas artilladas mientras no hay fábrica grande // una moto de suministro mientras no haya puesto logístico
         else if ((c.gatling || 0) + J.colas.gatling.n < 2 && (c.infanteria || 0) >= 8) entrena('gatling', 500);
         else if ((c.hacker || 0) + J.colas.hacker.n < 1 && soldados.length >= 10) entrena('hacker', 500);
         else if (c.estDrones && (c.operador || 0) + J.colas.operador.n < 2 && soldados.length >= 8) entrena('operador', 500);
@@ -4947,6 +4974,7 @@ globalThis.W = { VERSION: 'versión 129' };
     if (tk % 5 === 1) { // hackers y operadores de drones: con la oleada, unos pasos por detrás; sin oleada, en el punto de reunión
       let ax = 0, ay = 0, na = 0; for (const u of soldados) if (ia.atacantes.has(u.id)) { ax += u.x; ay += u.y; na++; }
       const tx = na >= 4 ? ax / na - (dx / dd) * 4 : rx - (dx / dd) * 2, ty = na >= 4 ? ay / na - (dy / dd) * 4 : ry - (dy / dd) * 2;
+      if (na >= 4) for (const u of sinArma) if (u.tipo === 'guerraE' && u.orden === 'nada' && Math.hypot(u.x - tx, u.y - ty) > 6) { const cc = W.cercaLibre(m, tx, ty, true); W.orden(m, { t: 'mover', j, ids: [u.id], x: (cc % m.N) + 0.5, y: ((cc / m.N) | 0) + 0.5 }); } // la guerra electrónica, detrás de la oleada: allí para y despliega
       if (na >= 4) for (const u of sinArma) if (u.tipo === 'tallerMovil' && u.orden === 'nada' && Math.hypot(u.x - tx, u.y - ty) > 12) { const cc = W.cercaLibre(m, tx, ty, true); W.orden(m, { t: 'mover', j, ids: [u.id], x: (cc % m.N) + 0.5, y: ((cc / m.N) | 0) + 0.5 }); } // el taller de campaña, detrás de la oleada: repara y recupera cascos él solo
       if (na >= 4) for (const u of sinArma) if (u.tipo === 'camionSum' && (!u.sumi || Math.hypot(u.sumi.x - tx, u.sumi.y - ty) > 14)) { const cc = W.cercaLibre(m, tx, ty, true); W.orden(m, { t: 'mover', j, ids: [u.id], x: (cc % m.N) + 0.5, y: ((cc / m.N) | 0) + 0.5 }); } // el camión de suministro, detrás de la oleada
       for (const u of sinArma) if (u.tipo === 'operador' && u.sinDron && u.orden === 'nada') { const b = m.ents.find((e) => e.edif && e.j === j && (e.tipo === 'estDrones' || e.tipo === 'logistica') && e.vida > 0); if (b && Math.hypot(u.x - b.cx, u.y - b.cy) > 4) { const cc = W.cercaLibre(m, b.cx, b.cy + b.tam / 2 + 1.5); W.orden(m, { t: 'mover', j, ids: [u.id], x: (cc % m.N) + 0.5, y: ((cc / m.N) | 0) + 0.5 }); } } // el operador sin drones vuelve a reponer
@@ -5262,6 +5290,44 @@ globalThis.W = { VERSION: 'versión 129' };
   // El contexto llega trasladado al centro de la unidad. r = radio en píxeles.
   // e = { ang, angT, retro (0..1), anda, tiempo, carga (0..1), cosecha }
   // y, para el movimiento: vehículos { fI, fD, rod, dir, fino, hx, hy }; infantería { pies: [{x, y}, {x, y}] (en R), hombro, cabeza, inc (en R), resp, fino, rodilla (0..1), te (0..1, cuerpo a tierra) }
+  // Los cuatro vehículos de la segunda tanda (camioneta artillada, vehículo de combate de infantería, cazacarros y guerra electrónica). El contexto ya está girado al rumbo del casco.
+  const VEH2 = {
+    camioneta(c, r, lod, col, e) { // camioneta con una ametralladora pesada en la caja y su tirador
+      const L = r * 1.5, w = r * 0.72, d = e.retro;
+      ruedas(c, col, e, lod, [-L * 0.62, L * 0.6], w * 0.6, L * 0.34, w * 0.3); c.translate(e.hx || 0, e.hy || 0);
+      c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.moveTo(-L, -w * 0.72); c.lineTo(L * 0.75, -w * 0.72); c.lineTo(L, -w * 0.45); c.lineTo(L, w * 0.45); c.lineTo(L * 0.75, w * 0.72); c.lineTo(-L, w * 0.72); c.closePath(); c.fill(); c.stroke();
+      c.fillStyle = col.osc; c.fillRect(L * 0.1, -w * 0.56, L * 0.42, w * 1.12); if (lod === 2) { c.fillStyle = col.claro || col.luz; c.fillRect(L * 0.44, -w * 0.48, L * 0.1, w * 0.96); c.strokeRect(-L * 0.9, -w * 0.56, L * 0.9, w * 1.12); } // cabina, parabrisas y caja
+      c.save(); c.translate(-L * 0.42, 0); c.rotate(e.angT - e.ang);
+      if (lod === 2) { c.fillStyle = col.base; c.strokeStyle = col.osc; rr(c, -r * 0.4, -r * 0.3, r * 0.28, r * 0.6, r * 0.12); c.fill(); c.stroke(); c.fillStyle = col.luz; c.beginPath(); c.arc(-r * 0.24, 0, r * 0.15, 0, TAU); c.fill(); c.stroke(); } // el tirador, de pie tras el arma
+      c.fillStyle = col.tinta || '#1a1a1a'; c.fillRect(-d * r * 0.12, -r * 0.05, r * 1.15, r * 0.1); c.fillRect(r * 0.1 - d * r * 0.12, -r * 0.13, r * 0.3, r * 0.26);
+      if (d > 0.5) { c.fillStyle = col.fuego; c.beginPath(); c.arc(r * 1.28, 0, r * 0.15, 0, TAU); c.fill(); } c.restore(); },
+    vci(c, r, lod, col, e) { // vehículo de combate de infantería: orugas, torre con cañón automático y portón trasero para la tropa
+      const L = r * 1.45, w = r * 0.95, d = e.retro;
+      orugas(c, col, e, lod, -L, L, w, w * 0.42); c.translate(e.hx || 0, e.hy || 0);
+      c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.moveTo(-L * 0.95, -w * 0.68); c.lineTo(L * 0.5, -w * 0.68); c.lineTo(L * 0.98, -w * 0.3); c.lineTo(L * 0.98, w * 0.3); c.lineTo(L * 0.5, w * 0.68); c.lineTo(-L * 0.95, w * 0.68); c.closePath(); c.fill(); c.stroke();
+      c.fillStyle = col.osc; c.fillRect(-L * 0.97, -w * 0.42, L * 0.1, w * 0.84); if (lod === 2) { for (const y of [-0.46, 0.14]) c.fillRect(-L * 0.78, w * y, L * 0.46, w * 0.32); c.beginPath(); for (let i = 0; i < 3; i++) { c.moveTo(L * (0.6 + i * 0.1), -w * 0.26); c.lineTo(L * (0.6 + i * 0.1), w * 0.26); } c.stroke(); } // portón, escotillas de la tropa y rejilla
+      c.save(); c.translate(L * 0.12, 0); c.rotate(e.angT - e.ang); c.fillStyle = col.osc; c.fillRect(r * 0.2 - d * r * 0.14, -r * 0.055, r * 1.3, r * 0.11);
+      c.fillStyle = col.claro || col.luz; c.strokeStyle = col.osc; c.beginPath(); c.moveTo(-r * 0.38, -r * 0.34); c.lineTo(r * 0.22, -r * 0.34); c.lineTo(r * 0.38, -r * 0.16); c.lineTo(r * 0.38, r * 0.16); c.lineTo(r * 0.22, r * 0.34); c.lineTo(-r * 0.38, r * 0.34); c.closePath(); c.fill(); c.stroke();
+      if (lod === 2) { c.fillStyle = col.osc; c.beginPath(); c.arc(-r * 0.1, r * 0.1, r * 0.1, 0, TAU); c.fill(); } if (d > 0.5) { c.fillStyle = col.fuego; c.beginPath(); c.arc(r * 1.6, 0, r * 0.15, 0, TAU); c.fill(); } c.restore(); },
+    cazacarros(c, r, lod, col, e) { // ocho ruedas, casco bajo y un lanzador doble de misiles sobre un brazo
+      const L = r * 1.5, w = r * 0.8, d = e.retro, alza = 1 - 0.25 * (e.marcha || 0);
+      ruedas(c, col, e, lod, [-L * 0.78, -L * 0.32, L * 0.16, L * 0.62], w * 0.6, L * 0.3, w * 0.28); c.translate(e.hx || 0, e.hy || 0);
+      c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.moveTo(-L * 0.95, -w * 0.7); c.lineTo(L * 0.55, -w * 0.7); c.lineTo(L, -w * 0.25); c.lineTo(L, w * 0.25); c.lineTo(L * 0.55, w * 0.7); c.lineTo(-L * 0.95, w * 0.7); c.closePath(); c.fill(); c.stroke();
+      if (lod === 2) { c.fillStyle = col.osc; c.fillRect(L * 0.42, -w * 0.4, L * 0.2, w * 0.8); c.beginPath(); for (let i = 0; i < 3; i++) { c.moveTo(-L * (0.85 - i * 0.1), -w * 0.4); c.lineTo(-L * (0.85 - i * 0.1), w * 0.4); } c.stroke(); } // parabrisas blindado y rejilla del motor
+      c.save(); c.translate(-L * 0.12, 0); c.rotate(e.angT - e.ang); c.fillStyle = col.osc; c.fillRect(-r * 0.22, -r * 0.13, r * 0.5, r * 0.26); // el brazo
+      for (const q of [-1, 1]) { c.fillStyle = col.claro || col.luz; c.strokeStyle = col.osc; c.beginPath(); c.rect(-r * 0.3 - d * r * 0.1, q * r * 0.31 - r * 0.17, r * 1.25 * alza, r * 0.34); c.fill(); c.stroke(); c.fillStyle = col.tinta || '#1a1a1a'; c.beginPath(); c.arc(-r * 0.3 + r * 1.25 * alza - r * 0.14 - d * r * 0.1, q * r * 0.31, r * 0.1, 0, TAU); c.fill(); } // los dos tubos; en marcha van recogidos
+      if (d > 0.5) { c.fillStyle = col.fuego; c.beginPath(); c.arc(-r * 0.5, 0, r * 0.3, 0, TAU); c.fill(); } c.restore(); }, // el rebufo sale por detrás
+    guerraE(c, r, lod, col, e) { // camión de guerra electrónica: cabina, caja y un mástil de antenas que se despliega al parar
+      const L = r * 1.5, w = r * 0.78, dp = 1 - (e.marcha || 0), T = (e.tiempo || 0) / 1000;
+      if (dp > 0.5 && lod === 2) { c.strokeStyle = col.osc; c.lineWidth = Math.max(1, r * 0.12); c.beginPath(); for (const x of [-0.8, 0.1]) for (const q of [-1, 1]) { c.moveTo(L * x, q * w * 0.7); c.lineTo(L * x, q * w * 1.15); } c.stroke(); } // los gatos, fuera
+      ruedas(c, col, e, lod, [-L * 0.72, -L * 0.3, L * 0.62], w * 0.62, L * 0.3, w * 0.28); c.translate(e.hx || 0, e.hy || 0);
+      c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.rect(-L, -w * 0.72, L * 1.3, w * 1.44); c.fill(); c.stroke(); // la caja
+      c.fillStyle = col.claro || col.luz; c.beginPath(); c.rect(L * 0.36, -w * 0.62, L * 0.6, w * 1.24); c.fill(); c.stroke(); c.fillStyle = col.osc; c.fillRect(L * 0.72, -w * 0.5, L * 0.12, w); // cabina y parabrisas
+      if (lod === 2) { c.fillStyle = col.luz; for (const x of [-0.86, -0.68]) c.fillRect(L * x, -w * 0.5, L * 0.1, w * 0.3); c.fillStyle = col.osc; c.fillRect(-L * 0.9, w * 0.2, L * 0.5, w * 0.34); } // equipos sobre el techo
+      const mx = -L * 0.2, R = r * (0.35 + 0.45 * dp); c.fillStyle = col.osc; c.beginPath(); c.arc(mx, 0, r * 0.2, 0, TAU); c.fill();
+      c.strokeStyle = col.tinta || '#1a1a1a'; c.lineWidth = Math.max(1, r * 0.07); c.beginPath(); for (let i = 0; i < 6; i++) { const a = i / 6 * TAU + T * 0.4 * dp; c.moveTo(mx, 0); c.lineTo(mx + Math.cos(a) * R, Math.sin(a) * R); } c.stroke(); // las antenas: recogidas en marcha, abiertas y girando al emitir
+      c.fillStyle = dp > 0.5 && Math.sin(T * 6) > 0 ? col.mal : col.tinta || '#1a1a1a'; c.beginPath(); c.arc(mx, 0, r * 0.08, 0, TAU); c.fill(); },
+  };
   W.fichaUnidad = function (c, u, r, lod, col, e) {
     const inf = W.UNID[u.tipo].cat === 'inf', at = u.tipo === 'antitanque' || u.tipo === 'manpad', pesado = u.tipo === 'pesado', expl = u.tipo === 'explorador', ing = u.tipo === 'ingeniero', med = u.tipo === 'medico', civ = u.tipo === 'civil', hk = u.tipo === 'hacker', op = u.tipo === 'operador' || u.tipo === 'cazadron', rad = u.tipo === 'radioOp', franco = u.tipo === 'francotirador', esp = u.tipo === 'espia', gra = u.tipo === 'granadero';
     if (lod === 0) {
@@ -5387,6 +5453,7 @@ globalThis.W = { VERSION: 'versión 129' };
       if (u.tipo === 'comando' && lod) { c.fillStyle = '#34453a'; c.beginPath(); c.arc(hx, 0, r * 1.4 * 0.3, 0, TAU); c.fill(); if (lod === 2) { c.strokeStyle = '#34453a'; c.lineWidth = 1.2; c.beginPath(); for (let i = 0; i < 9; i++) { const a = i / 9 * TAU + 0.3; c.moveTo(hx + Math.cos(a) * r * 0.36, Math.sin(a) * r * 0.36); c.lineTo(hx + Math.cos(a) * r * 0.74, Math.sin(a) * r * 0.74); } c.stroke(); } } // capucha de camuflaje
       if (u.tipo === 'emboscado' && lod && !e.hundido) { const R = r * 1.4; c.strokeStyle = '#4f5a3c'; c.lineCap = 'butt'; c.lineWidth = Math.max(2, R * 0.3); c.beginPath(); c.moveTo(-R * 1.0, -R * 0.52); c.lineTo(R * 0.35, -R * 0.52); c.stroke(); c.fillStyle = col.tinta || '#1a1a1a'; c.fillRect(-R * 1.05, -R * 0.7, R * 0.12, R * 0.36); } // el lanzacohetes, a la espalda
       if (u.tipo === 'asalto' && lod && !(e.te > 0.5)) { const R = r * 1.4; c.strokeStyle = col.osc; c.lineWidth = Math.max(1.5, R * 0.34); c.lineCap = 'round'; c.beginPath(); c.arc(R * 0.5, -R * 0.25, R * 0.95, -1.25, 0.35); c.stroke(); if (lod === 2) { c.strokeStyle = col.claro || col.luz; c.lineWidth = Math.max(1, R * 0.16); c.beginPath(); c.arc(R * 0.5, -R * 0.25, R * 0.95, -1.15, 0.25); c.stroke(); } c.lineCap = 'butt'; } // el escudo, por delante
+    } else if (VEH2[u.tipo]) { VEH2[u.tipo](c, r, lod, col, e);
     } else if (u.tipo === 'tanque' || pesado) {
       const L = r * 1.4, w = r;
       orugas(c, col, e, lod, -L, L, w, w * 0.44); c.translate(e.hx || 0, e.hy || 0); // el casco, sobre su tren de rodaje: cabecea y se ladea
@@ -6382,6 +6449,7 @@ globalThis.W = { VERSION: 'versión 129' };
         if (!e.edif && e.j === YO && e.bajas) t += ' · ' + e.bajas + (e.bajas === 1 ? ' baja' : ' bajas');
         if (e.arregla && e.j === YO) t += ' · reparando';
         if (!e.edif && UNID[e.tipo].plazas && e.j === YO) t += ' · ' + e.pasajeros.length + '/' + UNID[e.tipo].plazas + ' dentro';
+        if (!e.edif && UNID[e.tipo].burbuja) t += e.emite ? ' · emitiendo: burbuja activa' : ' · parada, despliega la burbuja';
         if (!e.edif && UNID[e.tipo].mando && e.j === YO) t += e.sinInfo ? ' · sin información: apagado' : ' · mando activo';
         if (!e.edif && e.j === YO && W.oculta(m, e)) t += ' · oculta';
         if (e.retirando) t += ' · se retira a reparar'; else if (e.huye > m.t) t += ' · huye';
@@ -6420,7 +6488,7 @@ globalThis.W = { VERSION: 'versión 129' };
     // La rodada de un vehículo: un trazo por cada lado, del punto anterior al actual (así las curvas salen seguidas). o: de oruga (trazo a rayas).
     function rodada(x0, y0, a0, x, y, ang, s, o) { if (suelo.length > 700) suelo.shift(); suelo.push({ k: 'rodada', x, y, x0, y0, a0, ang, s, o, b: conRed && W.clima(m) > 0, t0: performance.now(), dur: 22000 }); } // (b: con lluvia, la rodada es de barro)
     const pisadas = []; // las de la infantería, aparte: son muchas y cortas, y no deben echar de la lista a cráteres y rodadas
-    const ORUGA = new Set(['tanque', 'pesado', 'antiaereoMovil', 'artilleria', 'excavadora', 'lanzacohetes']);
+    const ORUGA = new Set(['tanque', 'pesado', 'antiaereoMovil', 'artilleria', 'excavadora', 'lanzacohetes', 'vci']);
     const muelleDe = (g, k, obj, rig, fr, dt) => { const v = (g[k + 'v'] || 0) + ((obj - (g[k] || 0)) * rig - (g[k + 'v'] || 0) * fr) * dt; g[k + 'v'] = v; return (g[k] = (g[k] || 0) + v * dt); }; // muelle amortiguado: lo que da el peso
     function marcaSuelo(k, x, y, s, ang, dur, clase) { if (suelo.length > 700) suelo.shift(); suelo.push({ k, x, y, s, ang, t0: performance.now(), dur, clase }); }
     function estallido(x, y, tam) { // tam: 1 impacto, 2 unidad, 3 edificio
@@ -7612,6 +7680,12 @@ globalThis.W = { VERSION: 'versión 129' };
           if (u.dronMis) { const qx = ox + u.dronMis.x * z, qy = oy + u.dronMis.y * z; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(qx, qy); ctx.stroke(); ctx.beginPath(); ctx.arc(qx, qy, W.ECON.dronMisRadio * z, 0, TAU); ctx.stroke(); }
         }
         ctx.setLineDash([]);
+        for (const u of m.ents) { // la burbuja de guerra electrónica: la tuya, con ondas; la del rival se ve siempre (al emitir se delata)
+          if (u.edif || !u.emite || u.vida <= 0) continue; const R = UNID[u.tipo].burbuja * z, cx = ox + u.x * z, cy = oy + u.y * z; if (cx + R < 0 || cy + R < 0 || cx - R > cw || cy - R > ch) continue;
+          if (u.j === YO) { ctx.strokeStyle = P.yo; ctx.lineWidth = 1; for (let k = 0; k < 3; k++) { const f = (tiempo * 0.00035 + k / 3) % 1; ctx.globalAlpha = 0.35 * (1 - f); ctx.beginPath(); ctx.arc(cx, cy, R * (0.15 + f * 0.85), 0, TAU); ctx.stroke(); } ctx.globalAlpha = 0.4; ctx.setLineDash([4, 6]); ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke(); ctx.setLineDash([]); }
+          else { ctx.strokeStyle = P.mal; ctx.globalAlpha = 0.5; ctx.lineWidth = 1.5; ctx.setLineDash([3, 5]); ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke(); ctx.setLineDash([]); }
+          ctx.globalAlpha = 1;
+        }
         for (const u of m.ents) { // el haz del láser de tus Delta: una línea roja fina que tiembla, y la marca sobre el blanco
           if (u.edif || u.j !== YO || !u.lsrOn || u.orden !== 'laser') continue; const o = m.porId.get(u.lsr); if (!o) continue;
           const ax = ox + u.x * z, ay = oy + u.y * z, bx = ox + (o.edif ? o.cx : o.x) * z, by = oy + (o.edif ? o.cy : o.y) * z, fl = 0.55 + 0.35 * Math.sin(tiempo * 0.031 + u.id);
@@ -8146,6 +8220,10 @@ globalThis.W = { VERSION: 'versión 129' };
       deposito: 'Alarga tu red: crea una zona redonda con suministro donde también puedes construir. Va a 40 celdas o menos de un edificio ya conectado y se cablea solo hasta él; para llegar más lejos, encadena varios.', misilera: 'Fabrica, guarda y lanza misiles balísticos.', interceptor: 'Derriba los misiles enemigos que entran en su radio.', estDrones: 'Mantiene dos drones de reconocimiento vigilando a su alrededor. Mejorada lleva además bombarderos y kamikazes, y guarda las tecnologías del operador.', inteligencia: 'Entrena espías, aloja dos drones espía de largo alcance y permite el mapeo satelital.',
       bunker: 'Entran hasta 4 de infantería (clic derecho sobre él con la tropa seleccionada) y disparan desde dentro recibiendo solo la cuarta parte del daño. Para sacarlos: selecciona el búnker y clic derecho en el suelo. Si lo destruyen, salen heridos.', vigia: 'Sin armas y muy barata: ve a 16 celdas y descubre a los escondidos a 8. Se puede poner fuera de la red, pero necesita enlace de datos: un cable hasta tu red (se tiende solo a menos de 24 celdas) o cobertura de radio. Sin enlace no te enseña nada.', artFija: 'Nivel 2. Obús fijo con 20 celdas de alcance sobre lo que vea cualquiera de los tuyos; no dispara a menos de 6 celdas. Gasta munición: la repone por la red. Sin enlace de datos (red o radio) solo tira a lo que ve ella misma, a 8 celdas.',
       opEsp: 'Operaciones especiales: de aquí sale la guerrilla. Moto transportadora, Delta y emboscados; con nivel 3, el comando y el helicóptero ligero (su helipuerto aloja dos). Nivel 2, pide cuartel.',
+      camioneta: 'Camioneta con una ametralladora pesada en la caja. Barata, muy rápida y sin blindaje: incursiones, escolta y cazar infantería al principio. Sale del cuartel; cualquier cosa con cañón la destroza.',
+      vci: 'Vehículo de combate de infantería: lleva cuatro infantes bajo blindaje (clic derecho sobre él para subir) y pelea con un cañón automático. Tritura infantería y blindados ligeros; un tanque o un antitanque lo destruyen con lo que lleve dentro.',
+      cazacarros: 'Ocho ruedas, poco blindaje y misiles guiados que alcanzan más que el cañón de un tanque. Para disparar para y alza los tubos; recarga despacio. Contra tanques, desde lejos; de cerca, la infantería lo destroza.',
+      guerraE: 'Camión desarmado. Parado unos segundos despliega la burbuja (10 celdas): los drones enemigos guiados por radio que entran caen, y las radios y enlaces de datos enemigos dentro se cortan (órdenes con retraso, artillería sin datos). Al emitir se delata: el rival ve la burbuja.',
       heliLigero: 'Helicóptero ligero de apoyo: rápido, barato y frágil. Ametralladora contra la infantería y cohetes ligeros contra vehículos y edificios; acompaña a un grupo pequeño. Sale del helipuerto de operaciones especiales (dos por edificio). El antiaéreo portátil lo derriba.',
       emboscado: 'Con la orden de vigilar zona (W), va a su puesto, cava un hoyo y se mete: el rival no lo ve. Cuando un enemigo de tierra entra en la zona, salen todos los de esa zona: subfusil contra la infantería, lanzacohetes contra vehículos y edificios. Con calma, vuelven al hoyo. Los descubren las cámaras y, de cerca, exploradores y drones de reconocimiento.',
       delta: 'Observador de operaciones especiales: subfusil, prismáticos (ve a 11 celdas) y puntero láser. Con «Marcar con láser» se planta y marca a un enemigo; tu avión de ataque libre acude y hace pasadas precisas mientras dure la marca. Quieto, no se le ve.',
