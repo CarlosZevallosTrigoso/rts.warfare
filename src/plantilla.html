@@ -145,6 +145,9 @@
   #tuto button { font: inherit; font-size: 10px; float: right; margin-left: 10px; color: var(--suave); background: none; border: 1px solid var(--linea); border-radius: 2px; padding: 1px 6px; cursor: pointer; }
   #tuto .hecho { color: var(--bien); }
   #tutorial { font: inherit; padding: 8px; border: 1px solid var(--linea); border-radius: 2px; background: var(--panel); color: var(--tinta); cursor: pointer; }
+  #listos { position: fixed; right: 244px; bottom: 8px; z-index: 3; display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+  #listos button { font: inherit; font-size: 11px; padding: 3px 8px; background: rgba(255,255,255,0.92); border: 1px solid #9a9a9a; color: var(--tinta); display: flex; gap: 6px; align-items: center; cursor: pointer; }
+  #listos button:hover { border-color: var(--tinta); } #listos button i { width: 7px; height: 7px; background: #3b6ea5; display: inline-block; }
   #abajo { position: fixed; left: 8px; bottom: 8px; z-index: 3; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; pointer-events: none; }
   #rend { border-collapse: collapse; background: var(--panel); border: 1px solid var(--linea); border-radius: 2px; font-size: 10px; line-height: 1.35; opacity: 0.92; pointer-events: auto; cursor: pointer; }
   #rend td { padding: 0 6px; } #rend td:last-child { text-align: right; color: var(--tinta); font-variant-numeric: tabular-nums; }
@@ -268,6 +271,7 @@
   </div>
   <div id="alertas"></div>
   <div id="tuto" hidden><button type="button" id="tutoFin">saltar tutorial</button><b id="tutoPaso"></b><span id="tutoTxt"></span></div>
+  <div id="listos"></div>
   <div id="abajo"><table id="rend" class="tenue plegado" title="Rendimiento del último segundo. Clic para desplegar o plegar."></table><div id="contexto" class="tenue plegado" title="Teclas para lo que tienes seleccionado. Clic para desplegar o plegar." hidden></div></div>
   <div id="repBar" hidden><b>REPETICIÓN</b><span id="repT"></span><button type="button" data-v="0">❙❙</button><button type="button" data-v="1" class="on">×1</button><button type="button" data-v="2">×2</button><button type="button" data-v="4">×4</button><button type="button" data-v="8">×8</button><button type="button" data-v="16">×16</button><a id="repSalir" href="#">salir</a></div>
   <aside id="barra">
@@ -310,6 +314,8 @@
     <button type="button" id="autoCivil" class="btn" hidden title="En automático, el ingeniero civil busca solo los edificios tuyos que estén fuera de la red y los conecta. Cualquier orden a mano lo saca del automático."></button>
     <button type="button" id="trazar" class="btn" hidden title="La excavadora va hasta el punto que marques dejando camino. Camino militar: abre el bosque y tiende puentes sobre el agua (más caros). Solo tus vehículos corren por él. No lleva energía ni red: para eso está el ingeniero civil.">Trazar camino</button>
     <button type="button" id="descargar" class="btn" hidden></button>
+    <button type="button" id="laser" class="btn" hidden title="El Delta se acerca, se planta y marca con el puntero al enemigo que elijas. Mientras lo marca, tu avión de ataque libre acude y hace pasadas precisas. Sin avión (aeródromo, nivel 3), la marca solo señala.">Marcar con láser</button>
+    <button type="button" id="separar" class="btn" hidden title="Deshace el binomio: el infante baja y la moto y él quedan cada uno por su cuenta.">Separar moto e infante</button>
     <button type="button" id="desplegar" class="btn" hidden title="Convierte el vehículo en su edificio, donde está: el patio móvil en un patio; el puesto móvil en un puesto de avanzada. No se puede replegar.">Desplegar</button>
     <button type="button" id="mejorar" class="btn" hidden title="Sube un nivel el rendimiento de este edificio: un 50 % más por nivel, hasta el nivel 3."></button>
     <div id="escolta" hidden style="display:flex;flex-wrap:wrap;gap:4px">

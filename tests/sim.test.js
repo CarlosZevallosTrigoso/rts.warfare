@@ -1503,6 +1503,121 @@ prueba('moto de suministro: sale del cuartel, va sola adonde hay tropa sin abast
   assert.ok(fue, 'la moto se pone en marcha sola'); assert.ok(sol.mun >= W.munDe('infanteria'), 'y le repone la munición (' + sol.mun + ')');
 });
 
+prueba('guerrilla: operaciones especiales y la moto transportadora (binomio: sube, lleva, deja, se resguarda, recoge y se separa)', () => {
+  assert.ok(W.EDIF.opEsp && W.EDIF.opEsp.nivel === 2 && W.EDIF.opEsp.req.includes('cuartel') && W.PRODUCE.opEsp, 'edificio de nivel 2 que produce');
+  assert.ok(W.lugarDe(W.UNID.motoTrans) === 'opEsp' && W.lugarDe(W.UNID.comando) === 'opEsp', 'la moto y el comando salen de operaciones especiales');
+  const m = W.crearMundo(4242, { N: 128 }), N = m.N; m.logistica = false;
+  for (const e of m.ents) if (!e.edif) e.vida = 0;
+  W.tick(m);
+  const cel = (x, y) => y * N + x;
+  for (let y = 40; y < 90; y++) for (let x = 20; x < 100; x++) { const i = cel(x, y); if (m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  for (let y = 58; y < 64; y++) for (let x = 24; x < 30; x++) { const i = cel(x, y); m.mapa.terreno[i] = 2; m.pasoV[i] = 0; } // un bosquecillo detrás
+  m.terrenoV++;
+  const avanza = (n, hasta) => { for (let i = 0; i < n; i++) { W.tick(m); if (hasta && hasta()) return i; } return n; };
+  const moto = W.crearUnidad(m, 0, 'motoTrans', cel(32, 60)), inf = W.crearUnidad(m, 0, 'infanteria', cel(34, 60)), gat = W.crearUnidad(m, 0, 'gatling', cel(34, 62));
+  W.orden(m, { t: 'cargar', j: 0, ids: [gat.id], en: moto.id }); avanza(60);
+  assert.ok(!moto.pasajeros.length && m.porId.has(gat.id), 'un equipo de dos no cabe en la moto');
+  W.orden(m, { t: 'cargar', j: 0, ids: [inf.id], en: moto.id }); avanza(80, () => moto.pasajeros.length);
+  assert.ok(moto.pasajeros[0] === inf && moto.bin === inf.id && inf.bin === moto.id, 'sube y quedan como binomio');
+  // orden de mover al infante (va dentro): la cumple la moto, lo deja allí y se vuelve al bosque
+  W.orden(m, { t: 'mover', j: 0, ids: [moto.id], x: 60.5, y: 60.5 });
+  avanza(900, () => moto.binEst === 'espera');
+  assert.ok(m.porId.has(inf.id) && Math.hypot(inf.x - 60.5, inf.y - 60.5) < 2.5, 'el infante baja en el destino: ' + inf.x.toFixed(1) + ',' + inf.y.toFixed(1));
+  assert.strictEqual(moto.binEst, 'espera', 'la moto se queda resguardada');
+  assert.ok(Math.hypot(moto.x - 60.5, moto.y - 60.5) > 1.5, 'y no se queda encima del infante');
+  assert.ok(moto.bin === inf.id && inf.bin === moto.id, 'separados, siguen siendo binomio');
+  // la orden siguiente, aunque se dé al infante, la cumple la moto: lo recoge y lo lleva
+  W.orden(m, { t: 'mover', j: 0, ids: [inf.id], x: 80.5, y: 70.5 });
+  let subio = false; avanza(1400, () => { if (moto.pasajeros.length) subio = true; return subio && moto.binEst === 'espera'; });
+  assert.ok(subio, 'la moto lo recoge');
+  assert.ok(Math.hypot(inf.x - 80.5, inf.y - 70.5) < 2.5, 'y lo deja en el nuevo destino');
+  // con el bosque cerca, la moto quieta en él no se ve
+  const m2bosque = m.mapa.terreno[Math.floor(moto.y) * N + Math.floor(moto.x)] === 2;
+  if (m2bosque) assert.ok(W.oculta(m, moto), 'resguardada en el bosque, no se ve');
+  // separar
+  W.orden(m, { t: 'separar', j: 0, ids: [moto.id] }); W.tick(m);
+  assert.ok(!moto.bin && !inf.bin, 'separados del todo');
+  W.orden(m, { t: 'mover', j: 0, ids: [inf.id], x: 70.5, y: 70.5 }); avanza(30);
+  assert.ok(inf.orden === 'mover' && moto.orden === 'nada', 'ya va cada uno por su cuenta');
+});
+
+prueba('guerrilla: el Delta marca con el láser y el avión de ataque acude; con la marca hace mucho más daño que sin ella', () => {
+  assert.ok(W.lugarDe(W.UNID.delta) === 'opEsp' && W.UNID.delta.laser > 0 && W.UNID.avAtaque.guiaLaser && W.UNID.avAtaque.nivel === 3, 'el Delta sale de operaciones especiales; el avión de ataque es de nivel 3');
+  const prueba1 = (conLaser) => {
+    const m = W.crearMundo(4242, { N: 128 }), N = m.N; m.logistica = false; m.sinClima = true;
+    for (const e of m.ents) if (!e.edif) e.vida = 0;
+    W.tick(m);
+    const cel = (x, y) => y * N + x;
+    for (let y = 30; y < 100; y++) for (let x = 20; x < 110; x++) { const i = cel(x, y); if (m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+    m.terrenoV++;
+    const ae = W.crearEdificio(m, 0, 'aerodromo', 40, 40); ae.obra = 0; ae.enObra = false;
+    const av = W.crearUnidad(m, 0, 'avAtaque', cel(41, 41));
+    for (let i = 0; i < 200; i++) W.tick(m); // se posa
+    const tq = W.crearUnidad(m, 1, 'tanque', cel(70, 70)); tq.guardia = true; tq.recarga = 99999; m.jug[1].tr.invulnerable = false;
+    let dl = null;
+    if (conLaser) { dl = W.crearUnidad(m, 0, 'delta', cel(66, 64)); W.orden(m, { t: 'laser', j: 0, ids: [dl.id], obj: tq.id }); }
+    else W.orden(m, { t: 'atacar', j: 0, ids: [av.id], obj: tq.id });
+    let despego = false; for (let i = 0; i < 900 && tq.vida > 0; i++) { W.tick(m); if (!av.enTierra) despego = true; if (tq.recarga < 9999) tq.recarga = 99999; }
+    return { dano: tq.vidaMax - Math.max(0, tq.vida), despego, dl, m };
+  };
+  const con = prueba1(true), sin = prueba1(false);
+  assert.ok(con.despego, 'el avión despega solo a la llamada del láser');
+  assert.ok(con.dl.lsrOn || con.dano >= 300, 'el Delta mantiene la marca');
+  assert.ok(con.dano > sin.dano * 1.6, 'con la marca, mucho más daño: ' + Math.round(con.dano) + ' contra ' + Math.round(sin.dano));
+});
+
+prueba('guerrilla: los emboscados cavan, se esconden, salen cuando entra el enemigo (cohete contra el tanque) y vuelven al hoyo', () => {
+  assert.ok(W.lugarDe(W.UNID.emboscado) === 'opEsp' && W.UNID.emboscado.arma2 === 'cohete', 'salen de operaciones especiales, con subfusil y lanzacohetes');
+  const m = W.crearMundo(4242, { N: 128 }), N = m.N; m.logistica = false; m.sinClima = true;
+  for (const e of m.ents) if (!e.edif) e.vida = 0;
+  W.tick(m);
+  const cel = (x, y) => y * N + x;
+  for (let y = 30; y < 100; y++) for (let x = 20; x < 110; x++) { const i = cel(x, y); if (m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  m.terrenoV++;
+  const avanza = (n, hasta) => { for (let i = 0; i < n; i++) { W.tick(m); if (hasta && hasta()) return i; } return n; };
+  const es = [0, 1].map((k) => W.crearUnidad(m, 0, 'emboscado', cel(50, 60 + k)));
+  W.orden(m, { t: 'vigilar', j: 0, ids: es.map((u) => u.id), x: 60.5, y: 60.5, r: 6 });
+  avanza(400, () => es.every((u) => u.enterrado));
+  assert.ok(es.every((u) => u.enterrado), 'cavan y se meten');
+  assert.ok(es.every((u) => W.oculta(m, u)), 'enterrados no se ven');
+  // nadie en la zona: siguen dentro; un explorador enemigo que entra los descubre, y salen
+  avanza(60); assert.ok(es.every((u) => u.enterrado), 'mientras nadie entra en la zona, siguen dentro');
+  const ex = W.crearUnidad(m, 1, 'explorador', cel(Math.floor(es[0].x) + 2, Math.floor(es[0].y))); ex.guardia = true; ex.recarga = 99999;
+  avanza(10); assert.ok(!W.oculta(m, es[0]) && es.every((u) => !u.enterrado), 'el explorador los descubre y salen');
+  avanza(200, () => ex.vida <= 0); ex.vida = 0;
+  avanza(W.ECON.emboscadaCalma + W.ECON.reEnterrar + 300, () => es.every((u) => u.enterrado));
+  assert.ok(es.every((u) => u.enterrado), 'con calma, vuelven a su hoyo');
+  // entra un tanque en la zona: salen y le tiran el cohete
+  const tq = W.crearUnidad(m, 1, 'tanque', cel(64, 60)); tq.guardia = true; tq.recarga = 99999; m.jug[1].tr.invulnerable = false;
+  avanza(20, () => es.some((u) => !u.enterrado));
+  assert.ok(es.every((u) => !u.enterrado), 'salen todos los de la zona');
+  avanza(400, () => tq.vida <= 0);
+  assert.ok(tq.vida < tq.vidaMax * 0.5, 'el lanzacohetes hace daño de verdad al tanque: ' + tq.vida);
+});
+
+prueba('guerrilla: el helicóptero ligero sale del helipuerto de operaciones especiales, ataca con cohetes y el antiaéreo portátil lo derriba', () => {
+  assert.ok(W.lugarDe(W.UNID.heliLigero) === 'opEsp' && W.EDIF.opEsp.hangar === 2 && W.UNID.heliLigero.vida < W.UNID.helicoptero.vida && W.UNID.heliLigero.costo < W.UNID.helicoptero.costo, 'ligero: barato y frágil, con hangar en operaciones especiales');
+  const m = W.crearMundo(4242, { N: 128 }), N = m.N; m.logistica = false; m.sinClima = true;
+  for (const e of m.ents) if (!e.edif) e.vida = 0;
+  W.tick(m);
+  const cel = (x, y) => y * N + x;
+  for (let y = 30; y < 100; y++) for (let x = 20; x < 110; x++) { const i = cel(x, y); if (m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  m.terrenoV++;
+  const op = W.crearEdificio(m, 0, 'opEsp', 40, 60); op.obra = 0; op.enObra = false;
+  const h = W.crearUnidad(m, 0, 'heliLigero', cel(41, 61));
+  for (let i = 0; i < 120; i++) W.tick(m);
+  assert.strictEqual(h.casa, op.id, 'su base es operaciones especiales');
+  const bl = W.crearUnidad(m, 1, 'blindado', cel(55, 61)); bl.guardia = true; bl.recarga = 99999; m.jug[1].tr.invulnerable = false;
+  W.orden(m, { t: 'atacar', j: 0, ids: [h.id], obj: bl.id });
+  for (let i = 0; i < 500 && bl.vida > 0; i++) W.tick(m);
+  assert.ok(bl.vida < bl.vidaMax * 0.5, 'con los cohetes, el blindado ligero sufre: ' + Math.round(bl.vida));
+  bl.vida = 0; W.tick(m);
+  const mp = W.crearUnidad(m, 1, 'manpad', cel(66, 64)); mp.guardia = true;
+  W.orden(m, { t: 'mover', j: 0, ids: [h.id], x: 70.5, y: 61.5 }); // en vuelo, de paso sobre él
+  for (let i = 0; i < 600 && h.vida > 0; i++) { W.tick(m); h.recarga = 99999; }
+  assert.ok(h.vida <= h.vidaMax * 0.3, 'un misil del antiaéreo portátil lo deja casi derribado: ' + Math.round(h.vida));
+});
+
 prueba('contabilidad: lo que cae se apunta por su valor, a quién y con qué arma', () => {
   const m = W.crearMundo(4242, { N: 128 });
   for (const e of m.ents) if (!e.edif) e.vida = 0;

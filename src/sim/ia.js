@@ -175,7 +175,7 @@
     if ((m.t + ia.j * 7) % 100 === 60 || !ia.amenaza) iaObserva(m, ia);
     const tk = (m.t + ia.j * 7) / 20; // cuántas veces ha pensado: las reglas que van cada cierto tiempo se cuentan con esto (con m.t, las del jugador 2 no caían nunca en su turno)
     let patio = null, objetivo = null, dObj = Infinity;
-    const soldados = [], aviones = [], patios = [], moviles = [], sinArma = [];
+    const soldados = [], aviones = [], patios = [], moviles = [], sinArma = [], embos = [];
     for (const e of m.ents) {
       if (e.j === j) {
         if (e.tipo === 'patio') patios.push(e);
@@ -183,6 +183,7 @@
         else if (!e.edif && UNID[e.tipo].mini) continue; // los drones pequeños van con su portador
         else if (!e.edif && (e.bunk || e.aBunk || UNID[e.tipo].ambu)) continue; // la guarnición de un búnker se queda en él; las ambulancias van solas
         else if (!e.edif && UNID[e.tipo].aire) aviones.push(e); // la aviación no va con el ejército
+        else if (!e.edif && UNID[e.tipo].emboscada) embos.push(e); // los emboscados no van en las oleadas: esperan enterrados en el camino
         else if (!e.edif && UNID[e.tipo].arma) soldados.push(e);
         else if (!e.edif && e.tipo !== 'cosechadora') sinArma.push(e);
       }
@@ -236,6 +237,7 @@
       else if (!c.hospital && m.t > 12000 && J.minerales > 1500 && puede('hospital')) quiereNuevo = 'hospital';
       else if (!c.artFija && J.nivel >= 2 && m.t > 20000 && J.minerales > 2600 && ia.estilo !== 'asalto' && puede('artFija')) quiereNuevo = 'artFija';
       else if (!c.estDrones && m.t > 9000 && J.minerales > 1200 && puede('estDrones')) quiereNuevo = 'estDrones';
+      else if (!c.opEsp && J.nivel >= 2 && m.t > 22000 && J.minerales > 1600 && puede('opEsp')) quiereNuevo = 'opEsp'; // operaciones especiales: de ahí sale el comando
       if (J.acero !== undefined && c.refineria && (c.fundicion || 0) < (m.t > 30000 && J.acero < 150 ? 2 : 1) && (c.fabrica || J.acero < 200) && J.minerales > 900 && puede('fundicion')) quiereNuevo = 'fundicion'; // acero para los tanques: lo primero en cuanto hay fábrica
       else if (!c.camara && m.t > 14000 && J.minerales > 1200 && puede('camara')) quiereNuevo = 'camara';
       else if (!c.logistica && m.logistica !== false && m.t > 18000 && J.minerales > 2000 && puede('logistica')) quiereNuevo = 'logistica'; // (antes que la central de inteligencia: sin suministro, sus oleadas pelean a media fuerza)
@@ -341,7 +343,8 @@
       let av = null;
       if (c.aerodromo && !(J.colas.caza.n + J.colas.bombardero.n + J.colas.helicoptero.n + J.colas.dron.n)) {
         const k = E.aviones, cupo = W.cupoAire(m, j);
-        if (cupo.hay < cupo.cupo) av = J.nivel >= 3 && (c.helicoptero || 0) < Math.round(2 * k) ? 'helicoptero'
+        if (cupo.hay < cupo.cupo) av = J.nivel >= 3 && c.opEsp && !(c.avAtaque || 0) ? 'avAtaque' // uno de ataque a tierra, para lo que marquen sus Delta
+          : J.nivel >= 3 && (c.helicoptero || 0) < Math.round(2 * k) ? 'helicoptero'
           : J.nivel >= 3 && (c.bombardero || 0) < Math.round(2 * k) && J.raros >= UNID.bombardero.raros ? 'bombardero'
           : !c.dron && J.info >= 120 ? 'dron' : (c.caza || 0) < Math.round(3 * k) ? 'caza' : null;
       }
@@ -381,13 +384,13 @@
     // Aviación: los aviones posados y sin tarea salen a patrullar por delante de la base, hacia el rival.
     {
       const riv = m.mapa.bases[1 - j], ax = riv.x - patio.cx, ay = riv.y - patio.cy, ad = Math.hypot(ax, ay) || 1;
-      const ociosos = aviones.filter((u) => u.enTierra && !u.repostando && !u.patrulla);
+      const ociosos = aviones.filter((u) => u.enTierra && !u.repostando && !u.patrulla && !UNID[u.tipo].guiaLaser); // (el avión de ataque espera en tierra a que un Delta marque)
       const patrulla = [];
       for (const u of ociosos) { // el dron espía, a dar vueltas sobre la base rival; bombarderos y helicópteros atacan lo que tengan a su alcance de vuelo y ya esté explorado; el resto patrulla
         if (u.tipo === 'dronEspia') { if (u.fuel >= UNID.dronEspia.fuel * 0.9) W.orden(m, { t: 'patrulla', j, ids: [u.id], x: riv.x, y: riv.y }); continue; }
         const d = UNID[u.tipo], casa = m.porId.get(u.casa);
         let blanco = null, mb = Infinity;
-        if (casa && (u.tipo === 'bombardero' || u.tipo === 'helicoptero') && u.fuel >= d.fuel * 0.9) {
+        if (casa && (u.tipo === 'bombardero' || u.tipo === 'helicoptero' || u.tipo === 'heliLigero') && u.fuel >= d.fuel * 0.9) {
           for (const e of m.ents) {
             if (e.j === j || e.vida <= 0 || e.infra || (!e.edif && (u.tipo === 'bombardero' || UNID[e.tipo].aire)) || !W.puedeAtacar(u, e)) continue;
             const ex = e.edif ? e.cx : e.x, ey = e.edif ? e.cy : e.y, dd = Math.hypot(ex - casa.cx, ey - casa.cy);
@@ -448,7 +451,10 @@
         else if (c.estDrones && (c.operador || 0) + J.colas.operador.n < 2 && soldados.length >= 8) entrena('operador', 500);
         else if ((c.mortero || 0) + J.colas.mortero.n < 2 && soldados.length >= 10) entrena('mortero', 600); // fuego indirecto propio, contra trincheras y defensas
         else if ((c.asalto || 0) + J.colas.asalto.n < 2 && soldados.length >= 8) entrena('asalto', 500);
-        else if (J.nivel >= 3 && (c.comando || 0) + J.colas.comando.n < 1 && soldados.length >= 10) entrena('comando', 800); // un saboteador
+        else if (J.nivel >= 3 && c.opEsp && (c.heliLigero || 0) + J.colas.heliLigero.n < 2 && soldados.length >= 10 && W.cupoAire(m, j, 'opEsp').hay < W.cupoAire(m, j, 'opEsp').cupo) entrena('heliLigero', 800); // helicópteros ligeros de apoyo
+        else if (c.opEsp && (c.emboscado || 0) + J.colas.emboscado.n < 2 && soldados.length >= 8) entrena('emboscado', 500); // dos emboscados en el camino del rival
+        else if (J.nivel >= 3 && c.opEsp && c.avAtaque && (c.delta || 0) + J.colas.delta.n < 1 && soldados.length >= 8) entrena('delta', 600); // un Delta que marque blancos para su avión de ataque
+        else if (J.nivel >= 3 && c.opEsp && (c.comando || 0) + J.colas.comando.n < 1 && soldados.length >= 10) entrena('comando', 800); // un saboteador
         else if ((c.cazadron || 0) + J.colas.cazadron.n < 1 && soldados.length >= 8) entrena('cazadron', 500); // un inhibidor que va con el grueso: los fusiles ya no derriban drones
         else if ((c.manpad || 0) + J.colas.manpad.n < 2 && soldados.length >= 10) entrena('manpad', 600);
       }
@@ -588,6 +594,23 @@
       for (const u of sinArma) if (u.tipo === 'operador' && u.sinDron && u.orden === 'nada') { const b = m.ents.find((e) => e.edif && e.j === j && (e.tipo === 'estDrones' || e.tipo === 'logistica') && e.vida > 0); if (b && Math.hypot(u.x - b.cx, u.y - b.cy) > 4) { const cc = W.cercaLibre(m, b.cx, b.cy + b.tam / 2 + 1.5); W.orden(m, { t: 'mover', j, ids: [u.id], x: (cc % m.N) + 0.5, y: ((cc / m.N) | 0) + 0.5 }); } } // el operador sin drones vuelve a reponer
       if (objetivo) for (const u of sinArma) if (u.tipo === 'operador' && !u.sinDron && u.orden === 'nada' && !u.dronMis && Math.hypot(u.x - tx, u.y - ty) <= 8 && Math.hypot(objetivo.cx - u.x, objetivo.cy - u.y) <= UNID.operador.misionDron) W.orden(m, { t: 'dronMision', j, ids: [u.id], x: objetivo.cx, y: objetivo.cy }); // el operador, en su sitio y con el objetivo a tiro: dron en misión sobre él
       for (const u of sinArma) if ((u.tipo === 'hacker' || u.tipo === 'cazadron' || (u.tipo === 'operador' && !u.sinDron)) && u.orden === 'nada' && Math.hypot(u.x - tx, u.y - ty) > 8) { const cc = W.cercaLibre(m, tx, ty); W.orden(m, { t: 'mover', j, ids: [u.id], x: (cc % m.N) + 0.5, y: ((cc / m.N) | 0) + 0.5 }); }
+    }
+    if (tk % 10 === 7 && embos.length) { // los emboscados, enterrados en el camino del rival, a unas celdas del patio
+      const ids = embos.filter((u) => !u.emb && u.orden === 'nada' && !u.herido).map((u) => u.id);
+      if (ids.length) { const c0 = W.cercaLibre(m, patio.cx + (dx / dd) * 16, patio.cy + (dy / dd) * 16); W.orden(m, { t: 'vigilar', j, ids, x: (c0 % m.N) + 0.5, y: ((c0 / m.N) | 0) + 0.5, r: 6 }); }
+    }
+    if (tk % 5 === 3 && J.cuenta.avAtaque) { // el Delta: si ve a su alcance algo que valga la pasada (defensas, blindados, edificios), lo marca para el avión de ataque
+      const nie = m.niebla[j], R = UNID.delta.laser;
+      for (const u of soldados) {
+        if (u.tipo !== 'delta' || u.orden === 'laser' || u.vida <= 0) continue;
+        let mejor = null, mv = 0;
+        for (const e of m.ents) {
+          if (e.j === j || e.j > 1 || e.vida <= 0 || e.infra || e.muro || e.herido) continue; const d = e.edif ? EDIF[e.tipo] : UNID[e.tipo]; if (!d || d.mini || (!e.edif && d.aire)) continue;
+          const ex = e.edif ? e.cx : e.x, ey = e.edif ? e.cy : e.y, dd = Math.hypot(ex - u.x, ey - u.y); if (dd > R || nie[Math.floor(ey) * m.N + Math.floor(ex)] !== 2) continue;
+          const v = (d.arma ? 2 : 1) * (d.costo || 100) * (e.edif || d.blindaje === 'pesado' ? 1.5 : 0.3); if (v > mv) { mv = v; mejor = e; }
+        }
+        if (mejor && mv >= 400) W.orden(m, { t: 'laser', j, ids: [u.id], obj: mejor.id });
+      }
     }
     if (tk % 5 === 2) { // sin munición lejos de casa: deja la oleada y vuelve a reponer (allí entra otra vez en la reserva)
       const ids = []; for (const u of soldados) if (u.mun === 0 && ia.atacantes.has(u.id)) { ia.atacantes.delete(u.id); if (ia.espera) ia.espera.delete(u.id); ia.reunidos.delete(u.id); ids.push(u.id); }

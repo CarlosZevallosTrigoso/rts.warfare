@@ -152,7 +152,7 @@
 
     // Volumen: la vista sigue siendo cenital, pero cada cosa tiene altura. Los edificios muestran su pared sur y el tejado
     // se dibuja desplazado hacia arriba; las unidades llevan un canto; la roca y el agua, un escalón.
-    const ALTO = { patio: 0.3, central: 0.36, refineria: 0.32, bomba: 0.2, cuartel: 0.26, extractor: 0.3, fabrica: 0.34, torreta: 0.22, torreCanon: 0.36, aerodromo: 0.08, antiaerea: 0.22, estacion: 0.26, deposito: 0.22, obras: 0.28, misilera: 0.12, interceptor: 0.24, camara: 0.3, estDrones: 0.14, laboratorio: 0.26, logistica: 0.16, avanzada: 0.2, inteligencia: 0.3, pistaAv: 0.04, almacen: 0.22, tanqueComb: 0.18, torreRadio: 0.5, mina: 0.3, radar: 0.3, fundicion: 0.34, eolica: 0.55, hidro: 0.26, bunker: 0.14, vigia: 0.6, artFija: 0.14, hospital: 0.28 };
+    const ALTO = { patio: 0.3, central: 0.36, refineria: 0.32, bomba: 0.2, cuartel: 0.26, extractor: 0.3, fabrica: 0.34, torreta: 0.22, torreCanon: 0.36, aerodromo: 0.08, antiaerea: 0.22, estacion: 0.26, deposito: 0.22, obras: 0.28, misilera: 0.12, interceptor: 0.24, camara: 0.3, estDrones: 0.14, laboratorio: 0.26, logistica: 0.16, avanzada: 0.2, inteligencia: 0.3, pistaAv: 0.04, almacen: 0.22, tanqueComb: 0.18, torreRadio: 0.5, mina: 0.3, radar: 0.3, fundicion: 0.34, eolica: 0.55, hidro: 0.26, bunker: 0.14, vigia: 0.6, artFija: 0.14, hospital: 0.28, opEsp: 0.22 };
     function entEn(wx, wy, holgura) { // holgura: margen extra (en celdas) para acertar con el dedo
       let mejor = null, md = Infinity;
       for (const e of m.ents) {
@@ -1027,7 +1027,7 @@
         if (g.aAnt !== undefined && dtS) g.w = (g.w || 0) + (hacia(0, g.a - g.aAnt, 1) / dtS - (g.w || 0)) * Math.min(1, dtS * 10); g.aAnt = g.a; // cuánto está girando (rad/s), suavizado
         // La infantería camina por partes: los pies alternan, los hombros giran contra el paso, la cabeza mira adonde va un poco antes,
         // el cuerpo se echa adelante al arrancar y atrás al frenar, y parada respira (y de vez en cuando mira a un lado).
-        let partes = null; const hund = d.cat === 'inf' && W.enTrinchera(m, e);
+        let partes = null; const hund = d.cat === 'inf' && (W.enTrinchera(m, e) || e.enterrado || (e.emb && e.emb.est === 'cava')); // (el emboscado en su hoyo, igual: solo asoman casco y arma)
         let tumbado = false; if (d.cat === 'inf' && lod && suprT.size) { const h = suprT.get(e.id); if (h) { if (h > tiempo) tumbado = !hund && !anda; else suprT.delete(e.id); } } // le están tirando: cuerpo a tierra (solo si está quieto)
         if (d.cat === 'inf' && lod) {
           if (e.herido) tumbado = true; // herido: en el suelo
@@ -1045,6 +1045,7 @@
           anda, tiempo, carga: e.carga / (d.carga || 1), cosecha: e.est === 'cosechar', raro: e.cargaTipo === 2,
         };
         if (partes) Object.assign(st, partes);
+        if (d.binomio) { st.pas = e.pasajeros.length ? e.pasajeros[0].tipo : null; g.rs = (g.rs || 0) + ((e.resg ? 1 : 0) - (g.rs || 0)) * Math.min(1, dtS * 3); st.resguardo = g.rs; } // la moto: con quién va y si está resguardada
         if (d.cat === 'veh' && !d.aire && lod) { // el vehículo, por partes: cada oruga a su ritmo, las ruedas ruedan y viran, y el casco se mueve sobre su rodaje
           const v = anda ? e.v * 20 : 0, w = g.w || 0, semi = d.radio * 0.78;
           if (ORUGA.has(e.tipo)) { st.fI = g.fI = (g.fI || 0) + (v + w * semi) * dtS * z; st.fD = g.fD = (g.fD || 0) + (v - w * semi) * dtS * z; }
@@ -1053,9 +1054,12 @@
           const bal = muelleDe(g, 'bal', Math.max(-1, Math.min(1, v * w * 0.12)), 60, 9, dtS), rel = g.t - g.a, golpe = st.retro * 0.17; // se ladea en las curvas; el disparo lo empuja hacia atrás
           st.hx = (g.cab - Math.cos(rel) * golpe) * r; st.hy = (bal * 0.09 - Math.sin(rel) * golpe) * r;
         }
+        if (e.emb && (e.enterrado || e.emb.est === 'cava') && lod) { ctx.fillStyle = 'rgba(150,132,100,0.55)'; ctx.beginPath(); ctx.ellipse(0, 0, r * 2.1, r * 1.6, 0, 0, TAU); ctx.fill(); if (e.emb.est === 'cava') { const f = (tiempo * 0.004 + e.id * 0.37) % 1; ctx.fillStyle = '#8f7d5a'; ctx.globalAlpha = 1 - f; ctx.beginPath(); ctx.arc(Math.cos(e.id + f * 3) * r * 2 * f, -r * 1.6 * f, r * 0.35, 0, TAU); ctx.fill(); ctx.globalAlpha = 1; } } // el hoyo del emboscado (y la tierra que saca al cavar)
+        const semi = e.enterrado && e.j === YO; if (semi) ctx.globalAlpha = 0.6; // tus emboscados, enterrados: medio transparentes (el rival no los ve)
         const canto = lod && !d.aire && r >= 3.5 && !st.hundido && !(g.te > 0.3) ? Math.max(1, r * 0.26) : 0; // el cuerpo de la unidad: su silueta en oscuro, y encima la ficha
         if (canto) { W.fichaUnidad(ctx, e, r, 1, e.j === YO ? COL.yoLado : COL.rivalLado, st); ctx.translate(0, -canto); }
         W.fichaUnidad(ctx, e, r, lod, e.j === YO ? COL.yo : COL.rival, st);
+        if (semi) ctx.globalAlpha = 1;
         if (lod === 2 && d.cat === 'veh' && !d.aire && r >= 5) { // el volumen: la cara que no mira al sol, en sombra; y el daño, a la vista
           const ca = Math.cos(g.a), sa = Math.sin(g.a), ll = -sa * LUX + ca * LUY, fv = e.vida / d.vida;
           ctx.save(); ctx.rotate(g.a); ctx.globalAlpha = 0.17 * Math.min(1, Math.abs(ll) * 1.6); ctx.fillStyle = '#000'; ctx.fillRect(-r * 1.25, ll > 0 ? -r * 0.6 : 0, r * 2.5, r * 0.6); ctx.globalAlpha = 1;
@@ -1075,6 +1079,7 @@
           if (cb && wy < cb[0].y) tapan.add(idb);
         }
         if (sel.has(e.id)) { ctx.strokeStyle = P.tinta; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(px, py, r * 1.9 + 2, 0, TAU); ctx.stroke(); }
+        if (d.binomio && e.bin && e.j === YO && sel.has(e.id)) { const o = m.porId.get(e.bin); if (o && o.vida > 0) { ctx.strokeStyle = P.yo; ctx.globalAlpha = 0.7; ctx.lineWidth = 1.2; ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(ox + o.x * z, oy + o.y * z); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1; } } // el binomio, aunque estén separados, sigue unido
         if (sel.has(e.id) && e.j === YO && lod && sel.size <= 40) { // lo que ve: cerca alrededor, lejos solo al frente
           const E = W.ECON, rf = d.vision * E.visAd * z, rs = d.vision * E.visLado * z, rb = d.vision * E.visAt * z, a = g.a;
           const cono = d.cono || E.cono; // cada tipo tiene su campo; el dron ve en redondo
@@ -1397,10 +1402,11 @@
       { // zonas de vigilancia y escoltas de lo seleccionado; y la vista previa al elegir
         ctx.lineWidth = 1; ctx.setLineDash([6, 4]); const vistas = new Set();
         for (const id of sel) { const u = m.porId.get(id); if (!u || u.edif || u.j !== YO) continue;
+          if (u.emb) { const k = 'e' + u.emb.x + ',' + u.emb.y; if (!vistas.has(k)) { vistas.add(k); ctx.strokeStyle = '#5d6b4a'; ctx.beginPath(); ctx.arc(ox + u.emb.x * z, oy + u.emb.y * z, u.emb.r * z, 0, TAU); ctx.stroke(); } } // la zona de la emboscada
           if (u.vigila) { const k = u.vigila.x + ',' + u.vigila.y; if (!vistas.has(k)) { vistas.add(k); ctx.strokeStyle = '#c8922a'; ctx.beginPath(); ctx.arc(ox + u.vigila.x * z, oy + u.vigila.y * z, u.vigila.r * z, 0, TAU); ctx.stroke(); } }
           if (u.protege) { const o = m.porId.get(u.protege); if (o) { ctx.strokeStyle = P.bien; ctx.beginPath(); ctx.moveTo(ox + u.x * z, oy + u.y * z); ctx.lineTo(ox + (o.edif ? o.cx : o.x) * z, oy + (o.edif ? o.cy : o.y) * z); ctx.stroke(); } }
         }
-        if (modo === 'vigilar' && raton.dentro) { ctx.strokeStyle = '#c8922a'; ctx.beginPath(); ctx.arc(raton.x, raton.y, W.ECON.vigilaRadio * z, 0, TAU); ctx.stroke(); ctx.fillStyle = P.tinta; ctx.fillText('vigilar: clic en el centro de la zona', raton.x + 14, raton.y - 8); }
+        if (modo === 'vigilar' && raton.dentro) { ctx.strokeStyle = '#c8922a'; ctx.beginPath(); ctx.arc(raton.x, raton.y, W.ECON.vigilaRadio * z, 0, TAU); ctx.stroke(); ctx.fillStyle = P.tinta; ctx.fillText(armadas().every((u) => UNID[u.tipo].emboscada) ? 'emboscada: clic en el centro de la zona (cavan, se meten y salen cuando entre el enemigo)' : 'vigilar: clic en el centro de la zona', raton.x + 14, raton.y - 8); }
         if (modo === 'proteger' && raton.dentro) { ctx.fillStyle = P.tinta; ctx.fillText('proteger: clic en una unidad o edificio tuyo', raton.x + 14, raton.y - 8); }
         ctx.setLineDash([]);
       }
@@ -1455,6 +1461,13 @@
           if (u.dronMis) { const qx = ox + u.dronMis.x * z, qy = oy + u.dronMis.y * z; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(qx, qy); ctx.stroke(); ctx.beginPath(); ctx.arc(qx, qy, W.ECON.dronMisRadio * z, 0, TAU); ctx.stroke(); }
         }
         ctx.setLineDash([]);
+        for (const u of m.ents) { // el haz del láser de tus Delta: una línea roja fina que tiembla, y la marca sobre el blanco
+          if (u.edif || u.j !== YO || !u.lsrOn || u.orden !== 'laser') continue; const o = m.porId.get(u.lsr); if (!o) continue;
+          const ax = ox + u.x * z, ay = oy + u.y * z, bx = ox + (o.edif ? o.cx : o.x) * z, by = oy + (o.edif ? o.cy : o.y) * z, fl = 0.55 + 0.35 * Math.sin(tiempo * 0.031 + u.id);
+          ctx.strokeStyle = '#d0312d'; ctx.globalAlpha = fl; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+          const s = Math.max(4, z * 0.35), a = tiempo * 0.003; ctx.globalAlpha = 0.9; ctx.lineWidth = 1.5; ctx.beginPath(); for (let k = 0; k < 4; k++) { const b0 = a + k * Math.PI / 2; ctx.moveTo(bx + Math.cos(b0) * s, by + Math.sin(b0) * s); ctx.lineTo(bx + Math.cos(b0) * s * 0.45, by + Math.sin(b0) * s * 0.45); } ctx.stroke(); ctx.globalAlpha = 1;
+        }
+        if (modo === 'laser') { const ls = conLaser(); ctx.strokeStyle = '#d0312d'; ctx.globalAlpha = 0.5; ctx.setLineDash([3, 5]); for (const u of ls) { ctx.beginPath(); ctx.arc(ox + u.x * z, oy + u.y * z, UNID[u.tipo].laser * z, 0, TAU); ctx.stroke(); } ctx.setLineDash([]); ctx.globalAlpha = 1; if (raton.dentro) { ctx.fillStyle = P.tinta; ctx.fillText('láser: elige el enemigo que marcar', raton.x + 14, raton.y - 8); } }
         if (modo === 'dronMis' && raton.dentro) { ctx.fillStyle = P.tinta; ctx.fillText('misión de dron: elige el punto a vigilar', raton.x + 14, raton.y - 8); }
       }
       if (modo === 'conectar' && raton.dentro) { // la línea que saldría del último edificio marcado, y lo que costaría
@@ -1713,6 +1726,10 @@
           if (enVista) flotar(d.x1, d.y1, d.s === 2 ? 'espalda +50 %' : 'costado +25 %', d.j === YO ? P.mal : P.bien);
         } else if (d.tipo === 'ascenso') {
           if (d.j === YO) { flotar(d.x1, d.y1, 'veterano ' + '▲'.repeat(d.rango), P.tinta); if (n++ < 6) son.unidadLista(); }
+        } else if (d.tipo === 'emboscada') {
+          if (d.j === YO) { aviso('¡Emboscada! Tus emboscados salen a por el enemigo'); son.alerta(); } else if (visible(d.x1, d.y1)) aviso('¡Emboscada! Salen de la tierra junto a tus tropas');
+        } else if (d.tipo === 'ataqueAereo') {
+          if (d.j === YO) { if (d.ok) { aviso('Avión de ataque en camino a la marca'); son.orden(); } else aviso('Marca puesta, pero no hay avión de ataque libre que llegue (se hace en el aeródromo, nivel 3)'); }
         } else if (d.tipo === 'misFin') {
           if (d.j === YO) { flotar(d.x1, d.y1, 'misión de dron cancelada', P.mal); if (!d.dicho) { d.dicho = true; aviso('El operador se ha movido: su dron vuelve y la misión se cancela'); } }
         } else if (d.tipo === 'retira') {
@@ -1927,6 +1944,11 @@
     const conCarga = () => unidadesSel().filter((u) => UNID[u.tipo].plazas && u.pasajeros.length);
     function descargar() { const us = conCarga(); if (us.length) { W.orden(m, { t: 'descargar', j: YO, ids: us.map((u) => u.id) }); son.orden(); } }
     $('descargar').addEventListener('click', descargar);
+    const conBinomio = () => unidadesSel().filter((u) => u.bin && (UNID[u.tipo].binomio || m.porId.get(u.bin)));
+    const conLaser = () => unidadesSel().filter((u) => UNID[u.tipo].laser);
+    $('laser').addEventListener('click', () => { if (!conLaser().length) return; if (modo === 'laser') modo = null; else { modo = 'laser'; aviso('Elige el enemigo que marcar con el láser'); } });
+    function laserEn(wx, wy) { const o = entEn(wx, wy, 0.6); if (!o || o.j === YO || o.vida <= 0 || o.infra || o.muro) { aviso('Marca un enemigo que se vea'); return; } const ls = conLaser(); if (!ls.length) { modo = null; return; } W.orden(m, { t: 'laser', j: YO, ids: ls.map((u) => u.id), obj: o.id }); marca(o.edif ? o.cx : o.x, o.edif ? o.cy : o.y, P.mal); son.orden(); modo = null; }
+    $('separar').addEventListener('click', () => { const us = conBinomio(); if (us.length) { W.orden(m, { t: 'separar', j: YO, ids: us.map((u) => u.id) }); son.orden(); } });
     let muroTipo = '', muroDesde = null, muroN = 0; // murar: qué se levanta, desde qué celda y cuántos tramos van
     $('bMuro').addEventListener('click', (ev) => {
       const b = ev.target.closest('[data-m]'); if (!b) return;
@@ -1972,6 +1994,12 @@
       antiaerea: 'Defensa fija solo contra el aire: aviones y drones.', estacion: 'Sobre un campo de conocimiento da información rápido; aloja la inteligencia.', laboratorio: 'Da información en la base, sin campo, más despacio. Vale como estación.', obras: 'Produce las unidades civiles: ingeniero civil y excavadora.',
       deposito: 'Alarga tu red: crea una zona redonda con suministro donde también puedes construir. Va a 40 celdas o menos de un edificio ya conectado y se cablea solo hasta él; para llegar más lejos, encadena varios.', misilera: 'Fabrica, guarda y lanza misiles balísticos.', interceptor: 'Derriba los misiles enemigos que entran en su radio.', estDrones: 'Mantiene dos drones de reconocimiento vigilando a su alrededor. Mejorada lleva además bombarderos y kamikazes, y guarda las tecnologías del operador.', inteligencia: 'Entrena espías, aloja dos drones espía de largo alcance y permite el mapeo satelital.',
       bunker: 'Entran hasta 4 de infantería (clic derecho sobre él con la tropa seleccionada) y disparan desde dentro recibiendo solo la cuarta parte del daño. Para sacarlos: selecciona el búnker y clic derecho en el suelo. Si lo destruyen, salen heridos.', vigia: 'Sin armas y muy barata: ve a 16 celdas y descubre a los escondidos a 8. Se puede poner fuera de la red, pero necesita enlace de datos: un cable hasta tu red (se tiende solo a menos de 24 celdas) o cobertura de radio. Sin enlace no te enseña nada.', artFija: 'Nivel 2. Obús fijo con 20 celdas de alcance sobre lo que vea cualquiera de los tuyos; no dispara a menos de 6 celdas. Gasta munición: la repone por la red. Sin enlace de datos (red o radio) solo tira a lo que ve ella misma, a 8 celdas.',
+      opEsp: 'Operaciones especiales: de aquí sale la guerrilla. Moto transportadora, Delta y emboscados; con nivel 3, el comando y el helicóptero ligero (su helipuerto aloja dos). Nivel 2, pide cuartel.',
+      heliLigero: 'Helicóptero ligero de apoyo: rápido, barato y frágil. Ametralladora contra la infantería y cohetes ligeros contra vehículos y edificios; acompaña a un grupo pequeño. Sale del helipuerto de operaciones especiales (dos por edificio). El antiaéreo portátil lo derriba.',
+      emboscado: 'Con la orden de vigilar zona (W), va a su puesto, cava un hoyo y se mete: el rival no lo ve. Cuando un enemigo de tierra entra en la zona, salen todos los de esa zona: subfusil contra la infantería, lanzacohetes contra vehículos y edificios. Con calma, vuelven al hoyo. Los descubren las cámaras y, de cerca, exploradores y drones de reconocimiento.',
+      delta: 'Observador de operaciones especiales: subfusil, prismáticos (ve a 11 celdas) y puntero láser. Con «Marcar con láser» se planta y marca a un enemigo; tu avión de ataque libre acude y hace pasadas precisas mientras dure la marca. Quieto, no se le ve.',
+      avAtaque: 'Avión de ataque a tierra: lento y duro, con un cañón de 30 mm muy eficaz contra blindados. Acude solo a lo que marque un Delta; con la marca, cada pasada es precisa; sin ella, el fuego cae disperso.',
+      motoTrans: 'Lleva a un infante de los que van solos: clic derecho sobre ella con el infante seleccionado. Quedan como binomio (tocar a uno selecciona a los dos). Con orden de mover o de atacar, la moto lo lleva, lo deja y vuelve a resguardarse en el bosque cercano; con la siguiente orden lo recoge. Va también por el bosque.',
       hospital: 'Cura a la infantería que tenga a 6 celdas y aloja hasta tres ambulancias (llega con una; las demás se encargan en él). Necesita energía y red.',
       central: 'Da 100 de energía quemando petróleo (1 cada 4 segundos). Sin petróleo da solo el 30 %.', eolica: 'Da 25 de energía sin gastar petróleo.', hidro: 'Nivel 2. Da 160 de energía sin gastar petróleo; solo se construye junto al agua.',
       extractor: 'Saca petróleo de un yacimiento y lo manda por un oleoducto que se tiende solo hasta la refinería, tanque o patio más cercano (30 celdas). Sin oleoducto, o si te lo cortan, rinde el 30 %.',
@@ -2000,7 +2028,7 @@
       const pide = (d) => (d.nivel > 1 ? ' Nivel ' + d.nivel + '.' : '') + (d.req && d.req.length ? ' Pide: ' + d.req.map((r) => EDIF[r].nombre.toLowerCase()).join(', ') + '.' : '');
       let h = '<h3>Edificios (desde el patio)</h3>';
       for (const t in EDIF) if (!EDIF[t].infra) h += fila(t, EDIF[t].nombre, EDIF[t].oculto ? 'se despliega' : precio(EDIF[t]) || '—', (QUE[t] || '') + pide(EDIF[t]));
-      const grupos = [['cuartel', 'Infantería (cuartel)'], ['fabrica', 'Vehículos (fábrica)'], ['obras', 'Civiles (obras civiles)'], ['aerodromo', 'Aviación (aeródromo)'], ['inteligencia', 'Inteligencia (central de inteligencia)'], ['logistica', 'Suministro (puesto logístico)'], ['hospital', 'Sanidad (hospital)']];
+      const grupos = [['cuartel', 'Infantería (cuartel)'], ['fabrica', 'Vehículos (fábrica)'], ['obras', 'Civiles (obras civiles)'], ['aerodromo', 'Aviación (aeródromo)'], ['inteligencia', 'Inteligencia (central de inteligencia)'], ['logistica', 'Suministro (puesto logístico)'], ['hospital', 'Sanidad (hospital)'], ['opEsp', 'Guerrilla (operaciones especiales)']];
       for (const [lugar, titulo] of grupos) { h += '<h3>' + titulo + '</h3>'; for (const t in UNID) if (!UNID[t].mini && W.lugarDe(UNID[t]) === lugar) h += fila(t, UNID[t].nombre, precio(UNID[t]), (QUE[t] || '') + pide(UNID[t])); }
       h += '<h3>Drones (los saca su portador)</h3>' + fila('dronRec', 'De reconocimiento', '40', 'Da vueltas alrededor del portador y ve.') + fila('dronFpv', 'Kamikaze', '40 por salida', 'Un solo uso, contra vehículos y edificios armados.') + fila('dronBomba', 'Bombardero', '15 por salida', 'Suelta una granada sobre la infantería y vuelve a recargar.');
       h += '<h3>Misiles (misilera)</h3>'; for (const k in W.MISILES) h += fila('', W.MISILES[k].nombre, precio(W.MISILES[k]), W.MISILES[k].que + ' Nivel ' + W.MISILES[k].nivel + '.');
@@ -2055,6 +2083,9 @@
       if (us.length) {
         const armadas = us.some((u) => UNID[u.tipo].arma);
         const soloAire = us.every((u) => UNID[u.tipo].aire);
+        if (us.some((u) => UNID[u.tipo].emboscada)) L.push('<b>emboscados: ' + k('W') + ' marca la zona · cavan, se meten y salen cuando entra el enemigo</b>');
+        if (us.some((u) => UNID[u.tipo].laser)) L.push('<b>Delta: «Marcar con láser» y clic en un enemigo · tu avión de ataque acude mientras dure la marca</b>');
+        if (us.some((u) => UNID[u.tipo].binomio)) L.push('<b>moto: la sube un infante con clic derecho sobre ella · al mover, lo lleva, lo deja y se resguarda; con la siguiente orden lo recoge</b>');
         if (us.some((u) => UNID[u.tipo].traza)) L.push('<b>excavadora: ' + k('K') + ' trazar camino hasta un punto (abre el bosque; por camino los vehículos corren más)</b>');
         if (us.some((u) => UNID[u.tipo].plazas)) L.push('<b>transporte: la infantería sube con clic derecho sobre él · ' + k('U') + ' descargar</b>');
         if (us.some((u) => UNID[u.tipo].mando)) L.push('<b>mando: los tuyos en su radio ven en redondo y giran más rápido; gasta información</b>');
@@ -2293,7 +2324,8 @@
       if (q.falta.length) h += '<div class="cae">faltan: ' + q.falta.map((t) => UNID[t].nombre.toLowerCase()).join(', ') + '</div><button type="button" class="grupo" data-pel="' + pel + '"' + (no ? ' disabled title="' + no + '"' : ' title="Se fabrican y van solos a reunirse con el pelotón"') + '>reponer bajas · ' + precioCorto(cuesta) + (no ? ' · ' + no : '') + '</button>';
       sec.innerHTML = h;
     }
-    const conPeloton = () => { const ps = new Set(); for (const id of sel) { const u = m.porId.get(id); if (u && !u.edif && u.pel) ps.add(u.pel); } if (ps.size) for (const u of m.ents) if (!u.edif && u.j === YO && u.pel && ps.has(u.pel) && !u.bunk) sel.add(u.id); }; // tocar a uno es tocar al pelotón (con Alt, solo a ese)
+    const conPeloton = () => { const ps = new Set(); for (const id of sel) { const u = m.porId.get(id); if (u && !u.edif && u.pel) ps.add(u.pel); } if (ps.size) for (const u of m.ents) if (!u.edif && u.j === YO && u.pel && ps.has(u.pel) && !u.bunk) sel.add(u.id);
+      for (const id of [...sel]) { const u = m.porId.get(id); if (u && !u.edif && u.bin) { const o = m.porId.get(u.bin); if (o && o.vida > 0 && o.j === YO && o.bin === u.id) sel.add(o.id); } } }; // tocar a uno es tocar al pelotón (con Alt, solo a ese); y al binomio de moto, los dos
 
     // ---------- alertas: lo que no rinde en toda la base, con un clic para ir a verlo ----------
     const ALERTA = {
@@ -2359,8 +2391,22 @@
       const paso = 'PASO ' + (tuto.i + 1) + ' DE ' + PASOS.length;
       if ($('tutoPaso').textContent !== paso) { $('tutoPaso').textContent = paso; $('tutoTxt').textContent = PASOS[tuto.i][0]; }
     }
+    // Aviso discreto, abajo a la derecha del mapa, cuando un patio termina una obra: al pulsarlo, la cámara va al patio y lo selecciona.
+    const listosVistos = new WeakSet(), listosBotones = new Map();
+    function actualizarListos() {
+      const caja = $('listos');
+      for (const o of J.obras) if (o.listo && !listosVistos.has(o)) {
+        listosVistos.add(o); const b = document.createElement('button'); b.type = 'button'; b.title = 'Ir al patio y seleccionarlo, para colocar lo que ha terminado';
+        b.innerHTML = '<i></i>' + EDIF[o.tipo].nombre + ' listo';
+        b.addEventListener('click', () => { const p = m.porId.get(o.patio); if (p) { cam.x = p.cx; cam.y = p.cy; limitarCam(); sel.clear(); sel.add(p.id); son.activar(); } b.remove(); listosBotones.delete(o); });
+        caja.prepend(b); listosBotones.set(o, b);
+      }
+      for (const [o, b] of listosBotones) if (!J.obras.includes(o) || !o.listo) { b.remove(); listosBotones.delete(o); } // ya colocado: el aviso sobra
+      while (caja.children.length > 5) { const b = caja.lastChild; for (const [o, x] of listosBotones) if (x === b) listosBotones.delete(o); b.remove(); }
+    }
     function actualizarBarra() {
       if (cuadros % 30 === 0) { actualizarAlertas(); actualizarTuto(); }
+      if (cuadros % 10 === 0) actualizarListos();
       { const f = m.t % W.ECON.dia, noche = W.esNoche(m), falta = Math.ceil(((noche ? W.ECON.dia : W.ECON.diaLuz) - f) / 20), t = (noche ? 'noche · amanece en ' : 'día · anochece en ') + Math.floor(falta / 60) + ':' + String(falta % 60).padStart(2, '0'); if ($('rHora').textContent !== t) $('rHora').textContent = t; }
       { const fc = $('filaClima'); if (fc.hidden !== !conRed) fc.hidden = !conRed; if (conRed) { const NOM = ['despejado', 'lluvia', 'tormenta'], cl = W.clima(m), sg = W.climaSig(m); let t = NOM[cl]; if (sg && sg.en <= 1200) { const s = Math.ceil(sg.en / 20); t += ' · ' + (sg.est === 0 ? 'escampa' : NOM[sg.est]) + ' en ' + Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); } const rc = $('rClima'); if (rc.textContent !== t) { rc.textContent = t; rc.style.color = cl === 2 || (sg && sg.en <= 1200 && sg.est === 2) ? '#b3261e' : ''; } } }
       const num = (v) => (J.dios ? '∞' : String(Math.floor(v)));
@@ -2439,6 +2485,9 @@
       { const hay = false, bm = $('bMuro'); /* (los muros se quitaron) */ bm.hidden = !hay; if (!hay && (modo === 'murar' || modo === 'quitarMuro')) modo = null; for (const b of bm.querySelectorAll('[data-m]')) b.classList.toggle('on', (modo === 'murar' || modo === 'quitarMuro') && muroTipo === b.dataset.m); }
       { const cs = unidadesSel().filter((u) => UNID[u.tipo].tiende), hay = cs.length > 0, bc = $('conectar'), ba = $('autoCivil'); ba.hidden = !hay || m.logistica === false; if (hay) { const on = cs.every((u) => u.auto), tx = on ? 'Automático: sí' : 'Automático: no'; if (ba.textContent !== tx) ba.textContent = tx; ba.classList.toggle('listo', on); } bc.hidden = !hay; bc.classList.toggle('listo', modo === 'conectar'); if (!hay && modo === 'conectar') modo = null; }
       { const hay = unidadesSel().some((u) => UNID[u.tipo].traza), bz = $('trazar'); bz.hidden = !hay; bz.classList.toggle('listo', modo === 'trazar'); }
+      { const bl = $('laser'), ls = conLaser(), hay = ls.length > 0; if (bl.hidden === hay) bl.hidden = !hay; if (hay) { const tx = modo === 'laser' ? 'Marcar con láser: elige el enemigo' : ls.some((u) => u.lsrOn) ? 'Marcar con láser: marcando' : 'Marcar con láser'; if (bl.textContent !== tx) bl.textContent = tx; bl.classList.toggle('listo', modo === 'laser' || ls.some((u) => u.lsrOn)); } }
+      { const bv = $('bVigilar'), ar = armadas(), tx = ar.length && ar.every((u) => UNID[u.tipo].emboscada) ? 'Emboscar en una zona' : 'Vigilar zona'; if (bv.textContent !== tx) bv.textContent = tx; }
+      { const bs = $('separar'), hay = conBinomio().length > 0; if (bs.hidden === hay) bs.hidden = !hay; }
       { const us = conCarga(), bd = $('descargar'); bd.hidden = !us.length; if (us.length) { const t = 'Descargar · ' + us.reduce((a, u) => a + u.pasajeros.length, 0) + ' dentro'; if (bd.textContent !== t) bd.textContent = t; } }
       { const e = mejorable(), bm = $('mejorar'); bm.hidden = !e; if (e) { const pr = W.costoMejora(e), t = 'Mejorar a nivel ' + ((e.nivelE || 1) + 1) + ' · ' + pr, cl = 'btn' + (J.minerales < pr && !J.dios ? ' caro' : ''); if (bm.textContent !== t) bm.textContent = t; if (bm.className !== cl) bm.className = cl; } }
       pintarForma();
@@ -2501,6 +2550,7 @@
           misionEn(wx, wy);
           return;
         }
+        if (modo === 'laser') { laserEn(wx, wy); return; }
         if (modo === 'barrido') { W.orden(m, { t: 'intel', j: YO, clave: barridoClave, x: wx, y: wy }); son.orden(); modo = null; return; }
         if (modo === 'quitarMuro') { // derribar muro propio, celda a celda
           const c = Math.floor(wy) * N + Math.floor(wx);
@@ -2650,6 +2700,7 @@
         raton.der = false; raton.arrastre = false;
         if (!fue && modo === 'patrulla') { cerrarPatrulla(); return; }
         if (!fue && modo === 'dronMis') { misionEn(aMundoX(raton.x), aMundoY(raton.y)); return; }
+        if (!fue && modo === 'laser') { laserEn(aMundoX(raton.x), aMundoY(raton.y)); return; }
         if (!fue) ordenar(aMundoX(raton.x), aMundoY(raton.y), ev.shiftKey);
         return;
       }

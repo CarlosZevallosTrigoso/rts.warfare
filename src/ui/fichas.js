@@ -108,6 +108,10 @@
       } else if (u.tipo === 'comando') { c.fillStyle = '#e0b83a'; c.strokeStyle = col.tinta || '#1a1a1a'; c.lineWidth = 1; c.beginPath(); c.rect(R * 0.55, R * 0.34, R * 0.5, R * 0.32); c.fill(); c.stroke(); // sin arma: la carga, en las manos
       } else if (esp) { // sin arma: un maletín fino al costado
         c.fillStyle = col.osc; c.fillRect(R * 0.55, R * 0.45, R * 0.55, R * 0.3);
+      } else if (u.tipo === 'emboscado') { // subfusil corto (el lanzacohetes va a la espalda)
+        c.beginPath(); c.moveTo(R * 0.3, R * 0.45); c.lineTo(R * (0.98 - e.retro * 0.2), R * 0.45); c.stroke();
+      } else if (u.tipo === 'delta') { // subfusil corto, con el puntero láser bajo el cañón
+        c.beginPath(); c.moveTo(R * 0.3, R * 0.45); c.lineTo(R * (0.98 - e.retro * 0.2), R * 0.45); c.stroke(); c.fillStyle = '#d0312d'; c.beginPath(); c.arc(R * (0.9 - e.retro * 0.2), R * 0.58, R * 0.1, 0, TAU); c.fill();
       } else if (expl) { // pistola corta
         c.beginPath(); c.moveTo(R * 0.3, R * 0.5); c.lineTo(R * (1.05 - e.retro * 0.2), R * 0.5); c.stroke();
       } else if (franco) { // rifle largo y fino, con mira
@@ -143,10 +147,13 @@
       if (med) { c.strokeStyle = col.mal; c.lineWidth = Math.max(1.2, R * 0.2); c.beginPath(); c.moveTo(R * 0.08 - R * 0.28, 0); c.lineTo(R * 0.08 + R * 0.28, 0); c.moveTo(R * 0.08, -R * 0.28); c.lineTo(R * 0.08, R * 0.28); c.stroke(); } // cruz en el casco
       if (ing) { c.strokeStyle = col.osc; c.lineWidth = Math.max(1, R * 0.2); c.beginPath(); c.moveTo(R * 0.08 - R * 0.42, 0); c.lineTo(R * 0.08 + R * 0.42, 0); c.stroke(); } // franja del casco
       if (expl) { c.fillStyle = col.osc; c.fillRect(R * 0.3, -R * 0.3, R * 0.35, R * 0.6); } // prismáticos
-      if (e.fino && lod === 2 && !esp && !civ) { c.strokeStyle = col.osc; c.lineWidth = Math.max(1, R * 0.12); c.beginPath(); c.arc(R * 0.08, 0, R * 0.42, -0.55, 0.55); c.stroke(); } // el frente del casco
+      if (u.tipo === 'emboscado') { c.fillStyle = '#47533a'; c.beginPath(); c.arc(R * 0.08, 0, R * 0.48, Math.PI * 0.45, Math.PI * 1.55); c.fill(); } // capucha de camuflaje
+      if (u.tipo === 'delta') { c.fillStyle = '#5d6b4a'; c.beginPath(); c.ellipse(R * 0.06, 0, R * 0.52, R * 0.58, 0, 0, TAU); c.fill(); c.fillStyle = col.osc; c.fillRect(R * 0.32, -R * 0.28, R * 0.34, R * 0.56); } // sombrero de ala y prismáticos
+      if (e.fino && lod === 2 && !esp && !civ && u.tipo !== 'delta') { c.strokeStyle = col.osc; c.lineWidth = Math.max(1, R * 0.12); c.beginPath(); c.arc(R * 0.08, 0, R * 0.42, -0.55, 0.55); c.stroke(); } // el frente del casco
       if (cerca && !esp && !civ && !med && !expl) { c.fillStyle = col.osc; c.fillRect(R * 0.4, -R * 0.12, R * 0.16, R * 0.24); if (fino) { c.beginPath(); c.arc(R * 0.04, -R * 0.42, R * 0.1, 0, TAU); c.arc(R * 0.04, R * 0.42, R * 0.1, 0, TAU); c.fill(); } } // visor y, de cerca, los cascos
       c.restore();
       if (u.tipo === 'comando' && lod) { c.fillStyle = '#34453a'; c.beginPath(); c.arc(hx, 0, r * 1.4 * 0.3, 0, TAU); c.fill(); if (lod === 2) { c.strokeStyle = '#34453a'; c.lineWidth = 1.2; c.beginPath(); for (let i = 0; i < 9; i++) { const a = i / 9 * TAU + 0.3; c.moveTo(hx + Math.cos(a) * r * 0.36, Math.sin(a) * r * 0.36); c.lineTo(hx + Math.cos(a) * r * 0.74, Math.sin(a) * r * 0.74); } c.stroke(); } } // capucha de camuflaje
+      if (u.tipo === 'emboscado' && lod && !e.hundido) { const R = r * 1.4; c.strokeStyle = '#4f5a3c'; c.lineCap = 'butt'; c.lineWidth = Math.max(2, R * 0.3); c.beginPath(); c.moveTo(-R * 1.0, -R * 0.52); c.lineTo(R * 0.35, -R * 0.52); c.stroke(); c.fillStyle = col.tinta || '#1a1a1a'; c.fillRect(-R * 1.05, -R * 0.7, R * 0.12, R * 0.36); } // el lanzacohetes, a la espalda
       if (u.tipo === 'asalto' && lod && !(e.te > 0.5)) { const R = r * 1.4; c.strokeStyle = col.osc; c.lineWidth = Math.max(1.5, R * 0.34); c.lineCap = 'round'; c.beginPath(); c.arc(R * 0.5, -R * 0.25, R * 0.95, -1.25, 0.35); c.stroke(); if (lod === 2) { c.strokeStyle = col.claro || col.luz; c.lineWidth = Math.max(1, R * 0.16); c.beginPath(); c.arc(R * 0.5, -R * 0.25, R * 0.95, -1.15, 0.25); c.stroke(); } c.lineCap = 'butt'; } // el escudo, por delante
     } else if (u.tipo === 'tanque' || pesado) {
       const L = r * 1.4, w = r;
@@ -211,6 +218,28 @@
       c.fillStyle = '#f2f0ea'; c.fillRect(-L * 0.9, -w * 0.82, L * 1.35, w * 1.64);
       c.fillStyle = col.base; c.fillRect(L * 0.52, -w * 0.75, L * 0.4, w * 1.5);
       c.fillStyle = '#c0392b'; c.fillRect(-L * 0.38, -w * 0.5, L * 0.3, w * 1.0); c.fillRect(-L * 0.62, -w * 0.18, L * 0.78, w * 0.36);
+    } else if (u.tipo === 'motoTrans') { // moto de campo con su conductor y, si lo lleva, el infante detrás, de lado y con el arma fuera
+      const L = r * 1.6, w = r * 0.5, rs = e.resguardo || 0, ag = 1 - 0.32 * rs, tinta = col.tinta || '#1a1a1a', lw = (q) => Math.max(1, r * q);
+      c.fillStyle = col.osc; rr(c, L * 0.52, -w * 0.24, L * 0.46, w * 0.48, w * 0.2); c.fill(); rr(c, -L * 0.98, -w * 0.28, L * 0.46, w * 0.56, w * 0.22); c.fill(); // ruedas de tacos
+      if (lod === 2 && e.fino) { c.strokeStyle = col.luz; c.lineWidth = 1; c.beginPath(); for (let i = 0; i < 3; i++) { const o = ((e.rod || 0) / (L * 0.46) + i / 3) % 1; c.moveTo(L * (0.56 + o * 0.38), -w * 0.24); c.lineTo(L * (0.56 + o * 0.38), w * 0.24); c.moveTo(-L * (0.94 - o * 0.38), -w * 0.28); c.lineTo(-L * (0.94 - o * 0.38), w * 0.28); } c.stroke(); }
+      c.translate(e.hx || 0, e.hy || 0);
+      c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.moveTo(L * 0.74, 0); c.lineTo(L * 0.32, -w * 0.36); c.lineTo(-L * 0.82, -w * 0.3); c.lineTo(-L * 0.82, w * 0.3); c.lineTo(L * 0.32, w * 0.36); c.closePath(); c.fill(); c.stroke(); // el bastidor
+      c.strokeStyle = col.osc; c.lineWidth = lw(0.13); c.beginPath(); c.moveTo(L * 0.44, -w * 1.05); c.lineTo(L * 0.44, w * 1.05); c.stroke(); // manillar
+      if (lod === 2) { c.fillStyle = '#5d6b4a'; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.rect(-L * 1.02, -w * 0.34, L * 0.18, w * 0.68); c.fill(); c.stroke(); } // el bidón de atrás
+      if (e.pas) { // el pasajero
+        const px = -L * 0.44; c.lineCap = 'round';
+        if (e.pas === 'antitanque' || e.pas === 'manpad') { c.strokeStyle = '#4f5a3c'; c.lineWidth = lw(0.3); c.beginPath(); c.moveTo(px + L * 0.38, w * 0.62); c.lineTo(px - L * 0.62, w * 0.62); c.stroke(); c.fillStyle = tinta; c.fillRect(px - L * 0.66, w * 0.62 - lw(0.2), lw(0.16), lw(0.4)); } // el tubo al hombro, hacia atrás
+        else if (e.pas === 'francotirador') { c.strokeStyle = tinta; c.lineWidth = lw(0.09); c.beginPath(); c.moveTo(px - L * 0.3, w * 0.5); c.lineTo(px + L * 0.75, -w * 1.5); c.stroke(); } // el fusil largo, cruzado
+        else if (W.UNID[e.pas] && W.UNID[e.pas].arma) { c.strokeStyle = tinta; c.lineWidth = lw(0.11); c.beginPath(); c.moveTo(px + L * 0.05, -w * 0.3); c.lineTo(px + L * 0.08, -w * 1.9); c.stroke(); } // el arma, asomando por su lado
+        c.lineCap = 'butt';
+        c.fillStyle = col.claro || col.base; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.ellipse(px, 0, L * 0.19, w * 1.0, 0, 0, TAU); c.fill(); c.stroke(); // el cuerpo, más claro que el conductor
+        if (lod === 2) { c.fillStyle = col.osc; c.fillRect(px - L * 0.16, -w * 0.5, L * 0.1, w); } // la mochila
+        c.fillStyle = col.osc; c.beginPath(); c.arc(px + L * 0.02, -w * 0.1, w * 0.5, 0, TAU); c.fill(); // el casco
+        if (lod === 2) { c.fillStyle = '#e9dcc6'; c.beginPath(); c.ellipse(px + L * 0.03, -w * 0.42, w * 0.22, w * 0.14, 0, 0, TAU); c.fill(); } // la cara asoma hacia su lado: mira afuera
+      }
+      c.fillStyle = col.osc; c.beginPath(); c.ellipse(-L * 0.02 * ag, 0, L * 0.2 * ag, w * 0.95 * ag, 0, 0, TAU); c.fill(); // el conductor
+      c.fillStyle = col.luz; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.arc(L * 0.06 + L * 0.12 * rs, 0, w * 0.5 * (0.9 + 0.1 * ag), 0, TAU); c.fill(); c.stroke(); // el casco: resguardada, agachado sobre el depósito
+      if (lod === 2) { c.fillStyle = tinta; c.fillRect(L * 0.13 + L * 0.12 * rs, -w * 0.22, L * 0.06, w * 0.44); } // las gafas
     } else if (u.tipo === 'motoSum') { // una moto con su conductor y dos alforjas
       const L = r * 1.5, w = r * 0.5; c.fillStyle = col.osc; c.fillRect(L * 0.55, -w * 0.22, L * 0.42, w * 0.44); c.fillRect(-L * 0.95, -w * 0.26, L * 0.42, w * 0.52); // ruedas, una tras otra
       c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.moveTo(L * 0.7, 0); c.lineTo(L * 0.3, -w * 0.4); c.lineTo(-L * 0.7, -w * 0.34); c.lineTo(-L * 0.7, w * 0.34); c.lineTo(L * 0.3, w * 0.4); c.closePath(); c.fill(); c.stroke(); // el cuerpo
@@ -256,6 +285,21 @@
       if (lod === 2) { c.fillStyle = col.luz; c.beginPath(); c.ellipse(L * 0.35, 0, L * 0.22, L * 0.09, 0, 0, TAU); c.fill(); } // cabina
       if (e.anda) { c.fillStyle = col.fuego; c.globalAlpha = 0.8; c.beginPath(); c.moveTo(-L * 0.75, -L * 0.08); c.lineTo(-L * (1.0 + 0.15 * Math.sin(e.tiempo * 0.05)), 0); c.lineTo(-L * 0.75, L * 0.08); c.fill(); c.globalAlpha = 1; }
       if (e.retro > 0.6) { c.fillStyle = col.fuego; c.beginPath(); c.arc(L * 0.2, L * 0.5, L * 0.12, 0, TAU); c.arc(L * 0.2, -L * 0.5, L * 0.12, 0, TAU); c.fill(); }
+    } else if (u.tipo === 'avAtaque') { // alas rectas, dos motores altos atrás y doble deriva: el avión de ataque a tierra
+      const L = r * 1.6, tinta = col.tinta || '#1a1a1a';
+      c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1;
+      c.beginPath(); c.moveTo(L * 0.3, -L * 1.12); c.lineTo(L * 0.1, -L * 1.12); c.lineTo(-L * 0.04, 0); c.lineTo(L * 0.1, L * 1.12); c.lineTo(L * 0.3, L * 1.12); c.lineTo(L * 0.34, 0); c.closePath(); c.fill(); c.stroke(); // el ala recta
+      c.beginPath(); c.rect(-L * 0.98, -L * 0.48, L * 0.22, L * 0.96); c.fill(); c.stroke(); // el estabilizador
+      c.fillStyle = col.osc; c.fillRect(-L * 1.02, -L * 0.54, L * 0.3, L * 0.1); c.fillRect(-L * 1.02, L * 0.44, L * 0.3, L * 0.1); // las dos derivas, en las puntas
+      c.beginPath(); c.ellipse(0, 0, L * 1.02, L * 0.14, 0, 0, TAU); c.fill(); // el fuselaje
+      c.fillStyle = col.base; for (const q of [-1, 1]) { c.beginPath(); c.ellipse(-L * 0.5, q * L * 0.24, L * 0.22, L * 0.1, 0, 0, TAU); c.fill(); c.stroke(); } // los motores, altos y atrás
+      if (lod === 2) {
+        c.fillStyle = col.luz; c.beginPath(); c.ellipse(L * 0.62, 0, L * 0.16, L * 0.08, 0, 0, TAU); c.fill(); // la cabina
+        c.fillStyle = tinta; c.fillRect(L * 0.98, -L * 0.025, L * 0.16, L * 0.05); // el cañón
+        for (const y of [-0.8, -0.55, 0.55, 0.8]) c.fillRect(L * 0.08, L * y - L * 0.03, L * 0.24, L * 0.06); // las cargas bajo el ala
+        c.fillStyle = col.osc; c.beginPath(); for (const q of [-1, 1]) c.arc(-L * 0.73, q * L * 0.24, L * 0.06, 0, TAU); c.fill(); // las toberas
+      }
+      if (e.retro > 0.4) { c.fillStyle = col.fuego; c.beginPath(); c.arc(L * 1.2, 0, L * 0.12, 0, TAU); c.fill(); }
     } else if (u.tipo === 'bombardero') { // alas rectas y anchas, dos motores
       const L = r * 1.7;
       c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1;
@@ -329,6 +373,17 @@
       c.beginPath(); c.arc(0, 0, w * 0.5, -1.1, 1.1); c.moveTo(0, 0); c.lineTo(w * 0.5, 0); c.stroke(); c.restore();
       c.fillStyle = col.luz; c.beginPath(); c.arc(-L * 0.3, 0, w * 0.14, 0, TAU); c.fill();
       c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.moveTo(L * 0.2, w * 0.5); c.lineTo(L * 0.2 - r * 1.4, w * 0.5 + r * 0.9); c.stroke(); // antena
+    } else if (u.tipo === 'heliLigero') { // helicóptero ligero: cabina en huevo, patines, botalón fino, dos contenedores de cohetes y el disco del rotor
+      const L = r * 1.5;
+      c.strokeStyle = col.osc; c.lineWidth = Math.max(1, r * 0.1); c.beginPath(); for (const q of [-1, 1]) { c.moveTo(-L * 0.35, q * L * 0.42); c.lineTo(L * 0.55, q * L * 0.42); } c.stroke(); // los patines
+      c.fillStyle = col.osc; c.fillRect(-L * 1.25, -L * 0.05, L * 0.95, L * 0.1); c.fillRect(-L * 1.3, -L * 0.22, L * 0.1, L * 0.44); // botalón y cola
+      c.fillStyle = col.base; c.strokeStyle = col.osc; c.lineWidth = 1; c.beginPath(); c.ellipse(L * 0.1, 0, L * 0.48, L * 0.3, 0, 0, TAU); c.fill(); c.stroke(); // la cabina
+      c.fillStyle = col.osc; for (const q of [-1, 1]) c.fillRect(-L * 0.05, q * L * 0.5 - L * 0.07, L * 0.42, L * 0.14); // los cohetes, a los lados
+      if (lod === 2) { c.fillStyle = col.luz; c.beginPath(); c.ellipse(L * 0.36, 0, L * 0.16, L * 0.2, 0, 0, TAU); c.fill(); c.fillStyle = col.tinta || '#1a1a1a'; c.fillRect(L * 0.3, L * 0.3, L * 0.35, L * 0.06); } // el parabrisas y la ametralladora
+      c.globalAlpha = 0.15; c.fillStyle = col.osc; c.beginPath(); c.arc(L * 0.1, 0, L * 0.95, 0, TAU); c.fill(); c.globalAlpha = 0.7; c.strokeStyle = col.osc; c.lineWidth = Math.max(1, r * 0.1); const a = e.tiempo * 0.04; c.beginPath(); // el rotor, de cuatro palas
+      for (let k = 0; k < 2; k++) { c.moveTo(L * 0.1 - Math.cos(a + k * 1.57) * L * 0.95, -Math.sin(a + k * 1.57) * L * 0.95); c.lineTo(L * 0.1 + Math.cos(a + k * 1.57) * L * 0.95, Math.sin(a + k * 1.57) * L * 0.95); }
+      c.stroke(); c.globalAlpha = 1;
+      if (e.retro > 0.5) { c.fillStyle = col.fuego; c.beginPath(); c.arc(L * 0.72, L * 0.33, L * 0.1, 0, TAU); c.fill(); }
     } else if (u.tipo === 'helicoptero' || u.tipo === 'heliSum' || W.UNID[u.tipo].heli) { // fuselaje con cola larga y el disco del rotor girando
       const L = r * 1.6;
       c.fillStyle = col.osc; c.fillRect(-L * 1.2, -L * 0.07, L * 1.1, L * 0.14); c.fillRect(-L * 1.3, -L * 0.3, L * 0.12, L * 0.6); // cola y rotor de cola
@@ -467,6 +522,21 @@
       for (let i = 0; i < 4; i++) { k.caja(0.2 + i * 0.52, 0.3, 0.52, 1.62, i === 3 ? 0.5 : 0, col.base); k.rect(0.23 + i * 0.52, 0.34, 0.15, 1.54, col.claro); } // nave en diente de sierra
       k.rect(1.1, 1.84, 0.8, 0.09, s.activo ? col.tinta : col.osc); for (const y of [0.8, 1.12]) { k.cil(2.55, y, 0.09, 1.1, col.osc); if (s.activo && det) k.humo(2.55, y, 0.05); }
       if (vida) { k.blindado(0.5, 2.4, -Math.PI / 2); for (const [x, y] of [[2.3, 2.3], [2.55, 2.36], [2.34, 2.56]]) k.caja(x, y, 0.18, 0.16, 0.06, col.saco); const p = k.en([[2.2, 2.82], [0.4, 2.82]], k.T * 0.05); k.carro(p.x, p.y, p.a, 0.26, 0.16, '#e0b83a', col.osc); k.anda([[0.3, 2.05], [0.9, 2.05], [0.9, 2.15], [0.3, 2.15]], 1, 0.05); } },
+    opEsp(c, k, s, col, det, vida) { // operaciones especiales: nave baja bajo red de camuflaje, cobertizo de motos, helipuerto, mástil de radio y pista de tiro
+      const CAMO = ['#5d6b4a', '#7a8560', '#47533a'];
+      k.caja(0.12, 0.12, 1.08, 0.84, 0.3, col.base);
+      c.save(); c.beginPath(); c.rect(k.X(0.12), k.Y(0.12), 1.08 * k.u, 0.84 * k.u); c.clip(); // la red de camuflaje, por encima de la nave
+      [[0.3, 0.3, 0.2], [0.75, 0.22, 0.17], [1.05, 0.5, 0.2], [0.5, 0.7, 0.24], [0.2, 0.82, 0.14], [0.9, 0.86, 0.16]].forEach(([x, y, r], i) => { c.globalAlpha = 0.55; k.punto(x, y, r, CAMO[i % 3]); }); c.globalAlpha = 1;
+      if (det) { c.globalAlpha = 0.5; for (let d = -1; d < 2.2; d += 0.08) k.linea([[0.12 + d, 0.12], [0.12 + d + 0.84, 0.96]], col.osc, 0.5); c.globalAlpha = 1; }
+      c.restore(); k.linea([[0.12, 0.12], [1.2, 0.12], [1.2, 0.96], [0.12, 0.96], [0.12, 0.12]], col.osc, 1);
+      k.caja(1.34, 0.12, 0.54, 0.84, 0.22, col.osc); if (det) k.rect(1.38, 0.86, 0.46, 0.07, '#2b2b2b'); // el cobertizo de las motos, abierto por delante
+      for (const x of [1.46, 1.62, 1.78]) { c.save(); c.translate(k.X(x), k.Y(1.12)); c.rotate(Math.PI / 2); const u = k.u; c.fillStyle = 'rgba(0,0,0,0.15)'; c.fillRect(-u * 0.09, -u * 0.005, u * 0.24, u * 0.07); c.fillStyle = col.osc; c.fillRect(-u * 0.13, -u * 0.025, u * 0.07, u * 0.05); c.fillRect(u * 0.06, -u * 0.025, u * 0.07, u * 0.05); c.fillStyle = col.base; c.fillRect(-u * 0.08, -u * 0.03, u * 0.17, u * 0.06); c.restore(); } // tres motos aparcadas
+      k.pista(0.6, 1.44, 0.4, col.horm, col.osc); // el helipuerto
+      if (det) for (let i = 0; i < 4; i++) { const a = i / 4 * TAU + 0.78; k.baliza(0.6 + Math.cos(a) * 0.45, 1.44 + Math.sin(a) * 0.45, '#f6d36b', 0.7); }
+      k.sombraL(1.12, 0.32, 1.12, 0.32, 2.4, 1.3); k.cil(1.12, 0.32, 0.05, 0, col.osc); if (det) { k.linea([[1.12, 0.32], [1.02, 0.18]], col.osc, 0.8); k.linea([[1.12, 0.32], [1.2, 0.2]], col.osc, 0.8); } k.baliza(1.12, 0.32, col.mal, 0.6); // mástil de radio con sus vientos
+      for (let i = 0; i < 4; i++) { k.cil(1.36 + i * 0.16, 1.86, 0.045, 0.12, col.luz); k.punto(1.36 + i * 0.16, 1.86, 0.018, col.mal); } // las dianas
+      if (det) k.linea([[1.28, 1.24], [1.9, 1.24]], col.horm2 || col.osc, 1, [0.06, 0.05]); // la línea de tiro
+      if (vida) { k.anda([[1.3, 1.36], [1.86, 1.36], [1.86, 1.62], [1.3, 1.62]], 3, 0.06); const a = Math.sin(k.T * 0.7) * 0.1; for (let i = 0; i < 3; i++) k.hombre(1.42 + i * 0.18, 1.2, Math.PI / 2 + a); } }, // corren el circuito; tres en la línea de tiro
     cuartel(c, k, s, col, det, vida) {
       k.dosAguas(0.15, 0.18, 1.12, 0.42, 0.25, true); k.dosAguas(0.15, 0.74, 1.12, 0.42, 0.25, true); k.caja(1.4, 0.18, 0.46, 0.98, 0.38, col.osc); if (det) { k.rect(1.48, 0.28, 0.3, 0.12, col.claro); k.baliza(1.63, 1.02, col.fuego, 0.5); }
       k.caja(0.18, 1.5, 0.24, 0.24, 0.3, col.claro); k.bandera(1.6, 1.36);

@@ -866,7 +866,7 @@
     if (!cerrado) return;
     for (const u of m.ents) { // quien estaba encima sale al suelo firme más cercano
       if (u.edif || u.vida <= 0 || UNID[u.tipo].aire) continue;
-      const c = Math.floor(u.y) * m.N + Math.floor(u.x), veh = UNID[u.tipo].cat === 'veh';
+      const c = Math.floor(u.y) * m.N + Math.floor(u.x), veh = UNID[u.tipo].cat === 'veh' && !UNID[u.tipo].todoTerreno;
       if (u.orden === 'trazar' ? pisaTraza(m, c) : (veh ? m.pasoV : m.paso)[c]) continue;
       const l = W.cercaLibre(m, u.x, u.y, veh); u.x = (l % m.N) + 0.5; u.y = ((l / m.N) | 0) + 0.5; u.ruta = null; u.v = 0;
       if (u.meta) pedirRuta(m, u, u.meta.x, u.meta.y, u.meta.radio);
@@ -1126,7 +1126,7 @@
   W.orden = function (m, cmd, deRep) { if (m.soloRep && !deRep) return; if (m.registro) m.registro.push(m.t, cmd); m.cola.push(cmd); };
 
   // Por dónde puede pasar cada unidad: los vehículos no entran al bosque, salvo la excavadora mientras traza un camino.
-  const pasoDe = (m, u) => (UNID[u.tipo].cat === 'veh' && u.orden !== 'trazar' ? m.pasoV : m.paso);
+  const pasoDe = (m, u) => (UNID[u.tipo].cat === 'veh' && !UNID[u.tipo].todoTerreno && u.orden !== 'trazar' ? m.pasoV : m.paso); // (la moto de campo pasa por donde la infantería)
   // La excavadora, mientras traza, también puede meterse al agua: va tendiendo un puente.
   const pisaTraza = (m, c) => m.paso[c] || (m.mapa.terreno[c] === T.AGUA && !m.ocup[c] ? 1 : 0);
   function tablaTraza(m) {
@@ -1245,7 +1245,7 @@
   }
 
   // ---------- órdenes de unidad: directa, encadenada, patrulla y exploración ----------
-  function limpiar(u) { u.cola.length = 0; u.patrulla = null; u.explora = false; u.acude = 0; u.protege = 0; u.vigila = null; u.expG = 0; }
+  function limpiar(u) { u.cola.length = 0; u.patrulla = null; u.explora = false; u.acude = 0; u.protege = 0; u.vigila = null; u.expG = 0; u.emb = null; u.enterrado = false; }
   function asignar(m, u, o) {
     if (o.t === 'atacar') {
       const ob = m.porId.get(o.obj);
@@ -1525,6 +1525,11 @@
         m.efectos.push({ tipo: 'lanzamiento', x1: e.cx, y1: e.cy, x2: cmd.x, y2: cmd.y, j: cmd.j, clase: cmd.tipo, t: m.t });
         return;
       }
+      case 'laser': { // los Delta elegidos marcan con el láser a ese enemigo (y llaman al avión de ataque)
+        const o = m.porId.get(cmd.obj); if (!o || o.vida <= 0 || o.j === cmd.j) break;
+        for (const u of propias(m, cmd)) if (UNID[u.tipo].laser) { limpiar(u); u.obj = 0; u.ruta = null; u.pend = null; u.guardia = false; u.orden = 'laser'; u.lsr = o.id; u.lsrOn = false; u.lsrAviso = false; }
+        break;
+      }
       case 'carga': { // los comandos elegidos van a poner una carga al pie de ese edificio enemigo
         const o = m.porId.get(cmd.obj);
         for (const u of propias(m, cmd)) if (UNID[u.tipo].comando && cargable(u, o)) { limpiar(u); u.obj = 0; u.ruta = null; u.pend = null; u.guardia = false; u.orden = 'carga'; u.hackObj = o.id; u.canal = 0; }
@@ -1610,7 +1615,12 @@
       case 'cargar': { // la infantería indicada va a subir al transporte cmd.en
         const t = m.porId.get(cmd.en);
         if (!t || t.edif || t.j !== cmd.j || !UNID[t.tipo].plazas) return;
-        for (const u of propias(m, cmd)) if (UNID[u.tipo].cat === 'inf') { limpiar(u); u.orden = 'nada'; u.obj = 0; u.ruta = null; u.pend = null; u.guardia = false; u.sube = t.id; }
+        for (const u of propias(m, cmd)) if (UNID[u.tipo].cat === 'inf' && !(UNID[t.tipo].binomio && UNID[u.tipo].monta)) { limpiar(u); u.orden = 'nada'; u.obj = 0; u.ruta = null; u.pend = null; u.guardia = false; u.sube = t.id; } // (a la moto solo sube quien va solo: los equipos de dos, no)
+        return;
+      }
+      case 'separar': { // el binomio se deshace: el infante baja y cada uno va por su cuenta
+        for (const t of propias(m, cmd)) { const mo = UNID[t.tipo].binomio ? t : t.bin ? m.porId.get(t.bin) : null; if (!mo || !UNID[mo.tipo].binomio) continue; const p = mo.pasajeros.length ? mo.pasajeros[0] : m.porId.get(mo.bin); if (mo.pasajeros.length) { apear(m, mo, mo.pasajeros); mo.pasajeros = []; } if (p) p.bin = 0; mo.bin = 0; mo.binEst = null; mo.binDest = null; mo.resg = 0; }
+        contar(m);
         return;
       }
       case 'descargar': {
@@ -1692,10 +1702,12 @@
       }
       // cmd.enc (encadenar): la orden se añade a la cola de la unidad en vez de reemplazar lo que hace.
       case 'mover':
+        cmd = binomioOrden(m, cmd); if (!cmd.ids.length) return;
         dronesOrden(m, cmd, [{ x: cmd.x, y: cmd.y }]);
         destinos(m, reaccion(m, propias(m, cmd)), cmd.x, cmd.y, (u, x, y, ex) => { enFormacion(m, u, 'mover', x, y, ex, cmd.enc && u.tipo !== 'cosechadora'); if (UNID[u.tipo].suministro) u.sumi = { x, y, est: 'ida' }; if (UNID[u.tipo].ambu) { u.amb = u.amb || {}; u.amb.punto = { x, y }; u.amb.est = 'ida'; u.amb.obj = 0; } }, cmd.forma, cmd.rumbo); // al suministro móvil, mover es marcarle su punto
         return;
       case 'amover':
+        cmd = binomioOrden(m, cmd); if (!cmd.ids.length) return;
         destinos(m, reaccion(m, propias(m, cmd).filter((u) => UNID[u.tipo].arma)), cmd.x, cmd.y, (u, x, y, ex) => enFormacion(m, u, 'amover', x, y, ex, cmd.enc), cmd.forma, cmd.rumbo);
         return;
       case 'investigar': { // una investigación a la vez por tipo de edificio
@@ -1743,6 +1755,7 @@
       case 'atacar': {
         const o = m.porId.get(cmd.obj);
         if (!o || o.j === cmd.j) return;
+        cmd = binomioOrden(m, cmd, o); if (!cmd.ids.length) return;
         for (const u of propias(m, cmd)) if (UNID[u.tipo].arma) encargar(m, u, { t: 'atacar', obj: o.id }, cmd.enc);
         return;
       }
@@ -1777,8 +1790,11 @@
         return;
       }
       case 'vigilar': { // esas unidades van a la zona, se quedan dentro y atacan a todo enemigo que entre y esté a la vista
-        const r = Math.max(4, Math.min(ECON.vigilaMax, cmd.r || ECON.vigilaRadio)), us = propias(m, cmd).filter((u) => UNID[u.tipo].arma && !UNID[u.tipo].aire);
-        if (!(cmd.x >= 0 && cmd.y >= 0 && cmd.x < m.N && cmd.y < m.N) || !us.length) return;
+        const r = Math.max(4, Math.min(ECON.vigilaMax, cmd.r || ECON.vigilaRadio)), todos = propias(m, cmd).filter((u) => UNID[u.tipo].arma && !UNID[u.tipo].aire);
+        if (!(cmd.x >= 0 && cmd.y >= 0 && cmd.x < m.N && cmd.y < m.N) || !todos.length) return;
+        const emb = todos.filter((u) => UNID[u.tipo].emboscada), us = todos.filter((u) => !UNID[u.tipo].emboscada);
+        if (emb.length) { for (const u of emb) { limpiar(u); u.obj = 0; u.guardia = true; } destinos(m, emb, cmd.x, cmd.y, (u, x, y) => { asignar(m, u, { t: 'mover', x, y }); u.guardia = true; u.emb = { x: cmd.x, y: cmd.y, r, hx: x, hy: y, est: 'va', hecho: false }; }); } // los emboscados: a su puesto, a cavar y a esperar
+        if (!us.length) return;
         for (const u of us) { limpiar(u); u.obj = 0; u.guardia = false; }
         destinos(m, us, cmd.x, cmd.y, (u, x, y) => { u.vigila = { x: cmd.x, y: cmd.y, r, px: x, py: y }; asignar(m, u, { t: 'amover', x, y }); u.vigila = { x: cmd.x, y: cmd.y, r, px: x, py: y }; });
         return;
@@ -2038,11 +2054,12 @@
   // El enemigo no la ve ni la ataca por su cuenta hasta tenerla a un par de celdas.
   function oculta(m, e) {
     if (e.edif || m.t - (e.camT === undefined ? -999 : e.camT) < 20) return false; // (una cámara enemiga cerca la descubre)
+    if (e.enterrado) return true; // el emboscado en su hoyo
     const d = UNID[e.tipo];
     if (d.espia) return true; // el espía pasa inadvertido también en movimiento
     if (d.comando && m.mapa.terreno[Math.floor(e.y) * m.N + Math.floor(e.x)] === T.BOSQUE) return true; // el comando, también andando, si va por el bosque
     if (e.orden !== 'nada' || e.v > 0.001 || m.t - (e.tDisparo === undefined ? -999 : e.tDisparo) < 60) return false;
-    return d.cat === 'inf' && (d.sigilo || m.mapa.terreno[Math.floor(e.y) * m.N + Math.floor(e.x)] === T.BOSQUE);
+    return (d.cat === 'inf' || d.binomio) && (d.sigilo || m.mapa.terreno[Math.floor(e.y) * m.N + Math.floor(e.x)] === T.BOSQUE); // (la moto resguardada en el bosque, tampoco)
   }
   W.oculta = oculta;
   function buscarEnemigo(m, a, x, y, rango) {
@@ -2052,7 +2069,7 @@
       if (e.j === a.j || e.vida <= 0 || e.infra || !puede(arma, e)) return; // a los caminos no se les dispara por iniciativa propia: solo por orden
       const d = dist(x, y, e);
       if (d > md) return;
-      if (oculta(m, e)) { if (d > ECON.ocultaVe) return; e.delatada = m.t; } // escondida: solo se la ve de muy cerca
+      if (oculta(m, e)) { if (d > ECON.ocultaVe || e.enterrado) return; e.delatada = m.t; } // escondida: solo se la ve de muy cerca (enterrado, ni eso)
       if (a.edif && arma.alcanceMin && d < arma.alcanceMin) return; // la artillería fija no tira a lo que tiene encima
       if (a.edif && arma.indirecto && m.niebla[a.j][Math.floor(posY(e)) * m.N + Math.floor(posX(e))] !== 2) return; // y solo a lo que alguien de los suyos esté viendo
       if (a.edif && arma.indirecto && EDIF[a.tipo].datos && d > EDIF[a.tipo].vision && !W.enlazado(m, a)) return; // sin enlace de datos nadie le canta los blancos: solo tira a lo que ve ella
@@ -2120,7 +2137,7 @@
         if (db.cat === 'inf') ur = U.inf;
         else if (db.cat === 'veh') { if (arma.ligera) { if (db.blindaje === 'pesado') return; } else { ur = U.penetra; if (!b.inmovil && ((b.id * 2654435761 + m.t * 40503) >>> 0) % 100 < U.inmovil) { b.inmovil = true; m.efectos.push({ tipo: 'inmovil', x1: b.x, y1: b.y, j: b.j, t: m.t }); } } }
       } }
-    b.vida -= ur * fl * arma.dano * (mult || 1) * arma.vs[b.edif ? 'edificio' : UNID[b.tipo].blindaje] * (arma.asalto ? 1 : b.bunk ? ECON.bunkerDano : enTrinchera(m, b) ? (arma.sobre ? 1 : ECON.trinchera) : 1) * (enBosque(m, b) && UNID[b.tipo].cat === 'inf' ? ECON.bosqueCubre : 1);
+    b.vida -= ur * fl * arma.dano * (mult || 1) * arma.vs[b.edif ? 'edificio' : UNID[b.tipo].blindaje] * (b.enterrado ? ECON.enterradoDano : arma.asalto ? 1 : b.bunk ? ECON.bunkerDano : enTrinchera(m, b) ? (arma.sobre ? 1 : ECON.trinchera) : 1) * (enBosque(m, b) && UNID[b.tipo].cat === 'inf' ? ECON.bosqueCubre : 1);
     b.tDano = m.t; b.agresor = de;
     if (m.ultra && !b.edif && UNID[b.tipo].cat === 'inf') {
       if (b.vida <= 0 && !b.herido && !b.bunk && !b.sube) { // cae herido: fuera de combate, a la espera de que lo recojan
@@ -2254,12 +2271,15 @@
       a.desg = Math.min(100, (a.desg || 0) + ECON.desgTiro);
       if (a.desg >= ECON.desgMal && (a.id * 31 + m.t * 17) % 100 < ECON.desgFallo) { a.recarga = arma.recarga; a.tDisparo = m.t; m.efectos.push({ tipo: 'encasquilla', x1: posX(a), y1: posY(a), j: a.j, t: m.t }); return; }
     }
-    const clave = corta ? 'pistola' : a.edif ? EDIF[a.tipo].arma : UNID[a.tipo].arma, ax = posX(a), ay = posY(a), bx = posX(b), by = posY(b);
-    const mult = (!a.edif && UNID[a.tipo].cat === 'inf' && m.jug[a.j].mejoras.perforante ? 1.25 : 1) * (a.edif ? 1 : 1 + ECON.rangoDano * a.rango);
+    let clave = corta ? 'pistola' : a.edif ? EDIF[a.tipo].arma : UNID[a.tipo].arma; const ax = posX(a), ay = posY(a), bx = posX(b), by = posY(b);
+    if (!corta && !a.edif && UNID[a.tipo].arma2 && (b.edif || (UNID[b.tipo].cat === 'veh' && !UNID[b.tipo].aire))) { clave = UNID[a.tipo].arma2; arma = ARMAS[clave]; } // el emboscado: contra vehículos y edificios, el lanzacohetes
+    const guia = !a.edif && UNID[a.tipo].guiaLaser, marcado = guia && laseado(m, b, a.j); // el avión de ataque: con la marca del láser, preciso; sin ella, disperso
+    const mult = (!a.edif && UNID[a.tipo].cat === 'inf' && m.jug[a.j].mejoras.perforante ? 1.25 : 1) * (a.edif ? 1 : 1 + ECON.rangoDano * a.rango) * (guia && !marcado ? ECON.sinLaser : 1);
     a.recarga = arma.recarga >= 8 ? Math.round(arma.recarga * (0.9 + ((a.id * 31 + m.t * 17) % 21) / 100)) : arma.recarga;
     a.tDisparo = m.t; // (cada arma lleva su compás, ±10 %: un grupo no dispara como un metrónomo)
     if (arma.vuelo) { // obús: vuela hasta donde estaba el blanco al disparar
-      m.proy.push({ ox: ax, oy: ay, x: ax, y: ay, px: ax, py: ay, tx: bx, ty: by, obj: b.id, j: a.j, arma: clave, mult, de: a.id });
+      if (guia && !marcado) { const q = (a.id * 2654435761 + m.t * 40503) >>> 0, h = (q % 628) / 100, rd = ECON.laserDisp * (0.2 + 0.8 * ((q >>> 10) % 100) / 100); m.proy.push({ ox: ax, oy: ay, x: ax, y: ay, px: ax, py: ay, tx: bx + Math.cos(h) * rd, ty: by + Math.sin(h) * rd, obj: 0, j: a.j, arma: clave, mult, de: a.id }); }
+      else m.proy.push({ ox: ax, oy: ay, x: ax, y: ay, px: ax, py: ay, tx: bx, ty: by, obj: b.id, j: a.j, arma: clave, mult, de: a.id });
       for (let k = 1; k < (arma.rafaga || 1); k++) { // el resto de la salva cae repartido alrededor, un poco más tarde cada cohete
         const ang = a.id * 1.7 + m.t * 0.37 + k * 2.4, rr = arma.area * 0.95;
         m.proy.push({ ox: ax, oy: ay, x: ax, y: ay, px: ax, py: ay, tx: bx + Math.cos(ang) * rr, ty: by + Math.sin(ang) * rr, obj: 0, j: a.j, arma: clave, mult, de: a.id, sale: m.t + k * 9 }); // salen uno tras otro, como de una lanzadera
@@ -2276,6 +2296,7 @@
       const p = m.proy[k], arma = ARMAS[p.arma], dx = p.tx - p.x, dy = p.ty - p.y, dd = Math.hypot(dx, dy);
       if (p.sale) { if (p.sale > m.t) continue; p.sale = 0; m.efectos.push({ tipo: 'boca', x1: p.ox, y1: p.oy, x2: p.tx, y2: p.ty, j: p.j, t: m.t, arma: p.arma }); } // aún en el tubo
       p.px = p.x; p.py = p.y;
+      if (arma.guiado && p.obj) { const o = m.porId.get(p.obj); if (o && o.vida > 0 && !o.enTierra) { p.tx = posX(o); p.ty = posY(o); } } // el misil guiado corrige hacia donde está el blanco
       const vel = p.vel || arma.vuelo;
       if (dd > vel) { p.x += (dx / dd) * vel; p.y += (dy / dd) * vel; continue; }
       let acierto = false, bl = '', rebote = false; // bl y rebote son para el dibujo: en qué dio y si el blindaje lo escupió (de frente, algunas veces)
@@ -2529,7 +2550,9 @@
       if (u.orden !== 'nada') u.cava = 0;
       else if ((u.cava -= d.cavaRapido ? 2 : 1) <= 0) { const c = Math.floor(u.y) * m.N + Math.floor(u.x); m.trincheras.set(c, { x: Math.floor(u.x) + 0.5, y: Math.floor(u.y) + 0.5, ang: u.ang, dentro: [u.id] }); u.trin = c + 1; } // quien la cava se queda en ella
     }
+    if (u.enterrado || (u.emb && u.emb.est === 'cava')) { u.v = 0; u.ruta = null; u.obj = 0; return; } // en su hoyo (o cavándolo): ni se mueve ni dispara
     if (!d.aire && (u.retira || u.retirando)) retirada(m, u);
+    if (u.orden === 'laser') { tickLaser(m, u); return; }
     if (!d.arma) { // sin arma: solo se mueve; el ingeniero, además, repara lo que tenga cerca
       if (u.orden === 'atacar') { u.orden = 'nada'; u.obj = 0; }
       if (u.orden === 'trazar') { tickTraza(m, u); return; }
@@ -2787,7 +2810,7 @@
   // todos: patio) y los edificios se reparan solos, más despacio.
   const LUGAR = { inf: 'cuartel', veh: 'fabrica', aire: 'aerodromo' }; // dónde se produce y se repara cada categoría
   W.lugarDe = (d) => d.lugar || LUGAR[d.cat]; // las unidades civiles salen de Obras civiles
-  W.PRODUCE = { cuartel: true, fabrica: true, aerodromo: true, obras: true, inteligencia: true, logistica: true, hospital: true };
+  W.PRODUCE = { cuartel: true, fabrica: true, aerodromo: true, obras: true, inteligencia: true, logistica: true, hospital: true, opEsp: true };
   W.cupoAmb = (m, j) => { let hay = 0, cupo = 0; for (const e of m.ents) { if (e.j !== j || e.vida <= 0) continue; if (e.edif) { if (EDIF[e.tipo].ambulancias) { cupo += EDIF[e.tipo].ambulancias; for (const q of e.cola) if (q === 'ambulancia' || (q && q.tipo === 'ambulancia')) hay++; } } else if (e.tipo === 'ambulancia') hay++; } return { hay, cupo }; };
   function curar(m) {
     const talleres = [[], []];
@@ -2833,6 +2856,133 @@
       for (const u of m.ents) { if (u.edif || Math.abs(u.x - e.x) > r || Math.hypot(u.x - e.x, u.y - e.y) > r) continue; if (u.j === e.j) u.tMando = m.t; else if (UNID[u.tipo].mini) u.tInterf = m.t; } // a los suyos los coordina; a los drones enemigos, los interfiere
     }
   }
+  // ---------- Emboscados ----------
+  // Con la orden de vigilar zona (W), el emboscado va a su puesto, cava un hoyo y se mete: no se le ve ni dispara. Cuando un enemigo de tierra entra en la zona
+  // (o le dan), salen todos los de esa zona y atacan. Pasado un rato sin enemigos cerca, vuelven a su hoyo. Los descubren las cámaras y, de cerca, los exploradores y los drones de reconocimiento.
+  function tickEmboscados(m) {
+    let hay = false;
+    for (const u of m.ents) if (!u.edif && u.emb) { hay = true; break; }
+    if (!hay) return;
+    for (const u of m.ents) {
+      if (u.edif || !u.emb || u.vida <= 0) continue;
+      const e = u.emb;
+      if (u.herido) { u.enterrado = false; continue; }
+      if (e.est === 'va') { if (u.orden === 'nada' && !u.pend) { e.est = 'cava'; e.fin = m.t + (e.hecho ? ECON.reEnterrar : ECON.cavarHoyo); u.v = 0; } }
+      else if (e.est === 'cava') { if (m.t >= e.fin) { e.est = 'dentro'; e.hecho = true; u.enterrado = true; u.guardia = true; u.obj = 0; } }
+      if (e.est === 'dentro') {
+        for (const o of m.ents) { // de cerca, el explorador y el dron de reconocimiento lo descubren
+          if (o.edif || o.j === u.j || o.vida <= 0 || (o.tipo !== 'explorador' && o.rol !== 'rec')) continue;
+          if (Math.abs(o.x - u.x) < ECON.detectaHoyo && Math.hypot(o.x - u.x, o.y - u.y) < ECON.detectaHoyo) { u.camT = m.t; break; }
+        }
+        let sale = m.t - (u.tDano === undefined ? -999 : u.tDano) < 10; // si le dan, sale
+        if (!sale) for (const o of m.ents) { if (o.edif || o.j === u.j || o.j > 1 || o.vida <= 0 || o.herido || UNID[o.tipo].aire || UNID[o.tipo].mini || Math.abs(o.x - e.x) > e.r) continue; if (Math.hypot(o.x - e.x, o.y - e.y) <= e.r) { sale = true; break; } }
+        if (sale) { // salen todos los de esa zona
+          for (const q of m.ents) if (!q.edif && q.emb && q.j === u.j && q.emb.est === 'dentro' && q.emb.x === e.x && q.emb.y === e.y) { q.emb.est = 'fuera'; q.emb.calma = m.t; q.enterrado = false; q.guardia = false; q.tDisparo = m.t; }
+          m.efectos.push({ tipo: 'emboscada', x1: e.x, y1: e.y, j: u.j, t: m.t });
+        }
+      } else if (e.est === 'fuera') {
+        let cerca = false; for (const o of m.ents) { if (o.edif || o.j === u.j || o.j > 1 || o.vida <= 0 || o.herido || UNID[o.tipo].aire || UNID[o.tipo].mini || Math.abs(o.x - e.x) > e.r + 3) continue; if (Math.hypot(o.x - e.x, o.y - e.y) <= e.r + 3) { cerca = true; break; } }
+        if (cerca || u.obj) e.calma = m.t;
+        else if (m.t - e.calma > ECON.emboscadaCalma && u.orden === 'nada') { e.est = 'va'; u.ruta = null; u.pend = null; u.dest = { x: e.hx, y: e.hy }; u.orden = 'mover'; pedirRuta(m, u, e.hx, e.hy, 0); } // de vuelta a su hoyo
+      }
+    }
+  }
+  W.tickEmboscados = tickEmboscados;
+  // ---------- El láser del Delta y el avión de ataque ----------
+  // El Delta se acerca hasta tener el blanco a tiro de puntero, se planta y lo marca. Mientras lo marca, llama al avión de ataque libre más cercano
+  // de su bando que llegue hasta allí; el avión hace pasadas sobre la marca. Si la marca se pierde (el Delta cae, se mueve o pierde de vista el blanco), el fuego cae disperso.
+  function laseado(m, b, j) {
+    for (const u of m.ents) if (!u.edif && u.j === j && u.lsrOn && u.lsr === b.id && u.vida > 0 && !u.herido && u.orden === 'laser') return true;
+    return false;
+  }
+  W.laseado = laseado;
+  function llamarAtaque(m, u, o) {
+    let libre = null, md = Infinity, ya = false;
+    for (const p of m.ents) {
+      if (p.edif || p.j !== u.j || p.vida <= 0 || !UNID[p.tipo].guiaLaser) continue;
+      if (p.obj === o.id) { ya = true; break; }
+      if (p.repostando || p.orden !== 'nada' || p.obj || p.cola.length) continue;
+      const casa = p.casa ? m.porId.get(p.casa) : null; if (casa && Math.hypot(posX(o) - casa.cx, posY(o) - casa.cy) > UNID[p.tipo].radioVuelo) continue;
+      if (p.enTierra && p.fuel < UNID[p.tipo].fuel * 0.3) continue;
+      const d = Math.hypot(posX(o) - p.x, posY(o) - p.y); if (d < md) { md = d; libre = p; }
+    }
+    if (ya) return;
+    if (libre) { limpiar(libre); asignar(m, libre, { t: 'atacar', obj: o.id }); m.efectos.push({ tipo: 'ataqueAereo', x1: posX(o), y1: posY(o), j: u.j, ok: true, t: m.t }); }
+    else if (!u.lsrAviso) m.efectos.push({ tipo: 'ataqueAereo', x1: posX(o), y1: posY(o), j: u.j, ok: false, t: m.t });
+    u.lsrAviso = true;
+  }
+  function tickLaser(m, u) {
+    const o = m.porId.get(u.lsr), R = UNID[u.tipo].laser;
+    if (!o || o.vida <= 0 || o.j === u.j || o.herido || o.enTierra || oculta(m, o)) { u.orden = 'nada'; u.lsr = 0; u.lsrOn = false; u.lsrAviso = false; u.ruta = null; return; }
+    const dd = dist(u.x, u.y, o);
+    if (dd > R) { u.lsrOn = false; if (!u.pend && (!u.ruta || (m.t + u.id) % 20 === 0)) pedirRuta(m, u, posX(o), posY(o), R - 1); avanzar(m, u); return; }
+    u.ruta = null; u.pend = null; u.v = 0; u.ang = Math.atan2(posY(o) - u.y, posX(o) - u.x); u.lsrOn = true; u.tDisparo = m.t; // (marcar delata: deja de estar oculto)
+    if ((m.t + u.id) % 20 === 0) llamarAtaque(m, u, o);
+  }
+  // ---------- Binomio de moto (moto transportadora y su infante) ----------
+  // Una orden de marcha o de ataque a la moto o a su infante la cumple la moto: si lo lleva encima, va; si está a pie, primero lo recoge.
+  // Devuelve la orden sin los del binomio (el registro de la partida guarda la orden original: no se toca).
+  function binomioOrden(m, cmd, ob) {
+    let quedan = null; const hechas = new Set();
+    for (let k = 0; k < cmd.ids.length; k++) {
+      const u = m.porId.get(cmd.ids[k]); let mo = null;
+      if (u && !u.edif && u.j === cmd.j && !u.herido) { if (UNID[u.tipo].binomio) mo = u.bin ? u : null; else if (u.bin) { const o = m.porId.get(u.bin); if (o && o.vida > 0 && o.bin === u.id) mo = o; else u.bin = 0; } }
+      if (!mo) { if (quedan) quedan.push(cmd.ids[k]); continue; }
+      if (!quedan) quedan = cmd.ids.slice(0, k);
+      if (u !== mo && ob) { quedan.push(cmd.ids[k]); continue; } // el infante, a pie, ataca por su cuenta
+      if (hechas.has(mo.id)) continue; // (la moto y su infante en la misma orden: se cumple una vez)
+      hechas.add(mo.id); mo.resg = 0;
+      let x = cmd.x, y = cmd.y;
+      if (ob) { const ox = ob.cx === undefined ? ob.x : ob.cx, oy = ob.cy === undefined ? ob.y : ob.cy, dx = mo.x - ox, dy = mo.y - oy, d = Math.hypot(dx, dy) || 1, r = 3.2 + (ob.tam || 0) / 2; x = ox + (dx / d) * r; y = oy + (dy / d) * r; } // a atacar: lo deja a tiro, sin meterse encima
+      const c = W.cercaLibre(m, x, y); mo.binDest = { x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5, ob: ob ? ob.id : 0 };
+      limpiar(mo);
+      if (mo.pasajeros.length) { mo.binEst = 'lleva'; asignar(m, mo, { t: 'mover', x: mo.binDest.x, y: mo.binDest.y }); }
+      else { const p = m.porId.get(mo.bin); if (!p) { mo.bin = 0; mo.binEst = null; continue; } limpiar(p); p.orden = 'nada'; p.obj = 0; p.ruta = null; p.pend = null; p.guardia = false; p.v = 0; mo.binEst = 'recoge'; asignar(m, mo, { t: 'mover', x: p.x, y: p.y }); }
+    }
+    return quedan ? Object.assign({}, cmd, { ids: quedan }) : cmd;
+  }
+  // Dónde se resguarda la moto: una celda de bosque cerca (mejor hacia atrás), o unas celdas atrás si no lo hay.
+  function resguardoDe(m, mo, desdeX, desdeY) {
+    const N = m.N, x0 = Math.floor(mo.x), y0 = Math.floor(mo.y), ax = desdeX - mo.x, ay = desdeY - mo.y, al = Math.hypot(ax, ay) || 1;
+    let mejor = -1, mv = -Infinity;
+    for (let dy = -6; dy <= 6; dy++) for (let dx = -6; dx <= 6; dx++) {
+      const x = x0 + dx, y = y0 + dy; if (x < 1 || y < 1 || x >= N - 1 || y >= N - 1) continue; const c = y * N + x;
+      if (m.mapa.terreno[c] !== T.BOSQUE || !m.paso[c] || m.ocup[c]) continue;
+      const d = Math.hypot(dx, dy); if (d < 1.5 || d > 6) continue;
+      const v = (dx * ax + dy * ay) / al - d * 0.6; if (v > mv) { mv = v; mejor = c; } // hacia atrás y cerca
+    }
+    if (mejor >= 0) return { x: (mejor % N) + 0.5, y: ((mejor / N) | 0) + 0.5 };
+    const c = W.cercaLibre(m, mo.x + (ax / al) * 3.5, mo.y + (ay / al) * 3.5); return { x: (c % N) + 0.5, y: ((c / N) | 0) + 0.5 };
+  }
+  function tickBinomio(m) {
+    for (const mo of m.ents) {
+      if (mo.edif || mo.vida <= 0 || !UNID[mo.tipo].binomio) continue;
+      if (mo.bin) { const p = mo.pasajeros.length ? mo.pasajeros[0] : m.porId.get(mo.bin); if (!p || p.vida <= 0 || p.bin !== mo.id) { mo.bin = 0; mo.binEst = null; mo.binDest = null; } }
+      if (!mo.bin || !mo.binEst) continue;
+      if (mo.binEst === 'recoge') {
+        const p = m.porId.get(mo.bin);
+        if (p.herido || p.bunk) { mo.binEst = null; continue; }
+        if (Math.hypot(p.x - mo.x, p.y - mo.y) <= 1.4) { // sube y salen
+          limpiar(p); p.orden = 'nada'; p.obj = 0; p.ruta = null; p.pend = null; p.v = 0; p.trin = 0; p.dentro = true; mo.pasajeros.push(p); m.porId.delete(p.id); m.ents = m.ents.filter((e) => e !== p); contar(m);
+          if (mo.binDest) { mo.binEst = 'lleva'; asignar(m, mo, { t: 'mover', x: mo.binDest.x, y: mo.binDest.y }); } else mo.binEst = null;
+        } else if (mo.orden === 'nada') asignar(m, mo, { t: 'mover', x: p.x, y: p.y });
+        else if ((m.t + mo.id) % 20 === 0 && mo.dest && Math.hypot(mo.dest.x - p.x, mo.dest.y - p.y) > 1.5) asignar(m, mo, { t: 'mover', x: p.x, y: p.y }); // si se ha movido, a por él
+      } else if (mo.binEst === 'lleva') {
+        if (!mo.pasajeros.length) { mo.binEst = null; continue; }
+        const D = mo.binDest, cerca = !D || Math.hypot(D.x - mo.x, D.y - mo.y) < 1.6;
+        if (mo.orden !== 'nada' && !cerca) continue;
+        if (!cerca && Math.hypot(D.x - mo.x, D.y - mo.y) > 4) { if ((mo.binInt = (mo.binInt || 0) + 1) < 4) { asignar(m, mo, { t: 'mover', x: D.x, y: D.y }); continue; } } // se quedó corta (atasco): lo intenta otra vez, pocas
+        mo.binInt = 0; limpiar(mo); mo.orden = 'nada'; mo.ruta = null; mo.v = 0;
+        const p = mo.pasajeros[0], hx = D ? D.x - mo.x : Math.cos(mo.ang), hy = D ? D.y - mo.y : Math.sin(mo.ang), hl = Math.hypot(hx, hy) > 0.2 ? Math.hypot(hx, hy) : 0, fx = hl ? hx / hl : Math.cos(mo.ang), fy = hl ? hy / hl : Math.sin(mo.ang); // baja en el acto, hacia donde iba
+        mo.pasajeros = []; const c = W.cercaLibre(m, mo.x + fx * 0.8 + fy * 0.35, mo.y + fy * 0.8 - fx * 0.35);
+        p.x = p.px = (c % m.N) + 0.5; p.y = p.py = ((c / m.N) | 0) + 0.5; p.dentro = false; p.sube = 0; p.orden = 'nada'; p.obj = 0; p.ruta = null; p.pend = null; p.v = 0; p.ang = Math.atan2(fy, fx); m.ents.push(p); m.porId.set(p.id, p); contar(m);
+        const ob = D && D.ob ? m.porId.get(D.ob) : null; if (ob && ob.vida > 0 && UNID[p.tipo].arma) asignar(m, p, { t: 'atacar', obj: ob.id });
+        const r = resguardoDe(m, mo, mo.x - fx * 4, mo.y - fy * 4); mo.binEst = 'resguarda'; mo.binDest = null; asignar(m, mo, { t: 'mover', x: r.x, y: r.y });
+      } else if (mo.binEst === 'resguarda') { if (mo.orden === 'nada') { mo.binEst = 'espera'; mo.resg = 1; } }
+      else if (mo.binEst === 'espera' && mo.orden !== 'nada') { mo.binEst = null; mo.resg = 0; } // la mandan a otra cosa
+    }
+  }
+  W.tickBinomio = tickBinomio;
   // Transporte: sacar a los pasajeros alrededor del vehículo (todos, o solo los supervivientes si lo han destruido).
   function apear(m, t, lista) {
     lista.forEach((p, i) => {
@@ -3136,11 +3286,12 @@
       if (!m.jug[0].vivo || !m.jug[1].vivo) m.ganador = m.jug[0].vivo ? 0 : m.jug[1].vivo ? 1 : 2;
     }
     if (m.t % 10 === 0) { tickPuestos(m); tickMando(m); }
+    if (m.t % 5 === 0) { tickBinomio(m); tickEmboscados(m); }
     if (m.t % 4 === 0 && m.marchas) tickMarchas(m);
     if (m.embarques.length) { // la infantería que ha llegado a su transporte entra en él y deja el mapa
       for (const u of m.embarques) {
         const t = m.porId.get(u.sube);
-        if (t && t.vida > 0 && u.vida > 0 && t.pasajeros.length < UNID[t.tipo].plazas) { u.dentro = true; u.sube = 0; u.ruta = null; u.v = 0; t.pasajeros.push(u); m.porId.delete(u.id); }
+        if (t && t.vida > 0 && u.vida > 0 && t.pasajeros.length < UNID[t.tipo].plazas) { u.dentro = true; u.sube = 0; u.ruta = null; u.v = 0; t.pasajeros.push(u); m.porId.delete(u.id); if (UNID[t.tipo].binomio) { t.bin = u.id; u.bin = t.id; t.binEst = null; t.resg = 0; } } // a la moto: quedan como binomio
         else u.sube = 0;
       }
       m.embarques.length = 0;
