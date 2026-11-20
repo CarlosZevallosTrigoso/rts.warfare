@@ -106,7 +106,7 @@
     infanteria:  { nombre: 'Infantería',  cat: 'inf', vida: 60,  vel: 0.06, costo: 100, tiempo: 100, blindaje: 'ligero', arma: 'fusil', vision: 6, radio: 0.11, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, arco: 0.5 },
     tanque:      { nombre: 'Tanque',      cat: 'veh', vida: 300, vel: 0.10, costo: 600, acero: 40, pet: 50, tiempo: 300, blindaje: 'pesado', arma: 'canon', vision: 7, radio: 0.20, req: ['fabrica'], agua: 2, giro: 0.13, acel: 0.006, giroT: 0.16, cono: 0.85 },
     // Granadero: desde el nivel 1; granadas de mano a corta distancia, con explosión en área. La respuesta temprana a los primeros vehículos.
-    granadero:   { nombre: 'Granadero',   cat: 'inf', vida: 65,  vel: 0.058, costo: 160, tiempo: 130, blindaje: 'ligero', arma: 'granadaMano', vision: 6, radio: 0.11, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, arco: 0.5 },
+    granadero:   { nombre: 'Granadero',   cat: 'inf', vida: 65,  vel: 0.058, costo: 240, tiempo: 130, blindaje: 'ligero', arma: 'granadaMano', vision: 6, radio: 0.11, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, arco: 0.5 },
     antitanque:  { nombre: 'Antitanque',  cat: 'inf', vida: 70,  vel: 0.055, costo: 250, tiempo: 160, blindaje: 'ligero', arma: 'cohete', vision: 6, radio: 0.115, req: ['cuartel'], agua: 1, giro: 0.5, acel: 0.02, nivel: 2, arco: 0.35 },
     artilleria:  { nombre: 'Artillería',  cat: 'veh', vida: 180, vel: 0.06, costo: 900, acero: 50, pet: 70, tiempo: 400, blindaje: 'pesado', arma: 'obus', vision: 7, radio: 0.21, req: ['fabrica'], agua: 2, giro: 0.08, acel: 0.004, nivel: 2, cono: 0.7 },
     pesado:      { nombre: 'Tanque pesado', cat: 'veh', vida: 700, vel: 0.07, costo: 1500, acero: 90, pet: 120, raros: 60, tiempo: 520, blindaje: 'pesado', arma: 'canonPesado', vision: 7, radio: 0.27, req: ['fabrica'], agua: 3, giro: 0.08, acel: 0.004, nivel: 3, giroT: 0.1, cono: 0.8 },
@@ -191,11 +191,11 @@
   for (const k of ['medico', 'ingeniero', 'radioOp', 'operador', 'hacker', 'cazadron', 'mando', 'vehRadio', 'comandoDrones', 'tallerMovil', 'camionSum', 'motoSum', 'mortero', 'artilleria', 'francotirador', 'manpad', 'lanzacohetes', 'antiaereoMovil']) W.UNID[k].atras = true;
 
   W.ARMAS = {
-    fusil:   { alcance: 4,   dano: 8,  recarga: 16, vs: { ligero: 1,   pesado: 0.25, edificio: 0.3, aire: 0.4 } },
-    canon:   { alcance: 5,   dano: 40, recarga: 50, vuelo: 0.9, vs: { ligero: 0.4, pesado: 1,    edificio: 0.9 } },
+    fusil:   { alcance: 4,   dano: 8,  recarga: 16, vs: { ligero: 1,   pesado: 0.12, edificio: 0.3, aire: 0.4 } }, // (contra blindaje, poco más que nada)
+    canon:   { alcance: 5,   dano: 40, recarga: 50, vuelo: 0.9, vs: { ligero: 0.7, pesado: 1,    edificio: 0.9 } }, // (con munición explosiva: también sirve contra infantería)
     cohete:  { alcance: 5,   dano: 45, recarga: 60, vuelo: 0.6, vs: { ligero: 0.3, pesado: 1.2,  edificio: 0.7, aire: 1.1 } },
     obus:    { indirecto: true, alcance: 11,  alcanceMin: 3, area: 1.4, dano: 70, recarga: 110, vuelo: 0.45, vs: { ligero: 1, pesado: 0.7, edificio: 1.3 } },
-    canonPesado: { alcance: 6, dano: 90, recarga: 60, vuelo: 0.9, vs: { ligero: 0.5, pesado: 1.1, edificio: 1.1 } },
+    canonPesado: { alcance: 6, dano: 90, recarga: 60, vuelo: 0.9, vs: { ligero: 0.7, pesado: 1.1, edificio: 1.1 } },
     obusFijo: { indirecto: true, alcance: 20, alcanceMin: 6, area: 1.6, dano: 90, recarga: 160, vuelo: 0.4, vs: { ligero: 1, pesado: 0.75, edificio: 1.3 } }, // la artillería fija: tira sobre lo que vea cualquiera de los suyos
     canonTorre:  { alcance: 8, dano: 75, recarga: 60, vuelo: 1.0, vs: { ligero: 0.5, pesado: 1.2, edificio: 0.6 } },
     bateria: { alcance: 6.5, dano: 30, recarga: 30, vuelo: 1.1, vs: { ligero: 0.8, pesado: 1,    edificio: 0.5, aire: 0.8, dron: 0.5 } },
@@ -208,13 +208,13 @@
     pistola: { alcance: 3,   dano: 4,  recarga: 18, vs: { ligero: 1,   pesado: 0.1,  edificio: 0.1 } },
     // Blindaje 'dron': los drones. Las armas de la infantería no les hacen nada; solo los derriban la antiaérea, la batería de la torreta, el caza y, sin disparar, los inhibidores.
     mortero: { indirecto: true, sobre: true, alcance: 8.5, alcanceMin: 2.5, area: 1.2, dano: 42, recarga: 80, vuelo: 0.35, vs: { ligero: 1, pesado: 0.4, edificio: 0.6 } }, // sobre: cae desde arriba, la trinchera no cubre
-    subfusil: { asalto: true, alcance: 2.6, dano: 9, recarga: 4, vs: { ligero: 1, pesado: 0.15, edificio: 0.5 } }, // asalto: a quemarropa, ni la trinchera ni el búnker cubren
+    subfusil: { asalto: true, alcance: 2.6, dano: 9, recarga: 4, vs: { ligero: 1, pesado: 0.05, edificio: 0.5 } }, // asalto: a quemarropa, ni la trinchera ni el búnker cubren
     misilHombro: { alcance: 7.5, dano: 95, recarga: 130, vuelo: 1.0, vs: { aire: 1 } }, // el del antiaéreo portátil: helicópteros y aviones; a un dron no lo puede fijar
     ametrFija: { alcance: 5.5, dano: 6, recarga: 5, vs: { ligero: 1, pesado: 0.15, edificio: 0.1 } }, // la de la torreta ametralladora: nada contra el aire
     ametralladora: { alcance: 4.5, dano: 6, recarga: 5, vs: { ligero: 1, pesado: 0.15, edificio: 0.15, aire: 0.25 } },
     fpv:     { dano: 150, area: 0.9, vs: { ligero: 0.5, pesado: 1, edificio: 0.5 } }, // el dron kamikaze al estrellarse
     mina:    { dano: 150, area: 1.3, vs: { ligero: 1, pesado: 1, edificio: 0 } }, // mina terrestre: la pisa quien no sea zapador
-    granadaMano: { alcance: 4.5, alcanceMin: 1, area: 1.1, dano: 38, recarga: 70, vuelo: 0.3, vs: { ligero: 0.8, pesado: 0.75, edificio: 0.4 } }, // la del granadero
+    granadaMano: { alcance: 3.2, alcanceMin: 1, area: 0.6, dano: 38, recarga: 90, vuelo: 0.3, vs: { ligero: 0.8, pesado: 0.45, edificio: 0.4 } }, // la del granadero: en nivel 1 es lo único de infantería que hiere a un tanque (alcance corto y radio pequeño: se lanza a mano)
     granada: { dano: 42, area: 1.2, vs: { ligero: 1, pesado: 0.25, edificio: 0.15 } }, // lo que suelta el dron bombardero
     gatling: { alcance: 5.5, dano: 5, recarga: 2, vs: { ligero: 1, pesado: 0.2, edificio: 0.2, aire: 0.5 } }, // diez tiros por segundo: tritura infantería y aviones bajos
     misil:   { alcance: 6,   dano: 40, recarga: 14, vuelo: 1.0, vs: { ligero: 0.6, pesado: 0.6, edificio: 0.3, aire: 1.3, dron: 1 } },

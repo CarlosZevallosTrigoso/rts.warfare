@@ -175,6 +175,7 @@ prueba('contraataque, disparo en marcha, curación y atropello', () => {
   t = W.crearUnidad(m, 0, 'tanque', en(m, 40, 64));
   const victima = W.crearUnidad(m, 1, 'infanteria', en(m, 46, 64)), amigo = W.crearUnidad(m, 0, 'infanteria', en(m, 44, 64));
   victima.guardia = true; // (fija en su puesto: suelta y sola ante un tanque, se retiraría)
+  t.recarga = 99999; // (sin disparar: con munición explosiva el cañón la mataría antes de llegar, y aquí se prueba el atropello)
   W.orden(m, { t: 'mover', j: 0, ids: [t.id], x: 52.5, y: 64.5 });
   let herida = false;
   for (let i = 0; i < 110; i++) { W.tick(m); if (m.porId.has(victima.id) && victima.vida < 30 && victima.vida > 0) herida = true; }
@@ -1513,7 +1514,7 @@ prueba('contabilidad: lo que cae se apunta por su valor, a quién y con qué arm
   assert.strictEqual(G.destruido, v); assert.strictEqual(G.mata.tanque, v);
 });
 
-prueba('IA de costes: la tabla de duelos cubre a todos los candidatos y la compra responde a lo que tiene el rival', () => {
+prueba('IA de costes: la tabla de duelos cubre a todos los candidatos y la nota responde a lo que tiene el rival', () => {
   const D = W.IA_DUELO;
   for (const a of W.IA_CANDIDATOS) { assert.ok(D[a], 'sin fila: ' + a); for (const b of W.IA_CANDIDATOS) assert.ok(D[a][b] >= -1 && D[a][b] <= 1, 'sin dato: ' + a + ' contra ' + b); }
   const nota = (am, c) => { let t = 0; for (const k in am) t += am[k]; return W.iaNota({ amenaza: am, amenazaT: t }, c); };
