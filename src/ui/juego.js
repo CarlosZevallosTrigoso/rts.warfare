@@ -2927,7 +2927,7 @@
     // El registro de la partida, para descargar: con la semilla, las opciones y todas las órdenes (las del jugador y las de la IA) se puede reproducir entera y analizarla fuera.
     const bajarRegistro = () => {
       try {
-        const datos = { rts: 'registro', version: W.VERSION, fecha: new Date().toISOString(), consulta: op.consulta, semilla, humano: YO, fin: m.t, ganador: m.ganador, jug: m.jug.map((J) => ({ minerales: Math.round(J.minerales), nivel: J.nivel, cuenta: J.cuenta })), ordenes: rep || m.registro || [] };
+        const datos = { rts: 'registro', version: W.VERSION, fecha: new Date().toISOString(), consulta: op.consulta, semilla, humano: YO, fin: m.t, ganador: m.ganador, jug: m.jug.map((J) => ({ minerales: Math.round(J.minerales), nivel: J.nivel, cuenta: J.cuenta, contabilidad: J.cont })), ia: ia ? { estilo: ia.estilo, oleadas: ia.diario || [] } : null, ordenes: rep || m.registro || [] }; // (con el balance de cada oleada de la IA: a qué fue, con cuánto, qué defendía el blanco y cómo volvió)
         const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(datos)], { type: 'application/json' })); a.download = 'rts-registro-' + semilla + '-' + m.t + '.json'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
       } catch (e) { aviso('No se pudo preparar el registro'); }
     };

@@ -1649,6 +1649,26 @@ prueba('vehículos: camioneta del cuartel, vehículo de combate de infantería c
   m.logistica = false; W.orden(m, { t: 'mover', j: 0, ids: [ge.id], x: 90.5, y: 60.5 }); avanza(15); assert.ok(!ge.emite, 'en marcha deja de emitir');
 });
 
+prueba('IA, entrega 3: ataca el blanco que puede tomar con holgura, no ataca si no le salen las cuentas y un fracaso encarece ese blanco', () => {
+  const m = W.crearMundo(4242, { N: 128 }), N = m.N;
+  for (const e of m.ents) if (!e.edif) e.vida = 0;
+  W.tick(m);
+  const p0 = m.ents.find((e) => e.edif && e.j === 0 && e.tipo === 'patio'), p1 = m.ents.find((e) => e.edif && e.j === 1 && e.tipo === 'patio');
+  for (const e of m.ents) if (e.edif && e.j === 1 && e !== p1) e.vida = 0;
+  W.tick(m);
+  for (let k = 0; k < 4; k++) { const t = W.crearEdificio(m, 1, 'torreCanon', Math.floor(p1.cx) - 3 + k * 2, Math.floor(p1.cy) + 3); t.obra = 0; t.enObra = false; } // el patio, bien defendido
+  const mx = Math.floor((p0.cx + p1.cx) / 2), my = Math.floor((p0.cy + p1.cy) / 2);
+  const ref = W.crearEdificio(m, 1, 'refineria', W.cercaLibre(m, mx, my) % N, Math.floor(W.cercaLibre(m, mx, my) / N)); ref.obra = 0; ref.enObra = false; // una refinería suelta, a medio camino
+  const ia = W.iaCrear(0);
+  const fuerte = W.iaDecideAtaque(m, ia, p0, 6000, 20, 6000);
+  assert.ok(fuerte && fuerte.b.id === ref.id, 'con fuerza de sobra elige la refinería mal defendida antes que el patio fortificado: ' + (fuerte && fuerte.b.tipo));
+  assert.ok(W.iaDefensaEn(m, ia, p1.cx, p1.cy) > W.iaDefensaEn(m, ia, ref.cx, ref.cy), 'sabe que el patio está más defendido');
+  assert.strictEqual(W.iaDecideAtaque(m, ia, p0, 300, 6, 6000), null, 'con poca fuerza, no ataca');
+  ia.fracasos = { [ref.id]: 3 }; ia.extra = { [ref.id]: 4000 };
+  const tras = W.iaDecideAtaque(m, ia, p0, 6000, 20, 6000);
+  assert.ok(!tras || tras.b.id !== ref.id, 'tras fracasar contra ella, no repite: ' + (tras && tras.b.tipo));
+});
+
 prueba('contabilidad: lo que cae se apunta por su valor, a quién y con qué arma', () => {
   const m = W.crearMundo(4242, { N: 128 });
   for (const e of m.ents) if (!e.edif) e.vida = 0;
