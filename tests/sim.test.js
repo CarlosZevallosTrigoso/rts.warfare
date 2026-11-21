@@ -1669,6 +1669,33 @@ prueba('IA, entrega 3: ataca el blanco que puede tomar con holgura, no ataca si 
   assert.ok(!tras || tras.b.id !== ref.id, 'tras fracasar contra ella, no repite: ' + (tras && tras.b.tipo));
 });
 
+prueba('IA, entrega 4: contra un patio fortificado monta una operación: se reúne fuera del alcance de sus torres y su artillería las bate antes del asalto', () => {
+  const m = W.crearMundo(4242, { N: 128 }), N = m.N;
+  for (const e of m.ents) if (!e.edif) e.vida = 0;
+  W.tick(m);
+  const p0 = m.ents.find((e) => e.edif && e.j === 0 && e.tipo === 'patio'), p1 = m.ents.find((e) => e.edif && e.j === 1 && e.tipo === 'patio');
+  for (const e of m.ents) if (e.edif && e.j === 1 && e !== p1) e.vida = 0;
+  W.tick(m);
+  const torres = []; for (let k = 0; k < 3; k++) { const t = W.crearEdificio(m, 1, 'torreta', Math.floor(p1.cx) - 3 + k * 3, Math.floor(p1.cy) + 3); t.obra = 0; t.enObra = false; torres.push(t); }
+  const ia = W.iaCrear(0), P = W.iaDepura.puntoSeguro(m, ia, p1, p0);
+  assert.ok(P, 'encuentra un punto de reunión');
+  for (const t of torres) assert.ok(Math.hypot(t.cx - P.x, t.cy - P.y) > W.ARMAS.bateria.alcance + 1, 'el punto queda fuera del alcance de las torres');
+  assert.ok(Math.hypot(p1.cx - P.x, p1.cy - P.y) < 30, 'y no lejísimos del blanco');
+  m.jug[0].nivel = 2; const ids = [];
+  const sitio = (k) => W.cercaLibre(m, p0.cx + 4 + (k % 4) * 1.5, p0.cy - 4 - Math.floor(k / 4) * 1.5);
+  for (let k = 0; k < 2; k++) ids.push(W.crearUnidad(m, 0, 'artilleria', sitio(k)).id);
+  ids.push(W.crearUnidad(m, 0, 'francotirador', sitio(2)).id);
+  for (let k = 3; k < 11; k++) ids.push(W.crearUnidad(m, 0, 'tanque', sitio(k)).id);
+  ia.op = { b: p1.id, fase: 'acerca', t: m.t, tFase: m.t, def0: 1, intentos: 0, usa: new Set(), esc: new Set() };
+  const vida0 = torres.reduce((s, t) => s + t.vida, 0), fases = new Set();
+  for (let i = 0; i < 12000 && ia.op && ia.op.fase !== 'curso'; i++) { W.iaTick(m, ia); W.tick(m); fases.add(ia.op && ia.op.fase); }
+  assert.ok(fases.has('prep'), 'pasa a preparar: ' + [...fases].join(','));
+  const vida1 = torres.reduce((s, t) => s + Math.max(0, t.vida), 0);
+  assert.ok(vida1 < vida0 * 0.85, 'la artillería castiga las torres antes del asalto: ' + vida0 + ' → ' + vida1);
+  const tanques = ids.map((id) => m.porId.get(id)).filter((u) => u && u.tipo === 'tanque' && u.vida > 0).length;
+  assert.ok(tanques >= 6, 'la escolta no se ha dejado matar esperando: ' + tanques + ' de 8');
+});
+
 prueba('contabilidad: lo que cae se apunta por su valor, a quién y con qué arma', () => {
   const m = W.crearMundo(4242, { N: 128 });
   for (const e of m.ents) if (!e.edif) e.vida = 0;

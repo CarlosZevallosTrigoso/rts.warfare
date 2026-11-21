@@ -138,8 +138,96 @@
       if (tot && fija > tot * 0.4) ia.pideArt = m.t; // la mataron sus defensas fijas: antes de volver, artillería
       for (const u of soldados) if (ia.atacantes.has(u.id) && O.ids.includes(u.id)) { ia.atacantes.delete(u.id); ia.reunidos.delete(u.id); } // los que quedan vuelven a la reserva
     }
-    (ia.diario || (ia.diario = [])).push({ t: m.t, blanco: O.tipo, fuerza: Math.round(O.fz), defensa: Math.round(O.def), salen: O.ids.length, vuelven: vivos, perdido: Math.round(perdido), cae });
+    (ia.diario || (ia.diario = [])).push({ t: m.t, blanco: O.tipo, fuerza: Math.round(O.fz), defensa: Math.round(O.def), salen: O.ids.length, vuelven: vivos, perdido: Math.round(perdido), cae, operacion: !!O.op });
     ia.ola = null; ia.blanco = 0;
+    if (O.op && ia.op) { if (cae) finOp(m, ia, true); else if (++ia.op.intentos >= 2) finOp(m, ia, false); else { ia.op.fase = 'acerca'; ia.op.tFase = m.t; ia.op.paso = null; } } // la operación: si el asalto fracasa, a preparar otra vez (dos intentos)
+  }
+  // ---------- Entrega 4: operaciones contra posiciones fortificadas ----------
+  // Cuando no hay blanco que tomar con holgura (o ya tarde, para ganar) y el patio rival está fortificado, la IA monta una operación por fases:
+  // preparación (un observador se acerca; artillería, morteros y aviación golpean sus defensas desde fuera de su alcance; el Delta las marca),
+  // aislamiento (el comando va a por la energía que alimenta sus torres; la guerra electrónica corta radios y enlaces) y asalto combinado con un amago
+  // por otro lado. Si el asalto fracasa, vuelve a preparar (dos veces como mucho) o lo deja y espera.
+  const esIndirecto = (u) => { const d = UNID[u.tipo]; return !!(d.arma && W.ARMAS[d.arma].indirecto); };
+  function ejercitoRival(ia, propio) { let v = 0; if (ia.memo) for (const r of ia.memo.values()) v += r.v * (r.aire ? 0.5 : 1); return Math.max(v, propio * 0.8); }
+  function defensasFijas(m, ia, b) { const L = []; for (const e of m.ents) { if (!e.edif || e.j === ia.j || e.j > 1 || e.vida <= 0 || !EDIF[e.tipo].arma) continue; if (Math.hypot(e.cx - b.cx, e.cy - b.cy) <= 10) L.push(e); } return L; }
+  const valorDe = (L) => L.reduce((s, e) => s + EDIF[e.tipo].costo * 1.6 * Math.max(0.2, e.vida / (e.vidaMax || 1)), 0);
+  function patioRival(m, ia, patio) { let pr = null, dp = Infinity; for (const e of m.ents) if (e.edif && e.j !== ia.j && e.j <= 1 && e.tipo === 'patio' && e.vida > 0) { const d = Math.hypot(e.cx - patio.cx, e.cy - patio.cy); if (d < dp) { dp = d; pr = e; } } return pr; }
+  W.iaDepura = { defensasFijas, valorDe, patioRival, puntoSeguro: (m, ia, b, patio) => puntoSeguro(m, ia, b, patio) };
+  function finOp(m, ia, exito) { if (ia.op) (ia.diario || (ia.diario = [])).push({ t: m.t, operacion: true, blanco: 'patio', fase: ia.op.fase, intentos: ia.op.intentos, exito }); ia.op = null; ia.opDefs = null; ia.tOpFin = m.t; }
+  // Sobre la recta del blanco a casa, el primer punto que queda fuera del alcance de todas sus torres (con margen); y la torre más cercana a él, la primera a batir.
+  function puntoSeguro(m, ia, b, patio) {
+    const L = [];
+    for (const e of m.ents) { if (!e.edif || e.j === ia.j || e.j > 1 || e.vida <= 0) continue; const a = EDIF[e.tipo].arma && W.ARMAS[EDIF[e.tipo].arma]; if (!a || a.indirecto || !(a.vs.ligero || a.vs.pesado)) continue; L.push(e, a.alcance + e.tam / 2 + 2.5); }
+    const gx = patio.cx - b.cx, gy = patio.cy - b.cy, gd = Math.hypot(gx, gy) || 1;
+    for (let d = 8; d <= 60; d += 2) {
+      const x = b.cx + (gx / gd) * d, y = b.cy + (gy / gd) * d; let ok = true, foco = null, mf = Infinity;
+      for (let k = 0; k < L.length; k += 2) { const d0 = Math.hypot(L[k].cx - x, L[k].cy - y); if (d0 < L[k + 1]) { ok = false; break; } if (d0 < mf) { mf = d0; foco = L[k]; } }
+      if (ok) { const c = W.cercaLibre(m, x, y); return { x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5, foco: foco ? foco.id : 0 }; }
+    }
+    return null;
+  }
+  function tickOp(m, ia, J, patio, soldados, sinArma, reserva) {
+    const op = ia.op, j = ia.j, b = m.porId.get(op.b);
+    if (!b || b.vida <= 0 || b.j === j) { finOp(m, ia, true); return; }
+    const defs = defensasFijas(m, ia, b).sort((p, q) => Math.hypot(p.cx - patio.cx, p.cy - patio.cy) - Math.hypot(q.cx - patio.cx, q.cy - patio.cy)), val = valorDe(defs);
+    ia.opDefs = new Set(defs.map((e) => e.id)); // la aviación las prefiere
+    if (!op.E || m.t - (op.tE || 0) > 240) { op.E = puntoSeguro(m, ia, b, patio) || op.E; op.tE = m.t; } // el punto de reunión: lo más cerca que se puede sin entrar en el alcance de ninguna torre
+    let foco = op.E && op.E.foco ? m.porId.get(op.E.foco) : null; if (!foco || foco.vida <= 0) foco = defs[0] || b;
+    if (!op.E) { const gx = patio.cx - foco.cx, gy = patio.cy - foco.cy, gd = Math.hypot(gx, gy) || 1, c = W.cercaLibre(m, foco.cx + (gx / gd) * 13, foco.cy + (gy / gd) * 13); op.E = { x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5, foco: foco.id }; }
+    const E = op.E, fx = E.x - foco.cx, fy = E.y - foco.cy, fd = Math.hypot(fx, fy) || 1;
+    const sitio = (dd) => { const c = W.cercaLibre(m, foco.cx + (fx / fd) * dd, foco.cy + (fy / fd) * dd); return { x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 }; };
+    const lejos = (u, p, r) => Math.hypot(u.x - p.x, u.y - p.y) > r;
+    // la escolta: buena parte de la reserva acompaña a la artillería y al observador y los cubre desde el punto de reunión
+    if (!op.esc) op.esc = new Set();
+    for (const id of op.esc) { const u = m.porId.get(id); if (!u || u.vida <= 0) { op.esc.delete(id); op.usa.delete(id); } }
+    let obs = op.obs ? m.porId.get(op.obs) : null; // el observador: alguien que vea más lejos de lo que alcanzan sus torres (Delta, explorador o francotirador)
+    if (!obs || obs.vida <= 0) { obs = null; if (op.fase !== 'acerca' || op.paso === 'junta') for (const t of ['delta', 'francotirador', 'explorador']) { obs = soldados.find((u) => u.tipo === t && !ia.atacantes.has(u.id) && !ia.capturan.has(u.id)); if (obs) break; } if (obs) { op.obs = obs.id; op.usa.add(obs.id); if (obs.id === ia.explorador) ia.explorador = 0; } else op.sinObs = true; }
+    if (obs) op.sinObs = false;
+    const dObs = obs ? Math.min(10, UNID[obs.tipo].vision - 0.4) : 9;
+    const art = soldados.filter((u) => esIndirecto(u) && !ia.atacantes.has(u.id)); // artillería, lanzacohetes y morteros
+    for (const u of art) op.usa.add(u.id);
+    const fuego = art.length; let aTiro = 0; for (const u of art) if (!lejos(u, E, 6)) aTiro++;
+    const ocioso = (u) => u.orden === 'nada' && !u.obj;
+    if (op.fase === 'acerca') { // todos juntos: primero se reúnen en casa; luego marchan en columna, al paso del más lento (sueltos por el camino, los cazan uno a uno)
+      if (!op.paso) { op.paso = 'junta'; op.tPaso = m.t; op.A = null; }
+      if (!op.A) { const gx = patio.cx - E.x, gy = patio.cy - E.y, gd = Math.hypot(gx, gy) || 1, kk = Math.min(35, gd * 0.6), c = W.cercaLibre(m, E.x + (gx / gd) * kk, E.y + (gy / gd) * kk); op.A = { x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 }; }
+      const A = op.A;
+      if (op.paso === 'junta') {
+        // ¿basta la columna? Por el camino le sale al paso el ejército que guarda su base: no marcha hasta tener con qué aguantarlo (va sumando reserva)
+        const propio = soldados.reduce((s0, u) => s0 + potU(u), 0), pideE = ejercitoRival(ia, propio) * 0.7 * 1.1;
+        let fzC = 0; for (const id of op.esc) fzC += potU(m.porId.get(id)); for (const u of art) fzC += potU(u) * 0.5;
+        const frac = fzC >= pideE ? 0.6 : Math.min(1, 0.6 + (m.t - op.tPaso) / 6000);
+        const quiere = Math.ceil(frac * (reserva.length + op.esc.size));
+        for (const u of reserva) { if (op.esc.size >= quiere) break; if (esIndirecto(u) || UNID[u.tipo].atras) continue; op.esc.add(u.id); op.usa.add(u.id); }
+        const todos = art.concat([...op.esc].map((id) => m.porId.get(id))); if (obs) todos.push(obs);
+        const ids = todos.filter((u) => ocioso(u) && lejos(u, A, 5)).map((u) => u.id);
+        if (ids.length) W.orden(m, { t: 'amover', j, ids, x: A.x, y: A.y });
+        let junto = 0; for (const u of todos) if (!lejos(u, A, 9)) junto++;
+        if (m.t - op.tPaso > 7200 && fzC < pideE * 0.9 && soldados.length < 34) { finOp(m, ia, false); return; } // no llega a juntar bastante: lo deja (y la reserva vuelve a casa)
+        if ((todos.length && junto >= todos.length * 0.75 && (fzC >= pideE || soldados.length >= 34 || m.t - op.tPaso > 7200)) || m.t - op.tPaso > 9600) { W.orden(m, { t: 'amover', j, ids: todos.map((u) => u.id), x: E.x, y: E.y, forma: 'columna', rumbo: Math.atan2(-fy, -fx) }); op.paso = 'marcha'; op.tPaso = m.t; }
+      } else {
+        const ids = []; for (const id of op.esc) { const u = m.porId.get(id); if (ocioso(u) && lejos(u, E, 4)) ids.push(id); } for (const u of art) if (ocioso(u) && lejos(u, E, 4)) ids.push(u.id); if (obs && ocioso(obs) && lejos(obs, E, 4)) ids.push(obs.id);
+        if (ids.length) W.orden(m, { t: 'amover', j, ids, x: E.x, y: E.y });
+      }
+    } else if (op.fase === 'prep') {
+      const ids = []; for (const id of op.esc) { const u = m.porId.get(id); if (ocioso(u) && !u.guardia) ids.push(id); }
+      if (ids.length) { const lej = ids.filter((id) => lejos(m.porId.get(id), E, 4)), aqui = ids.filter((id) => !lejos(m.porId.get(id), E, 4)); if (lej.length) W.orden(m, { t: 'amover', j, ids: lej, x: E.x, y: E.y }); if (aqui.length) W.orden(m, { t: 'guardia', j, ids: aqui }); } // en el punto, fijos: que no se vayan detrás de cualquiera hasta sus torres
+      if (obs && ocioso(obs)) { const P = sitio(dObs); if (lejos(obs, P, 2)) W.orden(m, { t: 'mover', j, ids: [obs.id], x: P.x, y: P.y }); else if (!obs.guardia) W.orden(m, { t: 'guardia', j, ids: [obs.id] }); } // adelantado y fijo (si no, solo y en inferioridad, se replegaría)
+      for (const u of art) if (ocioso(u) && defs.length) { let t = defs[0], md = Infinity; for (const e of defs) { const d0 = Math.hypot(e.cx - u.x, e.cy - u.y); if (d0 < md) { md = d0; t = e; } } W.orden(m, { t: 'atacar', j, ids: [u.id], obj: t.id }); }
+    } else { if (obs && ocioso(obs)) { const P = sitio(dObs); if (lejos(obs, P, 2)) W.orden(m, { t: 'mover', j, ids: [obs.id], x: P.x, y: P.y }); else if (!obs.guardia) W.orden(m, { t: 'guardia', j, ids: [obs.id] }); } for (const u of art) if (ocioso(u) && defs.length) W.orden(m, { t: 'atacar', j, ids: [u.id], obj: defs[0].id }); }
+    // aislamiento: el comando a la energía que alimenta sus torres; la guerra electrónica, cerca, a cortar radios y enlaces
+    for (const u of m.ents) if (!u.edif && u.j === j && u.tipo === 'comando' && u.orden === 'nada' && !(u.recarga > 0) && u.vida > 0) { let t = null, md = 30; for (const e of m.ents) { if (!e.edif || e.j === j || e.vida <= 0 || !(EDIF[e.tipo].energia > 0)) continue; const d0 = Math.hypot(e.cx - b.cx, e.cy - b.cy); if (d0 < md) { md = d0; t = e; } } if (t) W.orden(m, { t: 'carga', j, ids: [u.id], obj: t.id }); }
+    for (const u of sinArma) if (u.tipo === 'guerraE' && u.orden === 'nada' && lejos(u, E, 3)) W.orden(m, { t: 'mover', j, ids: [u.id], x: E.x, y: E.y }); // con la escolta: su burbuja cubre el punto de reunión
+    const aire = J.cuenta.bombardero || J.cuenta.helicoptero || J.cuenta.avAtaque || J.cuenta.misilera;
+    if (op.fase === 'acerca') { // cruzar el mapa lleva minutos: la preparación empieza cuando están en su sitio
+      let llegan = 0; for (const id of op.esc) if (!lejos(m.porId.get(id), E, 8)) llegan++;
+      if (!fuego && !aire) { op.fase = 'asalto'; op.tFase = m.t; }
+      else if ((op.paso === 'marcha' && llegan >= op.esc.size * 0.6 && (aTiro >= fuego * 0.6 || !fuego)) || (op.paso === 'marcha' && m.t - op.tPaso > 6000)) { op.fase = 'prep'; op.tFase = m.t; op.def0 = Math.max(1, val); }
+    }
+    if (op.fase === 'prep') {
+      if (!fuego && !aire && J.nivel >= 2) ia.pideArt = m.t; // sin con qué preparar: que haga artillería
+      if (!defs.length || val < op.def0 * 0.45 || m.t - op.tFase > 4800 || (!fuego && !aire && m.t - op.tFase > 1200)) { op.fase = 'asalto'; op.tFase = m.t; }
+    }
   }
   // Hasta dónde llegan los vehículos desde un punto (el bosque no lo cruzan): relleno por inundación sobre el paso de vehículos.
   function alcanceVehiculos(m, x, y) {
@@ -453,7 +541,8 @@
           for (const e of m.ents) {
             if (e.j === j || e.vida <= 0 || e.infra || (!e.edif && (u.tipo === 'bombardero' || UNID[e.tipo].aire)) || !W.puedeAtacar(u, e)) continue;
             const ex = e.edif ? e.cx : e.x, ey = e.edif ? e.cy : e.y, dd = Math.hypot(ex - casa.cx, ey - casa.cy);
-            if (dd < d.radioVuelo - 3 && dd < mb && m.niebla[j][Math.floor(ey) * m.N + Math.floor(ex)] >= (e.edif ? 1 : 2)) { mb = dd; blanco = e; }
+            const pref = ia.opDefs && ia.opDefs.has(e.id) ? 1000 : 0; // (con una operación en marcha, sus defensas primero)
+            if (dd < d.radioVuelo - 3 && dd - pref < mb && m.niebla[j][Math.floor(ey) * m.N + Math.floor(ex)] >= (e.edif ? 1 : 2)) { mb = dd; blanco = e; }
           }
         }
         if (!blanco && casa && u.tipo === 'bombardero' && u.fuel >= d.fuel * 0.9) { // sin nada mejor que hacer, el bombardero corta caminos: primero los puentes
@@ -512,6 +601,8 @@
         else if ((c.mortero || 0) + J.colas.mortero.n < 2 && soldados.length >= 10) entrena('mortero', 600); // fuego indirecto propio, contra trincheras y defensas
         else if ((c.asalto || 0) + J.colas.asalto.n < 2 && soldados.length >= 8) entrena('asalto', 500);
         else if (J.nivel >= 3 && c.opEsp && (c.heliLigero || 0) + J.colas.heliLigero.n < 2 && soldados.length >= 10 && W.cupoAire(m, j, 'opEsp').hay < W.cupoAire(m, j, 'opEsp').cupo) entrena('heliLigero', 800); // helicópteros ligeros de apoyo
+        else if (ia.op && ia.op.sinObs && c.opEsp && !J.colas.delta.n) entrena('delta', 400); // un observador para la operación
+        else if (ia.op && ia.op.sinObs && J.nivel >= 2 && !c.opEsp && !J.colas.francotirador.n) entrena('francotirador', 300);
         else if (c.opEsp && (c.emboscado || 0) + J.colas.emboscado.n < 2 && soldados.length >= 8) entrena('emboscado', 500); // dos emboscados en el camino del rival
         else if (J.nivel >= 3 && c.opEsp && c.avAtaque && (c.delta || 0) + J.colas.delta.n < 1 && soldados.length >= 8) entrena('delta', 600); // un Delta que marque blancos para su avión de ataque
         else if (J.nivel >= 3 && c.opEsp && (c.comando || 0) + J.colas.comando.n < 1 && soldados.length >= 10) entrena('comando', 800); // un saboteador
@@ -542,7 +633,7 @@
         if (b.j !== j || b.tipo !== 'bunker' || b.vida <= 0) continue;
         let libres = EDIF.bunker.bunker - W.enBunker(m, b); for (const u of m.ents) if (!u.edif && u.aBunk === b.id) libres--;
         if (libres <= 0) continue;
-        const ids = soldados.filter((u) => u.tipo === 'infanteria' && u.orden === 'nada' && !ia.atacantes.has(u.id) && u.id !== ia.explorador && !ia.capturan.has(u.id) && Math.hypot(u.x - b.cx, u.y - b.cy) < 28).slice(0, libres).map((u) => u.id);
+        const ids = soldados.filter((u) => u.tipo === 'infanteria' && u.orden === 'nada' && !ia.atacantes.has(u.id) && u.id !== ia.explorador && !ia.capturan.has(u.id) && !(ia.op && ia.op.usa.has(u.id)) && Math.hypot(u.x - b.cx, u.y - b.cy) < 28).slice(0, libres).map((u) => u.id);
         if (ids.length) W.orden(m, { t: 'guarnecer', j, ids, en: b.id });
       }
       // Ingeniero militar (solo el rival de estilo defensivo): ocho minas en un arco por delante de la base, de cara al rival.
@@ -591,7 +682,7 @@
     const faltaVer = (J.cuenta.extractor || 0) < 2 || !J.cuenta.estacion;
     if (expl && (!faltaVer || !expl.explora && expl.orden === 'nada')) { if (!faltaVer) W.orden(m, { t: 'detener', j, ids: [expl.id] }); expl = null; ia.explorador = 0; }
     if (!expl && faltaVer) {
-      expl = soldados.find((u) => u.tipo === 'explorador' && u.orden === 'nada' && !u.obj) || (m.logistica === false && !J.cuenta.explorador && soldados.find((u) => u.tipo === 'infanteria' && !ia.atacantes.has(u.id) && u.orden === 'nada' && !u.obj)); // (con red de radio, un soldado lejos de la base no ve casi nada: explora solo el explorador, que lleva radio propia)
+      expl = soldados.find((u) => u.tipo === 'explorador' && u.orden === 'nada' && !u.obj) || (m.logistica === false && !J.cuenta.explorador && soldados.find((u) => u.tipo === 'infanteria' && !ia.atacantes.has(u.id) && !(ia.op && ia.op.usa.has(u.id)) && u.orden === 'nada' && !u.obj)); // (con red de radio, un soldado lejos de la base no ve casi nada: explora solo el explorador, que lleva radio propia)
       if (expl) { ia.explorador = expl.id; W.orden(m, { t: 'explorar', j, ids: [expl.id] }); }
     }
     // Patio móvil: va al campo de minerales libre más cercano que quede lejos de las dos bases, y allí se despliega.
@@ -629,7 +720,7 @@
         let md = m.N * 0.5;
         for (const q of m.puestos) { const d0 = Math.hypot(q.x - patio.cx, q.y - patio.cy); if (q.dueno !== j && d0 < md && Math.hypot(q.x - rival.x, q.y - rival.y) > 18) { md = d0; p = q; } }
         if (p) {
-          const van = soldados.filter((u) => UNID[u.tipo].cat === 'inf' && u.tipo !== 'explorador' && !ia.atacantes.has(u.id) && u.orden === 'nada' && !u.obj).slice(0, 2);
+          const van = soldados.filter((u) => UNID[u.tipo].cat === 'inf' && u.tipo !== 'explorador' && !ia.atacantes.has(u.id) && !(ia.op && ia.op.usa.has(u.id)) && u.orden === 'nada' && !u.obj).slice(0, 2);
           if (van.length) { ia.puesto = p.id; ia.tPuesto = m.t; for (const u of van) ia.capturan.add(u.id); W.orden(m, { t: 'mover', j, ids: van.map((u) => u.id), x: p.x + 0.6, y: p.y + 0.6 }); }
         }
       }
@@ -677,7 +768,7 @@
       const ids = []; for (const u of soldados) if (u.mun === 0 && ia.atacantes.has(u.id)) { ia.atacantes.delete(u.id); if (ia.espera) ia.espera.delete(u.id); ia.reunidos.delete(u.id); ids.push(u.id); }
       if (ids.length) { const cc = W.cercaLibre(m, patio.cx + (dx / dd) * 8, patio.cy + (dy / dd) * 8); W.orden(m, { t: 'mover', j, ids, x: (cc % m.N) + 0.5, y: ((cc / m.N) | 0) + 0.5 }); }
     }
-    const reserva = soldados.filter((u) => !ia.atacantes.has(u.id) && u.id !== ia.explorador && !ia.capturan.has(u.id) && u.mun !== 0);
+    const reserva = soldados.filter((u) => !(ia.op && ia.op.usa.has(u.id)) && !ia.atacantes.has(u.id) && u.id !== ia.explorador && !ia.capturan.has(u.id) && u.mun !== 0);
 
     if (J.alerta && m.t - J.alerta.t < 100) { // defensa: acude la reserva ociosa
       const ids = reserva.filter((u) => u.orden === 'nada' && !u.obj).map((u) => u.id);
@@ -694,14 +785,39 @@
       cierreOla(m, ia, J, soldados);
       let ob = ia.blanco ? m.porId.get(ia.blanco) : null; if (!ob || ob.vida <= 0 || ob.j === j) ob = objetivo; // el blanco de la oleada en curso
       const ox = ob.cx - patio.cx, oy = ob.cy - patio.cy, od = Math.hypot(ox, oy) || 1, lim = (v) => Math.max(4, Math.min(m.N - 4, v));
-      if (!ia.ola && !ia.espera.size && reserva.length >= ia.oleada && tk % 3 === 0) { // (ia.oleada: el grupo mínimo, según el estilo y el nivel) // ¿otra oleada? solo si le salen las cuentas contra algún blanco
-        const fz = reserva.reduce((s, u) => s + potU(u), 0), dec = decideAtaque(m, ia, patio, fz, soldados.length, soldados.reduce((s, u) => s + potU(u), 0), E.oleada);
+      if (ia.op && tk % 2 === 0) tickOp(m, ia, J, patio, soldados, sinArma, reserva);
+      const esc = ia.op && ia.op.esc ? soldados.filter((u) => ia.op.esc.has(u.id)) : []; // la escolta de la operación: ya está delante, y entra con el asalto
+      if (!ia.ola && !ia.espera.size && reserva.length + esc.length >= ia.oleada && tk % 3 === 0) { /* (ia.oleada: el grupo mínimo, según el estilo y el nivel) */ // ¿otra oleada? solo si le salen las cuentas contra algún blanco
+        const fz = reserva.reduce((s, u) => s + potU(u), 0) + esc.reduce((s, u) => s + potU(u), 0), propio = soldados.reduce((s, u) => s + potU(u), 0);
+        let dec = null, conOp = false;
+        if (ia.op) { // operación en marcha: la reserva espera al asalto, y entra cuando las cuentas salen (o el cupo está lleno)
+          const b = m.porId.get(ia.op.b);
+          if (b && ia.op.fase === 'asalto') {
+            const def = defensaEn(m, ia, b.cx, b.cy, ejercitoRival(ia, propio) * 0.7) + ((ia.extra && ia.extra[b.id]) || 0), pide = (def * 1.2 + 300) * E.oleada * Math.max(0.6, 1 - (m.t - ia.op.tFase) / 9600);
+            if (fz >= pide || soldados.length >= 34) { dec = { b, def }; conOp = true; ia.op.fase = 'curso'; }
+            else if (m.t - ia.op.tFase > 4800) finOp(m, ia, false);
+          }
+        } else {
+          dec = decideAtaque(m, ia, patio, fz, soldados.length, propio, E.oleada);
+          const pr = patioRival(m, ia, patio); // ¿nada que tomar con holgura (o ya tarde y no es el patio)? contra su patio fortificado, una operación
+          if (pr && soldados.length >= 14 && m.t - (ia.tOpFin || -1e9) > 6000 && (!dec || (m.t > 36000 && dec.b.tipo !== 'patio'))) {
+            const L = defensasFijas(m, ia, pr), v = valorDe(L);
+            if (v >= 1000) { ia.op = { b: pr.id, fase: 'acerca', t: m.t, tFase: m.t, def0: v, intentos: 0, usa: new Set(), esc: new Set() }; dec = null; for (const u of soldados) if (esIndirecto(u) && ia.atacantes.has(u.id)) { ia.atacantes.delete(u.id); ia.reunidos.delete(u.id); } } // la artillería suelta de oleadas anteriores, a la operación
+          }
+        }
         if (dec) {
           ob = dec.b; ia.blanco = ob.id; const bx = ob.cx - patio.cx, by = ob.cy - patio.cy, bd = Math.hypot(bx, by) || 1;
-          const c = W.cercaLibre(m, lim(ob.cx - (bx / bd) * Math.min(26, bd * 0.5)), lim(ob.cy - (by / bd) * Math.min(26, bd * 0.5))); ia.punto = { x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 }; ia.tOla = m.t; ia.tUltOla = m.t;
+          const c = W.cercaLibre(m, lim(ob.cx - (bx / bd) * Math.min(26, bd * 0.5)), lim(ob.cy - (by / bd) * Math.min(26, bd * 0.5))); ia.punto = conOp && ia.op.E ? { x: ia.op.E.x, y: ia.op.E.y } : { x: (c % m.N) + 0.5, y: ((c / m.N) | 0) + 0.5 }; ia.tOla = m.t; ia.tUltOla = m.t;
+          if (conOp) for (const u of esc) { ia.op.esc.delete(u.id); ia.op.usa.delete(u.id); }
+          const grupo = conOp ? reserva.concat(esc) : reserva;
           W.orden(m, { t: 'amover', j, ids: reserva.map((u) => u.id), x: ia.punto.x, y: ia.punto.y, forma: 'columna' }); // en columna y al paso del más lento: la infantería no se queda atrás, sola
-          for (const u of reserva) { ia.atacantes.add(u.id); ia.espera.add(u.id); }
-          ia.ola = { b: ob.id, tipo: ob.tipo, ids: reserva.map((u) => u.id), t: m.t, fz, def: dec.def, p0: J.cont.perdido, pa0: Object.assign({}, J.cont.porArma) };
+          for (const u of grupo) { ia.atacantes.add(u.id); ia.espera.add(u.id); }
+          ia.ola = { b: ob.id, tipo: ob.tipo, ids: grupo.map((u) => u.id), t: m.t, fz, def: dec.def, p0: J.cont.perdido, pa0: Object.assign({}, J.cont.porArma), op: conOp };
+          if (conOp) { // el amago: unos pocos y rápidos van antes contra otro edificio, lejos del blanco, para sacar a sus defensores
+            let otro = null, md = Infinity; for (const e of m.ents) { if (!e.edif || e.j === j || e.j > 1 || e.vida <= 0 || e.infra || e.muro) continue; const dB = Math.hypot(e.cx - ob.cx, e.cy - ob.cy); if (dB < 15) continue; const d0 = Math.hypot(e.cx - patio.cx, e.cy - patio.cy); if (d0 < md) { md = d0; otro = e; } }
+            const fin = otro ? grupo.filter((u) => UNID[u.tipo].vel >= 0.07 && !UNID[u.tipo].atras).sort((p, q) => UNID[q.tipo].vel - UNID[p.tipo].vel).slice(0, 3) : [];
+            if (fin.length >= 2) { for (const u of fin) { ia.espera.delete(u.id); } W.orden(m, { t: 'amover', j, ids: fin.map((u) => u.id), x: otro.cx, y: otro.cy, forma: 'columna' }); }
+          }
         }
       }
       const oox = ob.cx - patio.cx, ooy = ob.cy - patio.cy, ood = Math.hypot(oox, ooy) || 1;
