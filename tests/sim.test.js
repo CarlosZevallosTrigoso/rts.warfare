@@ -1696,6 +1696,37 @@ prueba('IA, entrega 4: contra un patio fortificado monta una operación: se reú
   assert.ok(tanques >= 6, 'la escolta no se ha dejado matar esperando: ' + tanques + ' de 8');
 });
 
+prueba('mapas propios: el formato va y vuelve sin perder nada, y la partida con el mapa cargado es la misma que con el generado', () => {
+  for (const tipo of ['desfiladeros', 'rios']) {
+    const mp = W.generarMapa(5, 128, tipo), j = JSON.parse(JSON.stringify(W.mapaAJSON(mp, { nombre: 'prueba' }))), mp2 = W.mapaDeJSON(j);
+    assert.ok(JSON.stringify(j).length < 40000, 'un mapa de 128 ocupa poco: ' + JSON.stringify(j).length);
+    for (const k of ['terreno', 'mineral', 'tipoMin', 'sitioEn', 'alcanzable']) assert.ok(mp2[k].every((v, i) => v === mp[k][i]), tipo + ': ' + k + ' igual');
+    for (const k of ['sitios', 'puestos', 'bases']) assert.strictEqual(JSON.stringify(mp2[k]), JSON.stringify(mp[k].map((p) => k === 'bases' ? { x: p.x, y: p.y } : { x: p.x, y: p.y, tipo: p.tipo })), tipo + ': ' + k + ' igual');
+    const juega = (mapa) => { const m = W.crearMundo(5, { N: 128, mapa }), a = W.iaCrear(0), b = W.iaCrear(1); for (let i = 0; i < 2500; i++) { W.iaTick(m, a); W.iaTick(m, b); W.tick(m); } return W.huella(m); };
+    assert.strictEqual(juega(j), juega(tipo), tipo + ': la misma partida');
+  }
+  assert.throws(() => W.mapaDeJSON({ formato: 'otro' }), /no es un mapa/);
+  const roto = W.mapaAJSON(W.mapaVacio(64, 'llano')); roto.terreno = 'l100'; assert.throws(() => W.mapaDeJSON(roto), /incompleto/);
+});
+
+prueba('mapas propios: uno vacío se juega; la revisión avisa de lo que falta y cuenta las entradas de cada base', () => {
+  const T = W.TERRENO, N = 128, v = W.mapaVacio(N, 'llano', true), r0 = W.revisarMapa(v);
+  assert.strictEqual(r0.errores.length, 0, 'el vacío es jugable: ' + r0.errores.join('; '));
+  assert.ok(r0.avisos.some((a) => /agua/.test(a)) && r0.avisos.some((a) => /minerales/.test(a)) && r0.avisos.some((a) => /petróleo/.test(a)), 'avisa de que no hay agua, minerales ni petróleo');
+  assert.ok(r0.entradas.every((n) => n >= 2), 'en campo abierto, abierta: ' + r0.entradas);
+  const m = W.crearMundo(3, { mapa: W.mapaAJSON(v) }), a = W.iaCrear(0), b = W.iaCrear(1); for (let i = 0; i < 2000; i++) { W.iaTick(m, a); W.iaTick(m, b); W.tick(m); }
+  assert.ok(m.ents.filter((e) => e.edif).length > 2, 'la IA juega en él');
+  // un anillo de roca alrededor de cada base (en espejo), con una boca y luego con dos
+  const anillo = (bocas) => { const mp = W.mapaVacio(N, 'llano', true), b0 = mp.bases[0];
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { const d = Math.hypot(x - b0.x, y - b0.y); if (d < 13 || d > 15) continue; const ang = Math.atan2(y - b0.y, x - b0.x); if (bocas.some((g) => Math.abs(ang - g) < 0.17)) continue; const i = y * N + x; mp.terreno[i] = T.ROCA; mp.terreno[W.espejoDe(N, i)] = T.ROCA; }
+    return W.revisarMapa(W.completarMapa(mp)); };
+  const una = anillo([-Math.PI / 4]), dos = anillo([-Math.PI / 4, Math.PI / 4]);
+  assert.deepStrictEqual(una.entradas, [1, 1], 'una boca: ' + una.entradas); assert.ok(una.avisos.some((x) => /una sola entrada/.test(x)), 'y lo avisa');
+  assert.deepStrictEqual(dos.entradas, [2, 2], 'dos bocas: ' + dos.entradas);
+  const cerrado = anillo([]); assert.ok(cerrado.errores.some((x) => /no hay paso/.test(x)), 'sin bocas, error');
+  for (const tipo of ['clasico', 'desfiladeros', 'fortalezas']) assert.ok(W.revisarMapa(W.generarMapa(852742, 256, tipo)).entradas.every((n) => n >= 2), 'los mapas del juego pasan: ' + tipo);
+});
+
 prueba('contabilidad: lo que cae se apunta por su valor, a quién y con qué arma', () => {
   const m = W.crearMundo(4242, { N: 128 });
   for (const e of m.ents) if (!e.edif) e.vida = 0;

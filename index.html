@@ -363,12 +363,12 @@
   <button type="button" id="empezar">Empezar</button>
   <button type="button" id="tutorial">Tutorial guiado<small style="display:block;color:var(--suave);font-size:10px">ocho pasos, con el rival dormido hasta el final</small></button>
   <button type="button" id="continuar" hidden>Continuar la partida guardada</button>
-  <div id="version">versión 133</div>
+  <div id="version">versión 134</div>
 </div></div>
 <div id="guia" hidden><div class="caja"><div class="cab"><strong>Guía: para qué sirve cada cosa</strong><button type="button" id="cierraGuia">cerrar</button></div><div id="guiaTxt"></div></div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finVer" href="#" title="Vuelve a ver la partida entera, con todo el mapa a la vista y a la velocidad que quieras.">ver repetición</a><a id="finLog" href="#" title="Descarga el registro de la partida: la semilla, las opciones y todas las órdenes de los dos bandos, con su instante. Sirve para reproducirla y analizar cómo jugó la IA.">descargar registro</a><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 133' };
+globalThis.W = { VERSION: 'versión 134' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -719,6 +719,7 @@ globalThis.W = { VERSION: 'versión 133' };
   W.MAPAS_AZAR = ['equilibrado', 'llanura', 'desfiladeros', 'selva', 'rios', 'fortalezas'];
   W.mapaDe = (tipo, semilla) => (W.MAPAS[tipo] ? tipo : tipo === 'azar' ? W.MAPAS_AZAR[Math.abs(semilla | 0) % W.MAPAS_AZAR.length] : 'clasico');
   W.generarMapa = function (semilla, lado, tipo) {
+    if (tipo && typeof tipo === 'object') return W.mapaDeJSON(tipo); // un mapa propio (del editor)
     tipo = W.mapaDe(tipo, semilla); const cfg = W.MAPAS[tipo];
     const N = lado || W.N, NN = N * N, T = W.TERRENO, r = W.prng(semilla);
     const espejo = (i) => NN - 1 - i;
@@ -936,6 +937,114 @@ globalThis.W = { VERSION: 'versión 133' };
 
     const sitioTipo = new Map(sitios.map((s) => [s.y * N + s.x, s.tipo]));
     return { N, semilla, tipo, terreno, mineral, tipoMin, sitios, sitioEn, sitioTipo, bases, alcanzable, puestos };
+  };
+
+  // ---------- Mapas propios (editor) ----------
+  // Formato en JSON: el terreno por tramos repetidos (letra del terreno y cuántas celdas: «l120r3b7»), los recursos como lista dispersa
+  // con el índice en diferencias, y sitios, puestos y bases tal cual. Lo que se deduce (por dónde se pasa, qué celda es sitio) se recalcula al cargar.
+  const LETRA = 'lrabcp'; // llano, roca, agua, bosque, camino, puente (el orden de W.TERRENO)
+  W.FORMATO_MAPA = 'rts.mapa';
+  W.mapaAJSON = function (mapa, extra) {
+    const N = mapa.N, NN = N * N, t = mapa.terreno; let ter = '';
+    for (let i = 0; i < NN;) { let k = i + 1; while (k < NN && t[k] === t[i]) k++; ter += LETRA[t[i]] + (k - i > 1 ? k - i : ''); i = k; }
+    const rec = []; let ant = 0;
+    for (let i = 0; i < NN; i++) if (mapa.mineral[i] && mapa.tipoMin[i]) { rec.push(i - ant, mapa.mineral[i], mapa.tipoMin[i]); ant = i; }
+    const pts = (L) => L.map((p) => ({ x: p.x, y: p.y, tipo: p.tipo }));
+    return Object.assign({ formato: W.FORMATO_MAPA, v: 1, nombre: mapa.nombre || '', N, espejo: mapa.espejo !== false, terreno: ter, recursos: rec, sitios: pts(mapa.sitios), puestos: pts(mapa.puestos), bases: mapa.bases.map((b) => ({ x: b.x, y: b.y })) }, extra || {});
+  };
+  W.mapaDeJSON = function (o) {
+    if (typeof o === 'string') o = JSON.parse(o);
+    if (!o || o.formato !== W.FORMATO_MAPA) throw new Error('no es un mapa de rts.warfare');
+    const N = o.N | 0, NN = N * N; if (N < 32 || N > 1024) throw new Error('tamaño de mapa no válido: ' + o.N);
+    const terreno = new Uint8Array(NN), mineral = new Uint16Array(NN), tipoMin = new Uint8Array(NN);
+    let c = 0; const s = o.terreno || '';
+    for (let k = 0; k < s.length;) { const v = LETRA.indexOf(s[k++]); if (v < 0) throw new Error('terreno ilegible'); let n = 0; while (k < s.length && s[k] >= '0' && s[k] <= '9') n = n * 10 + (s.charCodeAt(k++) - 48); n = n || 1; terreno.fill(v, c, Math.min(NN, c + n)); c += n; }
+    if (c !== NN) throw new Error('terreno incompleto: ' + c + ' de ' + NN + ' celdas');
+    const r = o.recursos || []; for (let k = 0, i = 0; k + 2 < r.length; k += 3) { i += r[k]; if (i >= 0 && i < NN) { mineral[i] = Math.min(65535, r[k + 1]); tipoMin[i] = r[k + 2]; } }
+    const lim = (p) => ({ x: Math.max(0, Math.min(N - 1, p.x | 0)), y: Math.max(0, Math.min(N - 1, p.y | 0)), tipo: p.tipo });
+    if (!Array.isArray(o.bases) || o.bases.length !== 2) throw new Error('el mapa necesita dos bases');
+    return W.completarMapa({ N, semilla: 0, tipo: 'propio', nombre: o.nombre || '', espejo: o.espejo !== false, terreno, mineral, tipoMin, sitios: (o.sitios || []).map(lim), puestos: (o.puestos || []).map(lim), bases: o.bases.map((b) => { const q = lim(b); return { x: q.x, y: q.y }; }) });
+  };
+  // Lo que se deduce del resto: qué celdas son sitio (ahí no se construye otra cosa) y hasta dónde se llega a pie desde la primera base.
+  W.completarMapa = function (mp) {
+    const N = mp.N, NN = N * N, T = W.TERRENO, sitioEn = new Uint8Array(NN);
+    for (const s of mp.sitios.concat(mp.puestos)) sitioEn[s.y * N + s.x] = 1;
+    mp.sitioEn = sitioEn; mp.sitioTipo = new Map(mp.sitios.map((s) => [s.y * N + s.x, s.tipo]));
+    mp.alcanzable = inundar(mp, mp.bases[0], (t) => t === T.LLANO || t === T.BOSQUE || t >= T.CAMINO);
+    delete mp.veta; delete mp.vetas;
+    return mp;
+  };
+  function inundar(mp, desde, pasa) {
+    const N = mp.N, NN = N * N, visto = new Uint8Array(NN), cola = new Int32Array(NN), t = mp.terreno; let ini = 0, fin = 0;
+    const s = desde.y * N + desde.x; if (!pasa(t[s])) return visto; visto[s] = 1; cola[fin++] = s;
+    while (ini < fin) { const c = cola[ini++], cx = c % N;
+      if (cx > 0 && !visto[c - 1] && pasa(t[c - 1])) { visto[c - 1] = 1; cola[fin++] = c - 1; }
+      if (cx < N - 1 && !visto[c + 1] && pasa(t[c + 1])) { visto[c + 1] = 1; cola[fin++] = c + 1; }
+      if (c >= N && !visto[c - N] && pasa(t[c - N])) { visto[c - N] = 1; cola[fin++] = c - N; }
+      if (c < NN - N && !visto[c + N] && pasa(t[c + N])) { visto[c + N] = 1; cola[fin++] = c + N; } }
+    return visto;
+  }
+  // Las bases donde las pone el generador (a la misma distancia de su esquina), para un mapa que empieza de cero.
+  W.basesDe = (N) => { const O = Math.round(14 + (N / 128 - 1) * 4); return [{ x: O, y: N - 1 - O }, { x: N - 1 - O, y: O }]; };
+  W.mapaVacio = function (N, relleno, espejo) {
+    const T = W.TERRENO, NN = N * N, terreno = new Uint8Array(NN).fill(relleno === 'roca' ? T.ROCA : T.LLANO), bases = W.basesDe(N);
+    if (relleno === 'roca') for (const b of bases) for (let dy = -6; dy <= 6; dy++) for (let dx = -6; dx <= 6; dx++) if (Math.hypot(dx, dy) <= 6.5) terreno[(b.y + dy) * N + b.x + dx] = T.LLANO; // sitio para la base
+    return W.completarMapa({ N, semilla: 0, tipo: 'propio', nombre: '', espejo: espejo !== false, terreno, mineral: new Uint16Array(NN), tipoMin: new Uint8Array(NN), sitios: [], puestos: [], bases });
+  };
+  // La celda espejo (giro de 180°).
+  W.espejoDe = (N, i) => N * N - 1 - i;
+
+  // Revisión de un mapa: lo que lo hace injugable (errores) y lo que lo hace malo (avisos). Para el editor.
+  // Entradas de una base: las bocas por las que se sale de su entorno hacia la otra base sin cruzar roca ni agua (el bosque cuenta: lo cruza
+  // la infantería y la excavadora lo abre; la roca no). Se miran anillos de 12 a 36 celdas
+  // (más en los mapas grandes), de dos en dos: en cada uno se cuentan los tramos de anillo transitables que conectan por dentro con la base y por fuera con el rival.
+  // Un tramo de 16 celdas de ancho o más cuenta como abierto (dos o más: no se tapona con una torre). Vale el anillo más cerrado: un cuello cerca o lejos es un cuello.
+  W.revisarMapa = function (mp) {
+    const N = mp.N, NN = N * N, T = W.TERRENO, errores = [], avisos = [], t = mp.terreno;
+    const veh = (v) => v === T.LLANO || v >= T.CAMINO, pie = (v) => veh(v) || v === T.BOSQUE;
+    const [A, B] = mp.bases, nb = ['la base 1', 'la base 2'];
+    mp.bases.forEach((b, j) => { for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const x = b.x + dx, y = b.y + dy, i = y * N + x; if (x < 1 || y < 1 || x >= N - 1 || y >= N - 1 || t[i] !== T.LLANO || mp.mineral[i] || mp.sitioEn[i]) { errores.push(nb[j] + ' no tiene sitio para el patio (3×3 de llano libre)'); return; } } });
+    if (Math.hypot(A.x - B.x, A.y - B.y) < 30) errores.push('las bases están demasiado cerca (menos de 30 celdas)');
+    const aV = inundar(mp, A, veh), aP = inundar(mp, A, pie);
+    if (!aP[B.y * N + B.x]) errores.push('no hay paso entre las bases, ni a pie');
+    else if (!aV[B.y * N + B.x]) avisos.push('entre las bases solo se pasa a pie (por bosque): los vehículos no llegan');
+    const bP = inundar(mp, B, pie), K = N / 128, radios = []; for (let r = 12; r <= Math.round(36 * Math.max(1, Math.sqrt(K))); r += 2) radios.push(r);
+    const cuellos = [[], []];
+    const entradas = [A, B].map((b, j) => {
+      const rival = j ? aP : bP; let menor = Infinity;
+      for (const R of radios) {
+        // celdas del anillo [R-1, R+1] transitables, alcanzables desde la base sin salir del disco, y que tocan una celda de fuera unida al rival
+        const den = new Uint8Array(NN), cola = []; const ib = b.y * N + b.x; if (!pie(t[ib])) continue;
+        den[ib] = 1; cola.push(ib);
+        for (let q = 0; q < cola.length; q++) { const c = cola[q], cx = c % N, cy = (c / N) | 0; for (const d of [1, -1, N, -N]) { const n = c + d, nx = n % N, ny = (n / N) | 0; if (n < 0 || n >= NN || Math.abs(nx - cx) > 1 || den[n] || !pie(t[n]) || Math.hypot(nx - b.x, ny - b.y) > R + 1) continue; den[n] = 1; cola.push(n); } }
+        const boca = new Uint8Array(NN); let hay = false;
+        for (const c of cola) { const cx = c % N, cy = (c / N) | 0, d0 = Math.hypot(cx - b.x, cy - b.y); if (d0 < R - 1) continue;
+          for (const d of [1, -1, N, -N]) { const n = c + d, nx = n % N, ny = (n / N) | 0; if (n < 0 || n >= NN || Math.abs(nx - cx) > 1) continue; if (Math.hypot(nx - b.x, ny - b.y) > R + 1 && pie(t[n]) && rival[n]) { boca[c] = 1; hay = true; break; } } }
+        if (!hay) { menor = Math.min(menor, 0); continue; }
+        // tramos: componentes conexas (en 8 direcciones) de las celdas de boca; se mide el arco que abarca cada una
+        const vista = new Uint8Array(NN); let n = 0; const celdas = [];
+        for (const c of cola) { if (!boca[c] || vista[c]) continue; const pila = [c]; vista[c] = 1; const angs = [];
+          while (pila.length) { const q = pila.pop(), qx = q % N, qy = (q / N) | 0; angs.push(Math.atan2(qy - b.y, qx - b.x)); for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const x = qx + dx, y = qy + dy, k = y * N + x; if (x < 0 || y < 0 || x >= N || y >= N || vista[k] || !boca[k]) continue; vista[k] = 1; pila.push(k); } }
+          angs.sort((p, q) => p - q); let hueco = 2 * Math.PI - (angs[angs.length - 1] - angs[0]); for (let k = 1; k < angs.length; k++) hueco = Math.max(hueco, angs[k] - angs[k - 1]);
+          n += (2 * Math.PI - hueco) * R >= 16 ? 2 : 1; }
+        if (n < menor && n < 2) { for (const c of cola) if (boca[c]) celdas.push(c); cuellos[j] = celdas; } // dónde está el cuello, para señalarlo en el editor
+        menor = Math.min(menor, n);
+      }
+      return menor === Infinity ? 0 : menor;
+    });
+    entradas.forEach((n, j) => { if (n < 2) avisos.push(nb[j] + (n === 0 ? ' no tiene salida' : ' tiene una sola entrada: es fácil de taponar')); });
+    const cerca = (b, R, f) => { for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) { const x = b.x + dx, y = b.y + dy; if (x < 0 || y < 0 || x >= N || y >= N || dx * dx + dy * dy > R * R) continue; if (f(y * N + x)) return true; } return false; };
+    const alc = [aP, bP];
+    mp.bases.forEach((b, j) => {
+      if (!cerca(b, 14, (i) => t[i] === T.AGUA)) avisos.push(nb[j] + ' no tiene agua a menos de 14 celdas (la primera bomba)');
+      if (!cerca(b, 20, (i) => mp.tipoMin[i] === 1 && mp.mineral[i] > 0 && alc[j][i])) avisos.push(nb[j] + ' no tiene minerales a menos de 20 celdas');
+      if (!mp.sitios.some((s) => s.tipo === 'petroleo' && Math.hypot(s.x - b.x, s.y - b.y) <= 24)) avisos.push(nb[j] + ' no tiene petróleo a menos de 24 celdas');
+    });
+    let sueltos = 0; for (let i = 0; i < NN; i++) if (mp.mineral[i] && !aP[i]) sueltos++;
+    if (sueltos) avisos.push(sueltos + ' celdas de mineral a las que no se llega');
+    const malSitio = mp.sitios.concat(mp.puestos).filter((s) => t[s.y * N + s.x] !== T.LLANO || !aP[s.y * N + s.x] || mp.mineral[s.y * N + s.x]).length;
+    if (malSitio) avisos.push(malSitio + ' sitios o puestos fuera del llano o donde no se llega');
+    return { errores, avisos, entradas, cuellos };
   };
 })();
 
