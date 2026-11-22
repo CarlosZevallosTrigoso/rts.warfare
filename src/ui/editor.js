@@ -1,5 +1,6 @@
 // rts.warfare — editor de mapas. Trabaja sobre el mismo objeto de mapa que genera el juego (W.generarMapa) y lo guarda con W.mapaAJSON.
-// W.abrirEditor(raiz, op) monta el editor dentro de «raiz». op: { probar(json), salir() } (las dos, opcionales).
+// W.abrirEditor(raiz, op) monta el editor dentro de «raiz». op: { probar(json, id), salir(), abrir: id de un mapa guardado } (todo opcional).
+// Devuelve { cargar, mapa, cerrar }: cerrar quita sus escuchas del teclado y de la ventana.
 (function () {
   const W = globalThis.W;
   const C = { llano: '#f5f5f5', roca: '#5a5a5a', agua: '#aebfcc', bosque: '#c6cfbd', camino: '#d9d2c2', mineral: '#4d7a38', raro: '#7d5aa6', tinta: '#1a1a1a', suave: '#6e6e6e', yo: '#3b6ea5', rival: '#c9622b', mal: '#b0362f', aviso: '#a8741a' };
@@ -21,7 +22,7 @@
 
   W.abrirEditor = function (raiz, op) {
     op = op || {};
-    const T = W.TERRENO;
+    const T = W.TERRENO, fin = new AbortController(), oye = { signal: fin.signal };
     raiz.classList.add('ed');
     raiz.innerHTML = `
       <div class="ed-top">
@@ -207,8 +208,8 @@
       if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ') { e.preventDefault(); if (e.shiftKey) rehacerUno(); else deshacer(); return; }
       if (e.key === '[' || e.key === ']') { const p = $('.ed-pincel'); p.value = Math.max(1, Math.min(25, +p.value + (e.key === ']' ? 2 : -2))); p.dispatchEvent(new Event('input')); }
     };
-    addEventListener('keydown', tecla); addEventListener('keyup', tecla);
-    addEventListener('resize', () => { if (!raiz.isConnected) return; const z = cam.z; encajar(); if (mp) cam.z = z; pintar(); });
+    addEventListener('keydown', tecla, oye); addEventListener('keyup', tecla, oye);
+    addEventListener('resize', () => { if (!raiz.isConnected) return; const z = cam.z; encajar(); if (mp) cam.z = z; pintar(); }, oye);
 
     // ---------- barra de arriba ----------
     raiz.querySelector('.ed-top').addEventListener('click', (e) => {
@@ -218,10 +219,15 @@
       else if (a === 'rehacer') rehacerUno();
       else if (a === 'salir' && op.salir) op.salir();
       else if (!mp) return;
-      else if (a === 'guardar') { const json = W.mapaAJSON(mp); if (!json.nombre) { json.nombre = mp.nombre = 'mapa ' + new Date().toLocaleString('es'); $('.ed-nombre').value = mp.nombre; } idMapa = idMapa || 'm' + Date.now().toString(36); try { W.guardarMiMapa(idMapa, json); avisar('Guardado en este navegador'); } catch (err) { avisar('No cabe en la memoria del navegador: exporta el .json'); } }
+      else if (a === 'guardar') { if (guardar()) avisar('Guardado en este navegador'); }
       else if (a === 'exportar') { const json = W.mapaAJSON(mp), url = URL.createObjectURL(new Blob([JSON.stringify(json)], { type: 'application/json' })), el = document.createElement('a'); el.href = url; el.download = (json.nombre || 'mapa').replace(/[^\wáéíóúñ -]+/gi, '').trim().replace(/\s+/g, '-') + '.rts-mapa.json'; el.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
-      else if (a === 'probar') { if (rev && rev.errores.length) { avisar('Antes, corrige los errores de la revisión'); return; } if (op.probar) op.probar(W.mapaAJSON(mp)); else avisar('En el juego, esto abre una partida con este mapa'); }
+      else if (a === 'probar') { if (rev && rev.errores.length) { avisar('Antes, corrige los errores de la revisión'); return; } if (!op.probar) { avisar('En el juego, esto abre una partida con este mapa'); return; } if (guardar()) op.probar(W.mapaAJSON(mp), idMapa); } // se guarda antes: la partida lo lee de «mis mapas»
     });
+    function guardar() {
+      const json = W.mapaAJSON(mp); if (!json.nombre) { json.nombre = mp.nombre = 'mapa ' + new Date().toLocaleString('es'); $('.ed-nombre').value = mp.nombre; }
+      idMapa = idMapa || 'm' + Date.now().toString(36);
+      try { W.guardarMiMapa(idMapa, json); return true; } catch (err) { avisar('No cabe en la memoria del navegador: exporta el .json'); return false; }
+    }
 
     // ---------- cómo se empieza ----------
     function abrirInicio() {
@@ -259,7 +265,8 @@
       else if (a === 'borrar') { if (confirm('¿Borrar este mapa del navegador?')) { W.borrarMiMapa(b.dataset.id); abrirInicio(); } }
     });
 
-    elegir('roca'); requestAnimationFrame(() => { encajar(); abrirInicio(); });
-    return { cargar, mapa: () => mp };
+    elegir('roca');
+    requestAnimationFrame(() => { encajar(); const L = W.misMapas(); if (op.abrir && L[op.abrir]) { try { cargar(W.mapaDeJSON(L[op.abrir].mapa), op.abrir); return; } catch (err) { avisar('No se pudo abrir: ' + err.message); } } abrirInicio(); });
+    return { cargar, mapa: () => mp, cerrar: () => { fin.abort(); raiz.innerHTML = ''; raiz.classList.remove('ed'); } };
   };
 })();

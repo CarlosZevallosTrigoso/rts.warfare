@@ -1397,6 +1397,7 @@
         for (const [clave, valor] of [['recursos', J.admin], ['requisitos', J.admin], ['libre', J.admin], ['vel', J.admin ? 4 : 1], ['mapa', J.admin]]) trampa(m, cmd.j, clave, valor);
         if (J.admin) { trampa(m, cmd.j, 'nivel3', true); trampa(m, cmd.j, 'mejoras', true); }
         return;
+      case 'esIA': J.esIA = true; return; // la marca de que este jugador lo lleva la IA (cambia algunos alcances): como orden, para que esté en el registro
       case 'trampa': // un interruptor del panel ADMIN
         trampa(m, cmd.j, cmd.clave, cmd.valor);
         return;

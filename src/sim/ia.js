@@ -312,7 +312,7 @@
   W.iaTick = function (m, ia) {
     if ((m.t + ia.j * 7) % 20 !== 0 || m.ganador >= 0) return;
     const j = ia.j, J = m.jug[j];
-    J.esIA = true; // (lo usa la simulación: la IA conserva el alcance antiguo de líneas y depósitos)
+    if (!J.esIA) { J.esIA = true; W.orden(m, { t: 'esIA', j }); } // (lo usa la simulación: la IA conserva el alcance antiguo de líneas y depósitos; va también como orden para que la repetición la tenga)
     if (!J.vivo) return;
     const E = ESTILOS[ia.estilo];
     if ((m.t + ia.j * 7) % 100 === 60 || !ia.amenaza) iaObserva(m, ia);

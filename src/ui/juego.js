@@ -19,11 +19,20 @@
     const params = new URLSearchParams(location.search);
     try { if (localStorage.getItem('rts.tema') === 'oscura') document.body.dataset.tema = 'oscura'; } catch (e) { /* tema por defecto */ }
     const op = { n: '512', min: '2500', ia: 'normal', est: 'azar', red: 'si', map: 'azar', real: 'no' };
+    // Los mapas propios (del editor) salen como botones más en «Tipo de mapa», con el valor «p:<id>».
+    const pintarMisMapas = () => {
+      const cont = $('op-map'); for (const b of [...cont.querySelectorAll('.propio')]) b.remove();
+      const L = W.misMapas(); for (const id of Object.keys(L).sort((a, b) => (L[b].fecha || '').localeCompare(L[a].fecha || ''))) {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'propio'; b.dataset.v = 'p:' + id; b.textContent = L[id].nombre || id;
+        const sm = document.createElement('small'); sm.textContent = 'tuyo · ' + L[id].N; b.appendChild(sm); cont.appendChild(b); }
+    };
+    pintarMisMapas();
+    const marcas = {};
     for (const k in op) {
       const cont = $('op-' + k), v = params.get(k);
       if (v && cont.querySelector('[data-v="' + CSS.escape(v) + '"]')) op[k] = v;
-      const marcar = () => { for (const b of cont.children) b.classList.toggle('on', b.dataset.v === op[k]); };
-      for (const b of cont.children) b.addEventListener('click', () => { op[k] = b.dataset.v; marcar(); });
+      const marcar = marcas[k] = () => { for (const b of cont.children) b.classList.toggle('on', b.dataset.v === op[k]); if (k === 'map') $('op-n').style.opacity = op.map.startsWith('p:') ? 0.4 : 1; };
+      cont.addEventListener('click', (ev) => { const b = ev.target.closest('[data-v]'); if (b && b.parentNode === cont) { op[k] = b.dataset.v; marcar(); } });
       marcar();
     }
     if (params.get('s')) $('op-s').value = params.get('s');
@@ -31,12 +40,18 @@
     const empezar = () => {
       let semilla = parseInt($('op-s').value, 10);
       if (!Number.isFinite(semilla) || semilla < 0) semilla = Math.floor(Date.now() % 1000000);
-      const q = 's=' + semilla + '&n=' + op.n + '&min=' + op.min + '&ia=' + op.ia + '&est=' + op.est + '&red=' + op.red + '&map=' + op.map + '&real=' + op.real + (tut ? '&tut=1' : '');
-      try { history.replaceState(null, '', location.pathname + '?' + q); } catch (e) { /* en file:// puede no dejar */ }
-      $('menu').hidden = true;
+      const q = 's=' + semilla + '&n=' + op.n + '&min=' + op.min + '&ia=' + op.ia + '&est=' + op.est + '&red=' + op.red + '&map=' + encodeURIComponent(op.map) + '&real=' + op.real + (tut ? '&tut=1' : '');
       let rep = null; // ?rep=1: se vuelve a ver la partida apuntada en esta pestaña
       if (params.get('rep')) { try { const g = JSON.parse(sessionStorage.getItem('rts.rep')); if (g && g.q === q && Array.isArray(g.c)) rep = g; } catch (e) { /* sin repetición: partida normal */ } }
-      W.jugar({ semilla, N: +op.n, inicio: +op.min, ia: op.ia, estilo: op.est, red: op.red, real: op.real, mapa: op.map, consulta: q, repeticion: rep, tutorial: tut && !rep });
+      let mapa = op.map, propio = null, N = +op.n; // un mapa propio: se lee de «mis mapas» (o viene dentro de la repetición)
+      if (op.map.startsWith('p:')) {
+        propio = rep && rep.mapa ? rep.mapa : (W.misMapas()[op.map.slice(2)] || {}).mapa;
+        if (!propio) { alert('Ese mapa ya no está entre tus mapas: se juega uno al azar.'); op.map = mapa = 'azar'; marcas.map(); return empezar(); }
+        mapa = propio; N = propio.N;
+      }
+      try { history.replaceState(null, '', location.pathname + '?' + q); } catch (e) { /* en file:// puede no dejar */ }
+      $('menu').hidden = true;
+      W.jugar({ semilla, N, inicio: +op.min, ia: op.ia, estilo: op.est, red: op.red, real: op.real, mapa, mapaPropio: propio ? op.map.slice(2) : null, consulta: q, repeticion: rep, tutorial: tut && !rep });
     };
     $('empezar').addEventListener('click', () => { tut = false; empezar(); });
     $('tutorial').addEventListener('click', () => { tut = true; op.n = '256'; op.min = '6000'; op.ia = 'tranquilo'; op.red = 'si'; op.map = 'clasico'; $('op-s').value = '2026'; empezar(); });
@@ -58,6 +73,16 @@
     if (hayGuardada && params.get('cargar')) { try { history.replaceState(null, '', location.pathname); } catch (e) { /* da igual */ } continuar(); return; }
     $('op-s').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') empezar(); });
     $('tituloMenu').addEventListener('click', () => location.reload());
+    // Editor de mapas: tapa el menú; «Probar» guarda el mapa y empieza una partida con él y con las opciones del menú; «Salir» vuelve al menú.
+    let editor = null;
+    const abrirEditor = (id) => {
+      $('menu').hidden = true; $('editor').hidden = false;
+      editor = W.abrirEditor($('editor'), { abrir: id,
+        salir: () => { editor.cerrar(); editor = null; $('editor').hidden = true; $('menu').hidden = false; pintarMisMapas(); marcas.map(); },
+        probar: (json, idm) => { editor.cerrar(); editor = null; $('editor').hidden = true; pintarMisMapas(); op.map = 'p:' + idm; marcas.map(); tut = false; empezar(); } });
+    };
+    $('editorB').addEventListener('click', () => abrirEditor());
+    if (params.get('editor')) { try { history.replaceState(null, '', location.pathname); } catch (e) { /* da igual */ } abrirEditor(params.get('editor').replace(/^p:/, '')); return; }
     if (params.has('ya')) empezar();
   };
 
@@ -67,7 +92,7 @@
     const cargado = op.guardado || null; // partida guardada: el mundo y la IA vienen ya hechos
     const m = cargado ? cargado.m : W.crearMundo(semilla, { N: op.N, inicio: op.inicio, logistica: op.red !== 'no', mapa: op.mapa, ultra: op.real === 'si' }), estilos = Object.keys(W.ESTILOS_IA);
     const rep = op.repeticion ? op.repeticion.c : null, repFin = op.repeticion ? op.repeticion.fin : 0; // repetición: las órdenes apuntadas de una partida; se reproducen solas, sin rival que piense ni jugador que mande
-    if (rep) m.soloRep = true; else if (!cargado) m.registro = [];
+    if (rep) { m.soloRep = true; if (op.ia !== 'no') m.jug[1].esIA = true; } else if (!cargado) m.registro = []; // (los registros de antes no traen la marca de IA como orden)
     let repI = 0, repVel = 1, repAvisado = false;
     const ia = cargado ? cargado.extra.ia : rep || op.ia === 'no' ? null : W.iaCrear(1, op.ia, W.ESTILOS_IA[op.estilo] ? op.estilo : estilos[semilla % estilos.length]), N = m.N, YO = 0, J = m.jug[YO];
     const hist = cargado && cargado.extra.hist ? cargado.extra.hist : []; // una muestra cada 30 s, para el resumen final
@@ -1892,7 +1917,7 @@
     // Guardar y cargar: la partida entera va al almacenamiento del navegador (una sola, la última).
     function guardar() {
       try {
-        const txt = W.guardar(m, { ia, hist, cam, op: { semilla, N: op.N, inicio: op.inicio, ia: op.ia, estilo: op.estilo, red: op.red, mapa: op.mapa, consulta: op.consulta } });
+        const txt = W.guardar(m, { ia, hist, cam, op: { semilla, N: op.N, inicio: op.inicio, ia: op.ia, estilo: op.estilo, red: op.red, mapa: op.mapa, mapaPropio: op.mapaPropio, consulta: op.consulta } });
         localStorage.setItem('rts.guardado', txt);
         aviso('Partida guardada (' + Math.round(txt.length / 1024) + ' KB), minuto ' + Math.floor(m.t / 1200) + '. Se continúa desde el menú inicial; cada guardado pisa el anterior.');
       } catch (e) { aviso('No se pudo guardar: ' + (e && e.name === 'QuotaExceededError' ? 'no cabe en el almacenamiento del navegador' : 'el navegador no lo permite')); }
@@ -2052,7 +2077,7 @@
     $('cierraGuia').addEventListener('click', () => { $('guia').hidden = true; });
     $('guia').addEventListener('click', (ev) => { if (ev.target === $('guia')) $('guia').hidden = true; });
     const conDrones = () => unidadesSel().filter((u) => u.j === YO && UNID[u.tipo].drones && (W.dronesDe(m, u).fpv || W.dronesDe(m, u).bomba));
-    $('rSem').textContent = semilla + ' · ' + m.N + (m.mapa.tipo && m.mapa.tipo !== 'clasico' ? ' · ' + W.MAPAS[m.mapa.tipo].nombre : '');
+    $('rSem').textContent = semilla + ' · ' + m.N + (m.mapa.tipo === 'propio' ? ' · ' + (m.mapa.nombre || 'mapa propio') : m.mapa.tipo && W.MAPAS[m.mapa.tipo] && m.mapa.tipo !== 'clasico' ? ' · ' + W.MAPAS[m.mapa.tipo].nombre : '');
     $('rSem').addEventListener('click', () => { const t = String(semilla); try { navigator.clipboard.writeText(t).then(() => aviso('Semilla ' + t + ' copiada'), () => aviso('Semilla: ' + t)); } catch (e) { aviso('Semilla: ' + t); } });
     const armadas = () => unidadesSel().filter((u) => u.j === YO && !UNID[u.tipo].aire && u.tipo !== 'cosechadora');
     $('bProteger').addEventListener('click', () => { if (armadas().length) { modo = 'proteger'; aviso('Elige a quién proteger: una unidad o un edificio tuyo'); } });
@@ -2918,16 +2943,17 @@
     $('titulo').addEventListener('click', () => location.reload());
     $('semilla').textContent = 'semilla ' + semilla + ' · ' + W.VERSION;
     $('finRep').href = '?' + op.consulta + '&ya=1';
+    if (op.mapaPropio) { $('finEd').hidden = false; $('finEd').href = '?editor=' + encodeURIComponent('p:' + op.mapaPropio); }
     $('finVer').hidden = !rep && !m.registro; // una partida cargada no tiene apuntado su principio
     const verRepeticion = () => { // apunta la partida en la pestaña y la vuelve a abrir como repetición, hasta el tick en que estaba
-      try { if (!rep) sessionStorage.setItem('rts.rep', JSON.stringify({ q: op.consulta, c: m.registro, fin: m.t })); location.href = '?' + op.consulta + '&ya=1&rep=1'; }
+      try { if (!rep) sessionStorage.setItem('rts.rep', JSON.stringify({ q: op.consulta, c: m.registro, fin: m.t, mapa: op.mapaPropio ? op.mapa : undefined })); location.href = '?' + op.consulta + '&ya=1&rep=1'; } // (un mapa propio va dentro: el original, sin lo que cambió al jugar)
       catch (e) { aviso('La repetición no cabe en la memoria del navegador'); }
     };
     W.verRepeticion = verRepeticion; // a mano en la consola, también a media partida
     // El registro de la partida, para descargar: con la semilla, las opciones y todas las órdenes (las del jugador y las de la IA) se puede reproducir entera y analizarla fuera.
     const bajarRegistro = () => {
       try {
-        const datos = { rts: 'registro', version: W.VERSION, fecha: new Date().toISOString(), consulta: op.consulta, semilla, humano: YO, fin: m.t, ganador: m.ganador, jug: m.jug.map((J) => ({ minerales: Math.round(J.minerales), nivel: J.nivel, cuenta: J.cuenta, contabilidad: J.cont })), ia: ia ? { estilo: ia.estilo, oleadas: ia.diario || [] } : null, ordenes: rep || m.registro || [] }; // (con el balance de cada oleada de la IA: a qué fue, con cuánto, qué defendía el blanco y cómo volvió)
+        const datos = { rts: 'registro', version: W.VERSION, fecha: new Date().toISOString(), consulta: op.consulta, semilla, humano: YO, fin: m.t, ganador: m.ganador, mapa: op.mapaPropio && typeof op.mapa === 'object' ? op.mapa : undefined, jug: m.jug.map((J) => ({ minerales: Math.round(J.minerales), nivel: J.nivel, cuenta: J.cuenta, contabilidad: J.cont })), ia: ia ? { estilo: ia.estilo, oleadas: ia.diario || [] } : null, ordenes: rep || m.registro || [] }; // (con el balance de cada oleada de la IA: a qué fue, con cuánto, qué defendía el blanco y cómo volvió)
         const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(datos)], { type: 'application/json' })); a.download = 'rts-registro-' + semilla + '-' + m.t + '.json'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
       } catch (e) { aviso('No se pudo preparar el registro'); }
     };

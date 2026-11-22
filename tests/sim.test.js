@@ -3209,6 +3209,16 @@ prueba('determinismo: misma semilla, misma partida', () => {
   assert.strictEqual(corre(), corre());
 });
 
+if (!process.env.RAPIDO) prueba('repetición: una partida IA contra IA en desfiladeros y ultra-real se repite exacta con solo su registro (la marca de IA va como orden)', () => {
+  const op = { N: 256, inicio: 2500, logistica: true, mapa: 'desfiladeros', ultra: true }, T = 7200;
+  const m = W.crearMundo(852742, op), a = W.iaCrear(0, 'normal', 'equilibrado'), b = W.iaCrear(1, 'normal', 'aereo'); m.registro = [];
+  const h = []; for (let i = 0; i < T; i++) { W.iaTick(m, a); W.iaTick(m, b); W.tick(m); if (m.t % 600 === 0) h.push(W.huella(m)); }
+  assert.ok(m.registro.some((x) => x && x.t === 'esIA'), 'la marca de IA queda en el registro');
+  const rep = JSON.parse(JSON.stringify(m.registro)), r = W.crearMundo(852742, op); r.soloRep = true; let k = 0, mal = -1;
+  for (let i = 0; i < T; i++) { while (k < rep.length && rep[k] <= r.t) { W.orden(r, rep[k + 1], true); k += 2; } W.tick(r); if (r.t % 600 === 0 && mal < 0 && W.huella(r) !== h[r.t / 600 - 1]) mal = r.t; }
+  assert.strictEqual(mal, -1, 'la repetición no se aparta (se apartó en el tick ' + mal + ')');
+});
+
 if (!process.env.RAPIDO) prueba('fase 2c: los cinco estilos de rival juegan media hora y se comportan distinto', () => {
   const res = {};
   for (const estilo of Object.keys(W.ESTILOS_IA)) {
