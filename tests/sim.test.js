@@ -1772,6 +1772,48 @@ prueba('ultra-real: pocos tiros tumban a un infante, que queda herido; curado se
   W.orden(m, { t: 'actitud', j: 0, v: 1 }); W.tick(m); assert.ok(m.jug[0].decidido && !m.jug[0].aToda, 'actitud decidida'); W.orden(m, { t: 'actitud', j: 0, v: 2 }); W.tick(m); assert.ok(m.jug[0].aToda && !m.jug[0].decidido, 'a toda costa');
 });
 
+prueba('ultra-real, paso 2: supresión, avance por saltos, parapetos, la explosión remata al caído, tripulación que se salva y reponer cuesta más', () => {
+  const m = W.crearMundo(4242, { N: 128, ultra: true }), N = m.N, U = W.ECON.ultra, A = W.ARMAS; m.logistica = false;
+  m.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(m);
+  const cel = (x, y) => y * N + x; for (let y = 30; y < 90; y++) for (let x = 20; x < 110; x++) { const i = cel(x, y); if (m.ocup[i]) continue; m.mapa.terreno[i] = 0; m.mapa.mineral[i] = 0; m.mapa.tipoMin[i] = 0; m.paso[i] = 1; m.pasoV[i] = 1; }
+  // Supresión: el tiro a uno clava también al de al lado, que tira más despacio.
+  const a1 = W.crearUnidad(m, 0, 'infanteria', cel(40, 40)), a2 = W.crearUnidad(m, 0, 'infanteria', cel(41, 40)), lejano = W.crearUnidad(m, 0, 'infanteria', cel(40, 48)); a1.guardia = a2.guardia = lejano.guardia = true;
+  const tir = W.crearUnidad(m, 1, 'infanteria', cel(44, 40)); tir.ang = Math.PI; W.tick(m);
+  W.orden(m, { t: 'atacar', j: 1, ids: [tir.id], obj: a1.id }); let n = 0; while (a2.supT === undefined && n++ < 200) { a1.recarga = a2.recarga = lejano.recarga = 99999; W.tick(m); }
+  assert.ok(a2.supT !== undefined && lejano.supT === undefined, 'el de al lado queda suprimido y el lejano no');
+  const r0 = A.fusil.recarga; a2.recarga = 0; a2.supT = m.t; a2.obj = tir.id; a2.orden = 'atacar'; for (let i = 0; i < 40 && a2.recarga <= 0; i++) W.tick(m);
+  assert.ok(a2.recarga > r0 * 1.2, 'suprimido, recarga más despacio: ' + a2.recarga + ' frente a ' + r0);
+  [a1, a2, lejano, tir].forEach((u) => { u.vida = 0; }); W.tick(m);
+  // Avance por saltos: suprimido y en marcha de ataque, se para a ratos; con «a toda costa», no.
+  const sal = W.crearUnidad(m, 0, 'infanteria', cel(30, 60)); W.orden(m, { t: 'amover', j: 0, ids: [sal.id], x: 90.5, y: 60.5 }); W.tick(m);
+  let paradas = 0, px = sal.x; for (let i = 0; i < 160; i++) { sal.supT = m.t; W.tick(m); if (Math.abs(sal.x - px) < 1e-4) paradas++; px = sal.x; }
+  assert.ok(paradas > 30 && sal.x > 31.5, 'avanza por saltos: ' + paradas + ' ticks quieto, llega a ' + sal.x.toFixed(1)); sal.vida = 0; W.tick(m);
+  // Parapeto: tras una roca, el tiro directo le llega mucho menos.
+  const exp = W.crearUnidad(m, 0, 'infanteria', cel(50, 70)), tra = W.crearUnidad(m, 0, 'infanteria', cel(50, 74)); exp.guardia = tra.guardia = true; m.mapa.terreno[cel(51, 74)] = W.TERRENO.ROCA; m.paso[cel(51, 74)] = 0;
+  const ve = exp.vida, vt = tra.vida; W.herir(m, exp, A.fusil, 1, null, 58.5, 70.5); W.herir(m, tra, A.fusil, 1, null, 58.5, 74.5);
+  assert.ok((vt - tra.vida) < (ve - exp.vida) * 0.7, 'tras la roca recibe menos: ' + (vt - tra.vida) + ' frente a ' + (ve - exp.vida));
+  exp.vida = 0; tra.vida = 0; W.tick(m);
+  // La explosión remata al caído.
+  const ca = W.crearUnidad(m, 0, 'infanteria', cel(60, 50)); ca.guardia = true; while (!ca.herido) W.herir(m, ca, A.fusil, 1, null, 64, 50);
+  m.proy.push({ ox: 70, oy: 50, x: 60.5, y: 50.5, px: 60.5, py: 50.5, tx: 60.5, ty: 50.5, obj: 0, j: 1, arma: 'obus', mult: 1, de: 0 }); W.tick(m); W.tick(m);
+  assert.ok(!m.porId.get(ca.id), 'la explosión lo mata');
+  // Tripulación: de varios tanques destruidos se salva alguien, tocado, que se vuelve a casa.
+  const antes = new Set(m.ents.map((e) => e.id)), tqs = [0, 1, 2, 3].map((k) => W.crearUnidad(m, 0, 'tanque', cel(70 + k * 3, 80)));
+  for (const t of tqs) t.vida = 0; W.tick(m);
+  const tri = m.ents.filter((e) => !e.edif && !antes.has(e.id) && e.tripu);
+  assert.ok(tri.length >= 1 && tri.length <= 12, 'se salvan algunos tripulantes: ' + tri.length);
+  assert.ok(tri.every((u) => u.tipo === 'infanteria' && u.vida <= u.vidaMax * U.tripuVida + 1 && u.orden !== 'nada'), 'tocados y de vuelta a la base');
+  const sinU = W.crearMundo(4242, { N: 128 }); sinU.ents.filter((e) => !e.edif).forEach((e) => { e.vida = 0; }); W.tick(sinU); const t2 = W.crearUnidad(sinU, 0, 'tanque', cel(70, 80)); t2.vida = 0; W.tick(sinU);
+  assert.ok(!sinU.ents.some((e) => e.tripu), 'fuera del modo ultra-real, no');
+  // Reponer: en ultra-real, reponer bajas de un pelotón cuesta la mitad más.
+  const J = m.jug[0]; J.dios = false; J.minerales = 5000; const p0 = m.ents.find((e) => e.edif && e.j === 0 && e.tipo === 'patio');
+  const cu = W.crearEdificio(m, 0, 'cuartel', W.cercaLibre(m, p0.cx + 8, p0.cy) % N, Math.floor(W.cercaLibre(m, p0.cx + 8, p0.cy) / N)); cu.obra = 0; cu.enObra = false; for (let i = 0; i < 3; i++) W.tick(m);
+  ['infanteria', 'infanteria', 'infanteria', 'infanteria', 'granadero'].forEach((t, k) => { const u = W.crearUnidad(m, 0, t, cel(40 + k, 85)); u.pel = 77; u.pelT = 'fusileros'; u.guardia = true; });
+  const m0 = J.minerales; W.orden(m, { t: 'reponer', j: 0, pel: 77 }); W.tick(m);
+  assert.ok(cu.cola.includes('medico'), 'encarga el médico que falta');
+  assert.ok(m0 - J.minerales >= W.UNID.medico.costo * (1 + U.repone) - 5, 'y paga el recargo: ' + (m0 - J.minerales) + ' por un médico de ' + W.UNID.medico.costo);
+});
+
 prueba('torreta ametralladora: barata, sin consumo, contra tierra y nunca contra el aire', () => {
   const d = W.EDIF.nidoMG, A = W.ARMAS[d.arma];
   assert.ok(d && A, 'existe, con su arma'); assert.ok(A.vs.ligero === 1 && !A.vs.aire, 'no dispara al aire'); assert.ok(d.energia === 0 && d.costo < W.EDIF.torreta.costo, 'barata y sin consumo'); assert.ok(W.MUN[d.arma] > 0, 'tiene munición definida');

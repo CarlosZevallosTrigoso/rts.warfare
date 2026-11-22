@@ -310,7 +310,7 @@
     // Modo ultra-real (m.ultra): la infantería cae con muy pocos impactos (inf), lo que penetra un vehículo lo deja fuera en uno o dos (penetra) y a veces lo inmoviliza (inmovil, en %);
     // las armas ligeras no hacen nada a blindados ni a edificios. Quien cae queda herido: fuera de combate (nadie le dispara ni le hace daño) hasta heridoT ticks; si lo curan hasta heridoAlta de su vida, se salva; si no, muere.
     // Bajo fuego, el infante suelto busca bosque a cubre celdas; y el criterio de combate es más prudente (critInf, critRet).
-    ultra: { inf: 4, penetra: 3, inmovil: 30, heridoT: 800, heridoAlta: 0.25, cubre: 4, clavado: 0.45, critInf: 0.9, critRet: 0.5 },
+    ultra: { inf: 4, penetra: 3, inmovil: 30, heridoT: 800, heridoAlta: 0.25, cubre: 4, clavado: 0.45, critInf: 0.9, critRet: 0.5, supT: 90, supR: 1.5, supRMG: 2.5, supRecarga: 1.5, tierra: 0.6, salto: 80, saltoPara: 35, parapeto: 0.5, tripu: 40, tripuVida: 0.3, repone: 0.5 }, // supresión (cuánto dura, radio, el de las ametralladoras, recarga), cuerpo a tierra, avance por saltos (ciclo y parte quieta), parapeto, tripulación que se salva (%) y con cuánta vida, recargo al reponer
     geDespliega: 60, // guerra electrónica: lo que tarda parada en desplegar la burbuja
     cavarHoyo: 100, reEnterrar: 40, emboscadaCalma: 200, enterradoDano: 0.3, detectaHoyo: 3, // emboscados: lo que tardan en cavar y en volver a meterse, la calma que esperan para volver al hoyo y cuánto les protege
     sinLaser: 0.45, laserDisp: 1.4, // el avión de ataque sin la marca del láser: menos daño y el fuego cae a un lado

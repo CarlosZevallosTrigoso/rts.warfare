@@ -363,12 +363,12 @@
   <button type="button" id="empezar">Empezar</button>
   <button type="button" id="tutorial">Tutorial guiado<small style="display:block;color:var(--suave);font-size:10px">ocho pasos, con el rival dormido hasta el final</small></button>
   <button type="button" id="continuar" hidden>Continuar la partida guardada</button>
-  <div id="version">versión 132</div>
+  <div id="version">versión 133</div>
 </div></div>
 <div id="guia" hidden><div class="caja"><div class="cab"><strong>Guía: para qué sirve cada cosa</strong><button type="button" id="cierraGuia">cerrar</button></div><div id="guiaTxt"></div></div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finVer" href="#" title="Vuelve a ver la partida entera, con todo el mapa a la vista y a la velocidad que quieras.">ver repetición</a><a id="finLog" href="#" title="Descarga el registro de la partida: la semilla, las opciones y todas las órdenes de los dos bandos, con su instante. Sirve para reproducirla y analizar cómo jugó la IA.">descargar registro</a><a id="finRep" href="#">repetir mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 132' };
+globalThis.W = { VERSION: 'versión 133' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -682,7 +682,7 @@ globalThis.W = { VERSION: 'versión 132' };
     // Modo ultra-real (m.ultra): la infantería cae con muy pocos impactos (inf), lo que penetra un vehículo lo deja fuera en uno o dos (penetra) y a veces lo inmoviliza (inmovil, en %);
     // las armas ligeras no hacen nada a blindados ni a edificios. Quien cae queda herido: fuera de combate (nadie le dispara ni le hace daño) hasta heridoT ticks; si lo curan hasta heridoAlta de su vida, se salva; si no, muere.
     // Bajo fuego, el infante suelto busca bosque a cubre celdas; y el criterio de combate es más prudente (critInf, critRet).
-    ultra: { inf: 4, penetra: 3, inmovil: 30, heridoT: 800, heridoAlta: 0.25, cubre: 4, clavado: 0.45, critInf: 0.9, critRet: 0.5 },
+    ultra: { inf: 4, penetra: 3, inmovil: 30, heridoT: 800, heridoAlta: 0.25, cubre: 4, clavado: 0.45, critInf: 0.9, critRet: 0.5, supT: 90, supR: 1.5, supRMG: 2.5, supRecarga: 1.5, tierra: 0.6, salto: 80, saltoPara: 35, parapeto: 0.5, tripu: 40, tripuVida: 0.3, repone: 0.5 }, // supresión (cuánto dura, radio, el de las ametralladoras, recarga), cuerpo a tierra, avance por saltos (ciclo y parte quieta), parapeto, tripulación que se salva (%) y con cuánta vida, recargo al reponer
     geDespliega: 60, // guerra electrónica: lo que tarda parada en desplegar la burbuja
     cavarHoyo: 100, reEnterrar: 40, emboscadaCalma: 200, enterradoDano: 0.3, detectaHoyo: 3, // emboscados: lo que tardan en cavar y en volver a meterse, la calma que esperan para volver al hoyo y cuánto les protege
     sinLaser: 0.45, laserDisp: 1.4, // el avión de ataque sin la marca del láser: menos daño y el fuego cae a un lado
@@ -2725,7 +2725,7 @@ globalThis.W = { VERSION: 'versión 132' };
       }
       case 'reponer': { // lo que le falta a un pelotón: se encarga y, al salir, va a reunirse con los suyos
         const q = W.pelDe(m, cmd.j, cmd.pel); if (!q.vivos.length || !q.falta.length) return;
-        for (const t of q.falta) if (!W.pelNo(m, cmd.j, [t])) encolar(m, cmd.j, t, { id: cmd.pel, tipo: q.tipo });
+        for (const t of q.falta) { if (W.pelNo(m, cmd.j, [t])) continue; const extra = m.ultra && !J.dios ? Math.round((UNID[t].costo || 0) * ECON.ultra.repone) : 0; if (extra && J.minerales < extra + (UNID[t].costo || 0)) continue; if (encolar(m, cmd.j, t, { id: cmd.pel, tipo: q.tipo }) && extra) J.minerales -= extra; } // (ultra-real: reponer bajas cuesta más que el soldado nuevo: instrucción, equipo)
         return;
       }
       case 'cancelarUnidad': { // con id e i: ese puesto de la cola de ese edificio; si no, el último de ese tipo (en los edificios indicados o en todos)
@@ -2909,9 +2909,10 @@ globalThis.W = { VERSION: 'versión 132' };
       return false;
     }
     if (!d.aire && !pisa(c) && pisa(Math.floor(u.y) * N + Math.floor(u.x))) { replantear(); return false; } // alguien construyó en el punto de paso
-    const vel = d.vel * (d.cat === 'veh' && m.jug[u.j].mejoras.motores ? 1.15 : 1) * (m.ultra && d.cat === 'inf' && m.t - (u.tDano === undefined ? -999 : u.tDano) < 60 ? ECON.ultra.clavado : 1); // (ultra-real: bajo fuego, la infantería apenas avanza)
+    const vel = d.vel * (d.cat === 'veh' && m.jug[u.j].mejoras.motores ? 1.15 : 1) * (m.ultra && d.cat === 'inf' && (m.t - (u.tDano === undefined ? -999 : u.tDano) < 60 || m.t - (u.supT === undefined ? -999 : u.supT) < ECON.ultra.supT) ? ECON.ultra.clavado : 1); // (ultra-real: bajo fuego, la infantería apenas avanza)
     const terr = m.mapa.terreno[Math.floor(u.y) * N + Math.floor(u.x)];
     let freno = 1; // alambrada enemiga: a la infantería la frena mucho; un vehículo la aplasta al pasar
+    if (m.ultra && d.cat === 'inf' && u.orden === 'amover' && !m.jug[u.j].aToda && m.t - (u.supT === undefined ? -999 : u.supT) < ECON.ultra.supT && (m.t + u.id * 13) % ECON.ultra.salto < ECON.ultra.saltoPara) freno = 0; // ultra-real: avanza por saltos (un tramo corriendo, otro cuerpo a tierra)
     if (m.muro && !d.aire) { const ca = Math.floor(u.y) * N + Math.floor(u.x); if (m.muro[ca] === 1 && m.muroJ[ca] - 1 !== u.j) { if (d.cat === 'veh') quitarMuro(m, ca); else freno = 0.3; } }
     if (m.crater && d.cat === 'veh') { const ca = Math.floor(u.y) * N + Math.floor(u.x); if (m.escombro[ca]) freno *= ECON.ruinaFreno; else if (m.crater[ca]) freno *= ECON.craterFreno; } // cascotes y cráteres frenan a los vehículos
     if (u.desg >= ECON.desgLento) freno *= u.desg >= ECON.desgMal ? ECON.desgVel2 : ECON.desgVel1; // desgastado: más lento
@@ -3195,19 +3196,17 @@ globalThis.W = { VERSION: 'versión 132' };
         if (db.cat === 'inf') ur = U.inf;
         else if (db.cat === 'veh') { if (arma.ligera) { if (db.blindaje === 'pesado') return; } else { ur = U.penetra; if (!b.inmovil && ((b.id * 2654435761 + m.t * 40503) >>> 0) % 100 < U.inmovil) { b.inmovil = true; m.efectos.push({ tipo: 'inmovil', x1: b.x, y1: b.y, j: b.j, t: m.t }); } } }
       } }
+    if (m.ultra && !b.edif && UNID[b.tipo].cat === 'inf') { const U = ECON.ultra;
+      if (ox !== undefined && !arma.sobre && !arma.vuelo && tras(m, b, ox, oy)) ur *= U.parapeto; // tras un muro de roca, un edificio, una ruina o un casco: el tiro directo le llega mucho menos
+      if (arma.ligera && b.v < 0.01 && m.t - (b.supT === undefined ? -999 : b.supT) < U.supT) ur *= U.tierra; // suprimido y quieto: cuerpo a tierra
+    }
     b.vida -= ur * fl * arma.dano * (mult || 1) * arma.vs[b.edif ? 'edificio' : UNID[b.tipo].blindaje] * (b.enterrado ? ECON.enterradoDano : arma.asalto ? 1 : b.bunk ? ECON.bunkerDano : enTrinchera(m, b) ? (arma.sobre ? 1 : ECON.trinchera) : 1) * (enBosque(m, b) && UNID[b.tipo].cat === 'inf' ? ECON.bosqueCubre : 1);
     b.tDano = m.t; b.agresor = de;
     if (m.ultra && !b.edif && UNID[b.tipo].cat === 'inf') {
       if (b.vida <= 0 && !b.herido && !b.bunk && !b.sube) { // cae herido: fuera de combate, a la espera de que lo recojan
         b.vida = 1; b.herido = m.t; b.recarga = 0; limpiar(b); b.obj = 0; b.orden = 'nada'; b.ruta = null; b.pend = null; b.v = 0; b.guardia = false; m.efectos.push({ tipo: 'herido', x1: b.x, y1: b.y, j: b.j, t: m.t }); return;
       }
-      const J = m.jug[b.j]; // bajo fuego y al descubierto, por su cuenta: a cubierto
-      if (b.vida > 0 && !J.aToda && (b.orden === 'nada' || (b.orden === 'amover' && !J.decidido)) && !b.guardia && !b.bunk && !UNID[b.tipo].monta && !b.cava && m.t - (b.cubT === undefined ? -999 : b.cubT) > 200 && !enBosque(m, b) && !enTrinchera(m, b)) {
-        b.cubT = m.t; const N = m.N, R = ECON.ultra.cubre, bx = Math.floor(b.x), by = Math.floor(b.y); let mc = -1, mv = Infinity;
-        for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) { const x = bx + dx, y = by + dy; if (x < 1 || y < 1 || x >= N - 1 || y >= N - 1) continue; const i = y * N + x; if (m.mapa.terreno[i] !== T.BOSQUE || m.ocup[i]) continue;
-          const v = Math.hypot(dx, dy) - (ox !== undefined ? 0.3 * Math.hypot(x - ox, y - oy) : 0); if (v < mv) { mv = v; mc = i; } }
-        if (mc >= 0) { limpiar(b); b.obj = 0; asignar(m, b, { t: 'mover', x: (mc % N) + 0.5, y: ((mc / N) | 0) + 0.5 }); m.efectos.push({ tipo: 'retira', x1: b.x, y1: b.y, j: b.j, t: m.t }); }
-      }
+      b.supT = m.t; aCubierto(m, b, ox, oy); // bajo fuego y al descubierto, por su cuenta: a cubierto
     }
     if (b.vida <= 0 && !b.contada) { // veteranía: la baja se la apunta quien disparó
       b.contada = true;
@@ -3222,6 +3221,37 @@ globalThis.W = { VERSION: 'versión 132' };
         }
       }
     }
+  }
+  // Ultra-real. Parapeto: la celda de al lado, hacia quien dispara, es roca, edificio, ruina o casco (y la suya no).
+  function parapeto(m, i) { const t = m.mapa.terreno[i]; if (t === T.ROCA || (m.escombro && m.escombro[i]) || m.mapa.tipoMin[i] === 3) return true; const o = m.ocup[i] && m.porId.get(m.ocup[i]); return !!(o && o.edif && !o.infra); }
+  function tras(m, b, ox, oy) {
+    const N = m.N, dx = ox - b.x, dy = oy - b.y, d = Math.hypot(dx, dy); if (d < 1.5) return false;
+    const x = Math.floor(b.x + (dx / d) * 0.9), y = Math.floor(b.y + (dy / d) * 0.9), i = y * N + x, i0 = Math.floor(b.y) * N + Math.floor(b.x);
+    return i !== i0 && x > 0 && y > 0 && x < N - 1 && y < N - 1 && parapeto(m, i) && !parapeto(m, i0);
+  }
+  // A cubierto: la infantería bajo fuego (o suprimida) y por su cuenta busca cerca un bosque o un parapeto entre ella y el fuego.
+  // (ox, oy: de dónde viene; sin eso, vale cualquier parapeto al lado.) Una vez cada 200 ticks como mucho.
+  function aCubierto(m, b, ox, oy) {
+    const J = m.jug[b.j];
+    if (!(b.vida > 0 && !b.herido && !J.aToda && (b.orden === 'nada' || (b.orden === 'amover' && !J.decidido)) && !b.guardia && !b.bunk && !UNID[b.tipo].monta && !b.cava && m.t - (b.cubT === undefined ? -999 : b.cubT) > 200 && !enBosque(m, b) && !enTrinchera(m, b))) return;
+    if (ox !== undefined && tras(m, b, ox, oy)) return; // ya está tras algo
+    b.cubT = m.t; const N = m.N, R = ECON.ultra.cubre, bx = Math.floor(b.x), by = Math.floor(b.y); let mc = -1, mv = Infinity;
+    for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+      const x = bx + dx, y = by + dy; if (x < 1 || y < 1 || x >= N - 1 || y >= N - 1) continue; const i = y * N + x; if (m.ocup[i] || !m.paso[i] || parapeto(m, i)) continue;
+      let ok = m.mapa.terreno[i] === T.BOSQUE;
+      if (!ok) { if (ox !== undefined) { const ex = ox - (x + 0.5), ey = oy - (y + 0.5), ed = Math.hypot(ex, ey) || 1, j2 = Math.floor(y + 0.5 + (ey / ed) * 0.9) * N + Math.floor(x + 0.5 + (ex / ed) * 0.9); ok = j2 !== i && parapeto(m, j2); } else ok = parapeto(m, i - 1) || parapeto(m, i + 1) || parapeto(m, i - N) || parapeto(m, i + N); }
+      if (!ok) continue;
+      const v = Math.hypot(dx, dy) - (ox !== undefined ? 0.3 * Math.hypot(x - ox, y - oy) : 0); if (v < mv) { mv = v; mc = i; }
+    }
+    if (mc >= 0) { limpiar(b); b.obj = 0; asignar(m, b, { t: 'mover', x: (mc % N) + 0.5, y: ((mc / N) | 0) + 0.5 }); m.efectos.push({ tipo: 'retira', x1: b.x, y1: b.y, j: b.j, t: m.t }); }
+  }
+  // Supresión: el fuego que cae cerca deja a la infantería enemiga clavada (avanza y dispara peor) y la manda a cubierto, la toque o no.
+  function suprimir(m, x, y, r, j, ox, oy) {
+    const g = m.gr; if (!g) return; const C = g.C, x0 = Math.max(0, ((x - r) / GC) | 0), x1 = Math.min(C - 1, ((x + r) / GC) | 0), y0 = Math.max(0, ((y - r) / GC) | 0), y1 = Math.min(C - 1, ((y + r) / GC) | 0);
+    for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) { const c = cy * C + cx; for (let k = g.ini[c], f = g.ini[c + 1]; k < f; k++) {
+      const u = g.us[k]; if (u.j === j || u.j > 1 || u.vida <= 0 || u.herido || u.dentro || UNID[u.tipo].cat !== 'inf' || Math.hypot(u.x - x, u.y - y) > r) continue;
+      u.supT = m.t; aCubierto(m, u, ox, oy);
+    } }
   }
   // Contraataque: el atacado va por su agresor. Los compañeros llegan por la colmena (ver más abajo).
   function alertar(m, a, b) {
@@ -3334,6 +3364,7 @@ globalThis.W = { VERSION: 'versión 132' };
     const guia = !a.edif && UNID[a.tipo].guiaLaser, marcado = guia && laseado(m, b, a.j); // el avión de ataque: con la marca del láser, preciso; sin ella, disperso
     const mult = (!a.edif && UNID[a.tipo].cat === 'inf' && m.jug[a.j].mejoras.perforante ? 1.25 : 1) * (a.edif ? 1 : 1 + ECON.rangoDano * a.rango) * (guia && !marcado ? ECON.sinLaser : 1);
     a.recarga = arma.recarga >= 8 ? Math.round(arma.recarga * (0.9 + ((a.id * 31 + m.t * 17) % 21) / 100)) : arma.recarga;
+    if (m.ultra && !a.edif && UNID[a.tipo].cat === 'inf' && m.t - (a.supT === undefined ? -999 : a.supT) < ECON.ultra.supT) a.recarga = Math.round(a.recarga * ECON.ultra.supRecarga); // suprimido: tira menos
     a.tDisparo = m.t; // (cada arma lleva su compás, ±10 %: un grupo no dispara como un metrónomo)
     if (arma.vuelo) { // obús: vuela hasta donde estaba el blanco al disparar
       if (guia && !marcado) { const q = (a.id * 2654435761 + m.t * 40503) >>> 0, h = (q % 628) / 100, rd = ECON.laserDisp * (0.2 + 0.8 * ((q >>> 10) % 100) / 100); m.proy.push({ ox: ax, oy: ay, x: ax, y: ay, px: ax, py: ay, tx: bx + Math.cos(h) * rd, ty: by + Math.sin(h) * rd, obj: 0, j: a.j, arma: clave, mult, de: a.id }); }
@@ -3345,6 +3376,7 @@ globalThis.W = { VERSION: 'versión 132' };
       m.efectos.push({ tipo: 'boca', x1: ax, y1: ay, x2: bx, y2: by, j: a.j, t: m.t, arma: clave });
     } else {
       herir(m, b, arma, mult, a.id, ax, ay);
+      if (m.ultra && !b.edif && UNID[b.tipo].cat === 'inf') suprimir(m, bx, by, arma.recarga <= 10 ? ECON.ultra.supRMG : ECON.ultra.supR, a.j, ax, ay); // y a los de al lado también les llega (la ametralladora, más)
       m.efectos.push({ tipo: 'traza', x1: ax, y1: ay, x2: bx, y2: by, j: a.j, t: m.t, arma: clave, de: a.id, ob: b.id, bl: b.edif ? 'edif' : UNID[b.tipo].cat }); // de, ob y bl son para el dibujo: quién tira, a quién y de qué clase es
     }
     alertar(m, a, b);
@@ -3360,7 +3392,8 @@ globalThis.W = { VERSION: 'versión 132' };
       let acierto = false, bl = '', rebote = false; // bl y rebote son para el dibujo: en qué dio y si el blindaje lo escupió (de frente, algunas veces)
       if (arma.area) { // explosión: daña a todo enemigo dentro del radio
         danarMuros(m, p.tx, p.ty, arma.area, arma, p.mult, p.de, p.j); dejarCrater(m, p.tx, p.ty, arma.area);
-        for (const e of m.ents) if (e.j !== p.j && e.vida > 0 && !e.muro && dist(p.tx, p.ty, e) <= arma.area) { herir(m, e, arma, p.mult, p.de); acierto = true; }
+        for (const e of m.ents) if (e.j !== p.j && e.vida > 0 && !e.muro && dist(p.tx, p.ty, e) <= arma.area) { if (e.herido) { if (m.ultra) { e.herido = 0; e.vida = 0; e.porArma = p.arma; } continue; } herir(m, e, arma, p.mult, p.de); acierto = true; } // (ultra-real: la explosión remata al caído)
+        if (m.ultra) suprimir(m, p.tx, p.ty, arma.area + ECON.ultra.supR, p.j, p.ox, p.oy);
       } else {
         const o = m.porId.get(p.obj);
         acierto = !!o && o.vida > 0 && dist(p.tx, p.ty, o) <= 0.9; // si el blanco se apartó, falla
@@ -4042,6 +4075,16 @@ globalThis.W = { VERSION: 'versión 132' };
   }
   W.tickBinomio = tickBinomio;
   // Transporte: sacar a los pasajeros alrededor del vehículo (todos, o solo los supervivientes si lo han destruido).
+  // Tripulación: cuántos van dentro (los aviones, los drones y lo que no lleva gente no cuentan).
+  function tripulacion(d) { return d.tripu !== undefined ? d.tripu : d.cat !== 'veh' || d.aire || d.mini || !(d.costo > 0) ? 0 : d.blindaje === 'pesado' ? 3 : d.binomio ? 1 : 2; }
+  // El tripulante que se salva sale tocado y con la pistola (sin el arma larga) y se vuelve a la base más cercana; allí recupera munición.
+  function salvarTripulante(m, t, k) {
+    const a = k * 2.1 + t.id, c = W.cercaLibre(m, t.x + Math.cos(a) * 1.4, t.y + Math.sin(a) * 1.4), u = crearUnidad(m, t.j, 'infanteria', c); m.jug[t.j].producidas--;
+    u.tripu = true; u.vida = Math.max(1, Math.round(u.vidaMax * ECON.ultra.tripuVida)); if (u.mun !== undefined) u.mun = 0;
+    let b = null, md = Infinity; for (const e of m.ents) if (e.edif && e.j === t.j && e.vida > 0 && (e.tipo === 'patio' || e.tipo === 'cuartel' || e.tipo === 'fabrica')) { const dd = Math.hypot(e.cx - u.x, e.cy - u.y); if (dd < md) { md = dd; b = e; } }
+    if (b) { const cc = W.cercaLibre(m, b.cx, b.y + b.tam + 1.5); asignar(m, u, { t: 'mover', x: (cc % m.N) + 0.5, y: ((cc / m.N) | 0) + 0.5 }); }
+    m.efectos.push({ tipo: 'retira', x1: u.x, y1: u.y, j: u.j, t: m.t });
+  }
   function apear(m, t, lista) {
     lista.forEach((p, i) => {
       const a = (i / Math.max(1, lista.length)) * TAU, c = W.cercaLibre(m, t.x + Math.cos(a) * 1.3, t.y + Math.sin(a) * 1.3);
@@ -4297,7 +4340,7 @@ globalThis.W = { VERSION: 'versión 132' };
         } }
     }
     let muertos = false;
-    const apeados = [];
+    const apeados = [], tripus = [];
     for (let k = 0; k < m.ents.length; k++) {
       const e = m.ents[k];
       if (e.vida > 0) continue;
@@ -4315,6 +4358,7 @@ globalThis.W = { VERSION: 'versión 132' };
         const J = m.jug[e.j]; let sola = true; for (const o of m.ents) if (o !== e && !o.edif && o.j === e.j && o.vida > 0 && UNID[o.tipo].arma && Math.hypot(o.x - e.x, o.y - e.y) <= 6) { sola = false; break; }
         J.tropas = (J.tropas || 0) + 1; if (sola) J.solas = (J.solas || 0) + 1;
       }
+      if (m.ultra && !e.edif && !e.vendido && e.vida <= 0) { const n = tripulacion(UNID[e.tipo]); for (let k = 0; k < n; k++) if (((e.id * 2654435761 + k * 40503) >>> 0) % 100 < ECON.ultra.tripu) tripus.push(e); } // ultra-real: de un vehículo destruido se salva parte de la tripulación
       if (!e.edif && e.pasajeros.length) { // del transporte destruido sale la mitad de su carga
         const vivos = e.pasajeros.filter((p, i) => i % 2 === 0);
         m.jug[e.j].bajas += e.pasajeros.length - vivos.length; e.pasajeros = [];
@@ -4348,6 +4392,7 @@ globalThis.W = { VERSION: 'versión 132' };
     if (muertos) {
       m.ents = m.ents.filter((e) => e.vida > 0); m.redSucia = true;
       for (const [t, vivos] of apeados) apear(m, t, vivos);
+      tripus.forEach((t, k) => salvarTripulante(m, t, k));
       contar(m);
       for (const J of m.jug) if (!J.cuenta.patio && !J.cuenta.patioMovil) J.vivo = false; // se pierde al quedarse sin patios (ni patio móvil que desplegar)
       if (!m.jug[0].vivo || !m.jug[1].vivo) m.ganador = m.jug[0].vivo ? 0 : m.jug[1].vivo ? 1 : 2;
