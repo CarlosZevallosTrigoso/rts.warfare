@@ -31,6 +31,7 @@
         <span class="ed-tam"></span>
         <button data-a="inicio">Nuevo o abrir</button>
         <button data-a="deshacer" title="Deshacer (Ctrl Z)">↶</button><button data-a="rehacer" title="Rehacer (Ctrl Mayús Z)">↷</button>
+        <button data-a="rueda" class="ed-rueda" title="Qué hace la rueda o el deslizar de dos dedos: acercar y alejar, o mover la vista (tecla M). El pellizco siempre acerca y aleja."></button>
         <label class="ed-esp" title="Pinta también la celda opuesta (giro de 180°): mapa justo para los dos lados"><input type="checkbox" class="ed-espejo"> espejo</label>
         <span class="ed-sep"></span>
         <button data-a="guardar">Guardar</button><button data-a="exportar">Exportar .json</button><button data-a="probar" class="ed-fuerte">Probar</button>
@@ -43,7 +44,7 @@
           <div class="ed-fila"><span>Pincel</span><input type="range" class="ed-pincel" min="1" max="25" value="5"><b class="ed-pincelV">5</b></div>
           <div class="ed-fila ed-cantF"><span>Cantidad</span><input type="range" class="ed-cant" min="150" max="2700" step="50" value="1350"><b class="ed-cantV">1350</b></div>
           <div class="ed-rev"></div>
-          <div class="ed-ayuda">Clic: pintar o colocar · mover la vista: arrastrar con el botón derecho o con Espacio, o dos dedos en el trackpad · zoom: rueda o pellizco · M: la rueda mueve en vez de acercar · [ ]: pincel · Ctrl Z: deshacer</div>
+          <div class="ed-ayuda">Clic: pintar o colocar · mover la vista: arrastrar con el botón derecho o con Espacio, o dos dedos en el trackpad · zoom: rueda o pellizco · M o el botón «rueda»: que la rueda mueva la vista · [ ]: pincel · Ctrl Z: deshacer</div>
         </div>
       </div>
       <div class="ed-inicio"></div>`;
@@ -200,16 +201,14 @@
     const soltar = (e) => { dedos.delete(e.pointerId); if (pinta) { pinta = false; terminar(); } if (!dedos.size) arrastre = null; };
     lienzo.addEventListener('pointerup', soltar); lienzo.addEventListener('pointercancel', soltar);
     lienzo.addEventListener('pointerleave', () => { if (raton) raton.dentro = false; pintar(); });
-    // Como en el juego: la rueda del ratón acerca y aleja; en el trackpad, dos dedos mueven la vista y el pellizco acerca.
-    // El trackpad se reconoce porque también desliza en horizontal; la tecla M cambia el modo a mano.
+    // Como en el juego: la rueda del ratón acerca y aleja; en el trackpad, dos dedos mueven la vista y el pellizco acerca (W.rueda, en rueda.js).
     const acotar = () => { cam.x = Math.max(0, Math.min(mp.N, cam.x)); cam.y = Math.max(0, Math.min(mp.N, cam.y)); };
     const zoomEn = (px, py, f) => { const a = aCelda(px, py); cam.z = Math.max(0.3, Math.min(40, cam.z * f)); const b = aCelda(px, py); cam.x += a.x - b.x; cam.y += a.y - b.y; acotar(); pintar(); };
-    let deslizar = false, escalaGesto = 1;
+    let escalaGesto = 1;
     lienzo.addEventListener('wheel', (e) => {
       if (!mp) return; e.preventDefault(); const u = e.deltaMode === 1 ? 16 : 1;
       if (e.ctrlKey || e.metaKey) { zoomEn(e.clientX, e.clientY, Math.exp(-Math.max(-30, Math.min(30, e.deltaY * u)) * 0.01)); return; } // pellizco (Chrome, Firefox)
-      if (e.deltaX !== 0) deslizar = true;
-      if (deslizar) { cam.x += (e.deltaX * u) / cam.z; cam.y += (e.deltaY * u) / cam.z; acotar(); pintar(); }
+      if (W.rueda.mueve(e)) { cam.x += (e.deltaX * u) / cam.z; cam.y += (e.deltaY * u) / cam.z; acotar(); pintar(); }
       else zoomEn(e.clientX, e.clientY, Math.exp(-e.deltaY * u * 0.0015));
     }, { passive: false });
     lienzo.addEventListener('gesturestart', (e) => { e.preventDefault(); escalaGesto = 1; }); // pellizco en Safari
@@ -220,7 +219,7 @@
       if (e.code === 'Space') { espacio = e.type === 'keydown'; e.preventDefault(); return; }
       if (e.type !== 'keydown') return;
       if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ') { e.preventDefault(); if (e.shiftKey) rehacerUno(); else deshacer(); return; }
-      if (e.code === 'KeyM' && !e.ctrlKey && !e.metaKey) { deslizar = !deslizar; avisar(deslizar ? 'La rueda mueve la vista (M para volver al zoom)' : 'La rueda acerca y aleja (M para mover la vista)'); return; }
+      if (e.code === 'KeyM' && !e.ctrlKey && !e.metaKey) { W.rueda.cambiar(); return; }
       if (e.key === '[' || e.key === ']') { const p = $('.ed-pincel'); p.value = Math.max(1, Math.min(25, +p.value + (e.key === ']' ? 2 : -2))); p.dispatchEvent(new Event('input')); }
     };
     addEventListener('keydown', tecla, oye); addEventListener('keyup', tecla, oye);
@@ -233,6 +232,7 @@
       else if (a === 'deshacer') deshacer();
       else if (a === 'rehacer') rehacerUno();
       else if (a === 'salir' && op.salir) op.salir();
+      else if (a === 'rueda') { W.rueda.cambiar(); b.blur(); }
       else if (!mp) return;
       else if (a === 'guardar') { if (guardar()) avisar('Guardado en este navegador'); }
       else if (a === 'exportar') { const json = W.mapaAJSON(mp), url = URL.createObjectURL(new Blob([JSON.stringify(json)], { type: 'application/json' })), el = document.createElement('a'); el.href = url; el.download = (json.nombre || 'mapa').replace(/[^\wáéíóúñ -]+/gi, '').trim().replace(/\s+/g, '-') + '.rts-mapa.json'; el.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
@@ -280,8 +280,10 @@
       else if (a === 'borrar') { if (confirm('¿Borrar este mapa del navegador?')) { W.borrarMiMapa(b.dataset.id); abrirInicio(); } }
     });
 
+    const pintaRueda = () => { $('.ed-rueda').textContent = W.rueda.texto(); };
+    pintaRueda(); const sinRueda = W.rueda.alCambiar((modo, porQue) => { pintaRueda(); avisar(porQue === 'trackpad' ? 'Trackpad: dos dedos mueven la vista; el pellizco acerca y aleja' : modo === 'mover' ? 'La rueda mueve la vista; el pellizco (o Ctrl + rueda) acerca y aleja' : 'La rueda acerca y aleja; la vista se mueve arrastrando con el botón derecho o con Espacio'); });
     elegir('roca');
     requestAnimationFrame(() => { encajar(); const L = W.misMapas(); if (op.abrir && L[op.abrir]) { try { cargar(W.mapaDeJSON(L[op.abrir].mapa), op.abrir); return; } catch (err) { avisar('No se pudo abrir: ' + err.message); } } abrirInicio(); });
-    return { cargar, mapa: () => mp, cerrar: () => { fin.abort(); raiz.innerHTML = ''; raiz.classList.remove('ed'); } };
+    return { cargar, mapa: () => mp, cerrar: () => { fin.abort(); sinRueda(); raiz.innerHTML = ''; raiz.classList.remove('ed'); } };
   };
 })();

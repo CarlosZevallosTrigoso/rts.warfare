@@ -1549,10 +1549,11 @@
       if (modo === 'barrido' && raton.dentro) { // zona que revelará el barrido
         ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.setLineDash([6, 4]); ctx.beginPath(); ctx.arc(raton.x, raton.y, W.INTEL[barridoClave].radio * z, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
       }
+      const bordeBotones = avisos.length ? Math.round($('ruedaB').getBoundingClientRect().right - lienzo.getBoundingClientRect().left + 8) : 0; // (a la derecha del último botón de arriba)
       for (let k = avisos.length - 1, fila = 0; k >= 0; k--) { // avisos, arriba al centro
         const a = avisos[k], edad = (performance.now() - a.t0) / 6000;
         if (edad >= 1) { avisos.splice(k, 1); continue; }
-        const w = ctx.measureText(a.txt).width + 16, x = Math.max(268, (cw - w) / 2), y = 10 + fila++ * 24; // (a la derecha de los botones de arriba)
+        const w = ctx.measureText(a.txt).width + 16, x = Math.max(bordeBotones, (cw - w) / 2), y = 10 + fila++ * 24; // (a la derecha de los botones de arriba)
         ctx.globalAlpha = Math.min(1, (1 - edad) * 3);
         ctx.fillStyle = P.tinta; ctx.fillRect(x, y, w, 20); ctx.fillStyle = P.fondo; ctx.fillText(a.txt, x + 8, y + 14);
         ctx.globalAlpha = 1;
@@ -2772,17 +2773,18 @@
       cam.z *= factor; limitarCam();
       cam.x = wx - (raton.x - cw / 2) / cam.z; cam.y = wy - (raton.y - ch / 2) / cam.z; limitarCam();
     }
-    // Rueda de ratón: zoom. Trackpad: dos dedos desplazan y el pellizco hace zoom.
-    // Un trackpad se reconoce porque también desliza en horizontal; la tecla M cambia el modo a mano.
-    let deslizar = false;
+    // Rueda de ratón: zoom. Trackpad: dos dedos desplazan y el pellizco hace zoom. Cuál es cuál lo adivina W.rueda (ver rueda.js);
+    // el botón «rueda» y la tecla M lo cambian a mano.
     lienzo.addEventListener('wheel', (ev) => {
       ev.preventDefault(); posRaton(ev);
       const u = ev.deltaMode === 1 ? 16 : 1;
       if (ev.ctrlKey || ev.metaKey) { zoom(Math.exp(-Math.max(-30, Math.min(30, ev.deltaY * u)) * 0.01)); return; } // pellizco (Chrome, Firefox)
-      if (ev.deltaX !== 0) deslizar = true;
-      if (deslizar) { cam.x += (ev.deltaX * u) / cam.z; cam.y += (ev.deltaY * u) / cam.z; limitarCam(); }
+      if (W.rueda.mueve(ev)) { cam.x += (ev.deltaX * u) / cam.z; cam.y += (ev.deltaY * u) / cam.z; limitarCam(); }
       else zoom(Math.exp(-ev.deltaY * u * 0.0015));
     }, { passive: false });
+    const pintaRueda = () => { $('ruedaB').textContent = W.rueda.texto(); };
+    pintaRueda(); $('ruedaB').addEventListener('click', () => { W.rueda.cambiar(); $('ruedaB').blur(); });
+    W.rueda.alCambiar((modo, porQue) => { pintaRueda(); aviso(W.rueda.explica(porQue)); });
     // Pellizco en Safari: usa sus propios eventos de gesto.
     let escalaGesto = 1;
     lienzo.addEventListener('gesturestart', (ev) => { ev.preventDefault(); escalaGesto = 1; });
@@ -2883,7 +2885,7 @@
         tecleado = (tecleado + ev.key.toLowerCase()).slice(-5);
         if (tecleado.endsWith('god')) { W.orden(m, { t: 'dios', j: YO }); tecleado = ''; }
         if (tecleado === 'admin') { // abre o cierra el panel de interruptores; no activa nada por sí solo
-          tecleado = ''; modo = null; deslizar = !deslizar; // deshace lo que las letras a y m hicieron por el camino (la n no llega a actuar)
+          tecleado = ''; modo = null; W.rueda.cambiar(); // deshace lo que las letras a y m hicieron por el camino (la n no llega a actuar)
           $('admin').hidden = !$('admin').hidden; actualizarAdmin();
           return;
         }
@@ -2928,7 +2930,7 @@
         case 'Space': if (J.alerta) { cam.x = J.alerta.x; cam.y = J.alerta.y; } break;
         case 'KeyL': if (conRed) { verRed = !verRed; aviso(verRed ? 'Vista de la red: lo sombreado es tu cobertura; en rojo, las líneas que no llegan a tu red' : 'Vista de la red apagada'); } else aviso('Partida clásica: sin red'); break;
         case 'KeyP': ponPausa(!pausa); break;
-        case 'KeyM': deslizar = !deslizar; break;
+        case 'KeyM': W.rueda.cambiar(); break;
         case 'KeyN': son.alternar(); break;
         case 'Equal': case 'NumpadAdd': raton.x = cw / 2; raton.y = ch / 2; zoom(1.25); break;
         case 'Minus': case 'NumpadSubtract': raton.x = cw / 2; raton.y = ch / 2; zoom(0.8); break;

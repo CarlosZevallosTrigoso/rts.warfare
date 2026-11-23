@@ -37,8 +37,8 @@
   .btn.con-x .x { display: inline-block; }
   .btn .x:hover { background: var(--mal); color: #fff; }
   #obras { min-height: 34px; margin-top: 5px; }
-  #pausaB, #guardaB { position: fixed; top: 8px; z-index: 3; font: inherit; color: var(--tinta); background: var(--panel); border: 1px solid var(--linea); border-radius: 2px; padding: 3px 8px; cursor: pointer; }
-  #pausaB { left: 128px; } #guardaB { left: 190px; }
+  #pausaB, #guardaB, #ruedaB { position: fixed; top: 8px; z-index: 3; font: inherit; color: var(--tinta); background: var(--panel); border: 1px solid var(--linea); border-radius: 2px; padding: 3px 8px; cursor: pointer; }
+  #pausaB { left: 128px; } #guardaB { left: 190px; } #ruedaB { left: 262px; }
   #pausaB.on { background: var(--tinta); color: var(--fondo); border-color: var(--tinta); }
   #abreGuia { position: fixed; top: 8px; left: 78px; z-index: 3; font: inherit; color: var(--tinta); background: var(--panel); border: 1px solid var(--linea); border-radius: 2px; padding: 3px 8px; cursor: pointer; }
   #guia { position: fixed; inset: 0 236px 0 0; z-index: 6; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.25); }
@@ -248,6 +248,7 @@
   <canvas id="lienzo"></canvas>
   <button type="button" id="abreGuia" title="Para qué sirve cada edificio y cada unidad">guía</button>
   <button type="button" id="pausaB" title="Pausa la partida (tecla P). En pausa puedes mirar el mapa, pero no dar órdenes que avancen.">pausa</button>
+  <button type="button" id="ruedaB" title="Qué hace la rueda o el deslizar de dos dedos: acercar y alejar, o mover la vista (tecla M). El pellizco siempre acerca y aleja.">rueda: zoom</button>
   <button type="button" id="guardaB" title="Guarda la partida en este navegador (tecla F6). Hay un solo hueco: cada guardado pisa el anterior. Se continúa desde el menú inicial.">guardar</button>
   <details id="ayuda" class="tenue"><summary>ayuda</summary>
       <div>clic / caja: seleccionar</div>
@@ -281,7 +282,7 @@
       <div>trackpad: dos dedos desplazan, pellizco zoom</div>
       <div>táctil: toque elige; con tropa elegida, toque en el mapa ordena;</div>
       <div>arrastrar un dedo: caja · dos dedos: mover y zoom</div>
-      <div>rueda o <kbd>+</kbd> <kbd>−</kbd>: zoom · <kbd>M</kbd> cambia rueda</div>
+      <div>rueda o <kbd>+</kbd> <kbd>−</kbd>: zoom · <kbd>M</kbd> o el botón «rueda»: que la rueda mueva la vista</div>
       <div><kbd>H</kbd> base · <kbd>espacio</kbd> alerta</div>
       <div><kbd>Mayús+1…9</kbd> guardar grupo · <kbd>1…9</kbd> elegirlo, dos veces ir</div>
       <div>clic en un edificio: lo que produce y su cola;</div>
