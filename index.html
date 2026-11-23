@@ -420,13 +420,13 @@
   <button type="button" id="tutorial">Tutorial guiado<small style="display:block;color:var(--suave);font-size:10px">ocho pasos, con el rival dormido hasta el final</small></button>
   <button type="button" id="editorB">Editor de mapas<small style="display:block;color:var(--suave);font-size:10px">haz uno de cero o edita uno del juego; los tuyos salen arriba, en «Tipo de mapa»</small></button>
   <button type="button" id="continuar" hidden>Continuar la partida guardada</button>
-  <div id="version">versión 135</div>
+  <div id="version">versión 136</div>
 </div></div>
 <div id="editor" hidden></div>
 <div id="guia" hidden><div class="caja"><div class="cab"><strong>Guía: para qué sirve cada cosa</strong><button type="button" id="cierraGuia">cerrar</button></div><div id="guiaTxt"></div></div></div>
 <div id="fin" hidden><div><strong id="finTxt"></strong><span id="finSub" class="tenue"></span><canvas id="finGraf" width="660" height="170"></canvas><p><a id="finVer" href="#" title="Vuelve a ver la partida entera, con todo el mapa a la vista y a la velocidad que quieras.">ver repetición</a><a id="finLog" href="#" title="Descarga el registro de la partida: la semilla, las opciones y todas las órdenes de los dos bandos, con su instante. Sirve para reproducirla y analizar cómo jugó la IA.">descargar registro</a><a id="finRep" href="#">repetir mapa</a><a id="finEd" href="#" hidden>editar este mapa</a><a id="finNueva" href="#">mapa nuevo</a></p></div></div>
 <script>
-globalThis.W = { VERSION: 'versión 135' };
+globalThis.W = { VERSION: 'versión 136' };
 // ===== sim/datos.js =====
 // rts.warfare — tablas de datos y utilidades base. Enriquecer el juego = editar estas tablas.
 (function () {
@@ -6652,7 +6652,7 @@ globalThis.W = { VERSION: 'versión 135' };
           <div class="ed-fila"><span>Pincel</span><input type="range" class="ed-pincel" min="1" max="25" value="5"><b class="ed-pincelV">5</b></div>
           <div class="ed-fila ed-cantF"><span>Cantidad</span><input type="range" class="ed-cant" min="150" max="2700" step="50" value="1350"><b class="ed-cantV">1350</b></div>
           <div class="ed-rev"></div>
-          <div class="ed-ayuda">Clic: pintar o colocar · arrastrar con el botón derecho, la rueda o Espacio: mover la vista · rueda o dos dedos: zoom · [ ]: pincel · Ctrl Z: deshacer</div>
+          <div class="ed-ayuda">Clic: pintar o colocar · mover la vista: arrastrar con el botón derecho o con Espacio, o dos dedos en el trackpad · zoom: rueda o pellizco · M: la rueda mueve en vez de acercar · [ ]: pincel · Ctrl Z: deshacer</div>
         </div>
       </div>
       <div class="ed-inicio"></div>`;
@@ -6801,20 +6801,35 @@ globalThis.W = { VERSION: 'versión 135' };
       raton = { x: e.clientX, y: e.clientY, dentro: true };
       if (dedos.has(e.pointerId)) dedos.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (mp) { const c = aCelda(e.clientX, e.clientY), N = mp.N, x = Math.floor(c.x), y = Math.floor(c.y); if (x >= 0 && y >= 0 && x < N && y < N) { const i = y * N + x, t = mp.terreno[i]; $('.ed-info').textContent = `${x}, ${y} · ${['llano', 'roca', 'agua', 'bosque', 'camino', 'puente'][t]}${mp.mineral[i] ? ' · ' + (mp.tipoMin[i] === 2 ? 'raro ' : 'mineral ') + mp.mineral[i] : ''}`; } }
-      if (arrastre && arrastre.gesto && dedos.size === 2) { const g = gesto(), f = g.d / arrastre.d; cam.z = Math.max(0.3, Math.min(40, arrastre.z * f)); cam.x = arrastre.cx - (g.mx - arrastre.mx) / cam.z; cam.y = arrastre.cy - (g.my - arrastre.my) / cam.z; pintar(); return; }
-      if (arrastre && !arrastre.gesto) { cam.x = arrastre.cx - (e.clientX - arrastre.x) / cam.z; cam.y = arrastre.cy - (e.clientY - arrastre.y) / cam.z; pintar(); return; }
+      if (arrastre && arrastre.gesto && dedos.size === 2) { const g = gesto(), f = g.d / arrastre.d; cam.z = Math.max(0.3, Math.min(40, arrastre.z * f)); cam.x = arrastre.cx - (g.mx - arrastre.mx) / cam.z; cam.y = arrastre.cy - (g.my - arrastre.my) / cam.z; acotar(); pintar(); return; }
+      if (arrastre && !arrastre.gesto) { cam.x = arrastre.cx - (e.clientX - arrastre.x) / cam.z; cam.y = arrastre.cy - (e.clientY - arrastre.y) / cam.z; acotar(); pintar(); return; }
       if (pinta) { const c = aCelda(e.clientX, e.clientY), d = Math.hypot(c.x - ultimo.x, c.y - ultimo.y), n = Math.max(1, Math.ceil(d / Math.max(0.5, pincel() / 3))); for (let k = 1; k <= n; k++) brocha(ultimo.x + (c.x - ultimo.x) * k / n, ultimo.y + (c.y - ultimo.y) * k / n); ultimo = c; volcar(); return; }
       pintar();
     });
     const soltar = (e) => { dedos.delete(e.pointerId); if (pinta) { pinta = false; terminar(); } if (!dedos.size) arrastre = null; };
     lienzo.addEventListener('pointerup', soltar); lienzo.addEventListener('pointercancel', soltar);
     lienzo.addEventListener('pointerleave', () => { if (raton) raton.dentro = false; pintar(); });
-    lienzo.addEventListener('wheel', (e) => { if (!mp) return; e.preventDefault(); const a = aCelda(e.clientX, e.clientY), f = Math.exp(-e.deltaY * 0.0015); cam.z = Math.max(0.3, Math.min(40, cam.z * f)); const b = aCelda(e.clientX, e.clientY); cam.x += a.x - b.x; cam.y += a.y - b.y; pintar(); }, { passive: false });
+    // Como en el juego: la rueda del ratón acerca y aleja; en el trackpad, dos dedos mueven la vista y el pellizco acerca.
+    // El trackpad se reconoce porque también desliza en horizontal; la tecla M cambia el modo a mano.
+    const acotar = () => { cam.x = Math.max(0, Math.min(mp.N, cam.x)); cam.y = Math.max(0, Math.min(mp.N, cam.y)); };
+    const zoomEn = (px, py, f) => { const a = aCelda(px, py); cam.z = Math.max(0.3, Math.min(40, cam.z * f)); const b = aCelda(px, py); cam.x += a.x - b.x; cam.y += a.y - b.y; acotar(); pintar(); };
+    let deslizar = false, escalaGesto = 1;
+    lienzo.addEventListener('wheel', (e) => {
+      if (!mp) return; e.preventDefault(); const u = e.deltaMode === 1 ? 16 : 1;
+      if (e.ctrlKey || e.metaKey) { zoomEn(e.clientX, e.clientY, Math.exp(-Math.max(-30, Math.min(30, e.deltaY * u)) * 0.01)); return; } // pellizco (Chrome, Firefox)
+      if (e.deltaX !== 0) deslizar = true;
+      if (deslizar) { cam.x += (e.deltaX * u) / cam.z; cam.y += (e.deltaY * u) / cam.z; acotar(); pintar(); }
+      else zoomEn(e.clientX, e.clientY, Math.exp(-e.deltaY * u * 0.0015));
+    }, { passive: false });
+    lienzo.addEventListener('gesturestart', (e) => { e.preventDefault(); escalaGesto = 1; }); // pellizco en Safari
+    lienzo.addEventListener('gesturechange', (e) => { e.preventDefault(); if (mp && e.scale > 0) { const r = lienzo.getBoundingClientRect(); zoomEn(r.left + r.width / 2, r.top + r.height / 2, e.scale / escalaGesto); escalaGesto = e.scale; } });
+    lienzo.addEventListener('gestureend', (e) => e.preventDefault());
     const tecla = (e) => {
       if (!raiz.isConnected || e.target.tagName === 'INPUT' && e.target.type !== 'range' && e.target.type !== 'checkbox') return;
       if (e.code === 'Space') { espacio = e.type === 'keydown'; e.preventDefault(); return; }
       if (e.type !== 'keydown') return;
       if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ') { e.preventDefault(); if (e.shiftKey) rehacerUno(); else deshacer(); return; }
+      if (e.code === 'KeyM' && !e.ctrlKey && !e.metaKey) { deslizar = !deslizar; avisar(deslizar ? 'La rueda mueve la vista (M para volver al zoom)' : 'La rueda acerca y aleja (M para mover la vista)'); return; }
       if (e.key === '[' || e.key === ']') { const p = $('.ed-pincel'); p.value = Math.max(1, Math.min(25, +p.value + (e.key === ']' ? 2 : -2))); p.dispatchEvent(new Event('input')); }
     };
     addEventListener('keydown', tecla, oye); addEventListener('keyup', tecla, oye);
