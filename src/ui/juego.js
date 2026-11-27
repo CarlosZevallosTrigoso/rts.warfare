@@ -293,11 +293,11 @@
     let dtCuadro = 16;
     function parte(k, x, y, vx, vy, vida, s, o) { if (parts.length > 2600) parts.shift(); const q = { k, x, y, vx, vy, v: 0, m: vida, s }; if (o) Object.assign(q, o); parts.push(q); }
     // La rodada de un vehículo: un trazo por cada lado, del punto anterior al actual (así las curvas salen seguidas). o: de oruga (trazo a rayas).
-    function rodada(x0, y0, a0, x, y, ang, s, o) { if (suelo.length > 700) suelo.shift(); suelo.push({ k: 'rodada', x, y, x0, y0, a0, ang, s, o, b: conRed && W.clima(m) > 0, t0: performance.now(), dur: 22000 }); } // (b: con lluvia, la rodada es de barro)
+    function rodada(x0, y0, a0, x, y, ang, s, o) { if (suelo.length > 700) suelo.shift(); const b = conRed && W.clima(m) > 0; suelo.push({ k: 'rodada', x, y, x0, y0, a0, ang, s, o, b, t0: performance.now(), dur: 22000 }); if (W.horno) W.horno.marca('rodada', x, y, s, ang, { x0, y0, a0, oruga: o, barro: b }); } // (b: con lluvia, la rodada es de barro)
     const pisadas = []; // las de la infantería, aparte: son muchas y cortas, y no deben echar de la lista a cráteres y rodadas
     const ORUGA = new Set(['tanque', 'pesado', 'antiaereoMovil', 'artilleria', 'excavadora', 'lanzacohetes', 'vci']);
     const muelleDe = (g, k, obj, rig, fr, dt) => { const v = (g[k + 'v'] || 0) + ((obj - (g[k] || 0)) * rig - (g[k + 'v'] || 0) * fr) * dt; g[k + 'v'] = v; return (g[k] = (g[k] || 0) + v * dt); }; // muelle amortiguado: lo que da el peso
-    function marcaSuelo(k, x, y, s, ang, dur, clase) { if (suelo.length > 700) suelo.shift(); suelo.push({ k, x, y, s, ang, t0: performance.now(), dur, clase }); }
+    function marcaSuelo(k, x, y, s, ang, dur, clase) { if (suelo.length > 700) suelo.shift(); suelo.push({ k, x, y, s, ang, t0: performance.now(), dur, clase }); if (W.horno) W.horno.marca(k, x, y, s, ang); } // de maqueta, además queda en la memoria del suelo
     function estallido(x, y, tam) { // tam: 1 impacto, 2 unidad, 3 edificio
       parte('fogonazo', x, y, 0, 0, 0.13, 0.28 + tam * 0.22);
       parte('anillo', x, y, 0, 0, 0.28 + tam * 0.09, 0.5 + tam * 0.5);
@@ -589,9 +589,10 @@
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.fillStyle = P.fondo; ctx.fillRect(0, 0, cw, ch);
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(cTerr, ox, oy, N * z, N * z);
+      if (!(W.horno && W.horno.suelo(ctx, ox, oy, z, cw, ch, N, dpr, cTerr, mp.terreno, P, terrVisto))) ctx.drawImage(cTerr, ox, oy, N * z, N * z); // de maqueta: el suelo con textura, ya pintado
       const x0 = Math.floor(-ox / z) - 1, x1 = Math.floor((cw - ox) / z) + 1, y0 = Math.floor(-oy / z) - 1, y1 = Math.floor((ch - oy) / z) + 1;
       const fuera = (x, y) => x < x0 || x > x1 || y < y0 || y > y1;
+      if (W.horno) W.horno.recuerdo(ctx, ox, oy, z, cw, ch); // de maqueta: lo que ha pasado por el suelo
 
       const lod = z >= 16 ? 2 : z >= 8 ? 1 : 0; // nivel de detalle según el zoom
       if (lod) { // relieve: la roca es una meseta con su cara sur a la vista y sombra al sur y al este; el agua queda hundida
@@ -690,20 +691,20 @@
         }
         ctx.setLineDash([]);
       }
-      if (tubos.length) { // oleoductos: un trazo más grueso y pardo, tenue salvo en la vista de la red
+      if (tubos.length && !(W.horno && W.horno.tubos(ctx, tubos, ox, oy, z, verRed, performance.now() / 1000, fuera, veo))) { // oleoductos: un trazo más grueso y pardo, tenue salvo en la vista de la red (de maqueta: un tubo con volumen)
         ctx.strokeStyle = '#7a5a2e'; ctx.globalAlpha = verRed ? 0.85 : 0.4; ctx.lineWidth = Math.max(1.5, z * (verRed ? 0.2 : 0.13)); ctx.beginPath();
         for (const e of tubos) { if (!veo(e)) continue; const p = e.pts; ctx.moveTo(ox + p[0] * z, oy + p[1] * z); ctx.lineTo(ox + p[2] * z, oy + p[3] * z); }
         ctx.stroke(); ctx.globalAlpha = 1;
       }
       if (lineas.length) { // líneas de servicio: un trazo fino con sus postes; en rojo las propias que no llegan a la red
-        const ancho = Math.max(1, z * (verRed ? 0.14 : 0.08));
-        for (const pasada of [0, 1]) {
+        const ancho = Math.max(1, z * (verRed ? 0.14 : 0.08)), conVol = !!(W.horno && W.horno.lineas(ctx, lineas, ox, oy, z, verRed, (e) => e.j === YO && conRed && !e.conRed, P.mal, performance.now() / 1000, fuera)); // de maqueta: postes, crucetas y dos hilos
+        if (!conVol) for (const pasada of [0, 1]) {
           ctx.strokeStyle = pasada ? P.mal : P.tinta; ctx.globalAlpha = pasada ? 0.9 : verRed ? 0.85 : 0.28; ctx.lineWidth = ancho; /* el cableado, apenas visible salvo en la vista de la red */ ctx.beginPath();
           for (const e of lineas) { if ((e.j === YO && conRed && !e.conRed) !== !!pasada) continue; const p = e.pts; ctx.moveTo(ox + p[0] * z, oy + p[1] * z); ctx.lineTo(ox + p[2] * z, oy + p[3] * z); }
           ctx.stroke();
         }
         ctx.globalAlpha = 1;
-        if (z >= 9) { // postes: uno por celda, más o menos
+        if (z >= 9 && !conVol) { // postes: uno por celda, más o menos
           ctx.fillStyle = P.tinta; ctx.globalAlpha = verRed ? 1 : 0.4; ctx.beginPath();
           for (const e of lineas) { const p = e.pts, n = Math.max(1, Math.round(e.largo)); for (let k = 0; k <= n; k += 2) { const x = ox + (p[0] + ((p[2] - p[0]) * k) / n) * z, y = oy + (p[1] + ((p[3] - p[1]) * k) / n) * z; ctx.moveTo(x + z * 0.09, y); ctx.arc(x, y, Math.max(1.2, z * 0.09), 0, TAU); } }
           ctx.fill();
@@ -920,7 +921,7 @@
             ctx.fillStyle = 'rgba(0,0,0,0.28)'; ctx.fillRect(px, py + t - Math.max(1, h * 0.12), t, Math.max(1, h * 0.12));
           }
         }
-        W.fichaEdificio(ctx, e, px, py - h, t, lod, col, est);
+        if (!(W.horno && W.horno.edificio(ctx, e, px, py - h, t, lod, col, est))) W.fichaEdificio(ctx, e, px, py - h, t, lod, col, est); // de maqueta: con todo su detalle
         if (m.cargas && lod) for (const q of m.cargas) if (q.obj === e.id && (q.j === YO || rep)) { const qx = ox + q.x * z, qy = oy + q.y * z; ctx.fillStyle = '#e0b83a'; ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.fillRect(qx - z * 0.11, qy - z * 0.08, z * 0.22, z * 0.16); ctx.strokeRect(qx - z * 0.11, qy - z * 0.08, z * 0.22, z * 0.16); if ((m.t >> 2) & 1) { ctx.fillStyle = P.mal; ctx.beginPath(); ctx.arc(qx, qy, Math.max(1.5, z * 0.05), 0, TAU); ctx.fill(); } } // una carga puesta (solo la ve quien la puso): parpadea hasta que estalla
         if (e.nivelE > 1 && lod) { ctx.fillStyle = P.bien; for (let k = 1; k < e.nivelE; k++) { ctx.beginPath(); ctx.arc(px + t - 5 - (k - 1) * 7, py - h + 5, 2.6, 0, TAU); ctx.fill(); } } // edificio mejorado: un punto verde por nivel ganado
         if (edadObra < 1) { ctx.restore(); ctx.strokeStyle = P.tinta; ctx.lineWidth = 1; ctx.setLineDash([4, 3]); ctx.strokeRect(px + 1.5, py + 1.5, t - 3, t - 3); ctx.setLineDash([]); }
@@ -944,6 +945,7 @@
           ctx.closePath(); ctx.fill();
         }
         const edadObra = e.nace > 0 ? (m.t - e.nace + alfa) / 30 : 1; // recién colocado: se levanta de abajo arriba
+        if (luzD < 1 && lod === 2 && edadObra >= 1 && W.horno) W.horno.ventanas(e, px, py, t, z, est, luces); // de noche, de maqueta: ventanas encendidas
         cuerpos.set(e.id, [e, px, py, t, est, h, redondo, edadObra]);
         cuerpo(e, px, py, t, est, h, redondo, edadObra);
         if (EDIF[e.tipo].bunker && e.j === YO && lod) { const n = W.enBunker(m, e), cap = EDIF[e.tipo].bunker; for (let q = 0; q < cap; q++) { ctx.fillStyle = q < n ? P.yo : 'rgba(0,0,0,0.25)'; ctx.fillRect(px + t / 2 - cap * 2.5 + q * 5, py + t + 3, 4, 4); } } // plazas del búnker: ocupadas y libres
@@ -1248,7 +1250,7 @@
       }
       ctx.lineCap = 'butt';
       // Partículas: humo, polvo, chispas, anillos y fogonazos.
-      const ds = pausa ? 0 : dtCuadro / 1000;
+      const ds = pausa ? 0 : dtCuadro / 1000, bocas = lod === 2 && !!(W.horno && W.horno.activo && W.horno.capas.efectos), nocheL = luzD < 1 && bocas;
       for (let i = parts.length - 1; i >= 0; i--) {
         const q = parts[i];
         q.v += ds;
@@ -1257,7 +1259,13 @@
         const fr = q.v / q.m, sx = ox + q.x * z, sy = oy + q.y * z;
         if (!lod || sx < -40 || sy < -40 || sx > cw + 40 || sy > ch + 40 || !visible(q.x, q.y)) continue;
         ctx.globalAlpha = 1 - fr; ctx.beginPath();
-        if (q.k === 'humo') { ctx.globalAlpha = 0.34 * (1 - fr); ctx.fillStyle = P.roca; ctx.arc(sx, sy, z * q.s * (0.6 + fr * 1.3), 0, TAU); ctx.fill(); }
+        if (bocas && (q.k === 'humo' || q.k === 'polvo' || q.k === 'humoN' || q.k === 'polvoR')) { // de maqueta: bocanadas horneadas
+          if (q.bv === undefined) q.bv = (azar() * 3) | 0;
+          let R, al, cl; if (q.k === 'humo') { R = z * q.s * (0.6 + fr * 1.3); al = 0.34 * (1 - fr); cl = P.roca; } else if (q.k === 'polvo') { R = z * q.s * (0.5 + fr); al = 0.3 * (1 - fr); cl = '#a3977f'; }
+          else if (q.k === 'humoN') { q.vx *= 0.985; q.vy *= 0.985; q.x += 0.5 * ds * (0.3 + fr); R = z * q.s * (0.7 + fr * 2.2); al = 0.22 * (1 - fr) * Math.min(1, fr * 8); cl = fr < 0.2 ? '#6b665e' : P.roca; } else { q.vx *= 0.9; q.vy *= 0.9; R = z * q.s * (0.5 + fr * 1.4); al = 0.36 * (1 - fr); cl = '#a3977f'; }
+          ctx.globalAlpha = Math.min(1, al * 1.5); R *= 1.35; ctx.drawImage(W.horno.bocanada(cl, q.bv), sx - R, sy - R, 2 * R, 2 * R);
+        }
+        else if (q.k === 'humo') { ctx.globalAlpha = 0.34 * (1 - fr); ctx.fillStyle = P.roca; ctx.arc(sx, sy, z * q.s * (0.6 + fr * 1.3), 0, TAU); ctx.fill(); }
         else if (q.k === 'polvo') { ctx.globalAlpha = 0.3 * (1 - fr); ctx.fillStyle = '#a3977f'; ctx.arc(sx, sy, z * q.s * (0.5 + fr), 0, TAU); ctx.fill(); }
         else if (q.k === 'chispa') { q.vx *= 0.93; q.vy *= 0.93; ctx.strokeStyle = '#e8912d'; ctx.lineWidth = Math.max(1, z * 0.06); ctx.moveTo(sx, sy); ctx.lineTo(sx - q.vx * z * 0.07, sy - q.vy * z * 0.07); ctx.stroke(); }
         else if (q.k === 'alma') { ctx.globalAlpha = 0.85 * (1 - fr) * (1 - fr); ctx.fillStyle = P.tinta; ctx.arc(sx, sy, Math.max(1.5, z * q.s * (1 - fr * 0.5)), 0, TAU); ctx.fill(); }
@@ -1278,8 +1286,8 @@
         else if (q.k === 'anilloP') { const rr = z * q.s * (1 - (1 - fr) * (1 - fr)); ctx.globalAlpha = 0.3 * (1 - fr); ctx.strokeStyle = '#a3977f'; ctx.lineWidth = 5 * (1 - fr) + 1; ctx.ellipse(sx, sy, rr, rr * 0.7, 0, 0, TAU); ctx.stroke(); }
         else if (q.k === 'destello') { ctx.strokeStyle = '#fff3c4'; ctx.lineWidth = 2; for (let k = 0; k < 4; k++) { const an = (k * Math.PI) / 4 + 0.3, l = z * q.s * (1 - fr * 0.4); ctx.moveTo(sx - Math.cos(an) * l, sy - Math.sin(an) * l); ctx.lineTo(sx + Math.cos(an) * l, sy + Math.sin(an) * l); } ctx.stroke(); }
         else if (q.k === 'brasa') { q.vx += (azar() - 0.5) * 1.8 * ds; ctx.globalAlpha = (1 - fr) * (0.5 + azar() * 0.5); ctx.fillStyle = fr < 0.5 ? '#f2c45c' : '#e8912d'; ctx.arc(sx, sy, Math.max(1, z * q.s), 0, TAU); ctx.fill(); }
-        else if (q.k === 'llama') { ctx.globalAlpha = 0.85 * (1 - fr); ctx.fillStyle = azar() < 0.5 ? '#e8912d' : '#f2c45c'; ctx.arc(sx, sy, z * q.s * (1 - fr * 0.6), 0, TAU); ctx.fill(); }
-        else { ctx.fillStyle = '#f2c45c'; ctx.arc(sx, sy, z * q.s * (0.6 + fr * 0.6), 0, TAU); ctx.fill(); }
+        else if (q.k === 'llama') { ctx.globalAlpha = 0.85 * (1 - fr); ctx.fillStyle = azar() < 0.5 ? '#e8912d' : '#f2c45c'; ctx.arc(sx, sy, z * q.s * (1 - fr * 0.6), 0, TAU); ctx.fill(); if (nocheL) luces.push([sx, sy, 0, 4, z * q.s * 2.2 * (1 - fr * 0.6)]); }
+        else { ctx.fillStyle = '#f2c45c'; ctx.arc(sx, sy, z * q.s * (0.6 + fr * 0.6), 0, TAU); ctx.fill(); if (bocas) { const R = z * q.s * 2.4 * (1 - fr * 0.5); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.55 * (1 - fr); ctx.drawImage(W.horno.resplandor(), sx - R, sy - R, 2 * R, 2 * R); ctx.globalCompositeOperation = 'source-over'; if (nocheL) luces.push([sx, sy, 0, 4, R * 1.6]); } } // de maqueta, el fogonazo con su resplandor
       }
       ctx.globalAlpha = 1;
       if (lod === 2) for (const c of calor.values()) if (c.c > 0.3 && visible(c.x, c.y)) { ctx.globalAlpha = Math.min(0.9, c.c); ctx.fillStyle = '#e8912d'; ctx.beginPath(); ctx.arc(ox + c.x * z, oy + c.y * z, Math.max(1.5, z * 0.07), 0, TAU); ctx.fill(); } // el cañón de la ametralladora, al rojo
@@ -1287,7 +1295,7 @@
       if (destelloP > 0) { ctx.globalAlpha = Math.min(0.3, destelloP * 5); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cw, ch); ctx.globalAlpha = 1; }
 
       ctx.imageSmoothingEnabled = true;
-      { const luz = W.luz(m); if (luz < 1) { ctx.fillStyle = 'rgba(14,20,48,' + (0.36 * (1 - luz)).toFixed(3) + ')'; ctx.fillRect(0, 0, cw, ch);
+      { const luz = W.luz(m); if (luz < 1 && !(W.horno && W.horno.noche(ctx, luz, luces, z, cw, ch))) { ctx.fillStyle = 'rgba(14,20,48,' + (0.36 * (1 - luz)).toFixed(3) + ')'; ctx.fillRect(0, 0, cw, ch); /* de maqueta, la noche multiplica y las luces son imágenes horneadas */
         if (luces.length) { const k = 1 - luz; ctx.globalCompositeOperation = 'lighter';
           for (const [x, y, a, cl, r] of luces) {
             if (cl === 2) { const R = z * 1.3, gx = x + Math.cos(a) * r * 2, gy = y + Math.sin(a) * r * 2, gr = ctx.createRadialGradient(gx, gy, 0, gx, gy, R); gr.addColorStop(0, 'rgba(255,190,90,' + (0.5 * k).toFixed(3) + ')'); gr.addColorStop(1, 'rgba(255,190,90,0)'); ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(gx, gy, R, 0, TAU); ctx.fill(); }
@@ -2985,7 +2993,7 @@
       const fps = R.cuadros / (R.ms / 1000), sim = R.ticks ? R.sim / R.ticks : 0, dib = R.dib / R.cuadros, nie = R.pasadas ? R.niebla / R.pasadas : 0;
       const fila = (n, v, mal) => '<tr' + (mal ? ' class="mal"' : '') + '><td>' + n + '</td><td>' + v + '</td></tr>';
       $('rend').innerHTML = fila('cuadros/s', Math.round(fps), fps < 30) + fila('dibujo', f(dib) + ' ms', dib > 16.7) + fila('simulación', f(sim) + ' ms/tick', sim > 25)
-        + fila('· niebla', f(nie) + ' ms', nie > 10) + fila('entidades', m.ents.length + ' · ' + parts.length + ' part.', false) + (W.horno && W.horno.activo ? fila('maqueta', W.horno.info().imagenes + ' img · ' + f(W.horno.info().mb) + ' MB', W.horno.info().mb > 60) : '');
+        + fila('· niebla', f(nie) + ' ms', nie > 10) + fila('entidades', m.ents.length + ' · ' + parts.length + ' part.', false) + (W.horno && W.horno.activo ? (() => { const h = W.horno.info(), mb = h.mb + h.mbSuelo; return fila('maqueta', h.imagenes + ' img · ' + h.trozos + ' trozos · ' + f(mb) + ' MB', mb > 90); })() : '');
       R.sim = R.ticks = R.dib = R.cuadros = R.ms = R.niebla = R.pasadas = 0;
     }
     const recuerda = (id) => { const el = $(id); try { const v = localStorage.getItem('rtsw.' + id); if (v !== null) el.classList.toggle('plegado', v === '1'); } catch (_) {} el.addEventListener('click', () => { const p = el.classList.toggle('plegado'); try { localStorage.setItem('rtsw.' + id, p ? '1' : '0'); } catch (_) {} }); }; // los cuadros de abajo: plegados por defecto, y se acuerdan de cómo los dejaste

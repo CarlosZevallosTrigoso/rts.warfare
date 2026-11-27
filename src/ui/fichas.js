@@ -661,7 +661,7 @@
     const X = (f) => px + f * t, Y = (f) => py + f * t, cx = X(0.5), cy = Y(0.5);
     const lw = Math.max(1, t * 0.035);
     c.lineJoin = 'round'; c.lineCap = 'butt';
-    if (lod && VOL[e.tipo]) { VOL[e.tipo](c, kitEdif(c, px, py, t, W.EDIF[e.tipo].tam, col, s), s, col, lod === 2, lod === 2 && !!s.fino); danos(c, cx, cy, t, col, s); return; } // en volúmenes: cada edificio con su silueta
+    if (lod && VOL[e.tipo]) { const k = kitEdif(c, px, py, t, W.EDIF[e.tipo].tam, col, s); if (s.maqueta && W.kitMaqueta) W.kitMaqueta(k, c, col, e.tipo); VOL[e.tipo](c, k, s, col, lod === 2, lod === 2 && !!s.fino); if (s.maqueta && W.MAS_EDIF && W.MAS_EDIF[e.tipo] && W.horno.capas.mas) W.MAS_EDIF[e.tipo](k, s, col); danos(c, cx, cy, t, col, s); return; } // en volúmenes: cada edificio con su silueta (y de maqueta, con su detalle)
 
     if (e.tipo === 'torreta' || e.tipo === 'antiaerea') {
       const R = t * 0.47, aa = e.tipo === 'antiaerea';
