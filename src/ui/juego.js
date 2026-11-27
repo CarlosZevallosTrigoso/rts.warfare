@@ -579,6 +579,7 @@
       ctx.lineCap = 'butt'; ctx.lineJoin = 'miter';
     }
     function dibujar(alfa) {
+      if (W.horno) W.horno.cuadro();
       const z = cam.z, f = m.niebla[YO], mp = m.mapa;
       fino = z >= 16; medio = z >= 8;
       { const dsF = pausa ? 0 : dtCuadro / 1000; relojFx += dsF; sacude = Math.max(0, sacude - dsF); destelloP = Math.max(0, destelloP - dsF); // efectos aplazados, temblor y destello
@@ -1033,11 +1034,12 @@
         if (fuera(wx, wy)) continue;
         const d = UNID[e.tipo], px = ox + wx * z, py = oy + wy * z, r = Math.max(2, d.radio * z * (e.enTierra ? 0.72 : 1)), g = giro(e); // posado se ve más pequeño: está abajo
         const anda = (e.x - e.px) ** 2 + (e.y - e.py) ** 2 > 1e-6;
+        const horneado = lod === 2 && W.horno && W.horno.activo && W.horno.tiene(e.tipo) && r >= 6; // de cerca, los vehículos horneados: su sombra va con la imagen
         if (lod) { // sombra
           ctx.fillStyle = sombraCol; ctx.beginPath();
           const alto = d.aire && !e.enTierra ? r * 1.5 : 0; // la sombra de un avión cae lejos: vuela
           if (alto) ctx.fillStyle = 'rgba(0,0,0,0.12)';
-          ctx.ellipse(px + SOX * 0.8 + alto, py + SOY * 0.8 + alto, r * (d.cat === 'inf' ? 1.1 : 1.45), r * 1.1, g.a, 0, TAU); ctx.fill();
+          if (!horneado) { ctx.ellipse(px + SOX * 0.8 + alto, py + SOY * 0.8 + alto, r * (d.cat === 'inf' ? 1.1 : 1.45), r * 1.1, g.a, 0, TAU); ctx.fill(); }
           if (anda && d.cat === 'veh' && !d.aire && !pausa) { // los vehículos dejan su rodada, un trazo seguido por cada lado, y levantan polvo
             g.d = (g.d || 0) + e.v * (dtCuadro / 50);
             if (g.rx === undefined || Math.hypot(wx - g.rx, wy - g.ry) > 1.5) { g.rx = wx; g.ry = wy; g.ra = g.a; g.d = 0; }
@@ -1083,12 +1085,15 @@
         if (e.emb && (e.enterrado || e.emb.est === 'cava') && lod) { ctx.fillStyle = 'rgba(150,132,100,0.55)'; ctx.beginPath(); ctx.ellipse(0, 0, r * 2.1, r * 1.6, 0, 0, TAU); ctx.fill(); if (e.emb.est === 'cava') { const f = (tiempo * 0.004 + e.id * 0.37) % 1; ctx.fillStyle = '#8f7d5a'; ctx.globalAlpha = 1 - f; ctx.beginPath(); ctx.arc(Math.cos(e.id + f * 3) * r * 2 * f, -r * 1.6 * f, r * 0.35, 0, TAU); ctx.fill(); ctx.globalAlpha = 1; } } // el hoyo del emboscado (y la tierra que saca al cavar)
         const semi = e.enterrado && e.j === YO; if (semi) ctx.globalAlpha = 0.6; // tus emboscados, enterrados: medio transparentes (el rival no los ve)
         const canto = lod && !d.aire && r >= 3.5 && !st.hundido && !(g.te > 0.3) ? Math.max(1, r * 0.26) : 0; // el cuerpo de la unidad: su silueta en oscuro, y encima la ficha
-        if (canto) { W.fichaUnidad(ctx, e, r, 1, e.j === YO ? COL.yoLado : COL.rivalLado, st); ctx.translate(0, -canto); }
-        W.fichaUnidad(ctx, e, r, lod, e.j === YO ? COL.yo : COL.rival, st);
+        const hecho = horneado && !semi && W.horno.dibuja(ctx, e, r, z, g.a, g.t, e.j === YO ? COL.yo : COL.rival, e.j === YO ? COL.yoLado : COL.rivalLado, st, SOX * 0.8, SOY * 0.8); // ya horneado: se pega
+        if (hecho) { if (canto) ctx.translate(0, -canto); }
+        else { if (horneado) { ctx.fillStyle = sombraCol; ctx.beginPath(); ctx.ellipse(SOX * 0.8, SOY * 0.8, r * 1.45, r * 1.1, g.a, 0, TAU); ctx.fill(); } // aún sin hornear: como siempre, con su sombra
+          if (canto) { W.fichaUnidad(ctx, e, r, 1, e.j === YO ? COL.yoLado : COL.rivalLado, st); ctx.translate(0, -canto); }
+          W.fichaUnidad(ctx, e, r, lod, e.j === YO ? COL.yo : COL.rival, st); }
         if (semi) ctx.globalAlpha = 1;
         if (lod === 2 && d.cat === 'veh' && !d.aire && r >= 5) { // el volumen: la cara que no mira al sol, en sombra; y el daño, a la vista
           const ca = Math.cos(g.a), sa = Math.sin(g.a), ll = -sa * LUX + ca * LUY, fv = e.vida / d.vida;
-          ctx.save(); ctx.rotate(g.a); ctx.globalAlpha = 0.17 * Math.min(1, Math.abs(ll) * 1.6); ctx.fillStyle = '#000'; ctx.fillRect(-r * 1.25, ll > 0 ? -r * 0.6 : 0, r * 2.5, r * 0.6); ctx.globalAlpha = 1;
+          ctx.save(); ctx.rotate(g.a); if (!hecho) { ctx.globalAlpha = 0.17 * Math.min(1, Math.abs(ll) * 1.6); ctx.fillStyle = '#000'; ctx.fillRect(-r * 1.25, ll > 0 ? -r * 0.6 : 0, r * 2.5, r * 0.6); ctx.globalAlpha = 1; } // horneado, la luz ya va en la imagen
           if (fv < 0.6) { ctx.fillStyle = 'rgba(20,18,16,0.4)'; for (let k = 0; k < (fv < 0.3 ? 3 : 2); k++) { ctx.beginPath(); ctx.ellipse(Math.sin(e.id * 3.1 + k * 2.4) * r * 0.8, Math.cos(e.id * 1.7 + k * 4.2) * r * 0.35, r * 0.3, r * 0.2, k, 0, TAU); ctx.fill(); } } // quemaduras en el casco
           ctx.restore();
           if (fv < 0.3) { ctx.fillStyle = P.roca; for (let k = 0; k < 3; k++) { const f = (tiempo * 0.0006 + k / 3 + e.id * 0.37) % 1; ctx.globalAlpha = 0.4 * (1 - f); ctx.beginPath(); ctx.arc(-ca * r * 0.5 + f * r * 0.9, -sa * r * 0.5 - f * r * 1.6, r * (0.18 + f * 0.35), 0, TAU); ctx.fill(); } ctx.globalAlpha = 1; } // muy tocado: echa humo
@@ -2098,6 +2103,7 @@
     $('dronMis').addEventListener('click', () => { const om = conMision(); if (!om.length) return; if (om.some((u) => u.dronMis)) { W.orden(m, { t: 'dronMision', j: YO, ids: om.map((u) => u.id) }); aviso('Drones de vuelta con su operador'); } else { modo = 'dronMis'; aviso('Elige el punto que vigilará el dron (hasta 45 celdas del operador)'); } });
     $('dronAtk').addEventListener('click', () => { const us = conDrones(); if (us.length) W.orden(m, { t: 'dronAtk', j: YO, ids: us.map((u) => u.id), on: us.some((u) => u.dronAtk === false) }); });
     $('verAlcance').addEventListener('click', () => { verAlc = !verAlc; });
+    $('verHorno').addEventListener('click', () => { if (W.horno) W.horno.cambia(!W.horno.activo); });
     $('verRed').addEventListener('click', () => { if (conRed) verRed = !verRed; else aviso('Partida clásica: sin red'); });
     $('verFlujos').addEventListener('click', () => { if (conRed) { verFlujos = !verFlujos; flujoC = null; } else aviso('Partida clásica: sin red'); });
     $('retiro').addEventListener('click', () => { const us = paraRetiro(); if (us.length) W.orden(m, { t: 'retiro', j: YO, ids: us.map((u) => u.id), on: !us.every((u) => u.retira) }); });
@@ -2535,6 +2541,7 @@
       if (conRed) muestraFlujos();
       { const bf = $('verFlujos'), t = 'ver flujos: ' + (verFlujos ? 'sí' : 'no'); if (bf.textContent !== t) { bf.textContent = t; bf.classList.toggle('on', verFlujos); } bf.hidden = !conRed; }
       { const ba = $('verAlcance'), t = 'ver alcances: ' + (verAlc ? 'sí' : 'no'); if (ba.textContent !== t) { ba.textContent = t; ba.classList.toggle('on', verAlc); } }
+      { const bh = $('verHorno'), on = !!(W.horno && W.horno.activo), t = 'dibujo de maqueta: ' + (on ? 'sí' : 'no'); if (bh.textContent !== t) { bh.textContent = t; bh.classList.toggle('on', on); } }
       { const bv = $('verRed'), t = 'ver la red: ' + (verRed ? 'sí' : 'no'); if (bv.textContent !== t) { bv.textContent = t; bv.classList.toggle('on', verRed); } bv.hidden = !conRed; }
       { const us = paraRetiro(), br = $('retiro'); br.hidden = !us.length;
         if (us.length) { const t = 'Retirada automática: ' + (us.every((u) => u.retira) ? 'sí' : us.some((u) => u.retira) ? 'algunas' : 'no'); if (br.textContent !== t) br.textContent = t; } }
@@ -2978,7 +2985,7 @@
       const fps = R.cuadros / (R.ms / 1000), sim = R.ticks ? R.sim / R.ticks : 0, dib = R.dib / R.cuadros, nie = R.pasadas ? R.niebla / R.pasadas : 0;
       const fila = (n, v, mal) => '<tr' + (mal ? ' class="mal"' : '') + '><td>' + n + '</td><td>' + v + '</td></tr>';
       $('rend').innerHTML = fila('cuadros/s', Math.round(fps), fps < 30) + fila('dibujo', f(dib) + ' ms', dib > 16.7) + fila('simulación', f(sim) + ' ms/tick', sim > 25)
-        + fila('· niebla', f(nie) + ' ms', nie > 10) + fila('entidades', m.ents.length + ' · ' + parts.length + ' part.', false);
+        + fila('· niebla', f(nie) + ' ms', nie > 10) + fila('entidades', m.ents.length + ' · ' + parts.length + ' part.', false) + (W.horno && W.horno.activo ? fila('maqueta', W.horno.info().imagenes + ' img · ' + f(W.horno.info().mb) + ' MB', W.horno.info().mb > 60) : '');
       R.sim = R.ticks = R.dib = R.cuadros = R.ms = R.niebla = R.pasadas = 0;
     }
     const recuerda = (id) => { const el = $(id); try { const v = localStorage.getItem('rtsw.' + id); if (v !== null) el.classList.toggle('plegado', v === '1'); } catch (_) {} el.addEventListener('click', () => { const p = el.classList.toggle('plegado'); try { localStorage.setItem('rtsw.' + id, p ? '1' : '0'); } catch (_) {} }); }; // los cuadros de abajo: plegados por defecto, y se acuerdan de cómo los dejaste

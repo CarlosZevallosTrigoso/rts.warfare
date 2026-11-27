@@ -25,6 +25,7 @@
   }
 
   function rr(c, x, y, w, h, rad) { rad = Math.max(0, Math.min(rad, w / 2, h / 2)); c.beginPath(); c.moveTo(x + rad, y); c.lineTo(x + w - rad, y); c.arcTo(x + w, y, x + w, y + rad, rad); c.lineTo(x + w, y + h - rad); c.arcTo(x + w, y + h, x + w - rad, y + h, rad); c.lineTo(x + rad, y + h); c.arcTo(x, y + h, x, y + h - rad, rad); c.lineTo(x, y + rad); c.arcTo(x, y, x + rad, y, rad); c.closePath(); } // rectángulo de esquinas redondas
+  W.auxF = { orugas, ruedas, rr }; // para el horno, que dibuja con las mismas piezas
 
   // ---------- unidades ----------
   // El contexto llega trasladado al centro de la unidad. r = radio en píxeles.
